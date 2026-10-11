@@ -40,7 +40,7 @@ async function swapBuild(build,force=false,automatic=false) {
       if(saved==null)throw Error('No restorable state. Use Restart with update.');
     }
     next=document.createElement('iframe');next.title='Candidate game';next.setAttribute('sandbox','allow-scripts allow-pointer-lock');
-    next.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:0;visibility:hidden';
+    next.className='game-stage';next.style.visibility='hidden';
     document.body.prepend(next);next.srcdoc=build.html;
     const caps=await ready(next);check();posture(next,'pause');
     if(saved!==null) {

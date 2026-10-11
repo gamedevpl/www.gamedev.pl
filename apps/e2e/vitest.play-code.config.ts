@@ -3,6 +3,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: [
+      'src/cli-play-layout.test.ts',
       'src/play-local-code.test.ts',
       'src/play-funded-code.test.ts',
       'src/play-maximized-code.test.ts',

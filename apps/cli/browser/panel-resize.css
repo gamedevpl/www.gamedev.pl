@@ -1,10 +1,10 @@
 #panel-resize {
   position: fixed;
   z-index: 5;
-  top: 84px;
+  top: var(--panel-top);
   right: calc(12px + min(var(--panel-width, 390px), calc(100vw - 24px)));
   width: 10px;
-  height: calc(var(--height) - 98px - var(--notice-space, 0px));
+  height: calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px));
   cursor: ew-resize;
   touch-action: none;
 }
@@ -39,9 +39,4 @@ body[data-resizing='true'] {
 }
 body[data-resizing='true'] iframe {
   pointer-events: none;
-}
-@media (max-width: 600px) {
-  #panel-resize {
-    display: none;
-  }
 }

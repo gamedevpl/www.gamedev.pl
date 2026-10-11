@@ -53,6 +53,21 @@ hit the VM's 200 ms deadline before the zone counted repeated 8 ms overruns. Che
 guard fired. Inject the separate monotonic meter for the zone-policy test and keep its
 exact failure assertion; exercise VM deadlines in the cage tests.
 
+## Match browser keyboard shortcuts to the host platform
+
+Use `ControlOrMeta` for browser select-all and undo shortcuts. The Play editor's
+`Control+a` / `Control+z` fixture duplicated source and failed its undo assertion
+on macOS, including on clean master. Reproduce on the unchanged base before
+attributing that failure to a layout change; keep geometry checks independent.
+
+## Force safe-area values when checking phone overlays
+
+Desktop Chromium reports zero safe-area insets even at phone viewport sizes.
+For Play panels, force nonzero left/right `env(safe-area-inset-*)` values in the
+fixture stylesheet and check both conversation docks with Code open. More-specific
+coexisting-panel and dock selectors can override mobile width or position rules,
+so a viewport-only matrix misses controls extending into the notch area.
+
 ## Keep flow tests independent of live conversation routing
 
 A transfer test calling `/improve` must inject a `chatAgent` whose `decide` returns

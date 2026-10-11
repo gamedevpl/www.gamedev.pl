@@ -1,6 +1,8 @@
 :root {
   color-scheme: dark;
   --height: 100dvh;
+  --panel-top: 84px;
+  --panel-min-top: 84;
 }
 * {
   box-sizing: border-box;
@@ -58,7 +60,8 @@ button:disabled {
 .primary:hover {
   background: #56edc8;
 }
-#game {
+#game,
+.game-stage {
   position: fixed;
   inset: 0;
   width: 100%;
@@ -147,6 +150,9 @@ button:disabled {
 .stage-actions .primary {
   background: var(--turquoise);
 }
+.update-icon {
+  display: none;
+}
 #reveal {
   position: fixed;
   right: 12px;
@@ -176,10 +182,10 @@ button:disabled {
 #workbench-tools {
   position: fixed;
   z-index: 5;
-  top: 84px;
+  top: var(--panel-top);
   right: 12px;
   bottom: auto;
-  height: calc(var(--height) - 98px - var(--notice-space, 0px));
+  height: calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px));
   width: min(var(--panel-width, 390px), calc(100vw - 24px));
   display: flex;
   flex-direction: column;
@@ -409,43 +415,6 @@ textarea {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-@media (max-width: 600px) {
-  #tools {
-    gap: 6px;
-  }
-  .game-badge {
-    padding: 8px;
-    max-width: 40%;
-    min-width: 0;
-    flex-shrink: 1;
-    gap: 6px;
-  }
-  .game-badge > svg {
-    display: none;
-  }
-  #game-name {
-    font-size: 13px;
-  }
-  .stage-actions {
-    gap: 0;
-    flex-wrap: nowrap;
-    flex-shrink: 0;
-  }
-  .stage-actions button {
-    padding: 8px;
-    min-height: 36px;
-  }
-  .stage-actions button span {
-    display: none;
-  }
-  #panel,
-  #workbench-tools {
-    top: 78px;
-    right: 8px;
-    width: calc(100vw - 16px);
-    height: calc(var(--height) - 86px - var(--notice-space, 0px));
-  }
 }
 body[data-compact='true'] #panel {
   overflow: auto;

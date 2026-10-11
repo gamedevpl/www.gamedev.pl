@@ -25,17 +25,23 @@ export function PlayShell() {
           </div>
         </div>
         <div className="stage-actions">
-          <button id="apply" hidden>
-            Apply update
+          <button id="apply" title="Apply update" aria-label="Apply update" hidden>
+            <span className="update-icon">
+              <Icon name="check" />
+            </span>
+            <span>Apply update</span>
           </button>
-          <button id="restart" hidden>
-            Restart with update
+          <button id="restart" title="Restart with update" aria-label="Restart with update" hidden>
+            <span className="update-icon">
+              <Icon name="undo" />
+            </span>
+            <span>Restart with update</span>
           </button>
-          <button id="devices-open" title="Test on phone">
+          <button id="devices-open" title="Test on phone" aria-label="Test on phone">
             <Icon name="phone" />
             <span>Devices</span>
           </button>
-          <button id="commands-open" title="Commands">
+          <button id="commands-open" title="Commands" aria-label="Commands">
             <Icon name="menu" />
             <span>Commands</span>
           </button>
@@ -45,19 +51,19 @@ export function PlayShell() {
           <button id="clean" title="Hide controls" aria-label="Hide controls">
             <Icon name="eye" />
           </button>
-          <button id="code-open" aria-controls="code-panel" aria-expanded="false" title="Code">
+          <button id="code-open" aria-label="Code" aria-controls="code-panel" aria-expanded="false" title="Code">
             <Icon name="code" />
             <span>Code</span>
           </button>
-          <button id="edit" className="primary" aria-controls="panel" aria-expanded="false">
+          <button id="edit" className="primary" aria-label="Chat" aria-controls="panel" aria-expanded="false">
             <Icon name="chat" />
-            Chat
+            <span>Chat</span>
           </button>
         </div>
       </nav>
-      <button id="reveal" hidden aria-label="Show Play controls">
-        <Icon name="pencil" />
-        Show controls
+      <button id="reveal" hidden title="Show Play controls" aria-label="Show Play controls">
+        <Icon name="menu" />
+        <span>Show controls</span>
       </button>
       <div id="preview-feedback">
         <BuildError />
@@ -208,6 +214,9 @@ export function PlayShell() {
           </section>
         </div>
         <footer className="drawer-tabs">
+          <button id="drawer-fullscreen" className="mobile-action" aria-label="Fullscreen">
+            <Icon name="expand" /> Fullscreen
+          </button>
           <button id="details-open">Session details</button>
         </footer>
       </aside>
