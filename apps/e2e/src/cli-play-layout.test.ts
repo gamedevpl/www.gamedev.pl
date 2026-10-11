@@ -24,6 +24,7 @@ addEventListener('message',event=>{
 
 async function fixture(width: number, height: number) {
   const page = await browser.newPage({ viewport: { width, height } });
+  let updateReady = false;
   page.on('pageerror', (error) => console.error(error));
   await page.route('http://localhost/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -54,7 +55,7 @@ async function fixture(width: number, height: number) {
       path === '/state'
         ? state
         : path === '/preview/status'
-          ? { sourceId: 1, revision: 'one' }
+          ? { sourceId: 1, revision: updateReady ? 'two' : 'one' }
           : path === '/preview/game'
             ? { sourceId: 1, revision: 'one', html: game }
             : {};
@@ -64,6 +65,7 @@ async function fixture(width: number, height: number) {
   await page.waitForFunction(() => document.getElementById('shown-build')?.textContent === 'Build one', undefined, {
     timeout: 10000,
   });
+  updateReady = true;
   await page.evaluate(() => {
     document.getElementById('notice')!.textContent = '';
     document.getElementById('apply')!.hidden = false;
