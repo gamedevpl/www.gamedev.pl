@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.34.0 — 2026-10-11
+
 ### Added
 
 - Local Play independently toggles Conversation and game preview beside Code, including an editor with game preview and no chat (#1751).
