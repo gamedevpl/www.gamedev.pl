@@ -91,6 +91,10 @@ it.skipIf(!executablePath)(
         await page.setViewportSize({ width, height });
         await page.getByRole('button', { name: 'Maximize Code editor' }).click();
         expect(await page.locator('#code-panel').boundingBox()).toEqual({ x: 0, y: 0, width, height });
+        if (width === 390) {
+          expect((await page.locator('.code-editor').boundingBox())!.width).toBe(width);
+          expect((await page.locator('.cm-scroller').boundingBox())!.width).toBeLessThanOrEqual(width);
+        }
         await page.locator('.code-ai summary').scrollIntoViewIfNeeded();
         expect(await page.locator('.code-ai summary').isVisible()).toBe(true);
         await page.getByRole('button', { name: 'Restore Code panel' }).click();
@@ -126,6 +130,10 @@ it.skipIf(!executablePath)(
             expect(await page.locator('.code-files-container').isVisible()).toBe(true);
             await page.getByRole('button', { name: 'Hide files', exact: true }).click();
             expect(await page.locator('.code-files-container').isVisible()).toBe(false);
+          }
+          if (width === 390) {
+            expect((await page.locator('.code-editor').boundingBox())!.width).toBe(width);
+            expect((await page.locator('.cm-scroller').boundingBox())!.width).toBeLessThanOrEqual(width);
           }
           await page.locator('#prompt').scrollIntoViewIfNeeded();
           await page.locator('#prompt').fill('Czy możesz zachować stan rozgrywki oraz wszystkie niezapisane zmiany?');

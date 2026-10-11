@@ -45,6 +45,7 @@ body:has(#panel:not([hidden])) #code-panel {
 }
 .code-editor .code-surface-codemirror {
   height: 100%;
+  min-height: 0;
 }
 .code-conflict {
   background: #4a301c;
@@ -206,7 +207,7 @@ body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hid
     top: var(--code-height);
     overflow: auto;
   }
-  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) :is(.code-editor, #conversation) {
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #conversation {
     flex: none;
     height: 180px;
   }
@@ -232,7 +233,8 @@ body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hid
   min-height: 100px;
   overflow: hidden;
 }
-.code-workspace > .code-editor {
+#code-panel .code-workspace > .code-editor {
+  flex: 1;
   min-width: 0;
 }
 .code-files-container {
