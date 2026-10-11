@@ -106,28 +106,31 @@ it('keeps JSON delivery output machine readable without progress', async () => {
   expect(f.stderr.read()).toBe('');
 });
 
-it('stops the local check on Ctrl+C, clears progress and releases the checkout', async () => {
-  const f = fixture();
-  const listeners = process.listenerCount('SIGINT');
-  writeFileSync(
-    join(f.dest, 'check.cjs'),
-    "require('fs').writeFileSync('checking', 'yes'); setInterval(() => {}, 1000)\n",
-  );
-  writeFileSync(
-    join(f.dest, 'package.json'),
-    JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node -e "process.exit(0)"' } }),
-  );
-  const pending = submitCommand({ delivery: f, io: f.io, asJson: false });
-  const stopped = expect(pending).rejects.toThrow('Delivery stopped');
-  await vi.waitFor(() => expect(readFileSync(join(f.dest, 'checking'), 'utf8')).toBe('yes'), { timeout: 3000 });
-  process.emit('SIGINT');
-  await stopped;
-  expect(process.listenerCount('SIGINT')).toBe(listeners);
-  expect(f.stderr.read().endsWith('\r\u001b[2K')).toBe(true);
-  expect(f.messages.some((path) => path.includes('/sources'))).toBe(false);
-  await submitCommand({ delivery: { ...f, run: () => ({ status: 0, stderr: '' }) }, io: f.io, asJson: false });
-  expect(f.stdout.read()).toContain('delivery accepted');
-});
+it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)(
+  'stops the local check on %s and releases the checkout',
+  async (signal) => {
+    const f = fixture();
+    const listeners = process.listenerCount(signal);
+    writeFileSync(
+      join(f.dest, 'check.cjs'),
+      "require('fs').writeFileSync('checking', 'yes'); setInterval(() => {}, 1000)\n",
+    );
+    writeFileSync(
+      join(f.dest, 'package.json'),
+      JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node -e "process.exit(0)"' } }),
+    );
+    const pending = submitCommand({ delivery: f, io: f.io, asJson: false });
+    const stopped = expect(pending).rejects.toThrow('Delivery stopped');
+    await vi.waitFor(() => expect(readFileSync(join(f.dest, 'checking'), 'utf8')).toBe('yes'), { timeout: 3000 });
+    process.emit(signal);
+    await stopped;
+    expect(process.listenerCount(signal)).toBe(listeners);
+    expect(f.stderr.read().endsWith('\r\u001b[2K')).toBe(true);
+    expect(f.messages.some((path) => path.includes('/sources'))).toBe(false);
+    await submitCommand({ delivery: { ...f, run: () => ({ status: 0, stderr: '' }) }, io: f.io, asJson: false });
+    expect(f.stdout.read()).toContain('delivery accepted');
+  },
+);
 
 it.each(['push', 'submit'])('shows progress immediately for the shell %s verb while the API waits', async (verb) => {
   vi.useFakeTimers();

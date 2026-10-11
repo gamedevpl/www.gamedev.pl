@@ -12,6 +12,7 @@ export async function submitCommand(input: {
   const stop = () => controller.abort(new CliError('Delivery stopped. Check Studio before retrying.', EXIT_RED));
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
+  process.once('SIGHUP', stop);
   let result;
   try {
     result = await submitGame({
@@ -23,6 +24,7 @@ export async function submitCommand(input: {
     progress.stop();
     process.removeListener('SIGINT', stop);
     process.removeListener('SIGTERM', stop);
+    process.removeListener('SIGHUP', stop);
   }
   input.io.stdout.write(
     input.asJson ? `${JSON.stringify(result)}\n` : `${formatSubmitLines(result, input.delivery.slug).join('\n')}\n`,
