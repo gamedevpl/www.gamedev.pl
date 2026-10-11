@@ -69,14 +69,17 @@ export interface SharedDraftGate {
 }
 
 export const SHARED_DRAFT_VERDICT_TTL_MS = 5 * 60_000;
+export const SHARED_DRAFT_PENDING_TTL_MS = 15_000;
 
 // One manifest read per version per window, never one per play.
 export function createSharedDraftGate(input: {
   gamesStore?: GamesStore;
   now: () => number;
   ttlMs?: number;
+  pendingTtlMs?: number;
 }): SharedDraftGate {
   const ttlMs = input.ttlMs ?? SHARED_DRAFT_VERDICT_TTL_MS;
+  const pendingTtlMs = Math.min(input.pendingTtlMs ?? SHARED_DRAFT_PENDING_TTL_MS, ttlMs);
   const cache = new Map<string, { green: boolean; expiresAt: number }>();
   return {
     async isGreen(slug, version) {
@@ -84,9 +87,9 @@ export function createSharedDraftGate(input: {
       const at = input.now();
       const hit = cache.get(key);
       if (hit && hit.expiresAt > at) return hit.green;
-      const green = (await refuseUngatedShare({ gamesStore: input.gamesStore, slug, version })) === null;
-      // Pending is cached too; the window bounds staleness.
-      cache.set(key, { green, expiresAt: at + ttlMs });
+      const refusal = await refuseUngatedShare({ gamesStore: input.gamesStore, slug, version });
+      const green = refusal === null;
+      cache.set(key, { green, expiresAt: at + (refusal === 'gate_pending' ? pendingTtlMs : ttlMs) });
       return green;
     },
     forget(slug) {
