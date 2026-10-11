@@ -255,26 +255,18 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
             type: ['object', 'null'],
             properties: { file: { type: 'string' }, url: { type: 'string' } },
           },
-          openingShot: {
-            type: 'object',
-            properties: { file: { type: 'string' }, attached: { type: 'boolean' } },
-            required: ['file', 'attached'],
-          },
           access: { type: 'string' },
         },
         required: ['available', 'deliveryId'],
       },
       description:
-        'Fetch the media the gate itself produced for a delivery (default: latest). Screenshots come back ' +
-        'BOTH as attached images (no fetching needed — use these) and as short-lived signed URLs; the ' +
-        'gameplay MP4 is a URL only. ' +
+        'Fetch the media the gate itself produced for a delivery (default: latest). Screenshots and the ' +
+        'gameplay MP4 come back as short-lived signed URLs a plain GET downloads — never as inline images. ' +
         'Without a shell or browser, on a later/resumed run call get_gate_verdict once first (start does not surface preview_passed); if a preview verdict is already available after mode=preview, then call this — that is how you see the game. Right after submit_sources there is nothing yet: Cloud Build has stored no media, and this tool does not wait. ' +
-        'Use it when you cannot run the game yourself — look at the attached frames for visual defects ' +
-        '(blank canvas, missing sprites) before resubmitting, and show them to the creator. ' +
-        'frames=opening (default) attaches one frame; frames=all attaches up to 3; frames=none skips them ' +
-        'when you only want the URLs. ' +
-        'If your client cannot open URLs, do not try and do not report the video as broken — hand the link ' +
-        'to the creator, who can, and describe the game from the attached frames. ' +
+        'Use it when you cannot run the game yourself — download a screenshot and look at it for visual ' +
+        'defects (blank canvas, missing sprites) before resubmitting; show_media puts them in front of the creator. ' +
+        'If your client cannot open URLs, do not try and do not report the media as broken — hand the link ' +
+        'to the creator, who can. ' +
         'Read-only over the gate run that already happened; it never triggers a build, and media exists only ' +
         'after a delivery has been gated. Terminal receipt: like get_gate_verdict, the latest delivery stays ' +
         'readable after green closes the round.',
@@ -283,12 +275,6 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
         properties: {
           sessionKey: SESSION_KEY_PROP,
           deliveryId: { type: 'string', description: "Delivery version id; default is the job's latest." },
-          frames: {
-            type: 'string',
-            enum: ['opening', 'all', 'none'],
-            description:
-              'How many screenshots to attach as images: opening (default, one), all (up to 3), none (URLs only).',
-          },
         },
         required: [],
       },
@@ -298,8 +284,8 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
 
         const deliveryId =
           typeof args.deliveryId === 'string' && args.deliveryId.trim() ? args.deliveryId.trim() : null;
-        const frames = args.frames === 'all' || args.frames === 'none' ? args.frames : 'opening';
-        const query = new URLSearchParams({ frames });
+        // URLs only: inline base64 frames flood the agent's context.
+        const query = new URLSearchParams({ frames: 'none' });
         if (deliveryId) query.set('version', deliveryId);
         const res = await injectChannel(
           ctx.request,
@@ -307,25 +293,12 @@ export function createGateMediaTools(deps: GateMediaToolsDeps): Record<string, G
           `${AGENT_CHANNEL_ROUTES.MEDIA}?${query.toString()}`,
           auth.channelToken,
         );
-        const body = res.json() as Record<string, unknown> & {
-          error?: string;
-          frames?: Array<{ file?: string; name?: string; png?: string }>;
-        };
+        const body = res.json() as Record<string, unknown> & { error?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `gate media failed (${res.statusCode})`);
         }
-        // Frames ride as image blocks, not inline JSON, to avoid doubling cost.
-        const { frames: inlineFrames, ...rest } = body;
-        const attached = (inlineFrames ?? []).filter((frame) => typeof frame.png === 'string' && frame.png);
-        const structured = {
-          ...rest,
-          frames: attached.map((frame) => ({ file: frame.file, name: frame.name, attached: true })),
-        };
-        const result = toolOk(structured);
-        for (const frame of attached) {
-          result.content.push({ type: 'image', data: frame.png as string, mimeType: 'image/png' });
-        }
-        return result;
+        const { frames: _frames, ...structured } = body;
+        return toolOk(structured);
       },
     },
   };

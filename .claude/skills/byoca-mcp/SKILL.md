@@ -1112,9 +1112,13 @@ or this gate has to learn about it.
 Tests: `apps/api/src/mcp-oauth-handshake.test.ts`. Test helpers that open a session send a
 throwaway `Bearer handshake`; a case that means to arrive without one says so.
 
-- **`show_media` is how the creator sees the game.** `get_gate_media` attaches frames as
-  image blocks, which reach the _model_ — it can look at them and describe them, and there is
-  no path back out. Asked to display them, ChatGPT answered "the image attachments apparently
+- **No tool result ever carries image bytes.** `get_gate_media` and `get_reference_images`
+  return signed URLs only, and `ToolContent` in `mcp-tool-support.ts` is text-only so a new
+  tool cannot slip a base64 block back in. Inline images flooded the agent's context and a
+  managed round reported "I couldn't view your reference screenshot" with 1.3 MB of blocks
+  in the result (2026-10-11). An agent that wants to look downloads the URL and opens the file.
+- **`show_media` is how the creator sees the game.** Gate frames used to ride as image
+  blocks, which reach the _model_ at best — there is no path back out. Asked to display them, ChatGPT answered "the image attachments apparently
   didn't render in your view" and the creator saw nothing (2026-08-06). A tool result is input
   to a model, not output to a person, so a view is the only surface that puts pixels in the
   conversation. `show_media` carries no bytes: the card fetches them over the app-only

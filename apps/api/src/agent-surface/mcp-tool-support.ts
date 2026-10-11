@@ -3,8 +3,9 @@ import { BUILDERS, type BuilderKind } from '@gamedevpl/contract';
 import { NO_OPEN_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { referenceShotIds } from './inbox-reference-images.js';
 
-// text is the JSON body; image is a rendered frame (get_gate_media).
-type ToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+// Text only. Images go out as download URLs, never as base64 blocks: inline
+// pictures flood an agent's context and some clients drop them silently.
+type ToolContent = { type: 'text'; text: string };
 
 export interface ToolResult {
   content: ToolContent[];

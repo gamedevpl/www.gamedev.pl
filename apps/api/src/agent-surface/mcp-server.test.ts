@@ -3055,9 +3055,8 @@ declare const GameKit: { defineGame(): unknown };
       };
     }
 
-    it('returns signed media and attaches the opening frame as an image block', async () => {
-      // The whole point of the tool: a client that cannot run the game gets something
-      // it can look at and something it can show the creator.
+    it('returns signed media urls and never an inline image', async () => {
+      // URLs only: inline base64 frames flood the agent's context.
       const store = new InMemoryStore();
       await seedJob(store);
       await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
@@ -3080,7 +3079,7 @@ declare const GameKit: { defineGame(): unknown };
           deliveryId: string;
           screenshots: Array<{ file: string; url: string }>;
           video: { file: string; url: string };
-          frames?: Array<{ file: string; name: string; attached: boolean }>;
+          frames?: unknown;
         };
         isError?: boolean;
       };
@@ -3098,51 +3097,11 @@ declare const GameKit: { defineGame(): unknown };
           file: 'gameplay.mp4',
           url: 'https://signed.example/games/comet-courier/versions/v1/media/gameplay.mp4?sig=1',
         },
-        frames: [{ file: 'opening.png', name: 'opening', attached: true }],
       });
-
-      const image = result.content.find((part) => part.type === 'image');
-      expect(image).toMatchObject({ mimeType: 'image/png', data: TINY_PNG });
-      // The frame rides the image block only — duplicating it into the JSON body would
-      // put the same base64 into every client's context twice.
+      expect(result.structuredContent.frames).toBeUndefined();
+      expect(result.content.every((part) => part.type === 'text')).toBe(true);
       const text = result.content.find((part) => part.type === 'text')?.text ?? '';
       expect(text).not.toContain(TINY_PNG);
-    });
-
-    it('keeps the opening image when session nudges add warnings', async () => {
-      // applySessionNudges must not rebuild via toolOk alone — that dropped image blocks.
-      const store = new InMemoryStore();
-      await seedJob(store);
-      await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
-      app = await createApp(store, mediaGamesStore(), mediaObjectStore());
-      const sessionId = await initialize(app);
-      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
-      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-
-      for (let i = 0; i < 6; i += 1) {
-        await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
-      }
-
-      const res = await mcpCall(
-        app,
-        'tools/call',
-        // frames=all so this covers the plural case too: the nudge rebuild must keep
-        // *every* image block, not merely the first one.
-        { name: 'get_gate_media', arguments: { sessionKey, frames: 'all' } },
-        { 'mcp-session-id': sessionId },
-      );
-      expect(res.statusCode).toBe(200);
-      const result = res.json().result as {
-        content: Array<{ type: string; data?: string; mimeType?: string }>;
-        structuredContent: { warnings?: Array<{ code: string }>; frames?: Array<{ attached: boolean }> };
-        isError?: boolean;
-      };
-      expect(result.isError).toBeFalsy();
-      expect(result.structuredContent.warnings?.map((w) => w.code)).toContain('progress_stale');
-      expect(result.structuredContent.frames?.every((frame) => frame.attached)).toBe(true);
-      const images = result.content.filter((part) => part.type === 'image');
-      expect(images).toHaveLength(result.structuredContent.frames?.length ?? 0);
-      expect(images[0]).toMatchObject({ mimeType: 'image/png', data: TINY_PNG });
     });
 
     it('reports available:false instead of erroring before anything is delivered', async () => {
@@ -3221,6 +3180,45 @@ declare const GameKit: { defineGame(): unknown };
       // one prompt surface every client reads.
       expect(media?.description).toMatch(/screenshot/i);
       expect(media?.description).toMatch(/video|mp4/i);
+    });
+  });
+
+  describe('get_reference_images', () => {
+    it('lists newest-first download urls and never inlines the image', async () => {
+      // Inline base64 flooded a live round's context; a url is all the agent needs.
+      const store = new InMemoryStore();
+      await seedJob(store);
+      for (const minute of ['01', '03', '02']) {
+        await store.appendBuildShot(ISSUE, {
+          data: TINY_PNG,
+          label: 'creator-reference',
+          createdAt: `2026-10-11T10:${minute}:00.000Z`,
+        });
+      }
+      app = await createApp(store);
+      const sessionId = await initialize(app);
+      const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const res = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'get_reference_images', arguments: { sessionKey } },
+        { 'mcp-session-id': sessionId },
+      );
+      expect(res.statusCode).toBe(200);
+      const result = res.json().result as {
+        content: Array<{ type: string; text?: string }>;
+        structuredContent: { images: Array<{ createdAt: string; url: string }> };
+      };
+      expect(result.content.every((part) => part.type === 'text')).toBe(true);
+      expect(result.content.map((part) => part.text).join('')).not.toContain(TINY_PNG);
+      expect(result.structuredContent.images.map((image) => image.createdAt.slice(11, 16))).toEqual([
+        '10:03',
+        '10:02',
+        '10:01',
+      ]);
+      expect(result.structuredContent.images.every((image) => image.url.startsWith('http'))).toBe(true);
     });
   });
 
