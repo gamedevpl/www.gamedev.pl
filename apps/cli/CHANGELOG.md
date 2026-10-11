@@ -7,12 +7,19 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local Play independently toggles Conversation and game preview beside Code, including an editor with game preview and no chat (#1751).
+
+### Fixed
+
+- Local Play uses the Studio file-tree sidebar with left-aligned rows, hides Creator Kit modules from navigation, and replaces the layout selector with panel toggles and maximize controls (#1751).
+
 ## 0.33.1 — 2026-10-11
 
 ### Fixed
 
 - Local Play's Code editor loads read-only GameKit declarations from node_modules, preserving TypeScript help after npm Kit migration (#1757).
-- Local Play uses the Studio file-tree sidebar with left-aligned rows, hides Creator Kit modules from navigation, and replaces the layout selector with panel toggles and maximize controls (#1751).
 
 ## 0.33.0 — 2026-10-11
 
