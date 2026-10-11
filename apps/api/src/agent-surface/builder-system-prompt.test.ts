@@ -10,6 +10,7 @@ describe('builderSystemPrompt', () => {
     expect(prompt).toContain('never claim more than you shipped');
     expect(prompt).toContain('`end` with `summaryLocalized` and `locale`');
     expect(prompt).toContain('`transcript_unread` means read `get_transcript` before your first source edit');
+    expect(prompt).toContain('Images attached to creator messages');
   });
 
   it('keeps one edit path per file on the shell lane only', () => {

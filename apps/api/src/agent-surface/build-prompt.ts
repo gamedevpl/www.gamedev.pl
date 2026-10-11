@@ -110,7 +110,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     'Do not submit until the editor declaration and generated content are staged with the playable source.',
     'Define `howToPlay` (goal + hint) in `GAME.json`; the body is generated. Never author `index.html`.',
     'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
-    '- Skip optional polish. One screen, one loop, readable visuals.',
+    '- Creator messages can carry images (`referenceImages` from `read_inbox`, `get_reference_images`): download and look at each before your first edit (with a shell, curl it, then `read` the file). They are part of the request; if you cannot open one, say so in `end.summary`.',
     '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
     shell
       ? '- Audio ids are a fixed catalog: copy from the unpacked kit’s audio catalog and never invent one.'
