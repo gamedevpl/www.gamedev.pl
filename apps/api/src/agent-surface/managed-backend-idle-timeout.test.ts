@@ -13,12 +13,15 @@ const BRIEF = {
 };
 
 // Dispatch, then observe once the one-second clock has passed.
-async function observeAfterClock(state: string, signals: ManagedRoundSignals) {
+async function observeAfterClock(state: string, signals: ManagedRoundSignals, startTakesMs = 0) {
   const cancelSession = vi.fn(async () => ({ enforced: true }));
   const provider: ManagedAgentProvider = {
     vendor: 'fake',
     model: 'fake-model',
-    startSession: async () => ({ id: 'session-1', state: 'queued' }),
+    startSession: async () => {
+      vi.advanceTimersByTime(startTakesMs);
+      return { id: 'session-1', state: 'queued' };
+    },
     getSession: async () => ({ id: 'session-1', state: normalizeManagedState(state) }),
     cancelSession,
     deleteSession: async () => undefined,
@@ -55,6 +58,11 @@ describe('managed backend wall clock on a finished idle round', () => {
     });
     expect(cancelSession).not.toHaveBeenCalled();
     expect(observation?.state).not.toBe('timed_out');
+  });
+
+  it('counts an end the agent made while startSession was still resolving', async () => {
+    const { cancelSession } = await observeAfterClock('idle', { agentEndedAt: AFTER_START }, 800);
+    expect(cancelSession).not.toHaveBeenCalled();
   });
 
   it('still times out an idle session that delivered nothing and never ended', async () => {

@@ -143,6 +143,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
+    // Before the call: a vendor may run, and end, before startSession resolves.
+    const requestedAt = Date.now();
     const session = await options.provider.startSession({
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
@@ -161,7 +163,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       tools: options.tools,
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     });
-    startedAt.set(session.id, Date.now());
+    startedAt.set(session.id, requestedAt);
     sessionJobs.set(session.id, {
       jobId: brief.jobId,
       ...(brief.slug ? { slug: brief.slug } : {}),
