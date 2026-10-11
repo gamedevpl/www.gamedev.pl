@@ -19,5 +19,7 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: false })).not.toContain('Change each file through one path only');
     expect(builderSystemPrompt({ shell: false })).toContain('Prefer patching single files');
     expect(builderSystemPrompt({ shell: true })).not.toContain('Prefer patching single files');
+    expect(builderSystemPrompt({ shell: true })).toContain('look at each before your first source edit');
+    expect(builderSystemPrompt({ shell: false })).toContain('you cannot open their URLs here');
   });
 });

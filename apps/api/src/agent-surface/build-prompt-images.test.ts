@@ -12,10 +12,16 @@ const BRIEF: BuildBrief = {
 
 // 2026-10-11 review: a round skipped the creator picture as polish.
 describe('buildPrompt and creator images', () => {
-  it.each([true, false])('asks to open attached images before editing (shell=%s)', (shell) => {
-    const prompt = buildPrompt({ ...BRIEF, feedback: 'Add ice floes.' }, { shell });
-    expect(prompt).toContain('download and look at each before your first edit');
-    expect(prompt).toContain('`referenceImages` from `read_inbox`');
+  it('asks a shell round to open attached images before editing', () => {
+    const prompt = buildPrompt({ ...BRIEF, feedback: 'Add ice floes.' }, { shell: true });
+    expect(prompt).toContain('curl each and `read` the file before your first edit');
+    expect(prompt).not.toContain('Skip optional polish');
+  });
+
+  it('tells a no-shell round to say it could not see the images', () => {
+    const prompt = buildPrompt({ ...BRIEF, feedback: 'Add ice floes.' }, { shell: false });
+    expect(prompt).toContain('URLs you cannot open here');
+    expect(prompt).not.toContain('curl each');
     expect(prompt).not.toContain('Skip optional polish');
   });
 });

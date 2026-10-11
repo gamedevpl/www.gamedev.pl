@@ -98,19 +98,19 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
       ? [
           'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference.',
           'Stage with `patch_source_file` / `stage_source_file`, or PUT changed files to `stage_upload_url`.',
+          'Creator images (`referenceImages` from `read_inbox`, `get_reference_images`) are part of the request: curl each and `read` the file before your first edit.',
         ]
       : [
           'Call `get_kit` for kitEngineRef, then `get_kit_api` once with it: that is your API and file-shape reference.',
           'Fill its gaps with `search_kit_files` / `read_kit_file`; do not download or unpack the kit archive.',
           'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
+          'Creator images (`referenceImages`, `get_reference_images`) come as URLs you cannot open here: build from the words and say in `end.summary` that you did not see them.',
         ]),
-    'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`.',
-    'Stage calls sequentially; never parallelize mutating calls.',
+    'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`. Stage calls sequentially; never parallelize mutating calls.',
     'Before the first preview, stage `game.ts`, `GAME.json`, and the complete editor bundle: compiled `EDITOR.json`, `EDITOR.content.json` for v2, and `game/editor-content.ts`.',
     'Do not submit until the editor declaration and generated content are staged with the playable source.',
     'Define `howToPlay` (goal + hint) in `GAME.json`; the body is generated. Never author `index.html`.',
     'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
-    '- Creator messages can carry images (`referenceImages` from `read_inbox`, `get_reference_images`): download and look at each before your first edit (with a shell, curl it, then `read` the file). They are part of the request; if you cannot open one, say so in `end.summary`.',
     '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
     shell
       ? '- Audio ids are a fixed catalog: copy from the unpacked kit’s audio catalog and never invent one.'

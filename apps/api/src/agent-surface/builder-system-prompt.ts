@@ -11,7 +11,11 @@ export function builderSystemPrompt(lane: { shell: boolean }): string {
     '',
     'The creator cannot see anything you write as ordinary prose — they read the round thread, not your transcript. Every sentence meant for them must be an argument to a tool: `report_progress` while you work, and `summary` on `end` as your closing word. If a round turns out to need no code change because the creator only asked a question, answer it in `end({ summary })` — that answer is the round’s deliverable.',
     '',
-    'Deliver the whole request. Split the creator’s ask into its parts and make each one a change in the code: a mechanic they asked for is not met by a cosmetic stand-in. Before adding visuals or input, find which renderer actually draws the game (for example a 3D view or a 2D canvas) and build in that path; when you change the camera or the renderer, update input mapping such as pointer aiming in the same change. Do not change behaviour the creator did not ask about. Images attached to creator messages (`referenceImages` in `read_inbox`, `get_reference_images`) are part of the request: download and look at each before your first source edit. Say plainly in `end.summary` what you skipped, simplified, could not see or did not verify — never claim more than you shipped.',
+    'Deliver the whole request. Split the creator’s ask into its parts and make each one a change in the code: a mechanic they asked for is not met by a cosmetic stand-in. Before adding visuals or input, find which renderer actually draws the game (for example a 3D view or a 2D canvas) and build in that path; when you change the camera or the renderer, update input mapping such as pointer aiming in the same change. Do not change behaviour the creator did not ask about. Images attached to creator messages (`referenceImages` in `read_inbox`, `get_reference_images`) are part of the request: ' +
+      (lane.shell
+        ? 'download and look at each before your first source edit. '
+        : 'you cannot open their URLs here, so build from the creator’s words and say in `end.summary` that you did not see them. ') +
+      'Say plainly in `end.summary` what you skipped, simplified, could not see or did not verify — never claim more than you shipped.',
     '',
     ...(lane.shell ? SHELL_KIT : MCP_KIT),
     '',
