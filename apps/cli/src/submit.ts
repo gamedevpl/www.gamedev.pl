@@ -143,6 +143,7 @@ async function submitGameUnlocked(input: {
   const sourceHash = verificationSourceHash(input.dest, input.slug);
   const verification = {
     cwd: input.dest,
+    slug: input.slug,
     publish: input.publish === true,
     run: input.run,
     onStage: input.onProgress,
@@ -152,7 +153,7 @@ async function submitGameUnlocked(input: {
       ? await runLadderAsync({ ...verification, abort: input.abort ?? new AbortController().signal })
       : runLadder(verification);
   input.abort?.throwIfAborted();
-  assertLadderGreen(verify, input.dest, sourceHash);
+  assertLadderGreen(verify, input.dest, sourceHash, input.slug);
   if (verificationSourceHash(input.dest, input.slug) !== sourceHash)
     throw new CliError(
       'Sources changed during verification; result is stale. Nothing was sent.',

@@ -38,6 +38,7 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
       const hash = verificationSourceHash(delivery.dest, delivery.slug);
       const result = await runLadderAsync({
         cwd: delivery.dest,
+        slug: delivery.slug,
         publish: delivery.publish,
         run: ws?.run,
         abort: controller.signal,
@@ -110,7 +111,7 @@ export async function recoverVerification(
     }
     if (!result.ok) {
       diagnosticsCurrent = true;
-      failure = new VerificationError(result, delivery.dest, result.sourceHash);
+      failure = new VerificationError(result, delivery.dest, result.sourceHash, delivery.slug);
       input.write(failure.message);
       record(failure);
       continue;

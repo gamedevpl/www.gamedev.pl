@@ -5,6 +5,25 @@ import { join } from 'node:path';
 import { runLadder, runLadderAsync, VerificationError } from './verify.js';
 
 describe('verification ladder', () => {
+  it.each([false, true])('passes the selected game to every check (publish=%s)', (publish) => {
+    const ran: string[][] = [];
+    const result = runLadder({
+      cwd: '/tmp/game',
+      slug: 'trenchline-command',
+      publish,
+      run: (_cmd, args) => {
+        ran.push(args);
+        return { status: 0, stderr: '' };
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(ran).toEqual([
+      ['run', 'typecheck', '--', 'trenchline-command'],
+      ['run', 'check:static', '--', 'trenchline-command'],
+      ...(publish ? [['run', 'check:game', '--', 'trenchline-command']] : []),
+    ]);
+  });
+
   it('runs typecheck and check:static always, check:game only for publish', () => {
     const ran: string[] = [];
     const run = (_cmd: string, args: string[]) => {
@@ -64,17 +83,22 @@ describe('verification ladder', () => {
           cliVerification: { typecheck: 'check:types', checkStatic: 'check:assets', checkGame: 'check:publish' },
         }),
       );
-      const ran: string[] = [];
+      writeFileSync(join(cwd, '.gamedev-slug'), 'trenchline-command\n');
+      const ran: string[][] = [];
       const result = runLadder({
         cwd,
         publish: true,
         run: (_cmd, args) => {
-          ran.push(args[1]!);
+          ran.push(args);
           return { status: 0, stderr: '' };
         },
       });
       expect(result.ok).toBe(true);
-      expect(ran).toEqual(['check:types', 'check:assets', 'check:publish']);
+      expect(ran).toEqual([
+        ['run', 'check:types', '--', 'trenchline-command'],
+        ['run', 'check:assets', '--', 'trenchline-command'],
+        ['run', 'check:publish', '--', 'trenchline-command'],
+      ]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -108,10 +132,12 @@ it('uses the failed Creator Kit script in actionable diagnostics and removes ter
     const failure = new VerificationError(
       { stage: 'check_static', detail: '\u001b[31mGAME.json: missing title\u001b[0m\nasset missing' },
       cwd,
+      undefined,
+      'trenchline-command',
     );
     expect(failure.detail).toBe('GAME.json: missing title\nasset missing');
     expect(failure.message).toContain('GAME.json: missing title');
-    expect(failure.next).toContain('npm run check:assets');
+    expect(failure.next).toContain('npm run check:assets -- trenchline-command');
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }

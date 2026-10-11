@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Local verification passes the game slug to Creator Kit checks, so `push --publish` runs the publication check instead of failing with a usage error.
+
 ## 0.37.0 — 2026-10-11
 
 ### Added
