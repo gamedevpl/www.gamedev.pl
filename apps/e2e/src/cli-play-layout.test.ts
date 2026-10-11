@@ -160,6 +160,43 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
     }
   });
 
+  it.each([
+    [390, 360],
+    [667, 375],
+  ])('preserves editor focus views at %i × %i', async (width, height) => {
+    const page = await fixture(width!, height!);
+    try {
+      const frame = await page.locator('#game').elementHandle();
+      await page.locator('#code-open').click();
+      for (const view of ['editor', 'editor-chat', 'editor-chat-preview']) {
+        await page.getByRole('combobox', { name: 'Code view' }).selectOption(view);
+        await page.waitForFunction((view) => document.getElementById('code-panel')?.dataset.view === view, view);
+        const code = await visibleInside(page, '#code-panel', width!, height!);
+        expect(await page.locator('#tools').isVisible()).toBe(false);
+        if (view === 'editor') {
+          expect(code).toEqual({ x: 0, y: 0, width, height });
+        } else {
+          const chat = await visibleInside(page, '#panel', width!, height!);
+          if (width! <= 600) {
+            expect(chat.y).toBeCloseTo(code.y + code.height, 1);
+            expect(chat.width).toBe(width);
+          } else {
+            expect(code.width + chat.width).toBeCloseTo(width!, 1);
+            expect(chat.x).toBeCloseTo(code.x + code.width, 1);
+          }
+          if (view === 'editor-chat-preview') {
+            const preview = await visibleInside(page, '#game', width!, height!);
+            expect(preview.y).toBeCloseTo(chat.y + chat.height, 1);
+            expect(preview.y + preview.height).toBeCloseTo(height!, 1);
+          } else expect(await page.locator('#game').isVisible()).toBe(false);
+        }
+        expect(await frame!.evaluate((node) => node === document.getElementById('game'))).toBe(true);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
   it('keeps chat above long notices when the viewport shrinks for a keyboard', async () => {
     const page = await fixture(390, 667);
     try {
