@@ -5,6 +5,7 @@
   "type": "module",
   "// scripts": "Deliberately no `test` script: `npm run test` at the root fans out with --workspaces, and this suite drives a browser against a real deployment. Picked up there it would put every local test run on the network, stretch 16s into minutes, and fail whenever the deployed site lags the working tree. Run it explicitly: npm run e2e.",
   "scripts": {
+    "pree2e": "node ../cli/scripts/build-play-ui.mjs",
     "e2e": "vitest run",
     "e2e:hermetic": "node ../cli/scripts/build-play-ui.mjs && vitest run src/frame-document.test.ts src/editor-sensing.test.ts src/editor-dock-geometry.test.ts src/play-telemetry.test.ts src/cli-diff-view.test.ts",
     "e2e:framed-local": "bash scripts/with-local-site.sh vitest run src/framed-play.test.ts",
