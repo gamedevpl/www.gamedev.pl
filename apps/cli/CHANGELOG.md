@@ -13,7 +13,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- `gamedevpl push` and `submit` show live progress like `update`, including elapsed time, local checks and file upload counts; interactive delivery shows the current stage too.
+- `gamedevpl push` and `submit` show live progress like `update`, including elapsed time, local checks and file upload counts; interactive delivery shows the current stage too (#1769).
 
 ## 0.36.0 — 2026-10-11
 
