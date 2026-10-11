@@ -53,6 +53,16 @@ hit the VM's 200 ms deadline before the zone counted repeated 8 ms overruns. Che
 guard fired. Inject the separate monotonic meter for the zone-policy test and keep its
 exact failure assertion; exercise VM deadlines in the cage tests.
 
+## Use a native runtime for architecture-sensitive gates
+
+Replay fingerprints can differ between ARM and x64 on the same Node patch.
+Rosetta can make the x64 fingerprints pass but inflate catalog timings. Preserve
+cost limits, timeouts and golden assertions, and use native CI for the full gate
+when this happens. The website's Games catalog gate accepts an exact games SHA
+as its `ref` input and prints a receipt-backed full-gate attestation after success.
+Use that printed block only after the complete CI run passes; never stamp a local
+pass for a failed or interrupted run.
+
 ## Match browser keyboard shortcuts to the host platform
 
 Use `ControlOrMeta` for browser select-all and undo shortcuts. The Play editor's
