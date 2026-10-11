@@ -308,6 +308,27 @@ current step and elapsed time. Background round updates stay separate from foreg
 work. Ctrl+C interrupts an active agent or exits when no cancellable agent is running.
 The editor returns when work completes; arrow keys recall prompts or navigate choices.
 
+### Terminal workspace sidebar
+
+`gamedevpl --terminal` shows a conversation/status split at 120 columns and 16 rows
+or larger. The right sidebar shows the current task, queued follow-ups, preview
+availability, existing Studio round updates, and added/modified/deleted game files.
+Ctrl+B hides or restores it without clearing the input. PgUp/PgDn scroll the chat;
+while answering a choice, they scroll that question instead. Existing `/diff`, Ctrl+D
+and `/logs` keep their scrollable detail views.
+
+Changes are compared with `.gamedev-base.json`, not Git, using the same game-file
+reader and ignore rules as submission. Shared Kit files stay out of the list. The
+visible sidebar refreshes local files every three seconds and makes no additional
+API requests. Without a checkout baseline it says so instead of guessing. `/status`
+and `/diff` still fetch the current platform comparison and identify conflicts;
+this sidebar is a local summary, not a delivery or verification verdict.
+
+Narrow or short terminals use the existing single-column view and native scrollback.
+Widening restores the split and session messages. Native vendor permission handoffs
+resume after the handoff's transcript position, preserving input ownership and avoiding
+replayed output. Sidebar visibility lasts for the current terminal mount.
+
 ### Claude authentication and local sessions
 
 Claude delegation requires Claude.ai subscription authentication. The CLI removes inherited
