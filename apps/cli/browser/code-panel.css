@@ -265,6 +265,7 @@ body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hid
 #code-panel .code-surface-rail-item,
 #code-panel .code-surface-tree-folder-toggle {
   min-height: 32px;
+  justify-content: flex-start;
   border-radius: 0;
   font-weight: normal;
 }
