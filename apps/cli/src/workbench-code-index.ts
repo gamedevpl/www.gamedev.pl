@@ -1,7 +1,13 @@
 import { lstat, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathInside } from './checkout-sync.js';
-import { codeFileAllowed, codeFileRevision, codeProjectId, type CodeCheckout } from './workbench-code-files.js';
+import {
+  codeFileAllowed,
+  codeFileRevision,
+  codeProjectId,
+  codeStoragePath,
+  type CodeCheckout,
+} from './workbench-code-files.js';
 
 export async function readCodeIndex(checkout: CodeCheckout) {
   const root = await realpath(checkout.root);
@@ -9,9 +15,10 @@ export async function readCodeIndex(checkout: CodeCheckout) {
   let visited = 0;
   let bytes = 0n;
   const safe = async (path: string) => {
-    const absolute = pathInside(root, path);
+    const storagePath = codeStoragePath(root, path);
+    const absolute = pathInside(root, storagePath);
     let current = root;
-    for (const part of path.split('/')) {
+    for (const part of storagePath.split('/')) {
       current = join(current, part);
       if ((await lstat(current)).isSymbolicLink()) throw Error('Symbolic link');
     }
