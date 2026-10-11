@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.32.1 — 2026-10-11
+
 ### Fixed
 
 - `gamedevpl play` keeps phone controls in a compact row above the game, including landscape; hiding them leaves a small edge handle (#1750).
