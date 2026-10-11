@@ -123,6 +123,19 @@ export async function recoverVerification(
   }
 }
 
+async function deliver(input: Input, delivery: Delivery, ws?: Workshop) {
+  const controller = new AbortController();
+  const holder = input.abort ?? ws?.abort;
+  if (holder) holder.current = controller;
+  ws?.onLocalTask?.('delivery');
+  try {
+    return await submitGame({ ...delivery, abort: controller.signal });
+  } finally {
+    if (holder?.current === controller) holder.current = null;
+    ws?.onLocalTask?.('');
+  }
+}
+
 export async function submitRepl(input: Input, cmd: string, rest: string[]): Promise<void> {
   try {
     const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
@@ -149,7 +162,7 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
     const pick = input.pick ?? ws?.pick;
     for (;;) {
       try {
-        const result = await submitGame(delivery);
+        const result = await deliver(input, delivery, ws);
         if (result.kind === 'delivered') (input.telemetry ?? ws?.telemetry)?.record('delivered');
         input.write(formatSubmitLines(result, slug).join('\n'));
         return;

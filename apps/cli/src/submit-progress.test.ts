@@ -7,6 +7,7 @@ import type { ApiClient } from './api.js';
 import { writeBase, writeGameFiles } from './checkout.js';
 import { submitCommand } from './submit-command.js';
 import { runCli } from './main.js';
+import { handleReplLine } from './repl.js';
 
 const cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -151,4 +152,56 @@ it.each(['push', 'submit'])('shows progress immediately for the shell %s verb wh
   expect(f.stdout.read()).toContain('nothing to deliver');
   expect(readFileSync(join(f.dest, 'games', f.slug, 'game.ts'), 'utf8')).toBe('old');
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(['/push', '/submit'])('cancels %s through the shared controller and keeps the session usable', async (line) => {
+  const f = fixture();
+  const abort = { current: null as AbortController | null };
+  const lines: string[] = [];
+  writeFileSync(
+    join(f.dest, 'check.cjs'),
+    "require('fs').writeFileSync('checking', 'yes'); setInterval(() => {}, 1000)\n",
+  );
+  writeFileSync(
+    join(f.dest, 'package.json'),
+    JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node -e "process.exit(0)"' } }),
+  );
+  const input = { line, api: f.api, token: null, cwd: f.dest, abort, write: (text: string) => lines.push(text) };
+  const pending = handleReplLine(input);
+  await vi.waitFor(() => expect(readFileSync(join(f.dest, 'checking'), 'utf8')).toBe('yes'), { timeout: 3000 });
+  expect(abort.current).not.toBeNull();
+  abort.current!.abort();
+  expect(await pending).toMatchObject({ next: 'continue' });
+  expect(abort.current).toBeNull();
+  expect(f.messages.some((path) => path.includes('/sources'))).toBe(false);
+  expect(lines.join('\n')).toContain('aborted');
+  expect(readFileSync(join(f.dest, 'games', f.slug, 'game.ts'), 'utf8')).toBe('new');
+  writeFileSync(join(f.dest, 'check.cjs'), 'process.exit(0)\n');
+  expect(await handleReplLine(input)).toMatchObject({ next: 'continue' });
+  expect(abort.current).toBeNull();
+  expect(lines.join('\n')).toContain('delivery accepted');
+});
+
+it('cancels a pending interactive API request through the shared controller', async () => {
+  const f = fixture();
+  const abort = { current: null as AbortController | null };
+  let requestSignal: AbortSignal | undefined;
+  f.api.request = (_method, _path, _body, signal) =>
+    new Promise((_resolve, reject) => {
+      requestSignal = signal;
+      signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+  const pending = handleReplLine({
+    line: '/push',
+    api: f.api,
+    token: null,
+    cwd: f.dest,
+    abort,
+    write: () => {},
+  });
+  await vi.waitFor(() => expect(requestSignal).toBeDefined());
+  expect(requestSignal).toBe(abort.current!.signal);
+  abort.current!.abort();
+  expect(await pending).toMatchObject({ next: 'continue' });
+  expect(abort.current).toBeNull();
 });

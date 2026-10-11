@@ -141,13 +141,16 @@ async function submitGameUnlocked(input: {
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
   const sourceHash = verificationSourceHash(input.dest, input.slug);
-  const verify = await runLadderAsync({
+  const verification = {
     cwd: input.dest,
     publish: input.publish === true,
     run: input.run,
-    abort: input.abort ?? new AbortController().signal,
     onStage: input.onProgress,
-  });
+  };
+  const verify =
+    input.onProgress || input.abort
+      ? await runLadderAsync({ ...verification, abort: input.abort ?? new AbortController().signal })
+      : runLadder(verification);
   input.abort?.throwIfAborted();
   assertLadderGreen(verify, input.dest, sourceHash);
   if (verificationSourceHash(input.dest, input.slug) !== sourceHash)
@@ -336,5 +339,15 @@ export function formatSubmitLines(result: SubmitResult, slug: string): string[] 
 }
 
 export function submitGame(input: Parameters<typeof submitGameUnlocked>[0]): ReturnType<typeof submitGameUnlocked> {
-  return withCheckoutWriter(input.dest, () => submitGameUnlocked(input));
+  const api = input.api;
+  const delivery: typeof input = input.abort
+    ? {
+        ...input,
+        api: {
+          ...api,
+          request: (method, path, body, signal) => api.request(method, path, body, signal ?? input.abort),
+        },
+      }
+    : input;
+  return withCheckoutWriter(input.dest, () => submitGameUnlocked(delivery));
 }

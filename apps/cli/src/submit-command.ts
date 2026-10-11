@@ -12,16 +12,11 @@ export async function submitCommand(input: {
   const stop = () => controller.abort(new CliError('Delivery stopped. Check Studio before retrying.', EXIT_RED));
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
-  const api = input.delivery.api;
   let result;
   try {
     result = await submitGame({
       ...input.delivery,
       abort: controller.signal,
-      api: {
-        ...api,
-        request: (method, path, body, signal) => api.request(method, path, body, signal ?? controller.signal),
-      },
       onProgress: progress.stage,
     });
   } finally {
