@@ -381,7 +381,7 @@ export async function runCli(
       }
       return EXIT_GREEN;
     }
-    if (verb === 'submit' || verb === 'push') {
+    if (verb === 'submit' || verb === 'push' || verb === 'publish') {
       const requested = args[0] ?? process.cwd();
       const here = findCheckout(requested);
       const dest = here?.root ?? requested;
@@ -393,7 +393,7 @@ export async function runCli(
           slug,
           dest,
           force: flags.force === true,
-          publish: flags.publish === true,
+          publish: verb === 'publish' || flags.publish === true,
           takeover: flags.takeover === true,
         },
         io,

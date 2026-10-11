@@ -14,6 +14,7 @@ describe('formatHelp', () => {
     expect(out).toContain('Ctrl+C ends Play');
     expect(out).toContain('builder <slug> globally');
     expect(out).toMatch(/push\s+send local changes as a preview/);
+    expect(out).toMatch(/publish\s+alias for push --publish — submit for operator publication/);
     for (const verb of SLASH_VERBS) {
       expect(out).toMatch(new RegExp(`^  ${verb}\\s+\\S`, 'm'));
     }
@@ -25,7 +26,7 @@ describe('formatHelp', () => {
     expect(out).toContain('a game starts when you ask');
     expect(out).toContain('/quit');
     expect(out).toContain('choose [self|platform] in a checkout');
-    expect(out).toMatch(/\/publish\s+alias for \/push --publish/);
+    expect(out).toMatch(/\/publish\s+alias for push --publish/);
     expect(out).toContain('operator publication');
   });
 });

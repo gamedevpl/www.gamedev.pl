@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl publish [dir]` is a shell shortcut for `gamedevpl push [dir] --publish`, with the same checks and delivery options.
+
 ## 0.38.0 — 2026-10-11
 
 ### Added

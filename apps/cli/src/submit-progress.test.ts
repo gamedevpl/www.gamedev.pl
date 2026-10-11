@@ -157,6 +157,68 @@ it.each(['push', 'submit'])('shows progress immediately for the shell %s verb wh
   expect(vi.getTimerCount()).toBe(0);
 });
 
+function shellPublicationFixture(checkGameFails = false) {
+  const f = fixture();
+  writeFileSync(
+    join(f.dest, 'check.cjs'),
+    `const fs = require('fs');
+fs.appendFileSync('checks.jsonl', JSON.stringify(process.argv.slice(2)) + '\\n');
+if (${checkGameFails} && process.argv[2] === 'check:game') process.exit(1);
+`,
+  );
+  writeFileSync(
+    join(f.dest, 'package.json'),
+    JSON.stringify({
+      scripts: Object.fromEntries(
+        ['typecheck', 'check:static', 'check:game'].map((stage) => [stage, `node check.cjs ${stage}`]),
+      ),
+    }),
+  );
+  const deliveries: unknown[] = [];
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    const body: unknown = init?.body ? JSON.parse(String(init.body)) : undefined;
+    if (url.endsWith('/sources/deliver')) deliveries.push(body);
+    return new Response(JSON.stringify(f.reply(new URL(url).pathname, body)));
+  });
+  const stdin = new PassThrough();
+  cleanup.push(() => stdin.destroy());
+  const run = (args: string[]) =>
+    runCli(
+      ['node', 'gamedevpl', args[0]!, f.dest, ...args.slice(1), '--json'],
+      { GAMEDEV_TOKEN: 'test-token' },
+      {
+        ...f.io,
+        stdin,
+      },
+    );
+  const checks = () =>
+    readFileSync(join(f.dest, 'checks.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as string[]);
+  return { ...f, deliveries, run, checks };
+}
+
+it.each([['push', '--publish'], ['publish'], ['publish', '--publish=false']])(
+  'runs full slug-specific checks and submits a publication candidate for %s %s',
+  async (...args) => {
+    const f = shellPublicationFixture();
+    expect(await f.run(args)).toBe(0);
+    expect(f.checks()).toEqual(['typecheck', 'check:static', 'check:game'].map((stage) => [stage, f.slug]));
+    expect(f.deliveries).toEqual([expect.objectContaining({ mode: 'publish' })]);
+    expect(JSON.parse(f.stdout.read())).toMatchObject({ kind: 'delivered', mode: 'publish', version: 'v2' });
+  },
+);
+
+it('does not upload or deliver through shell publish when the publication check fails', async () => {
+  const f = shellPublicationFixture(true);
+  expect(await f.run(['publish'])).toBe(1);
+  expect(f.checks()).toEqual(['typecheck', 'check:static', 'check:game'].map((stage) => [stage, f.slug]));
+  expect(f.messages.some((path) => path.includes('/sources'))).toBe(false);
+  expect(f.deliveries).toEqual([]);
+  expect(f.stderr.read()).toContain('verify failed at check_game');
+});
+
 it.each(['/push', '/submit'])('cancels %s through the shared controller and keeps the session usable', async (line) => {
   const f = fixture();
   const abort = { current: null as AbortController | null };
