@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl publish [dir]` is a shell shortcut for `gamedevpl push [dir] --publish`, with the same checks and delivery options.
+- `gamedevpl publish [dir]` is a shell shortcut for `gamedevpl push [dir] --publish`, with the same checks and delivery options (#1777).
 
 ## 0.38.0 — 2026-10-11
 
