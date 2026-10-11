@@ -18,7 +18,6 @@ function authHeaders(uid: string) {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-/** Same fake GCS HTTP layer games-store.test.ts uses — real store logic, no network. */
 function stubGcs() {
   const objects = new Map<string, Buffer>();
   const generations = new Map<string, number>();
@@ -849,7 +848,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       );
     });
 
-    it('includes editor-def so Studio can resolve EDITOR.ts imports', async () => {
+    it('includes public helper declarations so Studio resolves Kit imports', async () => {
       const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };', {
         'shared/editor-def.ts': 'export function defineEditor() {}\n',
         'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
@@ -865,7 +864,10 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(res.json()).toEqual({
             engineRef: ENGINE_REF,
             declaration: 'declare const GameKit: { boot(): void };',
-            files: { 'shared/editor-def.ts': 'export function defineEditor() {}\n' },
+            files: {
+              'shared/editor-def.ts': 'export function defineEditor() {}\n',
+              'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+            },
           });
         },
         { objectStore, games: withKitGames },
