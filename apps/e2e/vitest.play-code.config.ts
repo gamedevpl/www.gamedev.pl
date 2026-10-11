@@ -8,6 +8,7 @@ export default defineConfig({
       'src/play-funded-code.test.ts',
       'src/play-maximized-code.test.ts',
       'src/play-drafts-code.test.ts',
+      'src/play-resize-code.test.ts',
     ],
     testTimeout: 90_000,
     hookTimeout: 90_000,

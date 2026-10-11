@@ -8,7 +8,7 @@ import {
 } from '../../web/src/surfaces/studio/codeSurfaceLanguageService.js';
 import { languageFor } from '../../web/src/surfaces/studio/codeLanguages.js';
 import { PixelIcon } from '../../web/src/PixelIcon.js';
-import { CodeFileTree } from './code-file-tree.js';
+import { CodeWorkspace, CodePreviewResizeHandle } from './code-workspace.js';
 import { CodePanelViewControls, useCodePanelView } from './code-panel-view.js';
 import { codeApi, CodeRequestError, type CodeFile, type CodeProject, type CompletionStatus } from './code-api.js';
 import { refreshCodeProject, syncCodeLanguageFiles } from './code-project-sync.js';
@@ -400,19 +400,18 @@ export function CodePanel() {
           </button>
         </div>
       )}
-      <div className="code-workspace">
-        <div className="code-files-container" hidden={!filesOpen}>
-          <CodeFileTree
-            key={project?.projectId}
-            files={treeFiles}
-            selected={selected.startsWith(projectPrefix) ? selected.slice(projectPrefix.length) : ''}
-            onSelect={(path) => {
-              chooseFile(projectPrefix + path);
-              if (innerWidth <= 600) setFilesOpen(false);
-            }}
-            onClose={() => setFilesOpen(false)}
-          />
-        </div>
+      <CodePreviewResizeHandle />
+      <CodeWorkspace
+        filesOpen={filesOpen}
+        projectId={project?.projectId}
+        files={treeFiles}
+        selected={selected.startsWith(projectPrefix) ? selected.slice(projectPrefix.length) : ''}
+        onSelect={(path) => {
+          chooseFile(projectPrefix + path);
+          if (innerWidth <= 600) setFilesOpen(false);
+        }}
+        onClose={() => setFilesOpen(false)}
+      >
         {draft && file && (
           <div className="code-editor">
             <CodeMirrorEditor
@@ -442,7 +441,7 @@ export function CodePanel() {
             />
           </div>
         )}
-      </div>
+      </CodeWorkspace>
       <p className="code-message" role="status">
         {notice || backupWarning}
       </p>
