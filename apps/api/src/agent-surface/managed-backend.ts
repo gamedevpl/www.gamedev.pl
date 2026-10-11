@@ -1,7 +1,7 @@
 // AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { withoutRetiredPaths } from '@gamedevpl/contract';
-import { isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
+import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
@@ -45,8 +45,9 @@ export interface ManagedRoundSignals {
   deliveredVersion?: string;
   // A preview delivery: gates without sealing.
   previewVersion?: string;
-  // The MCP `end` tool; the agent stopped deliberately.
+  // Set by `end`, but also by submit and takeover; agentEndedBy says which.
   agentEndedAt?: string;
+  agentEndedBy?: 'submit' | 'end' | 'takeover';
 }
 
 // Discriminated by shape: a flat usage's vendor field is just string.
@@ -143,6 +144,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
+    // Before the call: a vendor may run, and end, before startSession resolves.
+    const requestedAt = Date.now();
     const session = await options.provider.startSession({
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
@@ -161,7 +164,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       tools: options.tools,
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     });
-    startedAt.set(session.id, Date.now());
+    startedAt.set(session.id, requestedAt);
     sessionJobs.set(session.id, {
       jobId: brief.jobId,
       ...(brief.slug ? { slug: brief.slug } : {}),
@@ -254,12 +257,18 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       }
 
       const started = startedAt.get(ref) ?? (session.startedAt ? Date.parse(session.startedAt) : NaN);
-      const expired =
+      const overClock =
         options.maxDurationSeconds !== undefined &&
         Number.isFinite(started) &&
         Date.now() - started >= options.maxDurationSeconds * 1000 &&
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
-      if (expired) {
+      // Idle after this session's explicit end: the gate decides.
+      const idleSignals =
+        overClock && session.state === 'idle' && options.readSignals && observeOptions.jobId !== undefined
+          ? await options.readSignals(observeOptions.jobId)
+          : null;
+      const finishedIdle = endedExplicitlySince(idleSignals, started);
+      if (overClock && !finishedIdle) {
         await options.provider.cancelSession(ref);
         await releaseCredential(ref, observeOptions.jobId);
         return {

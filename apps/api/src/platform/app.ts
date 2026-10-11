@@ -509,6 +509,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                       deliveredVersion: record.deliveredVersion,
                       previewVersion: record.previewVersion,
                       agentEndedAt: record.agentEndedAt,
+                      agentEndedBy: record.agentEndedBy,
                     }
                   : null;
               },
