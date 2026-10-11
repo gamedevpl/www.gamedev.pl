@@ -30,13 +30,6 @@ body:has(#panel:not([hidden])) #code-panel {
   align-items: center;
   gap: 4px;
 }
-.code-toolbar select {
-  min-width: 0;
-}
-.code-toolbar input {
-  min-width: 0;
-  width: 30%;
-}
 .code-status,
 .code-message {
   padding: 0 12px 8px;
@@ -191,11 +184,6 @@ body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hid
 .code-panel-actions {
   min-width: 0;
 }
-.code-panel-actions select {
-  width: min(240px, 40vw);
-  min-width: 0;
-  font-size: 12px;
-}
 .code-panel-actions button {
   flex-shrink: 0;
 }
@@ -224,5 +212,118 @@ body[data-dock='left']:has(#code-panel[data-view='editor-chat-preview']:not([hid
   }
   body:has(#code-panel[data-view^='editor-chat']:not([hidden])) #composer {
     flex-shrink: 0;
+  }
+}
+
+.code-current-file {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font, monospace);
+  font-size: 12px;
+}
+.code-workspace {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 100px;
+  overflow: hidden;
+}
+.code-workspace > .code-editor {
+  min-width: 0;
+}
+.code-files-container {
+  width: min(240px, 36%);
+  flex-shrink: 0;
+  border-right: 1px solid var(--panel-border);
+  overflow: auto;
+}
+.code-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+#code-panel :is(.code-panel-actions button, .code-files-head button) {
+  padding: 6px;
+  width: 32px;
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+}
+#code-panel .code-panel-actions button[aria-pressed='true'] {
+  color: var(--turquoise);
+  background: #00e4ac18;
+}
+#code-panel .code-surface-rail-item,
+#code-panel .code-surface-tree-folder-toggle {
+  min-height: 32px;
+  border-radius: 0;
+  font-weight: normal;
+}
+body[data-compact='true'] .code-workspace {
+  flex: none;
+  height: 180px;
+}
+body:has(#code-panel[data-view='editor-preview']:not([hidden])) #panel {
+  visibility: hidden;
+}
+body:has(#code-panel[data-view='editor-preview']:not([hidden])) #game {
+  inset: 0 0 auto auto;
+  width: var(--code-rail);
+  height: var(--height);
+}
+@media (max-width: 600px) {
+  #code-panel .panel-head h2 {
+    font-size: 16px;
+  }
+  .code-files-container {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 2;
+    width: min(280px, 85%);
+    background: var(--panel);
+    box-shadow: 8px 0 24px #0005;
+  }
+  body:has(#code-panel[data-view^='editor-chat']:not([hidden])) .code-workspace {
+    flex: none;
+    height: 180px;
+  }
+  body:has(#code-panel[data-view='editor-preview']:not([hidden])) {
+    --code-height: calc(var(--height) * 0.7);
+    --code-rail: 100%;
+  }
+  body:has(#code-panel[data-view='editor-preview']:not([hidden])) #code-panel {
+    width: 100%;
+  }
+  body:has(#code-panel[data-view='editor-preview']:not([hidden])) #game {
+    top: var(--code-height);
+    height: calc(var(--height) - var(--code-height));
+  }
+}
+
+#code-panel .code-preview-maximize {
+  position: fixed;
+  top: calc(var(--height) - 48px);
+  right: 12px;
+  z-index: 9;
+  width: 36px;
+  padding: 8px;
+  min-height: 36px;
+  background: #161c22dd;
+}
+body[data-dock='left'] #code-panel .code-preview-maximize {
+  right: auto;
+  left: 12px;
+}
+@media (max-width: 600px) {
+  body[data-dock='left'] #code-panel .code-preview-maximize {
+    left: auto;
+    right: 12px;
   }
 }

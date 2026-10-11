@@ -12,6 +12,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Local Play's Code editor loads read-only GameKit declarations from node_modules, preserving TypeScript help after npm Kit migration (#1757).
+- Local Play uses the Studio file-tree sidebar, hides Creator Kit modules from navigation, and replaces the layout selector with panel toggles and maximize controls.
 
 ## 0.33.0 — 2026-10-11
 

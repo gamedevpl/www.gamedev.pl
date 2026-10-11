@@ -7,18 +7,13 @@ import {
   type CodeSurfaceLanguageService,
 } from '../../web/src/surfaces/studio/codeSurfaceLanguageService.js';
 import { languageFor } from '../../web/src/surfaces/studio/codeLanguages.js';
-import { buildSourceTree, type TreeNode } from '../../web/src/surfaces/studio/codeSurfaceTreeModel.js';
+import { PixelIcon } from '../../web/src/PixelIcon.js';
+import { CodeFileTree } from './code-file-tree.js';
 import { CodePanelViewControls, useCodePanelView } from './code-panel-view.js';
 import { codeApi, CodeRequestError, type CodeFile, type CodeProject, type CompletionStatus } from './code-api.js';
 import { refreshCodeProject, syncCodeLanguageFiles } from './code-project-sync.js';
 import { useCodeDrafts, reconcileCodeDrafts } from './code-drafts.js';
 import { reportCodeCompletion, reportCodeStep } from './code-telemetry.js';
-
-function fileOptions(nodes: TreeNode[]): { path: string; label: string }[] {
-  return nodes.flatMap((node) =>
-    node.kind === 'folder' ? fileOptions(node.children) : [{ path: node.path, label: node.path }],
-  );
-}
 
 export function CodePanel() {
   const panelView = useCodePanelView();
@@ -29,7 +24,7 @@ export function CodePanel() {
   const { workspaces, persist, backupWarning } = useCodeDrafts();
   const syncedFiles = useRef(new Map<string, string>());
   const unavailableFiles = useRef(new Map<string, string>());
-  const [fileSearch, setFileSearch] = useState('');
+  const [filesOpen, setFilesOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 600);
   const [selected, setSelected] = useState('');
   const [, redraw] = useState(0);
   const [notice, setNotice] = useState('');
@@ -56,18 +51,28 @@ export function CodePanel() {
         : undefined,
     [ready, diskFile?.path, languageRevision],
   );
-  const options = useMemo(
-    () =>
-      fileOptions(
-        buildSourceTree([
-          ...(project?.files ?? []),
-          ...[...(workspace?.drafts.values() ?? [])]
-            .filter((entry) => !project?.files.some((file) => file.path === entry.base.path))
-            .map((entry) => entry.base),
-        ]),
-      ),
-    [project?.files, workspace],
-  );
+  const projectPrefix = project?.files.find((entry) => !entry.readOnly)?.path.match(/^games\/[^/]+\//)?.[0] ?? '';
+  const treeFiles = [
+    ...(project?.files ?? []),
+    ...[...(workspace?.drafts.values() ?? [])]
+      .filter((entry) => !project?.files.some((file) => file.path === entry.base.path))
+      .map((entry) => entry.base),
+  ]
+    .filter((entry) => !entry.readOnly)
+    .map((entry) => ({
+      path: entry.path.slice(projectPrefix.length),
+      ...(workspace?.drafts.get(entry.path)?.content !== entry.content ? { stagedBy: 'owner' as const } : {}),
+    }));
+
+  useEffect(() => {
+    const narrow = window.matchMedia('(max-width: 600px)');
+    const collapse = () => {
+      if (narrow.matches) setFilesOpen(false);
+    };
+    collapse();
+    narrow.addEventListener('change', collapse);
+    return () => narrow.removeEventListener('change', collapse);
+  }, []);
 
   useEffect(() => {
     if (!open) completionEpoch.current++;
@@ -126,7 +131,6 @@ export function CodePanel() {
           setProvider('');
           setConsent(false);
           completionEpoch.current++;
-          setFileSearch('');
         }
         projectRef.current = next;
         setProject(next);
@@ -324,6 +328,7 @@ export function CodePanel() {
       id="code-panel"
       hidden={!open}
       data-view={view}
+      data-files-open={filesOpen}
       data-maximized={view === 'editor'}
       aria-labelledby="code-panel-title"
     >
@@ -331,30 +336,28 @@ export function CodePanel() {
         <h2 id="code-panel-title">Code</h2>
         <CodePanelViewControls {...panelView} />
       </header>
-      <div className="code-toolbar">
-        <input
-          aria-label="Search project files"
-          placeholder="Find a file…"
-          value={fileSearch}
-          onChange={(event) => setFileSearch(event.target.value)}
-        />
-        <label className="sr-only" htmlFor="code-file">
-          Project file
-        </label>
-        <select
-          id="code-file"
-          value={selected}
-          onChange={(event) => chooseFile(event.target.value)}
-          disabled={!project}
+      {view.endsWith('preview') && (
+        <button
+          className="code-preview-maximize"
+          aria-label="Maximize game"
+          title="Maximize game"
+          onClick={() => panelView.chooseView('game')}
         >
-          {options
-            .filter((entry) => entry.path === selected || entry.label.toLowerCase().includes(fileSearch.toLowerCase()))
-            .map((entry) => (
-              <option key={entry.path} value={entry.path}>
-                {entry.label}
-              </option>
-            ))}
-        </select>
+          <PixelIcon name="expand" size={16} />
+        </button>
+      )}
+      <div className="code-toolbar">
+        <button
+          aria-label="Toggle files"
+          title="Toggle files"
+          aria-expanded={filesOpen}
+          onClick={() => setFilesOpen((value) => !value)}
+        >
+          <PixelIcon name="folder" size={16} />
+        </button>
+        <span className="code-current-file" data-path={selected} title={selected}>
+          {selected.startsWith(projectPrefix) ? selected.slice(projectPrefix.length) : selected}
+        </span>
         <button id="code-save" onClick={() => void save()} disabled={!dirty || saving || file?.readOnly || !file}>
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -396,35 +399,49 @@ export function CodePanel() {
           </button>
         </div>
       )}
-      {draft && file && (
-        <div className="code-editor">
-          <CodeMirrorEditor
-            reportCompletion={reportCodeCompletion}
-            key={`${project?.projectId}:${file.path}`}
-            value={draft.content}
-            language={languageFor(file.path)}
-            onChange={edit}
-            onSave={() => void save()}
-            diagnostics={[]}
-            readOnly={file.readOnly}
-            languageService={languageService}
-            onGotoDefinition={(path, from, to) => {
-              const target = fromVfsPath(path);
-              if (project?.files.some((entry) => entry.path === target)) {
-                chooseFile(target);
-                setSelection({ anchor: from, head: to });
-              }
+      <div className="code-workspace">
+        <div className="code-files-container" hidden={!filesOpen}>
+          <CodeFileTree
+            key={project?.projectId}
+            files={treeFiles}
+            selected={selected.startsWith(projectPrefix) ? selected.slice(projectPrefix.length) : ''}
+            onSelect={(path) => {
+              chooseFile(projectPrefix + path);
+              if (innerWidth <= 600) setFilesOpen(false);
             }}
-            initialSelection={selection}
-            fetchGhostText={fetchGhostText}
-            initialEditorState={draft.editor}
-            onEditorStateChange={(state) => {
-              draft.editor = state;
-              persist();
-            }}
+            onClose={() => setFilesOpen(false)}
           />
         </div>
-      )}
+        {draft && file && (
+          <div className="code-editor">
+            <CodeMirrorEditor
+              reportCompletion={reportCodeCompletion}
+              key={`${project?.projectId}:${file.path}`}
+              value={draft.content}
+              language={languageFor(file.path)}
+              onChange={edit}
+              onSave={() => void save()}
+              diagnostics={[]}
+              readOnly={file.readOnly}
+              languageService={languageService}
+              onGotoDefinition={(path, from, to) => {
+                const target = fromVfsPath(path);
+                if (project?.files.some((entry) => entry.path === target)) {
+                  chooseFile(target);
+                  setSelection({ anchor: from, head: to });
+                }
+              }}
+              initialSelection={selection}
+              fetchGhostText={fetchGhostText}
+              initialEditorState={draft.editor}
+              onEditorStateChange={(state) => {
+                draft.editor = state;
+                persist();
+              }}
+            />
+          </div>
+        )}
+      </div>
       <p className="code-message" role="status">
         {notice || backupWarning}
       </p>

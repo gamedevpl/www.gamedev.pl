@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 import { expect, it } from 'vitest';
 import { findChromium } from './browser.js';
 import { chromiumSandbox } from './sandbox.js';
-import { playCodeFixture, INITIAL_CODE } from './play-code-fixture.js';
+import { playCodeFixture, INITIAL_CODE, selectCodeFile } from './play-code-fixture.js';
 
 const executablePath = findChromium();
 it.skipIf(!executablePath)(
@@ -40,8 +40,8 @@ it.skipIf(!executablePath)(
       await page.click('.cm-content');
       await page.keyboard.press('Control+End');
       await page.keyboard.insertText('// refresh draft');
-      await page.selectOption('#code-file', 'games/demo/game/logic.ts');
-      await page.selectOption('#code-file', 'games/demo/game.ts');
+      await selectCodeFile(page, 'games/demo/game/logic.ts');
+      await selectCodeFile(page, 'games/demo/game.ts');
       const dialog = page.waitForEvent('dialog');
       const reload = page.reload();
       const warning = await dialog;
@@ -71,7 +71,7 @@ it.skipIf(!executablePath)(
       expect(await page.locator('.cm-lintRange-warning').count()).toBe(0);
       rmSync(join(fixture.root, 'games/demo/game/logic.ts'));
       await page.waitForSelector('.cm-lintRange-warning');
-      await expect.poll(() => page.locator('#code-file option[value="games/demo/game/logic.ts"]').count()).toBe(0);
+      await expect.poll(() => page.locator('.code-surface-tree-row[data-path="game/logic.ts"]').count()).toBe(0);
       expect(errors).toEqual([]);
     } finally {
       await browser.close();

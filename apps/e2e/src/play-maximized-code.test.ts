@@ -2,7 +2,7 @@ import { chromium } from 'playwright-core';
 import { expect, it } from 'vitest';
 import { findChromium } from './browser.js';
 import { chromiumSandbox } from './sandbox.js';
-import { playCodeFixture, INITIAL_CODE } from './play-code-fixture.js';
+import { playCodeFixture, INITIAL_CODE, selectCodeFile, chooseCodeView } from './play-code-fixture.js';
 
 const executablePath = findChromium();
 it.skipIf(!executablePath)(
@@ -59,8 +59,8 @@ it.skipIf(!executablePath)(
       await page.keyboard.press('Control+z');
       expect(await page.locator('.cm-content').innerText()).toContain('fullscreen draft');
       await page.getByRole('button', { name: 'Maximize Code editor' }).click();
-      await page.selectOption('#code-file', 'games/demo/game/logic.ts');
-      await page.selectOption('#code-file', 'games/demo/game.ts');
+      await selectCodeFile(page, 'games/demo/game/logic.ts');
+      await selectCodeFile(page, 'games/demo/game.ts');
       expect(await page.locator('.cm-content').innerText()).toContain('fullscreen draft');
       await page.click('.cm-content');
       await page.keyboard.press('Control+z');
@@ -76,6 +76,15 @@ it.skipIf(!executablePath)(
       await page.keyboard.press('Control+End');
       await page.keyboard.insertText('\n// layout draft');
       const retainedEditor = (await page.locator('.cm-content').elementHandle())!;
+      await chooseCodeView(page, 'editor-preview');
+      expect(await page.locator('#panel').isVisible()).toBe(false);
+      expect(await page.locator('#game').isVisible()).toBe(true);
+      const codeWithPreview = (await page.locator('#code-panel').boundingBox())!;
+      const previewWithoutChat = (await page.locator('#game').boundingBox())!;
+      expect(codeWithPreview.width + previewWithoutChat.width).toBe(1440);
+      expect(previewWithoutChat.x).toBe(codeWithPreview.width);
+      expect(previewWithoutChat.height).toBe(1000);
+      await chooseCodeView(page, 'panel');
       await page.click('#dock');
       for (const width of [1440, 900, 390]) {
         const height = width === 390 ? 400 : 800;
@@ -86,7 +95,7 @@ it.skipIf(!executablePath)(
         expect(await page.locator('.code-ai summary').isVisible()).toBe(true);
         await page.getByRole('button', { name: 'Restore Code panel' }).click();
         for (const view of ['editor-chat', 'editor-chat-preview']) {
-          await page.getByRole('combobox', { name: 'Code view' }).selectOption(view);
+          await chooseCodeView(page, view);
           const code = (await page.locator('#code-panel').boundingBox())!;
           const chat = (await page.locator('#panel').boundingBox())!;
           expect(await page.locator('#panel').isVisible()).toBe(true);
@@ -111,6 +120,13 @@ it.skipIf(!executablePath)(
             expect(await page.locator('#game').isVisible()).toBe(false);
             expect(chat.y + chat.height).toBe(height);
           }
+          if (width === 390) {
+            expect(await page.locator('.code-files-container').isVisible()).toBe(false);
+            await page.getByRole('button', { name: 'Toggle files', exact: true }).click();
+            expect(await page.locator('.code-files-container').isVisible()).toBe(true);
+            await page.getByRole('button', { name: 'Hide files', exact: true }).click();
+            expect(await page.locator('.code-files-container').isVisible()).toBe(false);
+          }
           await page.locator('#prompt').scrollIntoViewIfNeeded();
           await page.locator('#prompt').fill('Czy możesz zachować stan rozgrywki oraz wszystkie niezapisane zmiany?');
           expect(await page.locator('#prompt').isVisible()).toBe(true);
@@ -121,17 +137,17 @@ it.skipIf(!executablePath)(
           await page.getByRole('button', { name: 'Maximize Code editor' }).click();
           await page.getByRole('button', { name: 'Restore Code panel' }).click();
           expect(await page.locator('#code-panel').getAttribute('data-view')).toBe(view);
-          await page.getByRole('combobox', { name: 'Code view' }).selectOption('panel');
+          await chooseCodeView(page, 'panel');
         }
       }
       await page.setViewportSize({ width: 1440, height: 1000 });
-      await page.getByRole('combobox', { name: 'Code view' }).selectOption('editor-chat');
+      await chooseCodeView(page, 'editor-chat');
       expect(await page.locator('#prompt').evaluate((node) => node === document.activeElement)).toBe(true);
       await page.keyboard.press('Escape');
       expect(await page.locator('#panel').isVisible()).toBe(false);
       await expect.poll(() => page.locator('#code-panel').getAttribute('data-view')).toBe('editor');
       expect(await page.locator('#code-panel').boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 1000 });
-      await page.getByRole('combobox', { name: 'Code view' }).selectOption('game');
+      await chooseCodeView(page, 'game');
       expect(await page.locator('#code-panel').isVisible()).toBe(false);
       expect(await page.locator('#panel').isVisible()).toBe(false);
       expect(await page.locator('#game').boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 1000 });

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { PixelIcon } from '../../web/src/PixelIcon.js';
 
-type CodeView = 'panel' | 'editor' | 'editor-chat' | 'editor-chat-preview';
+type CodeView = 'panel' | 'editor' | 'editor-chat' | 'editor-chat-preview' | 'editor-preview';
 
 export function useCodePanelView() {
   const [open, setOpen] = useState(false);
@@ -29,6 +29,26 @@ export function useCodePanelView() {
     setView(next);
   };
   const restore = () => setView(previous.current);
+  const toggleChat = () =>
+    chooseView(
+      view.startsWith('editor-chat')
+        ? view.endsWith('preview')
+          ? 'editor-preview'
+          : 'editor'
+        : view.endsWith('preview')
+          ? 'editor-chat-preview'
+          : 'editor-chat',
+    );
+  const togglePreview = () =>
+    chooseView(
+      view.endsWith('preview')
+        ? view.startsWith('editor-chat')
+          ? 'editor-chat'
+          : 'editor'
+        : view.startsWith('editor-chat')
+          ? 'editor-chat-preview'
+          : 'editor-preview',
+    );
 
   useEffect(() => {
     const button = document.getElementById('code-open');
@@ -48,7 +68,7 @@ export function useCodePanelView() {
     const closeChat = () => {
       if (view.startsWith('editor-chat')) {
         previous.current = 'panel';
-        setView('editor');
+        setView(view.endsWith('preview') ? 'editor-preview' : 'editor');
       }
     };
     const escape = (event: KeyboardEvent) => {
@@ -74,7 +94,7 @@ export function useCodePanelView() {
     };
   }, [view]);
 
-  return { open, view, close, chooseView, restore };
+  return { open, view, close, chooseView, restore, toggleChat, togglePreview };
 }
 
 export function CodePanelViewControls({
@@ -82,21 +102,35 @@ export function CodePanelViewControls({
   chooseView,
   restore,
   close,
+  toggleChat,
+  togglePreview,
 }: Omit<ReturnType<typeof useCodePanelView>, 'open'>) {
   const maximized = view === 'editor';
   return (
     <div className="code-panel-actions">
-      <select
-        aria-label="Code view"
-        value={view}
-        onChange={(event) => chooseView(event.target.value as CodeView | 'game')}
+      <button
+        aria-label="Toggle conversation beside Code"
+        title="Conversation"
+        aria-pressed={view.startsWith('editor-chat')}
+        onClick={toggleChat}
       >
-        <option value="panel">Floating panel</option>
-        <option value="editor">Editor only</option>
-        <option value="editor-chat">Editor + chat</option>
-        <option value="editor-chat-preview">Editor + chat + preview</option>
-        <option value="game">Game only · hide controls</option>
-      </select>
+        <PixelIcon name="chat" size={16} />
+      </button>
+      <button
+        aria-label="Toggle game preview beside Code"
+        title="Game preview"
+        aria-pressed={view.endsWith('preview')}
+        onClick={togglePreview}
+      >
+        <PixelIcon name="gamepad" size={16} />
+      </button>
+      <button
+        aria-label={view === 'panel' ? 'Dock Code panel' : 'Float Code panel'}
+        title={view === 'panel' ? 'Dock Code panel' : 'Float Code panel'}
+        onClick={() => chooseView(view === 'panel' ? 'editor-chat-preview' : 'panel')}
+      >
+        <PixelIcon name="panel" size={16} />
+      </button>
       <button
         id="code-maximize"
         aria-label={maximized ? 'Restore Code panel' : 'Maximize Code editor'}

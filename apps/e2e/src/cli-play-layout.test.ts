@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Browser, Page } from 'playwright-core';
 import { SESSION_BROWSER_PAGE } from '../../cli/src/session-browser-page.js';
 import { browserPrerequisite, launchSiteBrowser } from './browser.js';
+import { chooseCodeView } from './play-code-fixture.js';
 
 const prerequisite = browserPrerequisite();
 if (!prerequisite.ok) console.warn(`[e2e] SKIPPED CLI Play layout: ${prerequisite.reason}`);
@@ -171,7 +172,7 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
       const frame = await page.locator('#game').elementHandle();
       await page.locator('#code-open').click();
       for (const view of ['editor', 'editor-chat', 'editor-chat-preview']) {
-        await page.getByRole('combobox', { name: 'Code view' }).selectOption(view);
+        await chooseCodeView(page, view);
         await page.waitForFunction((view) => document.getElementById('code-panel')?.dataset.view === view, view);
         const code = await visibleInside(page, '#code-panel', width!, height!);
         expect(await page.locator('#tools').isVisible()).toBe(false);
