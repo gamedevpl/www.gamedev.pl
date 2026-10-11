@@ -125,6 +125,8 @@ repo in the same session.
   before `npm run e2e:play-code -w @gamedevpl/e2e`. Keep these fixtures in their own
   suite: the deployment browser gate does not build CLI assets. CI runs the local
   suite in the hermetic browser job, without credentials or live provider calls.
+  For a system browser outside `/opt/pw-browsers`, set `E2E_CHROMIUM_PATH` to its
+  executable. A skipped browser suite is no verification signal.
 
 - **Lazy editor assets are release artifacts.** Publish `play-typescript-worker.js.gz`
   beside the CLI and include it in `SHA256SUMS` and provenance. The CLI embeds its
