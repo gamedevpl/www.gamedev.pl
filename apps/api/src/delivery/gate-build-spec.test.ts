@@ -66,6 +66,7 @@ describe('buildSpec', () => {
 
       const steps = calls[0]!.body.steps as Array<{ env: string[]; secretEnv: string[]; args: string[] }>;
       expect(steps[0]!.env).toContain('GATE_PREVIEW_STILLS=0');
+      expect(steps[0]!.env).toContain('GATE_REQUIRE_CHROME_SANDBOX=1');
       expect(steps[0]!.env).toContain('GAMES_STORE_BUCKET=gamedevpl-games-store');
       expect(steps[0]!.secretEnv).toEqual(['GAMES_REPO_TOKEN']);
       expect(steps[0]!.args[1]).toContain('--health');

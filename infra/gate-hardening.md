@@ -174,8 +174,8 @@ an environment stripped of anything credential-shaped (`gate-sandbox.ts`). Concr
   Whether the sandbox can start depends on the build host (user namespaces, or the
   `chromium-sandbox` setuid helper), so each run probes once and logs
   `chrome sandbox on|OFF`. On OFF it falls back to `--no-sandbox`, still as `gate`;
-  `GATE_REQUIRE_CHROME_SANDBOX=1` on the step turns that into a failed run once the logs
-  show the sandbox works in Cloud Build.
+  `GATE_REQUIRE_CHROME_SANDBOX=1` is now on for every gate step, so OFF fails the run;
+  every probe since the rollout reported the sandbox on in Cloud Build.
 - **Nothing outlives its command.** After each harness command the runner SIGKILLs every
   `gate` process, then removes symlinks and hard links from the harness — the runner
   reads that tree back as root to assemble the bundle, and a planted link would have it

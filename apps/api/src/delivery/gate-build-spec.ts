@@ -61,6 +61,8 @@ export function buildSpec(
     `GAMES_STORE_BUCKET=${options.bucket}`,
     `GAMES_REPO=${options.gamesRepo}`,
     'PUPPETEER_SKIP_DOWNLOAD=1',
+    // Every probe since #1646 reported the sandbox on.
+    'GATE_REQUIRE_CHROME_SANDBOX=1',
     // The gate runs in *this* step, not in the API process, so an env var set on
     // the service reaches it only if it is forwarded here. Without this line the
     // preview-stills kill switch is inert in production — set on the service,
