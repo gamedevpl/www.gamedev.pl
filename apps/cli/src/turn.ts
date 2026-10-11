@@ -1,6 +1,8 @@
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 import type { CreatorProposal } from '@gamedevpl/contract';
+import { SUBMISSION_STATES } from '@gamedevpl/contract';
+import { z } from 'zod';
 
 export type TurnResult = { kind: 'reply'; text: string } | { kind: 'build'; ack?: string; roundId: number };
 export type PreparedTurnResult = TurnResult | { kind: 'proposal'; ack?: string };
@@ -37,7 +39,11 @@ export type RoundStatus = {
 };
 
 export async function getStatus(api: ApiClient, token: string): Promise<RoundStatus> {
-  return api.request('GET', `/api/submissions/${encodeURIComponent(token)}`);
+  const response = await api.request<unknown>('GET', `/api/submissions/${encodeURIComponent(token)}`);
+  if (!z.object({ status: z.enum(SUBMISSION_STATES) }).safeParse(response).success) {
+    throw new CliError('The server returned an invalid round status. Try again later or check Studio.', EXIT_REFUSED);
+  }
+  return response as RoundStatus;
 }
 
 export function isTerminalStatus(status: string): boolean {

@@ -1,5 +1,17 @@
 import { expect, it } from 'vitest';
 import { headline, trimUrl } from './transcript-view.js';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { RichText } from './transcript-view.js';
+
+it('colors patch lines without rewriting source backticks or treating red deletions as failures', () => {
+  const line = '-const path = `/failed/source.ts`;';
+  const html = renderToStaticMarkup(createElement(RichText, { text: line }));
+  expect(html).toContain('var(--tone-red)');
+  expect(html).toContain('`/failed/source.ts`');
+  expect(html).not.toContain('<code>');
+  expect(headline([line, '+const path = `/new/source.ts`;']).style.tone).not.toBe('red');
+});
 
 it('summarises a block by its latest outcome', () => {
   expect(headline(['verifying — typecheck', '✓ static ladder green']).style.label).toBe('PASS');

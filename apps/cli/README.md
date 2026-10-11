@@ -171,7 +171,19 @@ model:
 - **conflict** — the same path changed on both sides. Copy those files aside, then `pull`.
   `--force` is the explicit overwrite.
 
-`status` with no token, inside a checkout, prints that same picture. `diff` adds a patch.
+`status` with no token, inside a checkout, lists local edits, incoming platform changes
+and conflicts in separate groups, with one path per line and added/modified/deleted labels.
+Interactive `/status` uses the same working-copy report and then adds the current round's
+status when connected. A failed round read leaves the working-copy report visible.
+Both commands find the checkout from its subdirectories. `diff` and `/diff` show the
+same patch, from the platform version to local files. Terminal output uses Git-like
+colors; redirected output and `NO_COLOR=1` are plain. `--json` preserves the raw report
+without colors or the interactive round supplement.
+Interactive diffs open in a separate browser flyout or a TUI viewer instead of filling
+the conversation. In the TUI, use arrows or PgUp/PgDn to scroll, `q` or Esc to close,
+and Ctrl+D to reopen the latest diff. Browser cards reopen the selected diff.
+The last eight diffs remain available during the session; local conversation history
+stores a reminder to rerun `/diff`, without saving patch contents.
 Both skip files the checkout is not supposed to deliver. `.git` is never uploaded. `.gitignore`
 is honored, and `.gamedevplignore` adds rules in the same syntax after `.gitignore` in each
 directory. A path already recorded in `.gamedev-base.json` stays tracked when a pattern matches

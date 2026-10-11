@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { lineStyle, type LineStyle } from '../src/transcript-style.js';
 import { isMascotLine } from '../src/tui/mascot.js';
+import { checkoutLineStyle } from '../src/checkout-style.js';
 
 const TOKEN = /(`[^`\n]+`|https?:\/\/[^\s<>"'`]+|\/[a-z][\w-]*\b)/g;
 
@@ -16,6 +17,18 @@ export function trimUrl(url: string): string {
 }
 
 export function RichText({ text }: { text: string }) {
+  const checkout = checkoutLineStyle(text);
+  if (checkout)
+    return (
+      <span
+        style={{
+          color: checkout.tone ? `var(--tone-${checkout.tone})` : undefined,
+          fontWeight: checkout.bold ? 600 : undefined,
+        }}
+      >
+        {text}
+      </span>
+    );
   return (
     <>
       {text.split(TOKEN).map((part, index, parts) => {

@@ -45,6 +45,21 @@ async function fixture() {
   return { session, server, url, headers, post, cancel };
 }
 
+it('loads complete diffs on demand instead of sending patches in every state poll', async () => {
+  const { session, url, headers } = await fixture();
+  const patch =
+    'Diff: platform → local\n\n--- platform/game.ts\n+++ local/game.ts\n@@ -1 +1 @@\n-old\n+new' + 'x'.repeat(10000);
+  session.writeLine(patch);
+  const state = await fetch(`${url.origin}/state`, { headers }).then((response) => response.json());
+  expect(state.diffs[0]).not.toHaveProperty('lines');
+  expect(state.lines).not.toContain('+new');
+  const response = await fetch(`${url.origin}/diff/1`, { headers });
+  expect(response.status).toBe(200);
+  expect((await response.json()).lines.join('\n')).toBe(patch);
+  expect((await fetch(`${url.origin}/diff/1`)).status).toBe(401);
+  expect((await fetch(`${url.origin}/diff/99`, { headers })).status).toBe(404);
+});
+
 it('authenticates build retries and refuses stale sources and unsupported previews', async () => {
   const { server, url, headers } = await fixture();
   const retry = vi.fn(async () => {});

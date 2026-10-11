@@ -300,10 +300,6 @@ export interface SubmissionRecord {
   specIsSystemGenerated?: boolean;
 }
 
-// A record stored before `gating` was retired can carry it.
-
-// Nothing entered it deliberately, so `submitted` is where such a job sat.
-
 // A record stored before the field was renamed still carries `issueNumber`
 // instead of `jobId` — Firestore is schemaless, so the TS rename alone
 // leaves every already-persisted document unreadable under the new name.
@@ -311,7 +307,7 @@ export function fromStoredSubmission(data: unknown): SubmissionRecord {
   const record = data as SubmissionRecord & { issueNumber?: number };
   // A record written before it was removed can still hold the string.
   const storedState: string | undefined = record.state;
-  const state = storedState === 'gating' ? 'submitted' : record.state;
+  const state = storedState === 'gating' ? 'submitted' : storedState === 'ready' ? 'ready_for_review' : record.state;
   const jobId = record.jobId ?? record.issueNumber;
   if (state === record.state && jobId === record.jobId) return record;
   return { ...record, state, jobId: jobId as number };

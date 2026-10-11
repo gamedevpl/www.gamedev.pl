@@ -1,10 +1,12 @@
 import { shownPrompt, splitEvidence } from './workbench-evidence.js';
+import { sessionDiff, type SessionDiff } from './session-diff.js';
 import type { Steer } from './live-agent.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
 
 export type SessionState = {
   lines: string[];
+  diffs: SessionDiff[];
   live: string[];
   localTask: string;
   previewUrl: string;
@@ -66,6 +68,7 @@ export function formatSessionIdentity(who: string, slug: string): string {
 export function createSessionController(banner: string, onBusyCancel?: () => void): SessionController {
   let state: SessionState = {
     lines: banner ? banner.split('\n') : [],
+    diffs: [],
     live: [],
     localTask: '',
     previewUrl: '',
@@ -253,10 +256,15 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       };
     },
     writeLine(text) {
-      savedLines = [...savedLines, ...text.split('\n')].slice(-200);
+      const diff = sessionDiff(text, (state.diffs.at(-1)?.id ?? 0) + 1);
+      savedLines = [
+        ...savedLines,
+        ...(diff ? ['Diff was viewed; run /diff again to refresh.'] : text.split('\n')),
+      ].slice(-200);
       state = {
         ...state,
-        lines: [...state.lines, ...text.split('\n')],
+        lines: [...state.lines, ...(diff ? [diff.summary] : text.split('\n'))],
+        diffs: diff ? [...state.diffs, diff].slice(-8) : state.diffs,
         lastOutputAt: Date.now(),
       };
       emit();

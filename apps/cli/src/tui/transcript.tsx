@@ -2,8 +2,16 @@ import { lineStyle } from '../transcript-style.js';
 import { Box, Text } from 'ink';
 import { linkifyTerminalText } from './links.js';
 import { isMascotLine, MASCOT_COLOR } from './mascot.js';
+import { checkoutLineStyle } from '../checkout-style.js';
 
 export function RichText({ text, color }: { text: string; color: boolean }) {
+  const checkout = checkoutLineStyle(text);
+  if (checkout)
+    return (
+      <Text color={color ? checkout.tone : undefined} bold={checkout.bold}>
+        {text}
+      </Text>
+    );
   return (
     <Text>
       {text.split(/(`[^`\n]+`|https?:\/\/[^\s<>"']+|(?<![\w./:-])\/[a-z][\w-]*\b)/g).map((part, index) => {

@@ -9,6 +9,7 @@ import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
 import type { TuiSession, TuiState } from './session.js';
+import { DiffViewer } from './diff.js';
 
 export function draftViewport(draft: string, cursor: number, width: number) {
   const chars = [...draft];
@@ -41,6 +42,16 @@ export function ReplApp({
 }) {
   const [state, setState] = useState<TuiState>(session.get);
   const [debug, setDebug] = useState(false);
+  const [viewDiff, setViewDiff] = useState(false);
+  const newestDiff = state.diffs.at(-1);
+  const seenDiff = useRef(newestDiff?.id ?? 0);
+  useEffect(() => {
+    if (newestDiff && newestDiff.id > seenDiff.current) {
+      seenDiff.current = newestDiff.id;
+      setDebug(false);
+      setViewDiff(true);
+    }
+  }, [newestDiff]);
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
   const [rows, setRows] = useState(stdout.rows || 24);
@@ -60,6 +71,12 @@ export function ReplApp({
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
+    if (viewDiff) return;
+    if (key.ctrl && input === 'd' && newestDiff) {
+      setDebug(false);
+      setViewDiff(true);
+      return;
+    }
     if (debug) {
       if (key.ctrl && input === 'c') session.cancel();
       return;
@@ -209,7 +226,16 @@ export function ReplApp({
         )}
       </Static>
       {debug && readLogs && <TaskDebug read={readLogs} rows={rows} close={() => setDebug(false)} />}
-      <Box flexDirection="column" display={debug ? 'none' : 'flex'}>
+      {viewDiff && newestDiff && (
+        <DiffViewer
+          diff={newestDiff}
+          rows={Math.max(5, rows - 1)}
+          columns={Math.min(stdout.columns || 80, 110)}
+          color={color}
+          close={() => setViewDiff(false)}
+        />
+      )}
+      <Box flexDirection="column" display={debug || viewDiff ? 'none' : 'flex'}>
         <Box flexDirection="column" height={liveRows} flexShrink={0}>
           {live.slice(0, liveRows).map((line, index) => (
             <Text key={`live:${index}:${line.slice(0, 32)}`} color={color ? 'blue' : undefined} wrap="truncate-end">
@@ -312,7 +338,7 @@ export function ReplApp({
                 ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
                 : shellMode
                   ? 'Enter run · Esc exit · ←→ edit'
-                  : 'Enter · ←→ edit · / commands · ! shell · ↑↓ history · Tab fill'
+                  : `Enter · ←→ edit · / commands · ! shell · ↑↓ history · Tab fill${newestDiff ? ' · Ctrl+D diff' : ''}`
               : state.localTask
                 ? shellMode
                   ? 'Enter queue · Esc exit · Ctrl+C stop'
