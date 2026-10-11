@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Local Play's Code editor loads read-only GameKit declarations from node_modules, preserving TypeScript help after npm Kit migration.
+- Local Play's Code editor loads read-only GameKit declarations from node_modules, preserving TypeScript help after npm Kit migration (#1757).
 
 ## 0.33.0 — 2026-10-11
 
