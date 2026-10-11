@@ -47,8 +47,6 @@ export interface ManagedRoundSignals {
   previewVersion?: string;
   // The MCP `end` tool; the agent stopped deliberately.
   agentEndedAt?: string;
-  // Deliveries this round; resets with the round, unlike the versions.
-  roundDeliveryCount?: number;
 }
 
 // Discriminated by shape: a flat usage's vendor field is just string.
@@ -261,12 +259,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         Number.isFinite(started) &&
         Date.now() - started >= options.maxDurationSeconds * 1000 &&
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
-      // Idle after this round delivered or ended: the gate decides.
+      // Idle after this session called end: the gate decides.
       const idleSignals =
         overClock && session.state === 'idle' && options.readSignals && observeOptions.jobId !== undefined
           ? await options.readSignals(observeOptions.jobId)
           : null;
-      const finishedIdle = (idleSignals?.roundDeliveryCount ?? 0) > 0 || Boolean(idleSignals?.agentEndedAt);
+      const finishedIdle = Boolean(idleSignals?.agentEndedAt && Date.parse(idleSignals.agentEndedAt) >= started);
       if (overClock && !finishedIdle) {
         await options.provider.cancelSession(ref);
         await releaseCredential(ref, observeOptions.jobId);

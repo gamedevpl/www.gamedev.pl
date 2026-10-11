@@ -514,7 +514,6 @@ export async function registerSubmissionRoutes(
               deliveredVersion: record.deliveredVersion,
               previewVersion: record.previewVersion,
               agentEndedAt: record.agentEndedAt,
-              roundDeliveryCount: record.roundDeliveryCount,
             };
           },
         }

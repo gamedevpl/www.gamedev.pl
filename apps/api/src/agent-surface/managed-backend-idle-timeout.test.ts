@@ -12,7 +12,7 @@ const BRIEF = {
   apiBaseUrl: 'https://x.test',
 };
 
-// Delivered and ended, then idle past the wall clock.
+// Dispatch, then observe once the one-second clock has passed.
 async function observeAfterClock(state: string, signals: ManagedRoundSignals) {
   const cancelSession = vi.fn(async () => ({ enforced: true }));
   const provider: ManagedAgentProvider = {
@@ -36,41 +36,43 @@ async function observeAfterClock(state: string, signals: ManagedRoundSignals) {
   return { observation, cancelSession };
 }
 
+// Dispatch happens at T0; the clock is one second.
+const T0 = Date.parse('2026-10-10T16:50:00.000Z');
+const AFTER_START = '2026-10-10T16:50:00.500Z';
+const BEFORE_START = '2026-10-10T16:49:00.000Z';
+
 describe('managed backend wall clock on a finished idle round', () => {
-  beforeEach(() => vi.useFakeTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+  });
   afterEach(() => vi.useRealTimers());
 
-  it('leaves an idle round that delivered a preview and ended to the gate', async () => {
+  it('leaves an idle session that delivered and called end to the gate', async () => {
     const { observation, cancelSession } = await observeAfterClock('idle', {
-      previewVersion: 'v20261010T165200000Z-abc123',
-      roundDeliveryCount: 1,
+      previewVersion: 'v20261010T165000400Z-abc123',
+      agentEndedAt: AFTER_START,
     });
     expect(cancelSession).not.toHaveBeenCalled();
     expect(observation?.state).not.toBe('timed_out');
   });
 
-  it('leaves an idle round the agent ended to the gate', async () => {
-    const { cancelSession } = await observeAfterClock('idle', { agentEndedAt: '2026-10-10T16:52:00.000Z' });
-    expect(cancelSession).not.toHaveBeenCalled();
-  });
-
-  it('times out a revision that only carries an earlier round’s versions', async () => {
-    const { observation } = await observeAfterClock('idle', {
-      previewVersion: 'v20261010T165200000Z-abc123',
-      deliveredVersion: 'v20261009T120000000Z-def456',
-      roundDeliveryCount: 0,
-    });
-    expect(observation).toMatchObject({ state: 'timed_out' });
-  });
-
-  it('still times out an idle round that delivered nothing and never ended', async () => {
+  it('still times out an idle session that delivered nothing and never ended', async () => {
     const { observation, cancelSession } = await observeAfterClock('idle', {});
     expect(cancelSession).toHaveBeenCalledWith('session-1');
     expect(observation).toMatchObject({ state: 'timed_out' });
   });
 
+  it('times out a repair session that inherited an earlier session’s end and delivery', async () => {
+    const { observation } = await observeAfterClock('idle', {
+      previewVersion: 'v20261010T164800000Z-old',
+      agentEndedAt: BEFORE_START,
+    });
+    expect(observation).toMatchObject({ state: 'timed_out' });
+  });
+
   it('still times out a session that keeps running past the clock', async () => {
-    const { observation } = await observeAfterClock('in_progress', { agentEndedAt: '2026-10-10T16:52:00.000Z' });
+    const { observation } = await observeAfterClock('in_progress', { agentEndedAt: AFTER_START });
     expect(observation).toMatchObject({ state: 'timed_out' });
   });
 });
