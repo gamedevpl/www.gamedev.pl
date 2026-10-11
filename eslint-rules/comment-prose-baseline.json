@@ -377,7 +377,6 @@
     "apps/web/src/agentActivity.ts": 55,
     "apps/web/src/App.anonymousPlay.test.ts": 40,
     "apps/web/src/App.catalog.test.ts": 110,
-    "apps/web/src/App.createGameFocus.test.ts": 33,
     "apps/web/src/App.gamePageTheater.test.ts": 86,
     "apps/web/src/App.overlayExit.test.ts": 52,
     "apps/web/src/App.qa.test.ts": 337,

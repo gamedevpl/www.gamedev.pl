@@ -127,6 +127,8 @@ repo in the same session.
   suite in the hermetic browser job, without credentials or live provider calls.
   For a system browser outside `/opt/pw-browsers`, set `E2E_CHROMIUM_PATH` to its
   executable. A skipped browser suite is no verification signal.
+  Run the jsdom workbench fixtures too: shared components mount even while Code
+  is closed, and viewport APIs such as `matchMedia` may be absent there.
 
 - **Lazy editor assets are release artifacts.** Publish `play-typescript-worker.js.gz`
   beside the CLI and include it in `SHA256SUMS` and provenance. The CLI embeds its

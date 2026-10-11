@@ -535,7 +535,7 @@
     "apps/web/src/App.anonymousPlay.test.ts": 169,
     "apps/web/src/App.bottomCta.test.ts": 101,
     "apps/web/src/App.catalog.test.ts": 491,
-    "apps/web/src/App.createGameFocus.test.ts": 510,
+    "apps/web/src/App.createGameFocus.test.ts": 508,
     "apps/web/src/App.documentTitle.test.ts": 161,
     "apps/web/src/App.gamePageTheater.test.ts": 250,
     "apps/web/src/App.overlayExit.test.ts": 313,

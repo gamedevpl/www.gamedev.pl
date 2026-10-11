@@ -65,7 +65,8 @@ export function CodePanel() {
     }));
 
   useEffect(() => {
-    const narrow = window.matchMedia('(max-width: 600px)');
+    const narrow = window.matchMedia?.('(max-width: 600px)');
+    if (!narrow) return;
     const collapse = () => {
       if (narrow.matches) setFilesOpen(false);
     };
