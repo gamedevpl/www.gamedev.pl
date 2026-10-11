@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.38.0 — 2026-10-11
+
 ### Added
 
 - `/publish` is an interactive shortcut for `/push --publish`, with the same checks and delivery options (#1774).
