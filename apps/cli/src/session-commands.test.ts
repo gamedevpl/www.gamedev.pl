@@ -3,6 +3,20 @@ import { createSessionController } from './session-controller.js';
 import { createSessionCommands } from './session-commands.js';
 
 describe('shared session commands', () => {
+  it('routes the browser publish action through the publication alias', async () => {
+    const session = createSessionController('');
+    const pending = session.prompt();
+    try {
+      const dispatch = createSessionCommands(session);
+      expect(
+        dispatch({ id: 'publish', kind: 'action', promptId: session.get().promptId, action: 'publish' }).status,
+      ).toBe('accepted');
+      expect(await pending).toBe('/publish');
+    } finally {
+      session.close();
+    }
+  });
+
   it('accepts a second client input once and preserves the terminal draft', async () => {
     const session = createSessionController('');
     const dispatch = createSessionCommands(session);

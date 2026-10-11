@@ -12,6 +12,8 @@ describe('argv and slash completion', () => {
     expect(parseArgv(['node', 'gamedev'])).toMatchObject({ verb: 'repl' });
     expect(completeSlash('/sta')).toEqual(['status']);
     expect(completeSlash('/')).toContain('games');
+    expect(completeSlash('/pub')).toEqual(['publish']);
+    expect(suggestSlash('/publsh')).toBe('publish');
   });
 });
 
@@ -69,6 +71,7 @@ it('suggests shell verbs including browser entry points, excluding session-only 
   expect(suggestVerb('craete')).toBe('create');
   expect(suggestVerb('repp')).toBe('repl');
   expect(CLI_VERBS).not.toContain('logs');
+  expect(CLI_VERBS).not.toContain('publish');
   expect(suggestVerb('logs')).toBeUndefined();
   expect(suggestVerb('xyzzyq')).toBeUndefined();
 });

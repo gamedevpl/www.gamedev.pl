@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `/publish` is an interactive shortcut for `/push --publish`, with the same checks and delivery options (#1774).
+
 ### Fixed
 
 - Local verification passes the game slug to Creator Kit checks, so `push --publish` runs the publication check instead of failing with a usage error (#1774).

@@ -28,6 +28,7 @@ export const BLURB: Record<SlashVerb, string> = {
   whoami: 'print the signed-in identity',
   submit: 'alias for push — deliver a preview from local files',
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
+  publish: 'alias for /push --publish — submit for operator publication (interactive session)',
   pull: 'update a checkout from the platform',
   diff: 'show a colored patch from the platform version to local files, skipping ignored files',
   update: 'update the CLI and this project’s npm CLI dependency',

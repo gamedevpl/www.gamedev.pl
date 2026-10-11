@@ -432,6 +432,8 @@ If a previous MCP agent stopped without ending its session, preview delivery can
 
 Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
 
+`/publish [dir]` is an interactive alias for `/push [dir] --publish`. It runs the full local checks and submits a publication candidate; an operator still approves public publication. Flags such as `--takeover` and `--force` work as with `/push`.
+
 Local tasks default to **Auto (sandboxed)** for agents with supported sandbox flags.
 Other agents default to Ask. `/permissions ask` selects prompts explicitly; choosing
 Auto explicitly for an unsupported agent reports an error. Sandbox startup failures

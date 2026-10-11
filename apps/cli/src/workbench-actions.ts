@@ -8,7 +8,7 @@ export const WORKBENCH_ACTIONS = {
   share: '/share',
   handle: '/handle',
   update: '/update',
-  publish: '/push --publish',
+  publish: '/publish',
   takeover: '/push --takeover',
   'cancel-round': '/cancel-round',
   'share-draft': '/share-draft',

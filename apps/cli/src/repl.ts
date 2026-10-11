@@ -171,8 +171,8 @@ export async function handleReplLine(input: {
       await replStatus(input, rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
-    if (cmd === 'submit' || cmd === 'push') {
-      await submitRepl(input, cmd, rest);
+    if (cmd === 'submit' || cmd === 'push' || cmd === 'publish') {
+      await submitRepl(input, cmd === 'publish' ? 'push' : cmd, cmd === 'publish' ? [...rest, '--publish'] : rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {

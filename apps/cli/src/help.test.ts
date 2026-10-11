@@ -25,5 +25,7 @@ describe('formatHelp', () => {
     expect(out).toContain('a game starts when you ask');
     expect(out).toContain('/quit');
     expect(out).toContain('choose [self|platform] in a checkout');
+    expect(out).toMatch(/\/publish\s+alias for \/push --publish/);
+    expect(out).toContain('operator publication');
   });
 });
