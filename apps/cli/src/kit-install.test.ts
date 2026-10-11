@@ -109,3 +109,67 @@ it('rolls back a failed promotion, including dependencies and the pin', () => {
   expect(readFileSync(join(root, 'gamedev.lock'), 'utf8')).toBe('old');
   expect(readFileSync(join(root, 'node_modules/dependency/index.js'), 'utf8')).toBe('old');
 });
+
+it('migrates manifest-owned folders into an npm dependency and preserves local state', () => {
+  const { root, stage } = fixture();
+  put(root, '.gamedev/local-session.json', 'local session');
+  put(root, 'shared/modules/core.ts', 'old engine');
+  put(root, 'starters/sample/game.ts', 'old starter');
+  put(
+    root,
+    '.gamedev/kit-manifest.json',
+    JSON.stringify({
+      ignoreEntries: ['/tools/', '/shared/', '/starters/', '/kit.json', '/package.json'],
+    }),
+  );
+  rmSync(join(stage, 'tools'), { recursive: true });
+  put(stage, '.gamedev/gamekit.tgz', 'verified package');
+  put(stage, 'node_modules/@gamedevpl/gamekit/shared/modules/core.ts', 'new engine');
+  put(
+    stage,
+    '.gamedev/kit-manifest.json',
+    JSON.stringify({
+      ignoreEntries: ['/.gamedev/gamekit.tgz', '/kit.json', '/package.json'],
+    }),
+  );
+  installPreparedKit(root, stage);
+  for (const path of ['tools', 'shared', 'starters']) expect(existsSync(join(root, path))).toBe(false);
+  expect(readFileSync(join(root, '.gamedev/gamekit.tgz'), 'utf8')).toBe('verified package');
+  expect(readFileSync(join(root, '.gamedev/local-session.json'), 'utf8')).toBe('local session');
+  expect(readFileSync(join(root, 'games/airtime/game.ts'), 'utf8')).toBe('uncommitted hair changes');
+});
+
+it('refuses management of local state beyond the single npm package archive', () => {
+  const { root, stage } = fixture();
+  put(
+    stage,
+    '.gamedev/kit-manifest.json',
+    JSON.stringify({
+      ignoreEntries: ['/.gamedev/local-session.json', '/kit.json', '/package.json'],
+    }),
+  );
+  expect(() => installPreparedKit(root, stage)).toThrow('cannot replace');
+});
+
+it('rolls back an npm migration if replacing dependencies fails', () => {
+  const { root, stage } = fixture();
+  rmSync(join(stage, 'tools'), { recursive: true });
+  put(stage, '.gamedev/gamekit.tgz', 'new archive');
+  put(
+    stage,
+    '.gamedev/kit-manifest.json',
+    JSON.stringify({
+      ignoreEntries: ['/.gamedev/gamekit.tgz', '/kit.json', '/package.json'],
+    }),
+  );
+  expect(() =>
+    installPreparedKit(root, stage, (source, destination) => {
+      if (source === join(stage, 'node_modules')) throw new Error('dependency swap failed');
+      renameSync(source, destination);
+    }),
+  ).toThrow('dependency swap failed');
+  expect(readFileSync(join(root, 'tools/check.ts'), 'utf8')).toBe('old');
+  expect(readFileSync(join(root, 'node_modules/dependency/index.js'), 'utf8')).toBe('old');
+  expect(existsSync(join(root, '.gamedev/gamekit.tgz'))).toBe(false);
+  expect(readFileSync(join(root, 'games/airtime/game.ts'), 'utf8')).toBe('uncommitted hair changes');
+});

@@ -565,3 +565,14 @@ updates can preserve state; unsupported updates require an explicit restart.
 
 See [Play workbench](../../docs/play-workbench.md) for access boundaries, adapter
 limitations, recovery and verification details. `--no-open` prints the session link.
+
+### GameKit in local projects
+
+New Creator Kits install the pinned engine, types, assets, starters and tools as
+`node_modules/@gamedevpl/gamekit`. The project keeps its sources under `games/`;
+its npm scripts invoke the package's build commands. The dependency comes from
+the verified Kit archive in `.gamedev/gamekit.tgz`, with an exact npm lockfile.
+`gamedevpl kit update` stages installation before replacing manifest-owned paths,
+including legacy `shared/`, `tools/` and `starters/` folders. Game sources and
+local session state remain in place. Older pinned Kits keep working with their
+original layout.

@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local Play supports GameKit and its tools in node_modules; kit update migrates compatible Kits while preserving game sources.
+
 ### Fixed
 
 - Interactive diffs open in a separate browser flyout or a scrollable TUI viewer, keeping patches out of the conversation (#1754).
