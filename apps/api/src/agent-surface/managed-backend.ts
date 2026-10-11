@@ -1,7 +1,7 @@
 // AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { withoutRetiredPaths } from '@gamedevpl/contract';
-import { isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
+import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
@@ -45,8 +45,9 @@ export interface ManagedRoundSignals {
   deliveredVersion?: string;
   // A preview delivery: gates without sealing.
   previewVersion?: string;
-  // The MCP `end` tool; the agent stopped deliberately.
+  // Set by `end`, but also by submit and takeover; agentEndedBy says which.
   agentEndedAt?: string;
+  agentEndedBy?: 'submit' | 'end' | 'takeover';
 }
 
 // Discriminated by shape: a flat usage's vendor field is just string.
@@ -261,12 +262,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         Number.isFinite(started) &&
         Date.now() - started >= options.maxDurationSeconds * 1000 &&
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
-      // Idle after this session called end: the gate decides.
+      // Idle after this session's explicit end: the gate decides.
       const idleSignals =
         overClock && session.state === 'idle' && options.readSignals && observeOptions.jobId !== undefined
           ? await options.readSignals(observeOptions.jobId)
           : null;
-      const finishedIdle = Boolean(idleSignals?.agentEndedAt && Date.parse(idleSignals.agentEndedAt) >= started);
+      const finishedIdle = endedExplicitlySince(idleSignals, started);
       if (overClock && !finishedIdle) {
         await options.provider.cancelSession(ref);
         await releaseCredential(ref, observeOptions.jobId);

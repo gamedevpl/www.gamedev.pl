@@ -55,6 +55,7 @@ describe('managed backend wall clock on a finished idle round', () => {
     const { observation, cancelSession } = await observeAfterClock('idle', {
       previewVersion: 'v20261010T165000400Z-abc123',
       agentEndedAt: AFTER_START,
+      agentEndedBy: 'end',
     });
     expect(cancelSession).not.toHaveBeenCalled();
     expect(observation?.state).not.toBe('timed_out');
@@ -75,6 +76,15 @@ describe('managed backend wall clock on a finished idle round', () => {
     const { observation } = await observeAfterClock('idle', {
       previewVersion: 'v20261010T164800000Z-old',
       agentEndedAt: BEFORE_START,
+    });
+    expect(observation).toMatchObject({ state: 'timed_out' });
+  });
+
+  it('times out an idle session whose only marker is a submit, not an end', async () => {
+    const { observation } = await observeAfterClock('idle', {
+      previewVersion: 'v20261010T165000400Z-abc123',
+      agentEndedAt: AFTER_START,
+      agentEndedBy: 'submit',
     });
     expect(observation).toMatchObject({ state: 'timed_out' });
   });
