@@ -59,6 +59,9 @@ When enabling npm GameKit installations, set `supportsNpmGameKit: true` in that
 pin only after verifying the published CLI can play a project without root
 `tools/` or `shared/`. The Kit publisher keeps the legacy layout until this flag
 is present, preserving the release order: CLI first, then Kit activation.
+Also verify Local Play's Code index and file reads expose the installed Kit's
+read-only declarations. A working preview alone misses lost TypeScript help;
+retain the editor's path allowlist and rejection of symbolic links.
 Run the games repo's scoped PR gate and pack the Kit with its real npm lockfile before
 merging the pin update. That merge triggers Kit publication; verify the published
 artifact when access is available and distinguish a merged pin from a confirmed publish.
