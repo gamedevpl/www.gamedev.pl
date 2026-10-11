@@ -180,35 +180,55 @@ it('rechecks without an agent, refreshes failing diagnostics and offers recovery
   expect(f.writes()).toEqual([]);
 });
 
-it('preserves publish and takeover intent when green checks are confirmed for delivery', async () => {
-  const f = fixture();
-  f.state.stage = 'check_game';
-  f.state.locked = true;
-  f.pick.mockImplementation(async (choices, question) => {
-    expect(f.writes()).toEqual([]);
-    if (question.startsWith('Local checks')) {
-      f.state.red = false;
-      return 'Check again';
-    }
-    expect(choices).toEqual(['Publish game', BACK]);
-    return 'Publish game';
-  });
-  await f.run('/push --publish --takeover --force');
-  expect(f.checks.filter((c) => c === 'check:game')).toHaveLength(3);
-  expect(f.writes()).toContainEqual(
-    expect.objectContaining({
-      path: expect.stringContaining('/sources/session'),
-      body: { jobId: 2, generation: 1, stopAgent: true },
-    }),
-  );
-  expect(f.writes()).toContainEqual(
-    expect.objectContaining({
-      path: expect.stringContaining('/sources/deliver'),
-      body: { mode: 'publish', attestation: true },
-    }),
-  );
-  expect(f.ws.runAdapter).not.toHaveBeenCalled();
-});
+it.each(['/push --publish --takeover --force', '/publish --takeover --force'])(
+  'preserves publication and takeover intent during recovery for %s',
+  async (line) => {
+    const f = fixture();
+    f.state.stage = 'check_game';
+    f.state.locked = true;
+    f.pick.mockImplementation(async (choices, question) => {
+      expect(f.writes()).toEqual([]);
+      if (question.startsWith('Local checks')) {
+        f.state.red = false;
+        return 'Check again';
+      }
+      expect(choices).toEqual(['Publish game', BACK]);
+      return 'Publish game';
+    });
+    await f.run(line);
+    expect(f.checks.filter((c) => c === 'check:game')).toHaveLength(3);
+    expect(f.writes()).toContainEqual(
+      expect.objectContaining({
+        path: expect.stringContaining('/sources/session'),
+        body: { jobId: 2, generation: 1, stopAgent: true },
+      }),
+    );
+    expect(f.writes()).toContainEqual(
+      expect.objectContaining({
+        path: expect.stringContaining('/sources/deliver'),
+        body: { mode: 'publish', attestation: true },
+      }),
+    );
+    expect(f.ws.runAdapter).not.toHaveBeenCalled();
+  },
+);
+
+it.each(['/publish', '/publish --publish=false'])(
+  '%s runs the publication check and delivers publish mode',
+  async (line) => {
+    const f = fixture();
+    f.state.red = false;
+    await f.run(line);
+    expect(f.checks).toEqual(['typecheck', 'check:static', 'check:game']);
+    expect(f.writes()).toContainEqual(
+      expect.objectContaining({
+        path: expect.stringContaining('/sources/deliver'),
+        body: { mode: 'publish', attestation: true },
+      }),
+    );
+    expect(f.ws.runAdapter).not.toHaveBeenCalled();
+  },
+);
 
 it('does not offer a repair when no local agent is available', async () => {
   const f = fixture();

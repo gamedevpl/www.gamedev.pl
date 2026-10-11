@@ -452,7 +452,10 @@ describe('submitGame', () => {
       slug: SLUG,
       dest,
       publish: true,
-      run: () => ({ status: 0, stderr: '' }),
+      run: (_cmd, args) => {
+        expect(args.slice(2)).toEqual(['--', SLUG]);
+        return { status: 0, stderr: '' };
+      },
     });
     expect(result.kind).toBe('delivered');
     if (result.kind === 'delivered') {

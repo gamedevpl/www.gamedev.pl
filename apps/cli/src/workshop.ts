@@ -250,7 +250,7 @@ export async function runLocalBuild(input: {
       failed: (stage) => ws.telemetry?.record('verify_failed', { adapter: spec.name, stage }),
       verify: () => {
         presence?.phase('verifying');
-        return runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal });
+        return runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: controller.signal });
       },
       run: async (prompt) => {
         presence?.phase('editing');

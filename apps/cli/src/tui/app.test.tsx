@@ -325,12 +325,12 @@ describe('command completion keyboard', () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();
     await view.press('/pu');
-    expect(view.frame()).toContain('/pull — update a checkout');
+    expect(view.frame()).toContain('/publish — alias for /push --publish');
     await view.press('\t');
-    expect(view.session.get().draft).toBe('/pull ');
+    expect(view.session.get().draft).toBe('/publish ');
     expect(view.session.get().mode).toBe('prompt');
     await view.press('\r');
-    expect(await pending).toBe('/pull ');
+    expect(await pending).toBe('/publish ');
   });
 
   it('selects matches with arrows and fills a partial command with Enter', async () => {
