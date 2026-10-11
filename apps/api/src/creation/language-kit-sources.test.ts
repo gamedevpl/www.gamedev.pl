@@ -12,7 +12,7 @@ function kitTree(files: Record<string, string>): KitTree {
 }
 
 describe('languageKitSources', () => {
-  it('keeps editor-def and sim, drops GameKit modules and the ambient dts', () => {
+  it('keeps public declarations and helper sources, drops engine implementations', () => {
     const files = languageKitSources({
       'shared/game-kit.d.ts': 'declare const GameKit: unknown;\n',
       'shared/editor-def.ts': 'export function defineEditor() {}\n',
@@ -24,6 +24,7 @@ describe('languageKitSources', () => {
     });
     expect(Object.keys(files).sort()).toEqual([
       'shared/editor-def.ts',
+      'shared/genres/platformer.d.ts',
       'shared/sim-math.ts',
       'shared/sim/box-world.ts',
     ]);
@@ -31,6 +32,24 @@ describe('languageKitSources', () => {
 });
 
 describe('studioKitFromTree', () => {
+  it('retains declaration-only helpers and ambient references from a compiled Kit', () => {
+    const files = {
+      'shared/game-kit.d.ts': '/// <reference path="./types/game.d.ts" />',
+      'shared/types/game.d.ts': 'declare const GameKit: unknown;',
+      'shared/editor-def.d.ts': 'export declare function defineEditor(): void;',
+      'shared/sim/det-math.d.ts': 'export declare function detSin(value: number): number;',
+      'shared/modules/core.js': '(()=>{})();',
+    };
+    expect(studioKitFromTree(kitTree(files))).toEqual({
+      declaration: files['shared/game-kit.d.ts'],
+      files: {
+        'shared/types/game.d.ts': files['shared/types/game.d.ts'],
+        'shared/editor-def.d.ts': files['shared/editor-def.d.ts'],
+        'shared/sim/det-math.d.ts': files['shared/sim/det-math.d.ts'],
+      },
+    });
+  });
+
   it('splits the ambient dts from importable kit sources', () => {
     const kit = studioKitFromTree(
       kitTree({
