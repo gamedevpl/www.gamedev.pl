@@ -39,6 +39,13 @@ git worktree add /tmp/verify-xyz verify-xyz
 
 Clean up when done (`git worktree remove --force`, delete the temp branch/clone).
 
+In a `--single-branch` clone, the fetch refspec tracks only the cloned branch.
+`git push -u` can set a new branch's upstream without creating its remote-tracking
+ref, so `--force-with-lease` can report `stale info` even when the remote is unchanged.
+Fetch that branch into an explicit tracking ref, or verify its remote SHA and use
+`--force-with-lease=refs/heads/<branch>:<verified-sha>`. Never replace the lease with
+an unprotected force push.
+
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
