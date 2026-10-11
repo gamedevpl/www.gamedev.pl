@@ -112,40 +112,43 @@ describe('play', () => {
   }, 25000);
 });
 
-it('builds and reloads from an installed GameKit package without root tools or shared folders', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'gdpl-play-npm-'));
-  const kit = join(root, 'node_modules/@gamedevpl/gamekit');
-  mkdirSync(join(root, 'games/robot'), { recursive: true });
-  mkdirSync(join(kit, 'tools/lib'), { recursive: true });
-  symlinkSync(resolve('../../node_modules/tsx'), join(root, 'node_modules/tsx'), 'dir');
-  writeFileSync(join(root, 'package.json'), '{"type":"module"}');
-  writeFileSync(join(kit, 'package.json'), '{"name":"@gamedevpl/gamekit","type":"module"}');
-  writeFileSync(join(root, '.gamedev-slug'), 'robot');
-  const source = join(root, 'games/robot/game.html');
-  writeFileSync(source, '<!doctype html><h1>First packaged game</h1>');
-  writeFileSync(
-    join(kit, 'tools/lib/assemble.ts'),
-    `
+it.each(['ts', 'js'])(
+  'builds and reloads from installed GameKit %s without root tools or shared folders',
+  async (extension) => {
+    const root = mkdtempSync(join(tmpdir(), 'gdpl-play-npm-'));
+    const kit = join(root, 'node_modules/@gamedevpl/gamekit');
+    mkdirSync(join(root, 'games/robot'), { recursive: true });
+    mkdirSync(join(kit, 'tools/lib'), { recursive: true });
+    symlinkSync(resolve('../../node_modules/tsx'), join(root, 'node_modules/tsx'), 'dir');
+    writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+    writeFileSync(join(kit, 'package.json'), '{"name":"@gamedevpl/gamekit","type":"module"}');
+    writeFileSync(join(root, '.gamedev-slug'), 'robot');
+    const source = join(root, 'games/robot/game.html');
+    writeFileSync(source, '<!doctype html><h1>First packaged game</h1>');
+    writeFileSync(
+      join(kit, 'tools/lib/assemble.' + extension),
+      `
     import {readFileSync} from 'node:fs';
     export function assembleGame(slug) { return {html:readFileSync('games/'+slug+'/game.html','utf8')}; }
   `,
-  );
-  const input = { root, slug: 'robot', env: process.env, write: () => undefined };
-  try {
-    const play = await startLocalPlay(input);
-    await eventually(play!.url, (state) => Boolean(state.revision));
-    expect(await fetch(play!.url + 'game').then((r) => r.text())).toContain('First packaged game');
-    writeFileSync(source, '<!doctype html><h1>Updated packaged game</h1>');
-    await eventually(play!.url, (state) => !state.busy && Boolean(state.revision));
-    const deadline = Date.now() + 15_000;
-    while (!(await fetch(play!.url + 'game').then((r) => r.text())).includes('Updated packaged game')) {
-      if (Date.now() >= deadline) throw new Error('Packaged preview did not reload');
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    );
+    const input = { root, slug: 'robot', env: process.env, write: () => undefined };
+    try {
+      const play = await startLocalPlay(input);
+      await eventually(play!.url, (state) => Boolean(state.revision));
+      expect(await fetch(play!.url + 'game').then((r) => r.text())).toContain('First packaged game');
+      writeFileSync(source, '<!doctype html><h1>Updated packaged game</h1>');
+      await eventually(play!.url, (state) => !state.busy && Boolean(state.revision));
+      const deadline = Date.now() + 15_000;
+      while (!(await fetch(play!.url + 'game').then((r) => r.text())).includes('Updated packaged game')) {
+        if (Date.now() >= deadline) throw new Error('Packaged preview did not reload');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(existsSync(join(root, 'tools'))).toBe(false);
+      expect(existsSync(join(root, 'shared'))).toBe(false);
+    } finally {
+      await startLocalPlay({ ...input, stop: true });
+      rmSync(root, { recursive: true, force: true });
     }
-    expect(existsSync(join(root, 'tools'))).toBe(false);
-    expect(existsSync(join(root, 'shared'))).toBe(false);
-  } finally {
-    await startLocalPlay({ ...input, stop: true });
-    rmSync(root, { recursive: true, force: true });
-  }
-});
+  },
+);

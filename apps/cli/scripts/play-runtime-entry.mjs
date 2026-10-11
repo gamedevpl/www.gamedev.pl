@@ -56,7 +56,14 @@ function assemble() {
   const buildingFingerprint = fingerprint;
   const source =
     'import {assembleGame} from ' +
-    JSON.stringify(pathToFileURL(join(kitRoot, 'tools/lib/assemble.ts')).href) +
+    JSON.stringify(
+      pathToFileURL(
+        join(
+          kitRoot,
+          existsSync(join(kitRoot, 'tools/lib/assemble.js')) ? 'tools/lib/assemble.js' : 'tools/lib/assemble.ts',
+        ),
+      ).href,
+    ) +
     '; process.stdout.write(assembleGame(' +
     JSON.stringify(slug) +
     ').html);';
