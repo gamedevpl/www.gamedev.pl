@@ -41,6 +41,7 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
         publish: delivery.publish,
         run: ws?.run,
         abort: controller.signal,
+        onStage: input.onActivity ?? input.write,
       });
       if (controller.signal.aborted) return undefined;
       if (verificationSourceHash(delivery.dest, delivery.slug) !== hash) return 'stale' as const;
@@ -122,6 +123,19 @@ export async function recoverVerification(
   }
 }
 
+async function deliver(input: Input, delivery: Delivery, ws?: Workshop) {
+  const controller = new AbortController();
+  const holder = input.abort ?? ws?.abort;
+  if (holder) holder.current = controller;
+  ws?.onLocalTask?.('delivery');
+  try {
+    return await submitGame({ ...delivery, abort: controller.signal });
+  } finally {
+    if (holder?.current === controller) holder.current = null;
+    ws?.onLocalTask?.('');
+  }
+}
+
 export async function submitRepl(input: Input, cmd: string, rest: string[]): Promise<void> {
   try {
     const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
@@ -143,11 +157,12 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
       publish: parsed.flags.publish === true,
       takeover: parsed.flags.takeover === true,
       run: ws?.run,
+      onProgress: input.onActivity ?? input.write,
     };
     const pick = input.pick ?? ws?.pick;
     for (;;) {
       try {
-        const result = await submitGame(delivery);
+        const result = await deliver(input, delivery, ws);
         if (result.kind === 'delivered') (input.telemetry ?? ws?.telemetry)?.record('delivered');
         input.write(formatSubmitLines(result, slug).join('\n'));
         return;
