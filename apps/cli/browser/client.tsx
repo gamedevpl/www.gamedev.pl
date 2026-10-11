@@ -10,5 +10,6 @@ import './panel-resize.css';
 import './drawers.css';
 import './home.css';
 import './transcript.css';
+import './diff-flyout.css';
 import './responsive.css';
 flushSync(() => createRoot(document.getElementById('workbench')!).render(<PlayShell />));

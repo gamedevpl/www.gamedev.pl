@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { fromStoredSubmission } from './submission.js';
+import { toSubmissionStatus } from '../../creation/job-state.js';
 
 // A record written before `gating` was removed can still hold it.
 
 describe('fromStoredSubmission', () => {
+  it('maps a stored ready record to a public review status without mutating it', () => {
+    const stored = { jobId: 7, createdAt: '2026-01-01T00:00:00Z', state: 'ready' };
+    const record = fromStoredSubmission(stored);
+
+    expect(record.state).toBe('ready_for_review');
+    expect(toSubmissionStatus(record.state!)).toBe('in_review');
+    expect(stored.state).toBe('ready');
+  });
+
   it('reads a legacy gating record as submitted', () => {
     const record = fromStoredSubmission({ jobId: 7, createdAt: '2026-01-01T00:00:00Z', state: 'gating' });
 

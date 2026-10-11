@@ -30,7 +30,7 @@ function fixture() {
       ? { games: [{ slug: 'sky', token: 'tok' }] }
       : url.endsWith('/versions')
         ? { versions: [] }
-        : { slug: 'sky', status: 'dispatched', builder: 'self' };
+        : { slug: 'sky', status: 'queued', phase: 'dispatched', builder: 'self' };
     return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
   });
   const api = createApi({

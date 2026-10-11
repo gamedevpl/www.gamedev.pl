@@ -1,12 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { FirestoreStore } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
+import { toSubmissionStatus } from '../creation/job-state.js';
 
 // Regression coverage for the legacy-'gating' normalization.
 
 // Added when that state was removed from JobState (item 4).
 
 describe('FirestoreStore / legacy gating normalization', () => {
+  it('returns a defined public status for a stored ready record', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await db.collection('submissions').doc('7').set({
+      jobId: 7,
+      createdAt: '2026-01-01T00:00:00Z',
+      state: 'ready',
+    });
+
+    const record = await store.getSubmission(7);
+
+    expect(record?.state).toBe('ready_for_review');
+    expect(toSubmissionStatus(record!.state!)).toBe('in_review');
+  });
+
   it('reads a stored legacy gating record as submitted', async () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);

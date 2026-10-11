@@ -338,7 +338,7 @@
     "apps/api/src/store/records/quota.ts": 308,
     "apps/api/src/store/records/review.ts": 488,
     "apps/api/src/store/records/social.ts": 232,
-    "apps/api/src/store/records/submission.ts": 1649,
+    "apps/api/src/store/records/submission.ts": 1607,
     "apps/api/src/store/records/telemetry.test.ts": 92,
     "apps/api/src/store/records/telemetry.ts": 1137,
     "apps/api/src/store/shelf-guard-firestore.ts": 83,

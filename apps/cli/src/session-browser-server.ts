@@ -10,6 +10,7 @@ import { workbenchActionSchema, WORKBENCH_ACTIONS } from './workbench-actions.js
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import { stripVTControlCharacters } from 'node:util';
+import { stripTerminalControls } from './ansi.js';
 import { z } from 'zod';
 import { createSessionCommands } from './session-commands.js';
 import type { SessionController } from './session-controller.js';
@@ -160,6 +161,22 @@ export async function startSessionBrowser(
     }
     try {
       if (await code.route(req, origin, body, reply)) return;
+      if (req.method === 'GET' && /^\/diff\/\d+$/.test(req.url ?? '')) {
+        const id = Number(req.url!.slice(6));
+        const diff = session.get().diffs.find((item) => item.id === id);
+        reply(
+          diff ? 200 : 404,
+          diff
+            ? {
+                ...diff,
+                summary: clean(diff.summary),
+                files: diff.files.map(clean),
+                lines: diff.lines.map(stripTerminalControls),
+              }
+            : { error: 'Diff expired. Run /diff again.' },
+        );
+        return;
+      }
       if (req.method === 'POST' && req.url === '/stop') {
         reply(200, { ok: true });
         setTimeout(() => {
@@ -199,6 +216,11 @@ export async function startSessionBrowser(
           question: clean(state.question),
           choices: state.choices.slice(0, 50).map((value) => ({ label: clean(value), value })),
           lines: state.lines.slice(-200).map(clean),
+          diffs: state.diffs.map((diff) => ({
+            id: diff.id,
+            summary: clean(diff.summary),
+            files: diff.files.map(clean),
+          })),
           live: state.live.map(clean),
           queued: state.queued.map((line) => clean(shownPrompt(line))),
         });

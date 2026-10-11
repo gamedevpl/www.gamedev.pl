@@ -1,0 +1,72 @@
+.diff-flyout {
+  position: fixed;
+  inset: var(--panel-top) 12px auto;
+  margin: 0 auto;
+  width: min(1100px, calc(100vw - 24px));
+  height: min(760px, calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px)));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  color: var(--ink);
+  background: var(--panel-bg, #161c22);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: 0 20px 70px #0008;
+  overflow: hidden;
+}
+.diff-flyout[open] {
+  display: flex;
+  flex-direction: column;
+}
+.diff-flyout::backdrop {
+  background: #03090f66;
+}
+.diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-shrink: 0;
+}
+.diff-head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.diff-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.diff-head button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+.diff-content {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font:
+    12px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre;
+  tab-size: 2;
+}
+.diff-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+}
+.diff-card span {
+  font-size: 12px;
+  color: var(--muted);
+}

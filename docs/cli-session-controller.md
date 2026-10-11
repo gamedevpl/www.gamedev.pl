@@ -64,6 +64,13 @@ by CLI preview startup are registered for the proxy; transcript text alone canno
 a new preview. The existing source reader checks assembled content against its revision,
 and source generations prevent late responses from attaching a previous preview.
 
+Interactive `/diff` keeps the complete patch outside the conversation. The controller
+retains the last eight diffs for this session, and the transcript carries short summaries.
+Browser state polls include only diff metadata; authenticated `GET /diff/<id>` loads a
+selected patch when the flyout opens. The TUI uses a scrollable viewer (arrows, PgUp/PgDn,
+q/Esc to close, Ctrl+D to reopen the latest diff) without clearing terminal scrollback.
+Local conversation history stores a rerun reminder instead of patch contents.
+
 **Lifecycle:** terminal `/play` and browser entry commands belong to the invoking
 terminal by default. Ctrl+C ends Play and cancels active local work. Browser controllers
 keep a private recovery journal. Use `--detach` to run independently of the terminal;

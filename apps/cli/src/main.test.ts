@@ -176,7 +176,7 @@ describe('runCli verbs', () => {
     try {
       const status = io();
       expect(await runCli(['node', 'gamedevpl', 'status'], { GAMEDEV_TOKEN: 'gdpl_pat_x' }, status)).toBe(EXIT_GREEN);
-      expect(status.read().out).toContain('local-only: game.ts');
+      expect(status.read().out).toContain('modified: game.ts');
       expect(status.read().out).toContain('scratch.log');
       expect(status.read().out).not.toContain('+B');
       const diff = io();

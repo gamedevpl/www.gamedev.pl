@@ -27,7 +27,9 @@ import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
 import { checkoutGame, diffGame, findCheckout, pullGame, readCheckoutSlug } from './checkout.js';
-import { formatDiffReport, formatWorkingCopy } from './working-copy.js';
+import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js';
+import { colorCheckoutLines } from './checkout-style.js';
+import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
@@ -314,7 +316,10 @@ export async function runCli(
         const here = findCheckout(process.cwd());
         if (here) {
           const report = await diffGame({ api, slug: here.slug, dest: here.root });
-          const lines = formatWorkingCopy({ sync: report, ignored: report.ignored, clash: report.incoming.blocked });
+          const lines = colorCheckoutLines(
+            formatCheckoutStatus(report, here.slug),
+            wantsColor(env, Boolean(io.stdout.isTTY)),
+          );
           io.stdout.write(asJson ? `${JSON.stringify(report)}\n` : `${lines.join('\n')}\n`);
           return EXIT_GREEN;
         }
@@ -364,11 +369,15 @@ export async function runCli(
       if (!slug) throw new CliError(cliUsage('diff', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? here?.root ?? process.cwd();
       const diff = await diffGame({ api, slug, dest });
-      const lines = formatDiffReport(diff);
+      const lines = colorCheckoutLines(formatCheckoutDiff(diff), wantsColor(env, Boolean(io.stdout.isTTY)));
       if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
       else io.stdout.write(`${lines.join('\n')}\n`);
       if (!flags.force && (diff.kind === 'conflict' || diff.kind === 'legacy')) {
-        throw new CliError(lines[0] ?? diff.kind, EXIT_REFUSED, cliUsage('pull'));
+        throw new CliError(
+          diff.kind === 'conflict' ? 'working copy has conflicts' : 'checkout has no base version',
+          EXIT_REFUSED,
+          cliUsage('diff'),
+        );
       }
       return EXIT_GREEN;
     }

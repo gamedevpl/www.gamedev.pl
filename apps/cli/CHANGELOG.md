@@ -7,6 +7,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Interactive diffs open in a separate browser flyout or a scrollable TUI viewer, keeping patches out of the conversation (#1754).
+- Interactive `/status` shows the same working-copy report as `gamedevpl status`, with round status below; status and diff use grouped paths and Git-like colors (#1754).
+- `/status` and the live Studio status explain an invalid server response instead of printing `undefined` (#1754).
+
 ## 0.32.1 — 2026-10-11
 
 ### Fixed

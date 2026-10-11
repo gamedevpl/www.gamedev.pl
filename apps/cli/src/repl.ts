@@ -14,12 +14,13 @@ import { playGame } from './play.js';
 import { playSessionCommand } from './play-session-command.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
-import { completeSlash, parseArgv, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
+import { completeSlash, parseArgv, jsonMode, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
-import { diffGame, pullGame, readCheckoutSlug } from './checkout.js';
-import { formatDiffReport } from './working-copy.js';
+import { diffGame, findCheckout, pullGame, readCheckoutSlug } from './checkout.js';
+import { formatCheckoutDiff } from './checkout-display.js';
+import { replStatus } from './repl-status.js';
 import { connectSession, checkoutSession } from './connect-flow.js';
 import { submitRepl } from './repl-delivery.js';
 import { dispatchReadVerb } from './verbs.js';
@@ -167,17 +168,7 @@ export async function handleReplLine(input: {
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'status') {
-      const tok = rest[0] || input.token;
-      if (!tok) {
-        input.write(`run it as ${cliUsage('status')}`);
-        return { next: 'continue', conversationId: input.conversationId };
-      }
-      try {
-        const status = await getStatus(input.api, tok);
-        input.write(formatStatusLines(status, input.api.origin).join('\n'));
-      } catch (error) {
-        input.write(formatError(error));
-      }
+      await replStatus(input, rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'submit' || cmd === 'push') {
@@ -188,11 +179,12 @@ export async function handleReplLine(input: {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const cwd = input.workshop?.root ?? input.cwd ?? process.cwd();
+        const here = findCheckout(cwd);
         const sessionSlug =
           (cmd === 'connect' || cmd === 'checkout') && !parsed.args[0] && !input.workshop && input.token
             ? (await getStatus(input.api, input.token)).slug
             : undefined;
-        const slug = parsed.args[0] ?? input.workshop?.slug ?? sessionSlug ?? readCheckoutSlug(cwd);
+        const slug = parsed.args[0] ?? input.workshop?.slug ?? sessionSlug ?? here?.slug ?? readCheckoutSlug(cwd);
         if (!slug) {
           input.write(`Choose a game: /${cmd} <slug>. /games lists your games.`);
           return { next: 'continue', conversationId: input.conversationId };
@@ -216,14 +208,14 @@ export async function handleReplLine(input: {
                 });
           return { next: 'continue', ...(opened ?? {}) };
         }
-        const dest = parsed.args[1] ?? cwd;
+        const dest = parsed.args[1] ?? (parsed.args[0] ? cwd : (here?.root ?? cwd));
         if (cmd === 'pull') {
           const pulled = await pullGame({ api: input.api, slug, dest, force: parsed.flags.force === true });
           const notices = pulled.notices.length ? `\n${pulled.notices.join('\n')}` : '';
           input.write(`pulled ${slug} @ ${pulled.version}${notices}`);
         } else {
           const report = await diffGame({ api: input.api, slug, dest });
-          input.write(formatDiffReport(report).join('\n'));
+          input.write(jsonMode(parsed.flags) ? JSON.stringify(report) : formatCheckoutDiff(report).join('\n'));
         }
       } catch (error) {
         input.write(formatError(error));
