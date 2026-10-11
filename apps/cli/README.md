@@ -106,7 +106,7 @@ is involved.
 ## Verbs
 
 `login` `logout` `whoami` `agents` `games` `status` `share` `profile` `handle` `builder`
-`connect` `delegate` `checkout` `pull` `diff` `submit` `quota` `notifications` `update` `help`
+`connect` `delegate` `checkout` `pull` `diff` `push` `publish` `submit` `quota` `notifications` `update` `help`
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
@@ -432,7 +432,7 @@ If a previous MCP agent stopped without ending its session, preview delivery can
 
 Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
 
-`/publish [dir]` is an interactive alias for `/push [dir] --publish`. It runs the full local checks and submits a publication candidate; an operator still approves public publication. Flags such as `--takeover` and `--force` work as with `/push`.
+Use `gamedevpl publish [dir]` in your shell or `/publish [dir]` in the checkout session as a shortcut for `push [dir] --publish`. Both run the full local checks and submit a publication candidate; an operator still approves public publication. Flags such as `--takeover` and `--force` work as with `push`.
 
 Local tasks default to **Auto (sandboxed)** for agents with supported sandbox flags.
 Other agents default to Ask. `/permissions ask` selects prompts explicitly; choosing

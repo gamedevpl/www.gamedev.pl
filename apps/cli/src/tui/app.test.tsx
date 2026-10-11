@@ -325,7 +325,7 @@ describe('command completion keyboard', () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();
     await view.press('/pu');
-    expect(view.frame()).toContain('/publish — alias for /push --publish');
+    expect(view.frame()).toContain('/publish — alias for push --publish');
     await view.press('\t');
     expect(view.session.get().draft).toBe('/publish ');
     expect(view.session.get().mode).toBe('prompt');
