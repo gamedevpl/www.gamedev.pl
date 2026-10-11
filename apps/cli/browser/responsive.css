@@ -86,7 +86,9 @@
   body[data-dock='left'] :is(#panel, #workbench-tools) {
     left: max(8px, env(safe-area-inset-left));
   }
-  #code-panel:not([data-view^='editor']) {
+  #code-panel:not([data-view^='editor']),
+  body:has(#panel:not([hidden])) #code-panel:not([data-view^='editor']),
+  body[data-dock='left'][data-code-open='true'] #code-panel:not([data-view^='editor']) {
     left: max(8px, env(safe-area-inset-left));
     right: auto;
     width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));

@@ -199,6 +199,37 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
     }
   });
 
+  it.each([
+    [390, 667],
+    [844, 390],
+  ])('keeps floating Code inside safe insets with either conversation dock at %i × %i', async (width, height) => {
+    const page = await fixture(width!, height!);
+    try {
+      // Force phone safe-area env values; desktop Chromium otherwise reports zero.
+      const safe = { left: 44, right: 34 };
+      await page.evaluate((safe) => {
+        for (const style of document.querySelectorAll('style')) {
+          style.textContent = style
+            .textContent!.replaceAll('env(safe-area-inset-left)', `${safe.left}px`)
+            .replaceAll('env(safe-area-inset-right)', `${safe.right}px`);
+        }
+      }, safe);
+      await page.locator('#edit').click();
+      for (const dock of ['right', 'left']) {
+        if (dock === 'left') await page.locator('#dock').click();
+        await page.locator('#code-open').click();
+        const code = await visibleInside(page, '#code-panel', width!, height!);
+        expect(code.x).toBeGreaterThanOrEqual(safe.left);
+        expect(code.x + code.width).toBeLessThanOrEqual(width! - safe.right);
+        const close = await visibleInside(page, '[aria-label="Close Code"]', width!, height!);
+        expect(close.x + close.width).toBeLessThanOrEqual(width! - safe.right);
+        await page.locator('[aria-label="Close Code"]').click();
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
   it('keeps chat above long notices when the viewport shrinks for a keyboard', async () => {
     const page = await fixture(390, 667);
     try {
