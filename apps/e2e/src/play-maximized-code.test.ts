@@ -86,6 +86,12 @@ it.skipIf(!executablePath)(
       expect(previewWithoutChat.height).toBe(1000);
       await chooseCodeView(page, 'panel');
       await page.click('#dock');
+      await chooseCodeView(page, 'editor-preview');
+      const rightPreview = (await page.locator('#game').boundingBox())!;
+      const rightMaximize = (await page.getByRole('button', { name: 'Maximize game', exact: true }).boundingBox())!;
+      expect(rightMaximize.x).toBeGreaterThanOrEqual(rightPreview.x);
+      expect(rightMaximize.x + rightMaximize.width).toBeLessThanOrEqual(rightPreview.x + rightPreview.width);
+      await chooseCodeView(page, 'panel');
       for (const width of [1440, 900, 390]) {
         const height = width === 390 ? 400 : 800;
         await page.setViewportSize({ width, height });
@@ -120,6 +126,11 @@ it.skipIf(!executablePath)(
             expect(preview.y + preview.height).toBe(height);
             expect(preview.x).toBe(chat.x);
             expect(preview.width).toBe(chat.width);
+            const maximize = (await page.getByRole('button', { name: 'Maximize game', exact: true }).boundingBox())!;
+            expect(maximize.x).toBeGreaterThanOrEqual(preview.x);
+            expect(maximize.x + maximize.width).toBeLessThanOrEqual(preview.x + preview.width);
+            expect(maximize.y).toBeGreaterThanOrEqual(preview.y);
+            expect(maximize.y + maximize.height).toBeLessThanOrEqual(preview.y + preview.height);
           } else {
             expect(await page.locator('#game').isVisible()).toBe(false);
             expect(chat.y + chat.height).toBe(height);

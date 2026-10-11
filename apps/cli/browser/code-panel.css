@@ -319,12 +319,12 @@ body:has(#code-panel[data-view='editor-preview']:not([hidden])) #game {
   min-height: 36px;
   background: #161c22dd;
 }
-body[data-dock='left'] #code-panel .code-preview-maximize {
+body[data-dock='left'] #code-panel[data-view='editor-chat-preview'] .code-preview-maximize {
   right: auto;
   left: 12px;
 }
 @media (max-width: 600px) {
-  body[data-dock='left'] #code-panel .code-preview-maximize {
+  body[data-dock='left'] #code-panel[data-view='editor-chat-preview'] .code-preview-maximize {
     left: auto;
     right: 12px;
   }
