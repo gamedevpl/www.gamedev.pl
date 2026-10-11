@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { childEnv, spawnCommand } from './delegate.js';
@@ -31,7 +31,17 @@ export async function prepareWorkspace(input: {
     input.write('preparing the pinned Creator Kit');
     await run(process.execPath, ['setup.mjs']);
   }
-  if (existsSync(join(input.cwd, 'package.json')) && !existsSync(join(input.cwd, 'node_modules'))) {
+  const packagePath = join(input.cwd, 'package.json');
+  if (existsSync(packagePath) && existsSync(join(input.cwd, 'workspace-setup.mjs'))) {
+    const pkg = JSON.parse(readFileSync(packagePath, 'utf8')) as { name?: string };
+    if (pkg.name === '@gamedevpl/gamekit') await run(process.execPath, ['workspace-setup.mjs', '--force']);
+  }
+  const npmKit = existsSync(join(input.cwd, '.gamedev/gamekit.tgz'));
+  if (
+    existsSync(packagePath) &&
+    (!existsSync(join(input.cwd, 'node_modules')) ||
+      (npmKit && !existsSync(join(input.cwd, 'node_modules/@gamedevpl/gamekit/package.json'))))
+  ) {
     input.write('installing the checkout toolchain');
     await run('npm', ['ci']);
   }

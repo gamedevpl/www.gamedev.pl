@@ -79,7 +79,7 @@ export async function checkKit(
   const pin = readPin(root);
   const manifestPath = kitPath(root, '.gamedev/kit-manifest.json');
   const installed = existsSync(manifestPath)
-    ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as Partial<KitLock>)
+    ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as Partial<KitLock> & { installation?: string })
     : {};
   return {
     root,
@@ -88,6 +88,9 @@ export async function checkKit(
     current:
       installed.kitSha256 === lock.kitSha256 &&
       existsSync(kitPath(root, 'node_modules')) &&
+      (installed.installation !== 'npm' ||
+        (existsSync(kitPath(root, '.gamedev/gamekit.tgz')) &&
+          existsSync(kitPath(root, 'node_modules/@gamedevpl/gamekit/package.json')))) &&
       pin.engineRef === lock.engineRef &&
       pin.kitSha256 === lock.kitSha256 &&
       !existsSync(kitPath(root, '.gamedev/kit-update.json')) &&

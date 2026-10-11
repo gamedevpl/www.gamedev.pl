@@ -125,3 +125,15 @@ it('uses the checkout writer lock when invoked from a game subdirectory', async 
     await writer;
   }
 });
+
+it('repairs an npm Kit whose dependency or archive is missing despite an existing node_modules', async () => {
+  const { input, root, lock } = fixture();
+  put(root, 'gamedev.lock', JSON.stringify(lock));
+  put(root, '.gamedev/kit-manifest.json', JSON.stringify({ ...lock, installation: 'npm' }));
+  expect((await checkKit(input)).current).toBe(false);
+  put(root, '.gamedev/gamekit.tgz', 'verified archive');
+  put(root, 'node_modules/@gamedevpl/gamekit/package.json', '{}');
+  expect((await checkKit(input)).current).toBe(true);
+  rmSync(join(root, 'node_modules/@gamedevpl/gamekit'), { recursive: true });
+  expect((await checkKit(input)).current).toBe(false);
+});

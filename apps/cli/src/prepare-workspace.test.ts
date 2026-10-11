@@ -38,3 +38,21 @@ describe('checkout preparation', () => {
     await expect(prepareWorkspace({ ...input, abort: controller.signal })).rejects.toThrow('cancelled');
   });
 });
+
+it('converts a new Kit unpacked by a legacy scaffold before npm installation', async () => {
+  const input = fixture();
+  writeFileSync(join(input.cwd, 'package.json'), JSON.stringify({ name: '@gamedevpl/gamekit' }));
+  mkdirSync(join(input.cwd, 'node_modules'));
+  writeFileSync(
+    join(input.cwd, 'workspace-setup.mjs'),
+    `
+    import {writeFileSync, mkdirSync} from 'node:fs';
+    writeFileSync('package.json', JSON.stringify({name: 'gamedevpl-game'}));
+    mkdirSync('.gamedev', {recursive: true});
+    writeFileSync('.gamedev/gamekit.tgz', 'verified');
+  `,
+  );
+  await prepareWorkspace(input);
+  expect(existsSync(join(input.cwd, '.gamedev/gamekit.tgz'))).toBe(true);
+  expect(existsSync(join(input.cwd, 'installed'))).toBe(true);
+});

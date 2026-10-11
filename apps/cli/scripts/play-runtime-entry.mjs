@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 const [root, slug, statePath, key] = process.argv.slice(2);
+const kitRoot = existsSync(join(root, 'node_modules/@gamedevpl/gamekit/package.json'))
+  ? join(root, 'node_modules/@gamedevpl/gamekit')
+  : root;
 const cliVersion = process.env.GAMEDEVPL_PREVIEW_VERSION;
 const token = randomBytes(24).toString('hex');
 let html = '',
@@ -39,10 +42,10 @@ function treeStamp(dir) {
 function sourceStamp() {
   return [
     join(root, 'games', slug),
-    join(root, 'shared'),
-    join(root, 'starters'),
+    join(kitRoot, 'shared'),
+    join(kitRoot, 'starters'),
     join(root, 'templates'),
-    join(root, 'tools'),
+    join(kitRoot, 'tools'),
   ]
     .filter(existsSync)
     .map(treeStamp)
@@ -53,7 +56,7 @@ function assemble() {
   const buildingFingerprint = fingerprint;
   const source =
     'import {assembleGame} from ' +
-    JSON.stringify(pathToFileURL(join(root, 'tools/lib/assemble.ts')).href) +
+    JSON.stringify(pathToFileURL(join(kitRoot, 'tools/lib/assemble.ts')).href) +
     '; process.stdout.write(assembleGame(' +
     JSON.stringify(slug) +
     ').html);';

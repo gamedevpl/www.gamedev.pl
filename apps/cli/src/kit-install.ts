@@ -50,7 +50,8 @@ function managed(root: string): string[] {
     const path = entry.replace(/^\//, '').replace(/\/$/, '');
     kitPath(root, path);
     if (
-      [...RESERVED].some((reserved) => reserved.toLowerCase() === path.split('/')[0]!.toLowerCase()) ||
+      ([...RESERVED].some((reserved) => reserved.toLowerCase() === path.split('/')[0]!.toLowerCase()) &&
+        path !== '.gamedev/gamekit.tgz') ||
       path.startsWith('.gamedev-')
     )
       throw new CliError(`Kit cannot replace ${path}.`, EXIT_REFUSED);
@@ -72,7 +73,9 @@ export function recoverKitInstall(root: string): void {
       // Journal paths get the same namespace restriction as manifests, plus fixed metadata.
       if (
         [...RESERVED].some((reserved) => reserved.toLowerCase() === entry.path.split('/')[0]!.toLowerCase()) &&
-        !['gamedev.lock', '.gitignore', 'node_modules', '.gamedev/kit-manifest.json'].includes(entry.path)
+        !['gamedev.lock', '.gitignore', 'node_modules', '.gamedev/kit-manifest.json', '.gamedev/gamekit.tgz'].includes(
+          entry.path,
+        )
       )
         throw new CliError('Unsafe pending Kit update path.', EXIT_REFUSED);
       const backup = kitPath(stage, `backup/${entry.path}`);
