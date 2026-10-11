@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import './studio-credentials.css';
+import './studio-pat.css';
 
 type PatRow = {
   tokenId: string;
@@ -14,7 +16,7 @@ async function patRequest(path: string, init?: RequestInit): Promise<Response> {
 }
 
 export function StudioPatPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const baseId = useId();
   const [tokens, setTokens] = useState<PatRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,11 @@ export function StudioPatPanel() {
   }
 
   return (
-    <section className="studio-agent-key" aria-labelledby={`${baseId}-title`} data-testid="pat-tokens">
+    <section
+      className="studio-credentials-section studio-pat"
+      aria-labelledby={`${baseId}-title`}
+      data-testid="pat-tokens"
+    >
       <h3 id={`${baseId}-title`} className="studio-agent-key-title">
         {t('patTokens.title')}
       </h3>
@@ -92,37 +98,67 @@ export function StudioPatPanel() {
         </p>
       ) : null}
       {secret ? (
-        <p className="studio-connect-state" data-testid="pat-secret">
-          {t('patTokens.shownOnce')}: <code>{secret}</code>
-        </p>
+        <div className="studio-credential-confirm" data-testid="pat-secret">
+          <p>{t('patTokens.shownOnce')}</p>
+          <pre className="studio-connect-snippet studio-pat-secret" tabIndex={0}>
+            {secret}
+          </pre>
+        </div>
       ) : null}
-      <div className="studio-connect-actions">
-        <input
-          aria-label={t('patTokens.name')}
-          value={name}
-          maxLength={60}
-          onChange={(event) => setName(event.target.value)}
-        />
-        <input
-          aria-label={t('patTokens.days')}
-          type="number"
-          min={1}
-          max={365}
-          value={days}
-          onChange={(event) => {
-            const n = event.target.valueAsNumber;
-            setDays(Number.isFinite(n) ? Math.min(365, Math.max(1, Math.trunc(n))) : 1);
-          }}
-        />
-        <button type="button" className="studio-connect-skip" disabled={busy} onClick={() => void mint()}>
+      <div className="studio-connect-actions studio-pat-form">
+        <label className="studio-pat-field">
+          <span>{t('patTokens.name')}</span>
+          <input
+            aria-label={t('patTokens.name')}
+            value={name}
+            maxLength={60}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label className="studio-pat-field">
+          <span>{t('patTokens.days')}</span>
+          <input
+            aria-label={t('patTokens.days')}
+            type="number"
+            min={1}
+            max={365}
+            value={days}
+            onChange={(event) => {
+              const n = event.target.valueAsNumber;
+              setDays(Number.isFinite(n) ? Math.min(365, Math.max(1, Math.trunc(n))) : 1);
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="primary-btn studio-credential-action"
+          disabled={busy}
+          onClick={() => void mint()}
+        >
           {busy ? t('patTokens.minting') : t('patTokens.mint')}
         </button>
       </div>
-      <ul>
+      {!loading && !error && tokens.length === 0 ? (
+        <p className="studio-connect-state">{t('patTokens.empty')}</p>
+      ) : null}
+      <ul className="studio-pat-list">
         {tokens.map((row) => (
-          <li key={row.tokenId}>
-            {row.name} · {row.expiresAt.slice(0, 10)}
-            <button type="button" disabled={busy} onClick={() => void revoke(row.tokenId)}>
+          <li key={row.tokenId} className="studio-pat-row">
+            <div className="studio-pat-summary">
+              <strong>{row.name}</strong>
+              <span>
+                {t(row.expired ? 'patTokens.expired' : 'patTokens.expires')}{' '}
+                <time dateTime={row.expiresAt}>
+                  {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(new Date(row.expiresAt))}
+                </time>
+              </span>
+            </div>
+            <button
+              type="button"
+              className="studio-credential-action is-danger"
+              disabled={busy}
+              onClick={() => void revoke(row.tokenId)}
+            >
               {t('patTokens.revoke')}
             </button>
           </li>

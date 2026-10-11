@@ -2051,6 +2051,9 @@
     "shownOnce": "Skopiuj teraz",
     "name": "Nazwa tokenu",
     "days": "Wygasa za (dni)",
+    "expires": "Wygasa",
+    "expired": "Wygasł",
+    "empty": "Nie masz jeszcze osobistych tokenów dostępu.",
     "revoke": "Unieważnij",
     "revokeError": "Nie udało się unieważnić tego tokenu. Spróbuj za chwilę."
   },

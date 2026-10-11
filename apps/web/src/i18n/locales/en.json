@@ -2037,6 +2037,9 @@
     "shownOnce": "Copy this now",
     "name": "Token name",
     "days": "Expires in days",
+    "expires": "Expires",
+    "expired": "Expired",
+    "empty": "No personal access tokens yet.",
     "revoke": "Revoke",
     "revokeError": "We couldn't revoke that token. Try again in a moment."
   },
