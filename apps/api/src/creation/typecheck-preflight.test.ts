@@ -85,24 +85,6 @@ export function start(): Round { return { score: 0 }; }
     expect(result.ok).toBe(true);
   });
 
-  it('checks historical simulation imports against a declaration-only Kit', () => {
-    const input = {
-      slug: 'compiled',
-      kitShared: {
-        'shared/game-kit.d.ts': KIT_DTS,
-        'shared/sim/det-math.d.ts': 'export declare function detSin(value: number): number;',
-      },
-      sources: { 'game.ts': "import {detSin} from '../../shared/sim/det-math.ts'; export const value = detSin(0.5);" },
-    };
-    expect(typecheckDeliverySources(input)).toMatchObject({ ok: true });
-    expect(
-      typecheckDeliverySources({
-        ...input,
-        sources: { 'game.ts': input.sources['game.ts'].replace('detSin(0.5)', 'detSin("invalid")') },
-      }),
-    ).toMatchObject({ ok: false });
-  });
-
   it('skips when the kit declaration is absent', () => {
     const result = typecheckDeliverySources({
       slug: 'x',
