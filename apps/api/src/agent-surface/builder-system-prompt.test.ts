@@ -14,6 +14,9 @@ describe('builderSystemPrompt', () => {
 
   it('keeps one edit path per file on the shell lane only', () => {
     expect(builderSystemPrompt({ shell: true })).toContain('Change each file through one path only');
+    expect(builderSystemPrompt({ shell: true })).toContain('Do not patch over MCP separately');
     expect(builderSystemPrompt({ shell: false })).not.toContain('Change each file through one path only');
+    expect(builderSystemPrompt({ shell: false })).toContain('Prefer patching single files');
+    expect(builderSystemPrompt({ shell: true })).not.toContain('Prefer patching single files');
   });
 });
