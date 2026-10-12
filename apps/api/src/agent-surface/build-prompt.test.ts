@@ -37,8 +37,8 @@ describe('buildPrompt', () => {
 
   it('sends a shell sandbox to the unpacked kit instead of the MCP-only lane', () => {
     const prompt = buildPrompt(BRIEF, { shell: true });
-    expect(prompt).toContain('Unpack `get_kit`’s kitUrl once');
     expect(prompt).toContain('GET its `archive` once');
+    expect(prompt).toMatch(/kitUrl once.*`npm ci --ignore-scripts` once.*typecheck -- <slug>` before/);
     expect(prompt).not.toContain('read_source_files');
     expect(prompt).not.toContain('Do not use bash');
     expect(prompt).not.toContain('do not download or unpack');
