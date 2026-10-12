@@ -322,6 +322,22 @@ it.each([
   expect(await choice).toBe('Deny');
 });
 
+it('handles a mouse report and arrow key batched in one source read as separate events', async () => {
+  const view = screen();
+  for (let i = 0; i < 60; i++) view.session.writeLine(`Batch line ${i}`);
+  const answer = view.session.prompt(['Fix', 'Back'], 'Delivery choice');
+  await view.press('\u001b[<64;10;5M\u001b[B');
+  expect(view.frame()).toContain('Earlier messages');
+  expect(view.session.get().pickIndex).toBe(1);
+  await view.press('\r');
+  expect(await answer).toBe('Back');
+  void view.session.prompt();
+  view.session.setDraft('draft');
+  await view.press('\u001b[<64;10;5M\u001b[D');
+  await view.press('X');
+  expect(view.session.get().draft).toBe('drafXt');
+});
+
 it('keeps local ownership and queued messages visible without claiming a delivery', async () => {
   const view = screen();
   view.session.setLive(['Studio: queued (no_agent_yet)']);

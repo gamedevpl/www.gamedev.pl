@@ -67,6 +67,10 @@ prefixes and legacy mouse payloads wait for the next read; a 100 ms deadline
 releases a standalone Escape key. Unmounting cancels that timer and disconnects
 the input bridge before native terminal handoffs.
 
+Completed CSI/SS3/mouse frames remain separate readable objects, because Ink
+parses one key per read. Adjacent plain text stays grouped for pasted input;
+framing also retains double-Escape Meta key sequences.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

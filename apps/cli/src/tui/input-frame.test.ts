@@ -7,16 +7,36 @@ afterEach(() => vi.useRealTimers());
 it.each(['\u001b[<64;100;5M', '\u001b[M`\u0084%'])('holds incomplete wire reports at every boundary: %s', (report) => {
   for (let split = 1; split < report.length; split++) {
     const framed = frameInput('typed' + report.slice(0, split));
-    expect(framed).toEqual({ ready: 'typed', pending: report.slice(0, split) });
-    expect(frameInput(framed.pending + report.slice(split))).toEqual({ ready: report, pending: '' });
+    expect(framed).toEqual({ frames: ['typed'], pending: report.slice(0, split) });
+    expect(frameInput(framed.pending + report.slice(split))).toEqual({ frames: [report], pending: '' });
   }
 });
 
 it('preserves literal prefixes and frames fragmented keyboard escape sequences too', () => {
-  expect(frameInput('[<T>() => T] [MABC')).toEqual({ ready: '[<T>() => T] [MABC', pending: '' });
-  expect(frameInput('\u001b[5')).toEqual({ ready: '', pending: '\u001b[5' });
-  expect(frameInput('\u001b[5~\u001bOB')).toEqual({ ready: '\u001b[5~\u001bOB', pending: '' });
-  expect(frameInput('\u001bO')).toEqual({ ready: '', pending: '\u001bO' });
+  expect(frameInput('[<T>() => T] [MABC')).toEqual({ frames: ['[<T>() => T] [MABC'], pending: '' });
+  expect(frameInput('\u001b[5')).toEqual({ frames: [], pending: '\u001b[5' });
+  expect(frameInput('\u001b[5~\u001bOB')).toEqual({ frames: ['\u001b[5~', '\u001bOB'], pending: '' });
+  expect(frameInput('\u001bO')).toEqual({ frames: [], pending: '\u001bO' });
+});
+
+it('preserves frame boundaries when Ink drains a batched read', async () => {
+  const source = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const bridge = bufferTerminalInput(source as unknown as NodeJS.ReadStream);
+  bridge.stdin.setEncoding('latin1');
+  const frames: string[] = [];
+  bridge.stdin.on('readable', () => {
+    let frame: string | null;
+    while ((frame = bridge.stdin.read()) !== null) frames.push(frame);
+  });
+  try {
+    source.write('\u001b[<64;10;5M\u001b[B\u001bOB\u001b\u001b[Atext');
+    await vi.waitFor(() =>
+      expect(frames).toEqual(['\u001b[<64;10;5M', '\u001b[B', '\u001bOB', '\u001b\u001b[A', 'text']),
+    );
+  } finally {
+    bridge.stop();
+    source.end();
+  }
 });
 
 it('releases a standalone Escape and cancels buffered input on a native handoff', async () => {

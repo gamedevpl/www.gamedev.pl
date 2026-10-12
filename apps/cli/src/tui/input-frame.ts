@@ -1,25 +1,34 @@
 import { Transform } from 'node:stream';
 
-export function frameInput(input: string): { ready: string; pending: string } {
+export function frameInput(input: string): { frames: string[]; pending: string } {
+  const frames: string[] = [];
   let offset = 0;
   while (offset < input.length) {
     const start = input.indexOf('\u001b', offset);
-    if (start < 0) break;
-    if (start + 1 === input.length) return { ready: input.slice(0, start), pending: input.slice(start) };
-    if (input[start + 1] === '[') {
-      let end = start + 2;
+    if (start < 0) {
+      frames.push(input.slice(offset));
+      break;
+    }
+    if (start > offset) frames.push(input.slice(offset, start));
+    let tag = start + 1;
+    while (input[tag] === '\u001b') tag++;
+    if (tag === input.length) return { frames, pending: input.slice(start) };
+    if (input[tag] === '[') {
+      let end = tag + 1;
       while (end < input.length && (input.charCodeAt(end) < 0x40 || input.charCodeAt(end) > 0x7e)) end++;
-      if (end === input.length) return { ready: input.slice(0, start), pending: input.slice(start) };
-      if (end === start + 2 && input[end] === 'M') {
-        if (end + 3 >= input.length) return { ready: input.slice(0, start), pending: input.slice(start) };
+      if (end === input.length) return { frames, pending: input.slice(start) };
+      if (end === tag + 1 && input[end] === 'M') {
+        if (end + 3 >= input.length) return { frames, pending: input.slice(start) };
         end += 3;
       }
       offset = end + 1;
-    } else if (input[start + 1] === 'O' && start + 2 === input.length) {
-      return { ready: input.slice(0, start), pending: input.slice(start) };
-    } else offset = start + 2;
+    } else if (input[tag] === 'O') {
+      if (tag + 1 === input.length) return { frames, pending: input.slice(start) };
+      offset = tag + 2;
+    } else offset = tag + 1;
+    frames.push(input.slice(start, offset));
   }
-  return { ready: input, pending: '' };
+  return { frames, pending: '' };
 }
 
 export function bufferTerminalInput(source: NodeJS.ReadStream) {
@@ -30,11 +39,12 @@ export function bufferTerminalInput(source: NodeJS.ReadStream) {
   const stream = Object.assign(
     new Transform({
       decodeStrings: false,
+      readableObjectMode: true,
       transform(chunk: string | Buffer, _encoding, done) {
         clearTimeout(timer);
         const framed = frameInput(pending + (typeof chunk === 'string' ? chunk : chunk.toString('latin1')));
         pending = framed.pending;
-        if (framed.ready) this.push(Buffer.from(framed.ready, 'latin1'));
+        for (const frame of framed.frames) this.push(Buffer.from(frame, 'latin1'));
         if (pending) {
           // Escape needs a deadline because it is also a standalone key.
           timer = setTimeout(() => {
