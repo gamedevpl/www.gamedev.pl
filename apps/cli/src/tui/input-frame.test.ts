@@ -17,6 +17,9 @@ it('preserves literal prefixes and frames fragmented keyboard escape sequences t
   expect(frameInput('\u001b[5')).toEqual({ frames: [], pending: '\u001b[5' });
   expect(frameInput('\u001b[5~\u001bOB')).toEqual({ frames: ['\u001b[5~', '\u001bOB'], pending: '' });
   expect(frameInput('\u001bO')).toEqual({ frames: [], pending: '\u001bO' });
+  expect(frameInput('\u001b[[A\u001b[[5~')).toEqual({ frames: ['\u001b[[A', '\u001b[[5~'], pending: '' });
+  expect(frameInput('\u001b[[')).toEqual({ frames: [], pending: '\u001b[[' });
+  expect(frameInput('\u001bOx')).toEqual({ frames: ['\u001bO', 'x'], pending: '' });
 });
 
 it('preserves frame boundaries when Ink drains a batched read', async () => {
@@ -56,8 +59,9 @@ it('releases a standalone Escape and cancels buffered input on a native handoff'
     expect(received).toBe('');
     await vi.advanceTimersByTimeAsync(1);
     expect(received).toBe('\u001b');
-    source.write('\u001b[');
-    await vi.advanceTimersByTimeAsync(1);
+    source.write('\u001b[<64;');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(received).toBe('\u001b');
     expect(bridge.hasPending()).toBe(true);
     bridge.stop();
     await vi.advanceTimersByTimeAsync(100);

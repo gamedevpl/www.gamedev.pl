@@ -15,6 +15,7 @@ export function frameInput(input: string): { frames: string[]; pending: string }
     if (tag === input.length) return { frames, pending: input.slice(start) };
     if (input[tag] === '[') {
       let end = tag + 1;
+      if (input[end] === '[') end++;
       while (end < input.length && (input.charCodeAt(end) < 0x40 || input.charCodeAt(end) > 0x7e)) end++;
       if (end === input.length) return { frames, pending: input.slice(start) };
       if (end === tag + 1 && input[end] === 'M') {
@@ -24,7 +25,7 @@ export function frameInput(input: string): { frames: string[]; pending: string }
       offset = end + 1;
     } else if (input[tag] === 'O') {
       if (tag + 1 === input.length) return { frames, pending: input.slice(start) };
-      offset = tag + 2;
+      offset = /[A-FHP-Sa-e]/.test(input[tag + 1]) ? tag + 2 : tag + 1;
     } else offset = tag + 1;
     frames.push(input.slice(start, offset));
   }
@@ -45,7 +46,8 @@ export function bufferTerminalInput(source: NodeJS.ReadStream) {
         const framed = frameInput(pending + (typeof chunk === 'string' ? chunk : chunk.toString('latin1')));
         pending = framed.pending;
         for (const frame of framed.frames) this.push(frame);
-        if (pending) {
+        const ambiguous = pending.replaceAll('\u001b', '');
+        if (pending && (ambiguous === '' || ambiguous === '[' || ambiguous === 'O')) {
           // Escape needs a deadline because it is also a standalone key.
           timer = setTimeout(() => {
             this.push(pending);

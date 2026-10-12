@@ -338,6 +338,17 @@ it('handles a mouse report and arrow key batched in one source read as separate 
   expect(view.session.get().draft).toBe('drafXt');
 });
 
+it('keeps Linux-console function keys intact without inserting their trailing letters', async () => {
+  const view = screen();
+  void view.session.prompt();
+  view.session.setDraft('keep draft');
+  await view.press('\u001b[[A\u001b[[B\u001b[[C\u001b[[D\u001b[[E');
+  expect(view.session.get().draft).toBe('keep draft');
+  await view.press('\u001b[[', true);
+  await view.press('A');
+  expect(view.session.get().draft).toBe('keep draft');
+});
+
 it('keeps local ownership and queued messages visible without claiming a delivery', async () => {
   const view = screen();
   view.session.setLive(['Studio: queued (no_agent_yet)']);

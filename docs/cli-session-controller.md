@@ -63,13 +63,14 @@ Reader reference counts preserve bytes during direct Ink mounts. The input
 bridge owns physical encoding and restores it when the bridge disconnects.
 
 The host frames terminal escape sequences before Ink reads them. Partial CSI/SS3
-prefixes and legacy mouse payloads wait for the next read; a 100 ms deadline
-releases a standalone Escape key. Unmounting cancels that timer and disconnects
+prefixes and legacy mouse payloads wait for the next read. Recognized incomplete
+mouse reports have no deadline; a 100 ms deadline releases ambiguous Escape/Meta
+prefixes that can be standalone keys. Unmounting cancels that timer and disconnects
 the input bridge before native terminal handoffs.
 
 Completed CSI/SS3/mouse frames remain separate readable objects, because Ink
 parses one key per read. Adjacent plain text stays grouped for pasted input;
-framing also retains double-Escape Meta key sequences.
+framing also retains double-Escape Meta key sequences and Linux-console `ESC[[` function keys.
 Frames are byte strings and ignore Ink encoding resets, which otherwise merge
 queued frames and can replace legacy coordinate bytes before the parser sees them.
 
