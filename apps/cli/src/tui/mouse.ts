@@ -78,6 +78,9 @@ export function useTerminalInput(onKey: (input: string, key: Key) => void, onWhe
     useCallback((input, key) => {
       const event = decode.current(rawInput.current);
       for (const wheel of event.wheels) handlers.current.onWheel?.(wheel);
+      const control = rawInput.current.replaceAll('\u001b', '');
+      if (!event.mouse && rawInput.current.startsWith('\u001b') && control.length >= 2 && control[0] === 'O' && input)
+        return;
       const text = keyboard.current.write(Buffer.from(event.mouse ? event.text : input, 'latin1'));
       if (!event.mouse || text) handlers.current.onKey(text, key);
     }, []),

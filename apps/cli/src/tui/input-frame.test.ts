@@ -19,7 +19,8 @@ it('preserves literal prefixes and frames fragmented keyboard escape sequences t
   expect(frameInput('\u001bO')).toEqual({ frames: [], pending: '\u001bO' });
   expect(frameInput('\u001b[[A\u001b[[5~')).toEqual({ frames: ['\u001b[[A', '\u001b[[5~'], pending: '' });
   expect(frameInput('\u001b[[')).toEqual({ frames: [], pending: '\u001b[[' });
-  expect(frameInput('\u001bOx')).toEqual({ frames: ['\u001bO', 'x'], pending: '' });
+  expect(frameInput('\u001bOt\u001bOM\u001bOp')).toEqual({ frames: ['\u001bOt', '\u001bOM', '\u001bOp'], pending: '' });
+  expect(frameInput('\u001bO1;5B')).toEqual({ frames: ['\u001bO1;5B'], pending: '' });
 });
 
 it('preserves frame boundaries when Ink drains a batched read', async () => {

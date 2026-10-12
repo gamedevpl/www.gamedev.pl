@@ -24,8 +24,10 @@ export function frameInput(input: string): { frames: string[]; pending: string }
       }
       offset = end + 1;
     } else if (input[tag] === 'O') {
-      if (tag + 1 === input.length) return { frames, pending: input.slice(start) };
-      offset = /[A-FHP-Sa-e]/.test(input[tag + 1]) ? tag + 2 : tag + 1;
+      let end = tag + 1;
+      while (end < input.length && (input.charCodeAt(end) < 0x40 || input.charCodeAt(end) > 0x7e)) end++;
+      if (end === input.length) return { frames, pending: input.slice(start) };
+      offset = end + 1;
     } else offset = tag + 1;
     frames.push(input.slice(start, offset));
   }

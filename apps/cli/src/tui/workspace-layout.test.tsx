@@ -349,6 +349,26 @@ it('keeps Linux-console function keys intact without inserting their trailing le
   expect(view.session.get().draft).toBe('keep draft');
 });
 
+it('keeps all VT100 and application-keypad SS3 codes out of the composer', async () => {
+  const view = screen();
+  void view.session.prompt();
+  view.session.setDraft('keep draft');
+  await view.press(
+    ['t', 'u', 'v', 'l', 'w', 'x', 'M', 'p', 'q', 'r', 's', 'y'].map((suffix) => '\u001bO' + suffix).join(''),
+  );
+  expect(view.session.get().draft).toBe('keep draft');
+  await view.press('\u001bO', true);
+  await view.press('t');
+  expect(view.session.get().draft).toBe('keep draft');
+  await view.press('ordinary text');
+  expect(view.session.get().draft).toBe('keep draftordinary text');
+  const answer = view.session.prompt(['Fix', 'Back'], 'Modified SS3 key');
+  await view.press('\u001bO1;5B');
+  expect(view.session.get().pickIndex).toBe(1);
+  await view.press('\r');
+  expect(await answer).toBe('Back');
+});
+
 it('keeps local ownership and queued messages visible without claiming a delivery', async () => {
   const view = screen();
   view.session.setLive(['Studio: queued (no_agent_yet)']);

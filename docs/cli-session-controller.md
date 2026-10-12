@@ -71,6 +71,8 @@ the input bridge before native terminal handoffs.
 Completed CSI/SS3/mouse frames remain separate readable objects, because Ink
 parses one key per read. Adjacent plain text stays grouped for pasted input;
 framing also retains double-Escape Meta key sequences and Linux-console `ESC[[` function keys.
+Complete SS3 frames retain every suffix; keys Ink does not recognize are ignored
+instead of exposing their protocol bytes as composer text.
 Frames are byte strings and ignore Ink encoding resets, which otherwise merge
 queued frames and can replace legacy coordinate bytes before the parser sees them.
 
