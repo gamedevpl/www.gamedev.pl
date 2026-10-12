@@ -39,6 +39,7 @@ describe('anthropic mounted workspace', () => {
     const upload = calls.find(([url]) => url.endsWith('/v1/files'))!;
     expect((upload[1].headers as Record<string, string>)['x-api-key']).toBe('secret-key');
     expect(upload[1].body).toBeInstanceOf(FormData);
+    expect((upload[1].body as FormData).get('expires_in_seconds')).toBe('3600');
     const session = calls.find(([url]) => url.includes('/v1/sessions'))!;
     expect(JSON.parse(String(session[1].body)).resources).toEqual([
       { type: 'file', file_id: 'file_1', mount_path: '/kit.tgz' },

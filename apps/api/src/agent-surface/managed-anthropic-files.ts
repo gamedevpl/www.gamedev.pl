@@ -8,6 +8,7 @@ import { ManagedWorkspaceError } from './managed-workspace.js';
 export const ANTHROPIC_UPLOADS_DIR = '/mnt/session/uploads';
 
 const FileSchema = z.object({ id: z.string().min(1) });
+const UPLOAD_EXPIRY_SECONDS = 3_600;
 
 export interface AnthropicFilesClient {
   baseUrl: string;
@@ -25,6 +26,8 @@ export interface MountedFile {
 async function upload(client: AnthropicFilesClient, archive: ManagedWorkspaceArchive): Promise<MountedFile> {
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(archive.bytes)], { type: 'application/gzip' }), archive.name);
+  // Backstop for a lost file id or failed deletes; the API minimum.
+  form.append('expires_in_seconds', String(UPLOAD_EXPIRY_SECONDS));
   const response = await client.fetchImpl(`${client.baseUrl}/v1/files`, {
     method: 'POST',
     headers: { 'x-api-key': client.apiKey, 'anthropic-version': client.apiVersion },
