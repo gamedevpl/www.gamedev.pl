@@ -7,13 +7,18 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Publication checks allow extended play plans to finish and report timeouts explicitly; `GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS` sets an optional limit (#1801).
+
+## 0.42.0 — 2026-10-12
+
 ### Added
 
 - `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object (#1796).
 
 ### Fixed
 
-- Publication checks allow extended play plans to finish and report timeouts explicitly; `GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS` sets an optional limit (#1801).
 - Claude Auto approves ordinary Bash permission requests inside its sandbox, including local diagnostic scripts, while refusing sandbox overrides and writes outside the game directory; policy refusals identify the sandbox rather than blaming the creator (#1796).
 
 ## 0.41.1 — 2026-10-12
