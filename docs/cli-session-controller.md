@@ -57,6 +57,11 @@ Input retains Ink's raw Escape byte before its keyboard normalization, so pasted
 legacy `CSI M` reports, including partial payloads across reads, for multiplexers
 that accept tracking but ignore the SGR encoding mode.
 
+TUI input readers preserve bytes through latin1 stream decoding before parsing
+legacy coordinates; keyboard text uses a separate streaming UTF-8 decoder.
+Reader reference counts reapply byte preservation after Ink changes raw-mode
+ownership and restore Ink's UTF-8 encoding after the final reader unmounts.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

@@ -1,7 +1,9 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { StringDecoder } from 'node:string_decoder';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useInput, useStdin, useStdout, type DOMElement, type Key } from 'ink';
 
 export type Wheel = { x: number; y: number; direction: -1 | 1 };
+const readers = new WeakMap<NodeJS.ReadStream, number>();
 
 export function mouseDecoder() {
   let pending = '';
@@ -57,8 +59,9 @@ export function mouseDecoder() {
 
 export function useTerminalInput(onKey: (input: string, key: Key) => void, onWheel?: (wheel: Wheel) => void) {
   const decode = useRef(mouseDecoder());
+  const keyboard = useRef(new StringDecoder('utf8'));
   const rawInput = useRef('');
-  const { internal_eventEmitter: emitter } = useStdin();
+  const { stdin, internal_eventEmitter: emitter } = useStdin();
   const handlers = useRef({ onKey, onWheel });
   handlers.current = { onKey, onWheel };
   useLayoutEffect(() => {
@@ -75,10 +78,22 @@ export function useTerminalInput(onKey: (input: string, key: Key) => void, onWhe
     useCallback((input, key) => {
       const event = decode.current(rawInput.current);
       for (const wheel of event.wheels) handlers.current.onWheel?.(wheel);
-      if (!event.mouse) handlers.current.onKey(input, key);
-      else if (event.text) handlers.current.onKey(event.text, key);
+      const text = keyboard.current.write(Buffer.from(event.mouse ? event.text : input, 'latin1'));
+      if (!event.mouse || text) handlers.current.onKey(text, key);
     }, []),
   );
+  useEffect(() => {
+    readers.set(stdin, (readers.get(stdin) ?? 0) + 1);
+    // Preserve legacy coordinate bytes; keyboard text gets its own UTF-8 decoder.
+    stdin.setEncoding('latin1');
+    return () => {
+      const remaining = (readers.get(stdin) ?? 1) - 1;
+      if (remaining) readers.set(stdin, remaining);
+      else readers.delete(stdin);
+      // Ink resets encoding whenever a raw-mode reader mounts or unmounts.
+      stdin.setEncoding(remaining ? 'latin1' : 'utf8');
+    };
+  }, [stdin]);
 }
 
 export function useMouseReporting(enabled: boolean) {

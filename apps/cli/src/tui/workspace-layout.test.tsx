@@ -55,8 +55,9 @@ function screen(
     frame: () => frames.at(-1) ?? '',
     takeOutput: () => frames.splice(0).join(''),
     terminalOutput: () => terminal.join(''),
+    inputEncoding: () => input.readableEncoding,
     close: () => app.unmount(),
-    async press(keys: string) {
+    async press(keys: string | Buffer) {
       settle();
       input.write(keys);
       await vi.waitFor(() => expect(input.readableLength).toBe(0), { interval: 1 });
@@ -162,6 +163,32 @@ it('handles legacy wheel reports while an agent runs without leaking bytes into 
   expect(view.frame()).toContain('Legacy line 59');
   await view.press('\u001b[M *%\u001b[M#*%');
   expect(view.session.get().draft).toBe('follow-up');
+});
+
+it('reads legacy coordinate bytes above ASCII and keeps Unicode keyboard input intact', async () => {
+  const view = screen();
+  void view.session.prompt();
+  for (let i = 0; i < 60; i++) view.session.writeLine(`Byte line ${i}`);
+  await view.press('zażółć gęślą jaźń');
+  const draft = view.session.get().draft;
+  expect(draft).toBe('zażółć gęślą jaźń');
+  await view.press(Buffer.from([0x1b, 0x5b, 0x4d, 0x60, 132, 37]));
+  expect(view.frame()).toContain('Earlier messages');
+  expect(view.session.get().draft).toBe(draft);
+  await view.press(Buffer.from([0x1b, 0x5b, 0x4d, 0x61, 132, 37, 0x1b, 0x5b, 0x4d, 0x61, 132, 37]));
+  expect(view.frame()).toContain('Byte line 59');
+  await view.press(Buffer.from([0xe2]));
+  expect(view.session.get().draft).toBe(draft);
+  await view.press(Buffer.from([0x82, 0xac]));
+  expect(view.session.get().draft).toBe(draft + '€');
+  expect(view.inputEncoding()).toBe('latin1');
+  view.session.writeLine('Diff: platform → local\n\n--- platform/game.ts\n+++ local/game.ts\n@@ -1 +1 @@\n-old\n+new');
+  await view.press('q');
+  expect(view.inputEncoding()).toBe('latin1');
+  await view.press('ż');
+  expect(view.session.get().draft).toBe(draft + '€ż');
+  view.close();
+  expect(view.inputEncoding()).toBe('utf8');
 });
 
 it('keeps verification output visible and scrollable while a delivery choice is open', async () => {
