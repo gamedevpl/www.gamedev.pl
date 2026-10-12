@@ -487,6 +487,8 @@ const FILE_BUCKET = {
   'managed-backend': 'agent-surface',
   'managed-idle': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
+  'managed-anthropic-files': 'agent-surface',
+  'managed-workspace': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',
   'managed-provider-openai': 'agent-surface',

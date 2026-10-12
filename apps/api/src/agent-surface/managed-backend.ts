@@ -3,6 +3,7 @@ import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './a
 import { withoutRetiredPaths } from '@gamedevpl/contract';
 import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
+import { startWithWorkspace, type ManagedWorkspaceLoader } from './managed-workspace.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
@@ -18,6 +19,7 @@ import {
   type ManagedMcpBearerCredential,
   type ManagedUsageBudget,
   type ManagedToolAccess,
+  type ManagedSessionRequest,
 } from './managed-agent.js';
 
 export interface ManagedBackendOptions {
@@ -26,6 +28,7 @@ export interface ManagedBackendOptions {
   // Cacheable prefix, typically the published Creator Kit digest.
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
+  workspace?: ManagedWorkspaceLoader;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
   budget?: ManagedUsageBudget;
@@ -144,12 +147,13 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
-    // Before the call: a vendor may run, and end, before startSession resolves.
-    const requestedAt = Date.now();
-    const session = await options.provider.startSession({
+    // Set at the vendor call, after workspace assembly; vendors may end early.
+    let requestedAt = Date.now();
+    const shell = options.provider.shell === true;
+    const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
-      prompt: buildPrompt(effectiveBrief, { shell: options.provider.shell === true }),
+      prompt: buildPrompt(effectiveBrief, { shell }),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(seedSupported && brief.seed
@@ -163,7 +167,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.maxDurationSeconds ? { maxDurationSeconds: options.maxDurationSeconds } : {}),
       tools: options.tools,
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
-    });
+    };
+    const load = options.workspace ? () => options.workspace!(brief) : undefined;
+    const withWorkspace = (lines: string[]) => buildPrompt(effectiveBrief, { shell, workspace: lines });
+    const vendor = {
+      workspaceArchiveDir: options.provider.workspaceArchiveDir,
+      startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),
+    };
+    const session = await startWithWorkspace(vendor, load, request, withWorkspace, options.log);
     startedAt.set(session.id, requestedAt);
     sessionJobs.set(session.id, {
       jobId: brief.jobId,

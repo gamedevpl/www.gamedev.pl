@@ -1,6 +1,7 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
 import { isSettledAgentState, type AgentTaskState } from '../platform/agent-state.js';
 import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
+import type { ManagedWorkspaceArchive } from './managed-workspace.js';
 
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';
@@ -92,6 +93,8 @@ export interface ManagedSessionRequest {
   model: string;
   effort?: ManagedAgentEffort;
   workspaceFiles?: ManagedWorkspaceFile[];
+  // Mounted under the provider's workspaceArchiveDir before the agent starts.
+  workspaceArchives?: ManagedWorkspaceArchive[];
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: ManagedMcpBearerCredential;
@@ -104,6 +107,8 @@ export interface ManagedAgentProvider {
   readonly supportsSeedFiles?: boolean;
   // A sandbox shell with egress: the agent can unpack the kit locally.
   readonly shell?: boolean;
+  // Set by vendors that can mount workspaceArchives; where they appear.
+  readonly workspaceArchiveDir?: string;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   sendMessage?(sessionId: string, message: string): Promise<void>;

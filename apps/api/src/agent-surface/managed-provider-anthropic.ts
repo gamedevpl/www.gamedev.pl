@@ -9,6 +9,13 @@ import {
   type ManagedSession,
   type ManagedSessionRequest,
 } from './managed-agent.js';
+import {
+  ANTHROPIC_UPLOADS_DIR,
+  deleteAnthropicFiles,
+  mountedFileResources,
+  uploadAnthropicFiles,
+} from './managed-anthropic-files.js';
+import { ManagedWorkspaceError } from './managed-workspace.js';
 
 export const ANTHROPIC_VENDOR = 'anthropic';
 
@@ -83,6 +90,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const maxListCostCents = config.maxListCostCents;
   const vaultIds = config.vaultIds?.filter(Boolean);
   const overrideTools = config.overrideTools === true;
+  const filesClient = { baseUrl, apiKey: config.apiKey, apiVersion: API_VERSION, fetchImpl, timeoutMs };
 
   async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
@@ -142,6 +150,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     model: config.model,
     supportsSeedFiles: false,
     shell: true,
+    workspaceArchiveDir: ANTHROPIC_UPLOADS_DIR,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       if (!agentId || !environmentId) {
@@ -155,12 +164,18 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
         throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
       }
+      const files = request.workspaceArchives?.length
+        ? await uploadAnthropicFiles(filesClient, request.workspaceArchives)
+        : [];
       const credentialRef = request.mcpBearerCredential
         ? await createMcpCredentialVault(
             request.mcpBearerCredential.url,
             request.mcpBearerCredential.token,
             request.correlationId,
-          )
+          ).catch(async (error: unknown) => {
+            await deleteAnthropicFiles(filesClient, files);
+            throw error;
+          })
         : undefined;
       const sessionVaultIds = credentialRef ? [credentialRef] : vaultIds;
       // Replacing a configured agent's toolset leaves it nothing to call.
@@ -194,6 +209,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             : {}),
         },
         environment_id: environmentId,
+        ...(files.length ? { resources: mountedFileResources(files) } : {}),
         ...(sessionVaultIds?.length ? { vault_ids: sessionVaultIds } : {}),
         initial_events: [
           {
@@ -222,7 +238,13 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             () => undefined,
           );
         }
+        // A 400 with mounts may be the mounts; the plain retry tells.
+        if (files.length && error instanceof ManagedAgentError && error.status === 400) {
+          throw new ManagedWorkspaceError(error.message, error.status);
+        }
         throw error;
+      } finally {
+        void deleteAnthropicFiles(filesClient, files);
       }
     },
 

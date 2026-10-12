@@ -14,6 +14,7 @@ import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
 import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
 import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 import type { KitDigestLoader } from './kit-digest.js';
+import type { ManagedWorkspaceLoader } from './managed-workspace.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
@@ -51,6 +52,8 @@ export function resolveBuilderBackend(
 export interface ManagedBackendDeps {
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
+  // Kit + sources mounted for vendors that can take files (workspaceArchiveDir).
+  workspace?: ManagedWorkspaceLoader;
   // Channel-side round state; without it a finished round looks stalled.
   readSignals?: (jobId: number) => Promise<ManagedRoundSignals | null>;
   readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
@@ -212,6 +215,7 @@ function buildManagedBackendForVendor(
       : {}),
     systemPrompt: deps?.systemPrompt ?? (async () => builderSystemPrompt({ shell: provider.shell === true })),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
+    ...(deps?.workspace ? { workspace: deps.workspace } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
