@@ -236,33 +236,29 @@ export async function exchangeDeviceCode(
   }
 
   const grantId = randomUUID();
+  const access = generateAsAccessToken();
+  const refresh = generateAsRefreshToken();
   const grant: OAuthGrantRecord = {
     grantId,
     clientId: row.clientId,
     ownerUid: row.ownerUid!,
     scope: row.scope,
     createdAt: new Date(input.nowMs).toISOString(),
+    lastUsedAt: new Date(input.nowMs).toISOString(),
     refreshFamilyId: grantId,
-    currentRefreshTokenId: '',
-    currentRefreshHash: '',
+    currentRefreshTokenId: refresh.tokenId,
+    currentRefreshHash: refresh.secretHash,
     refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
     deviceName: row.deviceName,
     ...bindingFields(row),
   };
-  const created = await store.createOAuthGrant(grant, { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID });
-  if (!created) {
-    return { ok: false, error: 'access_denied', status: 400 };
-  }
-  const access = generateAsAccessToken();
-  const refresh = generateAsRefreshToken();
-  const issued = await store.issueOAuthTokensFromGrant({
-    grantId,
-    refreshTokenId: refresh.tokenId,
-    refreshHash: refresh.secretHash,
-    refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
+  const issued = await store.completeOAuthDeviceAuthorization({
+    deviceCodeHash: hash,
+    grant,
+    maxPerOwner: MAX_OAUTH_GRANTS_PER_UID,
     accessToken: buildAsAccessTokenRecord(access, grant, input.nowMs),
     nowMs: input.nowMs,
   });
-  if (!issued) return { ok: false, error: 'invalid_grant', status: 400 };
+  if (!issued.ok) return { ...issued, status: 400 };
   return { ok: true, accessToken: access.token, refreshToken: refresh.token, scope: row.scope };
 }

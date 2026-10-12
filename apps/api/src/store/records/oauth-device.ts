@@ -1,3 +1,5 @@
+import type { OAuthAccessTokenRecord, OAuthGrantRecord } from './oauth.js';
+
 export interface OAuthDeviceAuthorization {
   userCode: string;
   deviceCodeHash: string;
@@ -19,6 +21,34 @@ export type DeviceAuthorizationDecision =
 export type DeviceAuthorizationPoll =
   | { ok: true; authorization: OAuthDeviceAuthorization }
   | { ok: false; error: 'invalid_grant' | 'expired_token' | 'slow_down' | 'authorization_pending' | 'access_denied' };
+
+export interface DeviceTokenIssuanceInput {
+  deviceCodeHash: string;
+  grant: OAuthGrantRecord;
+  accessToken: OAuthAccessTokenRecord;
+  maxPerOwner: number;
+  nowMs: number;
+}
+
+export type DeviceTokenIssuanceResult =
+  { ok: true } | { ok: false; error: 'invalid_grant' | 'expired_token' | 'access_denied' };
+
+export function deviceTokenIssuanceError(
+  row: OAuthDeviceAuthorization | undefined,
+  input: DeviceTokenIssuanceInput,
+): DeviceTokenIssuanceResult | undefined {
+  if (!row || row.deviceCodeHash !== input.deviceCodeHash || row.clientId !== input.grant.clientId)
+    return { ok: false, error: 'invalid_grant' };
+  if (row.expiresAtMs <= input.nowMs) return { ok: false, error: 'expired_token' };
+  if (
+    row.denied ||
+    !row.ownerUid ||
+    row.ownerUid !== input.grant.ownerUid ||
+    row.scope !== input.grant.scope ||
+    row.viaTokenId !== input.grant.viaTokenId
+  )
+    return { ok: false, error: 'access_denied' };
+}
 
 export function deviceAuthorizationPoll(row: OAuthDeviceAuthorization, nowMs: number): DeviceAuthorizationPoll {
   if (row.expiresAtMs <= nowMs) return { ok: false, error: 'expired_token' };

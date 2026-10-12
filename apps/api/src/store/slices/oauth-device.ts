@@ -29,8 +29,8 @@ export interface OAuthDeviceStore {
 }
 
 export class InMemoryOAuthDeviceStore implements OAuthDeviceStore {
-  private authorizations = new Map<string, OAuthDeviceAuthorization>();
-  private codes = new Map<string, string>();
+  protected authorizations = new Map<string, OAuthDeviceAuthorization>();
+  protected codes = new Map<string, string>();
 
   private remove(row: OAuthDeviceAuthorization): void {
     this.authorizations.delete(row.userCode);
@@ -75,7 +75,7 @@ export class InMemoryOAuthDeviceStore implements OAuthDeviceStore {
     const row = code ? this.authorizations.get(code) : undefined;
     if (!row || row.clientId !== clientId) return { ok: false, error: 'invalid_grant' };
     const result = deviceAuthorizationPoll(row, nowMs);
-    if (result.ok || result.error === 'expired_token' || result.error === 'access_denied') this.remove(row);
+    if (!result.ok && (result.error === 'expired_token' || result.error === 'access_denied')) this.remove(row);
     return result;
   }
 
@@ -164,7 +164,7 @@ export class FirestoreOAuthDeviceStore implements OAuthDeviceStore {
       if (row.deviceCodeHash !== deviceCodeHash || row.clientId !== clientId)
         return { ok: false, error: 'invalid_grant' };
       const result = deviceAuthorizationPoll(row, nowMs);
-      if (result.ok || result.error === 'expired_token' || result.error === 'access_denied') {
+      if (!result.ok && (result.error === 'expired_token' || result.error === 'access_denied')) {
         tx.delete(rowRef);
         tx.delete(codeRef);
       } else {

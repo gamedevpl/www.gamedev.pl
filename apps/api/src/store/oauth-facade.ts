@@ -4,6 +4,12 @@ import type { OAuthStore } from './slices/oauth.js';
 export abstract class OAuthFacade extends SubmissionFacade {
   protected abstract oauthStore: OAuthStore;
 
+  completeOAuthDeviceAuthorization(
+    ...args: Parameters<OAuthStore['completeOAuthDeviceAuthorization']>
+  ): ReturnType<OAuthStore['completeOAuthDeviceAuthorization']> {
+    return this.oauthStore.completeOAuthDeviceAuthorization(...args);
+  }
+
   createOAuthDeviceAuthorization(
     ...args: Parameters<OAuthStore['createOAuthDeviceAuthorization']>
   ): ReturnType<OAuthStore['createOAuthDeviceAuthorization']> {

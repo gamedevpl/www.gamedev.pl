@@ -61,13 +61,13 @@ for (const implementation of ['memory', 'firestore'] as const) {
         ok: true,
         authorization: { ownerUid: 'g:owner' },
       });
-      expect(await second.pollOAuthDeviceAuthorization('private-hash', 'gamedev-cli', now + 20_000)).toEqual({
-        ok: false,
-        error: 'invalid_grant',
+      expect(await second.pollOAuthDeviceAuthorization('private-hash', 'gamedev-cli', now + 20_000)).toMatchObject({
+        ok: true,
+        authorization: { ownerUid: 'g:owner' },
       });
     });
 
-    it('allows only one of two concurrent decisions and one of two concurrent claims', async () => {
+    it('allows only one concurrent decision and throttles concurrent polls without consuming approval', async () => {
       const [first, second] = stores();
       await first.createOAuthDeviceAuthorization(authorization(), now, 64);
       const decisions = await Promise.all([
@@ -80,7 +80,8 @@ for (const implementation of ['memory', 'firestore'] as const) {
         second.pollOAuthDeviceAuthorization('private-hash', 'gamedev-cli', now),
       ]);
       expect(claims.filter((claim) => claim.ok)).toHaveLength(1);
-      expect(claims).toContainEqual({ ok: false, error: 'invalid_grant' });
+      expect(claims).toContainEqual({ ok: false, error: 'slow_down' });
+      expect(await second.getOAuthDeviceAuthorization('BCDF-GHJK', now)).toMatchObject({ ownerUid: 'g:first' });
     });
 
     it('enforces the pending-session cap during concurrent creation', async () => {
