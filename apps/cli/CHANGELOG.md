@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.42.0 — 2026-10-12
+
 ### Added
 
 - `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object (#1796).
