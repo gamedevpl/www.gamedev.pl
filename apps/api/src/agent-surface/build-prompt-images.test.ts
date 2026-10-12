@@ -15,6 +15,8 @@ describe('buildPrompt and creator images', () => {
   it('asks a shell round to open attached images before editing', () => {
     const prompt = buildPrompt({ ...BRIEF, feedback: 'Add ice floes.' }, { shell: true });
     expect(prompt).toContain('curl each and `read` the file before your first edit');
+    expect(prompt).toContain('Reads come first');
+    expect(prompt).not.toContain('Execute tools immediately');
     expect(prompt).not.toContain('Skip optional polish');
   });
 

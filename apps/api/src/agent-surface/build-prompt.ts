@@ -73,7 +73,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     'The session has a hard time limit and is cancelled when it runs out; a round that has',
     'not called `submit_sources` by then delivers nothing at all.',
     '',
-    'Do not reply with a plan. Execute tools immediately.',
+    'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request, its images and the sources. Only then edit.',
     ...(creating
       ? [
           `Call \`create_game\` first with ${JSON.stringify({
