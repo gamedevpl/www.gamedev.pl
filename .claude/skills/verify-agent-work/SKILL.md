@@ -114,6 +114,9 @@ Two concrete instances of that (observed 2026-07-23):
   commit — CodeQL ran but `on: push` CI/Deploy workflows never got runs created (no failed
   run, just _nothing_). Always confirm runs exist for the exact head SHA
   (`gh api "repos/<r>/actions/runs?head_sha=<sha>"`); if none, retrigger with an empty commit.
+  For PR-only CI, check `mergeable_state` first: a merge conflict suppresses those runs
+  while dynamic CodeQL still runs. Fetch current master and resolve conflicts before
+  retriggering; the PR's recorded base SHA can lag behind the current master ref.
 - **Scanner version drift makes local verification meaningless.** gitleaks 8.18.2 (CI) and
   8.30.1 (local) each flagged _different_ false positives over full history — a local "no
   leaks" pass said nothing about CI's verdict. Verify with the exact version CI pins, and
