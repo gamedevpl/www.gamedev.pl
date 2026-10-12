@@ -212,6 +212,12 @@ gamedevpl status <token-or-slug>
 `submit` is preview-mode delivery. A green gate is not a publish. `--publish` runs the
 full local ladder and delivers `mode=publish`; an operator still publishes.
 
+Typecheck and static checks each have a five-minute limit. The full publication
+check has no time limit by default, so extended capture plans can finish.
+Set `GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS` to a positive integer to limit that
+check, or `0` to keep it unlimited. A timeout reports the command and elapsed
+limit; cancellation still stops the check and its child processes.
+
 Delivery progress shows the current stage out of eight, local check counts (two for
 preview, three for publish), and file upload counts. For example:
 `[2/8] Checking local game 3/3: npm run check:game -- trenchline-command`.
