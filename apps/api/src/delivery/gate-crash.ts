@@ -80,7 +80,7 @@ export function createGateCrashProbe(
       let manifest: Partial<VersionManifest> | undefined;
       for (const candidate of versions) {
         const found = await deps.getManifest(record.slug, candidate);
-        if (!found || (found.roundGeneration !== undefined && found.roundGeneration !== roundGeneration)) continue;
+        if (!found || (found.roundGeneration ?? 1) !== roundGeneration) continue;
         if (found.jobId !== undefined && found.jobId !== record.jobId) continue;
         if (!manifest || Date.parse(found.createdAt ?? '') > Date.parse(manifest.createdAt ?? '')) {
           version = candidate;

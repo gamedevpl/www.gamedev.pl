@@ -121,3 +121,35 @@ describe('outcomeFromBuildStatus', () => {
     expect(outcomeFromBuildStatus(undefined)).toBe('unknown');
   });
 });
+
+describe('legacy manifest round ownership', () => {
+  const legacyCrash = {
+    createdAt: DELIVERED_AT,
+    gateCrash: { buildId: 'build-abc', ranAt: DELIVERED_AT, status: 'timed_out' as const },
+  };
+
+  it('does not replay a generation-less crash onto a newly opened retry', async () => {
+    const d = deps({ getManifest: vi.fn(async () => legacyCrash) });
+    const retry = record({
+      state: 'building',
+      roundGeneration: 2,
+      stateSince: new Date(NOW - 60_000).toISOString(),
+      roundStartedAt: new Date(NOW - 60_000).toISOString(),
+    });
+    expect(await createGateCrashProbe(d)(retry)).toBeNull();
+    expect(d.recordJobTransition).not.toHaveBeenCalled();
+    expect(d.putGateCrash).not.toHaveBeenCalled();
+    expect(d.readBuildOutcome).not.toHaveBeenCalled();
+  });
+
+  it('still recovers a legacy content candidate in its original generation', async () => {
+    const d = deps({ getManifest: vi.fn(async () => legacyCrash) });
+    expect(await createGateCrashProbe(d)(record({ roundGeneration: 1 }))).toMatchObject({ reason: 'gate_crashed' });
+    expect(d.putGateCrash).toHaveBeenCalledOnce();
+  });
+
+  it('accepts an explicitly scoped candidate in a later round', async () => {
+    const d = deps({ getManifest: vi.fn(async () => ({ ...legacyCrash, roundGeneration: 2 })) });
+    expect(await createGateCrashProbe(d)(record({ roundGeneration: 2 }))).toMatchObject({ reason: 'gate_crashed' });
+  });
+});

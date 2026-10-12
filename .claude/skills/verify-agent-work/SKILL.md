@@ -102,6 +102,8 @@ observed version pointers inside the store transaction, including their absence.
 Delivery setters can replace those pointers before the heartbeat changes; generation
 and activity guards alone can still reject a successful retry as an old gate crash.
 Exercise this window for preview and publish in both store implementations.
+Also test a retry that retains old version pointers: a manifest lacking a round
+generation must not be accepted as evidence for a later generation.
 
 ## Run the project's real gate
 
