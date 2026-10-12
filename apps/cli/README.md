@@ -153,7 +153,8 @@ installed MCP adapters or manual setup. Explicit `--agent` skips the picker. Can
 does not launch an agent or request a handoff. One-shot commands never prompt.
 
 Anonymous `delegate_offered` / `delegate_used` events measure the choice and launch;
-`verify_failed` and `delivered` cover the local result. They use the existing visit
+`verify_failed` and `delivered` cover validation and delivery results. Platform source
+validation failures omit the local check stage. They use the existing visit
 endpoint and a process-local random visit ID, with closed adapter/stage dimensions.
 No credentials, inventory, executable paths, game identifiers, or prompts are sent.
 The existing CLI funnel rollup measures offered-to-used conversion by adapter.

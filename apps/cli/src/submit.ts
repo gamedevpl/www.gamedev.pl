@@ -18,8 +18,9 @@ import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder, runLadderAsync } from './verify.js';
-import { verificationSourceHash } from './verification-source.js';
+import { verificationFilesHash, verificationSourceHash } from './verification-source.js';
 import { deliveryProgress } from './delivery-progress.js';
+import { deliveryValidationError } from './delivery-validation.js';
 
 export type DeliverMode = 'preview' | 'publish';
 
@@ -223,6 +224,7 @@ async function submitGameUnlocked(input: {
     }
   }
   const uploaded = localGameFiles(input.dest, input.slug);
+  const uploadedSourceHash = verificationFilesHash(uploaded);
   const snapshot = hashesOf(uploaded);
   const localMap = new Map(uploaded.map((file) => [file.path, file]));
   const staged: string[] = [];
@@ -250,6 +252,8 @@ async function submitGameUnlocked(input: {
       attestation: true,
     });
   } catch (error) {
+    const validation = deliveryValidationError(error, uploadedSourceHash);
+    if (validation) throw validation;
     mapHttpError(error);
   }
   if (!delivered.accepted) {

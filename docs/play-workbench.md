@@ -328,17 +328,26 @@ button is unavailable while answering a question or choosing a builder; it does 
 an approval or dispatch an agent automatically. If the game changes while evidence is
 being attached, Play discards that staged attachment rather than submitting stale evidence.
 
-## Recovering from failed local checks
+## Recovering from failed validation
 
-When `/push`, `/submit` or `/verify` fails local verification, the interactive session
+When `/push`, `/submit`, `/publish` or `/verify` fails local verification, the interactive session
 shows the failed check's diagnostic output and offers **Fix with agent**, **Check again**
 and **Back — keep local changes**. The same choices appear in the terminal and Play's
 Conversation. Fix with agent is offered when a local agent is available for that checkout.
-Choosing Back or cancelling keeps local edits and sends nothing.
+
+Platform source-validation rejections during delivery offer the same menu, including
+missing imports/exports, metadata and editor data. The agent receives the platform's
+diagnostic report. Network, account and rate-limit failures do not offer agent repair.
+Rejected uploads stay staged; no delivery was accepted.
+Choosing Back or cancelling keeps local edits and makes no further upload.
 
 If game sources change during verification or while choosing a repair, the session
 withholds agent repair until **Check again** supplies fresh diagnostics. Kept-local
 notes and ignored media do not invalidate game verification.
+
+Platform diagnostics are tied to the uploaded source snapshot. After a source change,
+**Check again** reruns local checks and asks before retrying delivery to obtain fresh
+platform diagnostics. Passing local checks does not establish that platform validation passed.
 
 Fix with agent passes the actual diagnostic report through the existing local builder
 selection and permission flow. Diagnostics are identified as untrusted tool output;
@@ -350,8 +359,9 @@ or **Publish game**, according to the original delivery request. Confirming retr
 request with its original checkout and flags and reruns verification before sending.
 Repairing a failure from `/verify` only repairs and checks the local game.
 
-Non-interactive commands keep their failure exit code and print diagnostics plus the
-specific Creator Kit command to run. They do not open a recovery menu.
+Non-interactive commands keep their failure exit code and print diagnostics. Local check
+failures include the specific Creator Kit command to run; platform failures explain how
+to retry delivery. They do not open a recovery menu.
 
 The local editor browser regression runs without a deployed site or credentials:
 `E2E_CHROMIUM_PATH=/path/to/chromium npm run e2e:play-code -w @gamedevpl/e2e`
