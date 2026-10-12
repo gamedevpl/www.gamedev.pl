@@ -11,12 +11,14 @@ export function DiffViewer({
   columns,
   color,
   close,
+  paused = false,
 }: {
   diff: SessionDiff;
   rows: number;
   columns: number;
   color: boolean;
   close: () => void;
+  paused?: boolean;
 }) {
   const [offset, setOffset] = useState(0);
   const panel = useRef<DOMElement>(null);
@@ -32,6 +34,7 @@ export function DiffViewer({
   const start = Math.min(offset, max);
   useTerminalInput(
     (input, key) => {
+      if (paused) return;
       if (key.escape || input === 'q' || (key.ctrl && (input === 'd' || input === 'c'))) close();
       else if (key.upArrow || input === 'k') setOffset(Math.max(0, start - 1));
       else if (key.downArrow || input === 'j') setOffset(Math.min(max, start + 1));
@@ -41,7 +44,7 @@ export function DiffViewer({
       else if (input === 'G') setOffset(max);
     },
     (wheel) => {
-      if (wheelInside(panel.current, wheel, stdout.rows || 24)) {
+      if (!paused && wheelInside(panel.current, wheel, stdout.rows || 24)) {
         setOffset((value) => Math.max(0, Math.min(max, value + wheel.direction * 3)));
       }
     },
@@ -59,7 +62,9 @@ export function DiffViewer({
         ))}
       </Box>
       <Text dimColor wrap="truncate-end">
-        ↑↓ / PgUp/PgDn · {start + 1}–{Math.min(lines.length, start + count)}/{lines.length} · q / Esc close
+        {paused
+          ? 'Text selection · display paused · Ctrl+T resume'
+          : `↑↓ / PgUp/PgDn · ${start + 1}–${Math.min(lines.length, start + count)}/${lines.length} · q / Esc close`}
       </Text>
     </Box>
   );

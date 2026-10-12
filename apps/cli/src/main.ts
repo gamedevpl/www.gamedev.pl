@@ -419,11 +419,12 @@ export async function runCli(
       if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');
         const checkout = matchingCheckout(process.cwd(), slug) ?? undefined;
-        return runInkRepl({
+        return await runInkRepl({
           api,
           env,
           io,
-          token: checkout ? null : await studioToken(api, slug),
+          token: null,
+          resolveToken: checkout ? undefined : () => studioToken(api, slug),
           checkout,
           slug,
           currentPath: argv[1],

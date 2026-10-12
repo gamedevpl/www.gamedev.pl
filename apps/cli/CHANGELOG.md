@@ -9,11 +9,22 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object.
+- `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object (#1796).
 
 ### Fixed
 
-- Claude Auto approves ordinary Bash permission requests inside its sandbox, including local diagnostic scripts, while refusing sandbox overrides and writes outside the game directory; policy refusals identify the sandbox rather than blaming the creator.
+- Claude Auto approves ordinary Bash permission requests inside its sandbox, including local diagnostic scripts, while refusing sandbox overrides and writes outside the game directory; policy refusals identify the sandbox rather than blaming the creator (#1796).
+
+## 0.41.0 — 2026-10-12
+
+### Added
+
+- Ctrl+T switches the terminal workspace to native text selection, pausing display updates until copying is finished (#1791).
+
+### Fixed
+
+- `gamedevpl connect` shows the terminal workspace before waiting for account and Studio requests (#1791).
+- Typing in a long terminal conversation renders only the visible messages, keeping input responsive (#1791).
 
 ## 0.40.0 — 2026-10-12
 

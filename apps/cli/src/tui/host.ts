@@ -28,6 +28,7 @@ export async function runInkRepl(input: {
   env: NodeJS.ProcessEnv;
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
+  resolveToken?: () => Promise<string>;
   slug?: string;
   initialLine?: string;
   // Set when a checkout in the working directory opened this session.
@@ -129,50 +130,8 @@ export async function runInkRepl(input: {
   let stopUpdateNotice: (() => void) | undefined;
   let watch: ReturnType<typeof createRoundWatch> | undefined;
   try {
-    if (input.browserOnly) {
-      input.onReady?.(await browser.start());
-      session.writeLine(
-        input.detached === false
-          ? 'Play session ready. Keep the terminal open; Ctrl+C ends this session.'
-          : 'Play session ready. Closing the terminal does not stop this session.',
-      );
-    }
-    const refreshAccount = async (): Promise<void> => {
-      const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
-        'GET',
-        '/api/auth/me',
-        undefined,
-        AbortSignal.timeout(3000),
-      );
-      if (uid !== user.uid) {
-        saveHistory();
-        history = undefined;
-        historyScope = '';
-        conversationId = undefined;
-      }
-      uid = user.uid;
-      who = user.handle ?? uid;
-    };
-    try {
-      await refreshAccount();
-    } catch {
-      who = 'account unavailable';
-    }
-    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
-
-    if (input.browserOnly && !uid && input.login && !input.checkout) {
-      const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
-      if (answer === 'Sign in') {
-        try {
-          await input.login(session.writeLine);
-          await refreshAccount();
-        } catch (error) {
-          session.writeLine(formatError(error));
-        }
-      }
-    }
-    if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
-    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
+    session.setIdentity(formatSessionIdentity('', slug));
+    session.setActivity(input.resolveToken ? 'Connecting to Studio' : 'Checking your account');
     const openPreview = (url: string): void => {
       telemetry.record('play_requested');
       void browser.open(url).then((opened) => {
@@ -203,6 +162,49 @@ export async function runInkRepl(input: {
       );
     };
     mount();
+    if (input.browserOnly) {
+      input.onReady?.(await browser.start());
+      session.writeLine(
+        input.detached === false
+          ? 'Play session ready. Keep the terminal open; Ctrl+C ends this session.'
+          : 'Play session ready. Closing the terminal does not stop this session.',
+      );
+    }
+    const refreshAccount = async (): Promise<void> => {
+      const { user } = await input.api.request<{ user: { handle?: string; uid: string } }>(
+        'GET',
+        '/api/auth/me',
+        undefined,
+        AbortSignal.timeout(3000),
+      );
+      if (uid !== user.uid) {
+        saveHistory();
+        history = undefined;
+        historyScope = '';
+        conversationId = undefined;
+      }
+      uid = user.uid;
+      who = user.handle ?? uid;
+    };
+    const [account, studio] = await Promise.allSettled([refreshAccount(), input.resolveToken?.()]);
+    if (account.status === 'rejected') who = 'account unavailable';
+    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
+    if (studio.status === 'rejected') throw studio.reason;
+    if (studio.value) token = studio.value;
+
+    if (input.browserOnly && !uid && input.login && !input.checkout) {
+      const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
+      if (answer === 'Sign in') {
+        try {
+          await input.login(session.writeLine);
+          await refreshAccount();
+        } catch (error) {
+          session.writeLine(formatError(error));
+        }
+      }
+    }
+    if (!uid) session.writeLine('Account could not be verified. Local history is disabled for this session.');
+    if (input.shutdownSignal?.aborted) return EXIT_GREEN;
     stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
     const interactiveRun: InteractiveRun = async (request) => {
       if (input.browserOnly)
