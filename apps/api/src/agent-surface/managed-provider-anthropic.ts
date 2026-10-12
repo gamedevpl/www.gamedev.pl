@@ -244,7 +244,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
         }
         throw error;
       } finally {
-        await deleteAnthropicFiles(filesClient, files);
+        void deleteAnthropicFiles(filesClient, files);
       }
     },
 

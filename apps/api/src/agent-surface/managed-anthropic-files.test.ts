@@ -44,8 +44,10 @@ describe('anthropic mounted workspace', () => {
       { type: 'file', file_id: 'file_1', mount_path: '/kit.tgz' },
       { type: 'file', file_id: 'file_2', mount_path: '/sources.tgz' },
     ]);
-    const deleted = calls.filter(([, init]) => init.method === 'DELETE').map(([url]) => url.split('/').pop());
-    expect(deleted.sort()).toEqual(['file_1', 'file_2']);
+    await vi.waitFor(() => {
+      const deleted = calls.filter(([, init]) => init.method === 'DELETE').map(([url]) => url.split('/').pop());
+      expect(deleted.sort()).toEqual(['file_1', 'file_2']);
+    });
   });
 
   it('refuses with a workspace error and leaves no file behind when one upload fails', async () => {
@@ -80,7 +82,7 @@ describe('anthropic mounted workspace', () => {
       provider(fetchImpl).startSession({ correlationId: '7', prompt: 'p', model: 'm', workspaceArchives: ARCHIVES }),
     ).rejects.toBeInstanceOf(ManagedWorkspaceError);
     const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
-    expect(calls.filter(([, init]) => init.method === 'DELETE')).toHaveLength(2);
+    await vi.waitFor(() => expect(calls.filter(([, init]) => init.method === 'DELETE')).toHaveLength(2));
   });
 
   it('retries a delete the API answered with a server error', async () => {
@@ -101,6 +103,24 @@ describe('anthropic mounted workspace', () => {
       model: 'm',
       workspaceArchives: [ARCHIVES[0]!],
     });
-    expect(deletes).toEqual(['https://api.anthropic.com/v1/files/file_r', 'https://api.anthropic.com/v1/files/file_r']);
+    await vi.waitFor(() => expect(deletes).toHaveLength(2));
+    expect(new Set(deletes)).toEqual(new Set(['https://api.anthropic.com/v1/files/file_r']));
+  });
+
+  it('returns the created session without waiting on a hanging delete', async () => {
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/files') && init.method === 'POST') return jsonResponse({ id: 'file_h' });
+      if (url.includes('/v1/files/') && init.method === 'DELETE') return new Promise<Response>(() => {});
+      if (url.endsWith('/v1/sessions?beta=true')) return jsonResponse({ id: 'sess_h', status: 'queued' });
+      throw new Error(`unexpected request ${url}`);
+    });
+
+    const session = await provider(fetchImpl).startSession({
+      correlationId: '7',
+      prompt: 'p',
+      model: 'm',
+      workspaceArchives: [ARCHIVES[0]!],
+    });
+    expect(session.id).toBe('sess_h');
   });
 });

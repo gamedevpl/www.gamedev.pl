@@ -41,6 +41,7 @@ async function upload(client: AnthropicFilesClient, archive: ManagedWorkspaceArc
 }
 
 const DELETE_ATTEMPTS = 3;
+const DELETE_TIMEOUT_MS = 5_000;
 
 // fetch resolves on 429/5xx; success means ok or already gone.
 async function deleteOnce(client: AnthropicFilesClient, file: MountedFile): Promise<boolean> {
@@ -48,13 +49,13 @@ async function deleteOnce(client: AnthropicFilesClient, file: MountedFile): Prom
     .fetchImpl(`${client.baseUrl}/v1/files/${encodeURIComponent(file.id)}`, {
       method: 'DELETE',
       headers: { 'x-api-key': client.apiKey, 'anthropic-version': client.apiVersion },
-      signal: AbortSignal.timeout(client.timeoutMs),
+      signal: AbortSignal.timeout(Math.min(client.timeoutMs, DELETE_TIMEOUT_MS)),
     })
     .catch(() => null);
   return response !== null && (response.ok || response.status === 404);
 }
 
-// Unpublished sources must not outlive the dispatch; retry failed deletes.
+// Retries refused deletes; callers on a created session need not await.
 export async function deleteAnthropicFiles(client: AnthropicFilesClient, files: readonly MountedFile[]): Promise<void> {
   let pending = [...files];
   for (let attempt = 0; attempt < DELETE_ATTEMPTS && pending.length; attempt += 1) {
