@@ -7,7 +7,7 @@ export function buildPromptOpening(brief: BuildBrief, slug: string, creating: bo
   if (brief.gateRepair)
     return `The gate rejected version ${brief.gateRepair.version} of \`${slug}\`. Repair that delivered game and submit it again.`;
   if (brief.undelivered)
-    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and treat the creator’s latest message in \`read_inbox\`, if any, as the request.`;
+    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and take the request from \`get_brief\` and \`read_inbox\` together, reading \`get_transcript\` when the latest message is terse.`;
   if (brief.feedback)
     return `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`;
   return `Build a new browser game in \`games/${slug}/\`.`;
