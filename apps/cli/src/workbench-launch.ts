@@ -5,7 +5,8 @@ import { permissionEnvironment, permissionMode } from './agent-permissions.js';
 import { CLI_VERSION, compareSemver } from './update.js';
 import { spawn } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, openSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { closeSync, realpathSync, renameSync, writeFileSync } from 'node:fs';
+import { openPlayLog } from './play-output.js';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { privatePlayDirectory, readPlayState } from './play-state.js';
@@ -45,6 +46,7 @@ export type PlayJournal = {
   pending?: { path: string; hash: string; startedAt: string };
   remote?: { path: string; result: unknown };
   ended?: boolean;
+  logPath?: string;
 };
 export function savePlayJournal(path: string, value: PlayJournal): void {
   const temp = `${path}.${randomUUID()}.tmp`;
@@ -140,6 +142,7 @@ export async function launchWorkbench(input: {
       );
     input.write(`Existing Play session: ${existing.url}`);
     input.write('Reopened the running session; its lifetime stays with the original launch. Stop: gamedevpl stop.');
+    if (existing.logPath) input.write(`Play log: ${existing.logPath}`);
     if (permissionMode() !== 'ask')
       input.write('The running session keeps its permission mode; change it there with /permissions.');
     if (input.idea) input.write('The supplied idea was not sent. Review the active session and enter it in Play.');
@@ -159,6 +162,8 @@ export async function launchWorkbench(input: {
   };
   try {
     const journal = nextPlayJournal(existing, cwd, input.idea, input.write);
+    if (input.detach) journal.logPath = join(base, `${key}.log`);
+    else delete journal.logPath;
     if (!existing || (existing.ended && !existing.pending)) journal.launch = input.launch;
     savePlayJournal(path, journal);
     if (!input.detach) {
@@ -182,7 +187,7 @@ export async function launchWorkbench(input: {
         process.chdir(previousCwd);
       }
     }
-    const log = openSync(join(base, `${key}.log`), 'a', 0o600);
+    const log = openPlayLog(journal.logPath!);
     let child;
     try {
       child = spawn(process.execPath, [...process.execArgv, resolve(input.entry), '__play-session', path], {
@@ -205,6 +210,7 @@ export async function launchWorkbench(input: {
       const state = journalAt(path);
       if (state?.url && (await health(state))) {
         input.write(`Play session: ${state.url}`);
+        input.write(`Play log: ${journal.logPath}`);
         input.write(
           'Runs in the background; Ctrl+C does not stop it. After the last Play tab closes, it ends in 60 seconds once active work finishes. Stop now: Commands → End session, or gamedevpl stop.',
         );
@@ -213,10 +219,12 @@ export async function launchWorkbench(input: {
         return state.url;
       }
       if (child.exitCode !== null)
-        throw Error('Play exited during startup. Retry after inspecting the local session log.');
+        throw Error(`Play exited during startup. Inspect the local session log: ${journal.logPath}`);
       await new Promise((r) => setTimeout(r, 100));
     }
-    throw Error('Play is still starting. Run the same command to reconnect; do not launch a second writer.');
+    throw Error(
+      `Play is still starting. Inspect ${journal.logPath}, then run the same command to reconnect; do not launch a second writer.`,
+    );
   } finally {
     releaseStartup();
   }

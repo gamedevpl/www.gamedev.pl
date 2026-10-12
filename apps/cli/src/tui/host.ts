@@ -22,6 +22,7 @@ import { reportInstall } from '../main.js';
 import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 import { bufferTerminalInput } from './input-frame.js';
+import { startPlayOutput } from '../play-output.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -99,6 +100,7 @@ export async function runInkRepl(input: {
     lastLines = state.lines;
     saveHistory();
   });
+  const stopOutput = input.browserOnly ? startPlayOutput(session, (line) => input.io.stdout.write(line)) : undefined;
   const foregroundApi = activityApi(input.api, (activity) => {
     const previous = session.get().activity;
     session.setActivity(activity);
@@ -401,6 +403,7 @@ export async function runInkRepl(input: {
     saveHistory();
     stopUpdateNotice?.();
     watch?.stop();
+    stopOutput?.();
     session.close();
     await browser.close();
     unmount();
