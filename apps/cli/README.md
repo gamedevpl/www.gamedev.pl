@@ -324,7 +324,10 @@ Ctrl+B hides or restores it without clearing the input. The mouse wheel or track
 scrolls the conversation under the pointer; PgUp/PgDn scroll the chat;
 while answering a choice, they scroll that question instead. Check output stays visible
 above choices. The wheel scrolls long questions, diffs and diagnostics under the pointer.
-Compact terminals retain native terminal scrolling, and mouse reporting is restored
+Ctrl+T temporarily restores native text selection and pauses display updates so
+you can drag to select and copy. Press Ctrl+T again to resume TUI scrolling and
+show updates received meanwhile. Tasks continue while the display is paused;
+Ctrl+C still stops or exits. Compact terminals retain native terminal scrolling, and mouse reporting is restored
 when the workspace closes or hands the terminal to an agent. Existing `/diff`, Ctrl+D
 and `/logs` keep their scrollable detail views.
 

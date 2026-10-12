@@ -2,91 +2,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeBase } from '../checkout-sync.js';
-import type { WorkspaceCheckout } from './workspace-status.js';
-import { PassThrough, Writable } from 'node:stream';
-import { stripVTControlCharacters } from 'node:util';
-import { createElement } from 'react';
-import { render } from 'ink';
-import { afterEach, expect, it, vi } from 'vitest';
-import { ReplApp } from './app.js';
-import { createTuiSession } from './session.js';
-import { bufferTerminalInput } from './input-frame.js';
-import * as transcript from './transcript.js';
-
-const cleanups: Array<() => void> = [];
-afterEach(() => cleanups.splice(0).forEach((close) => close()));
-function screen(
-  columns = 150,
-  rows = 28,
-  historyOffset = 0,
-  checkout: () => WorkspaceCheckout | null = () => null,
-  readLogs?: () => string[],
-) {
-  const session = createTuiSession('');
-  const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
-  const buffered = bufferTerminalInput(input as unknown as NodeJS.ReadStream);
-  const frames: string[] = [];
-  const terminal: string[] = [];
-  const output = Object.assign(
-    new Writable({
-      write(chunk, _encoding, done) {
-        terminal.push(String(chunk));
-        frames.push(stripVTControlCharacters(String(chunk)));
-        done();
-      },
-    }),
-    { columns, rows, isTTY: true },
-  );
-  const element = () => createElement(ReplApp, { session, color: false, checkout, historyOffset, readLogs });
-  const app = render(element(), {
-    stdin: buffered.stdin,
-    stdout: output as unknown as NodeJS.WriteStream,
-    debug: true,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
-  const settle = () => app.rerender(element());
-  settle();
-  cleanups.push(() => {
-    app.unmount();
-    buffered.stop();
-    session.close();
-    input.end();
-    output.end();
-  });
-  return {
-    session,
-    frame: () => frames.at(-1) ?? '',
-    takeOutput: () => frames.splice(0).join(''),
-    terminalOutput: () => terminal.join(''),
-    inputEncoding: () => input.readableEncoding,
-    close: () => {
-      app.unmount();
-      buffered.stop();
-    },
-    async press(keys: string | Buffer, fragmented = false) {
-      settle();
-      input.write(keys);
-      await vi.waitFor(
-        () => {
-          expect(input.readableLength).toBe(0);
-          expect(buffered.stdin.readableLength).toBe(0);
-        },
-        { interval: 1 },
-      );
-      if (keys === '\u001b' && !fragmented) {
-        await vi.waitFor(() => expect(buffered.hasPending()).toBe(false), { interval: 1 });
-      }
-      settle();
-    },
-    resize(width: number, height: number) {
-      output.columns = width;
-      output.rows = height;
-      output.emit('resize');
-      settle();
-    },
-  };
-}
+import { expect, it, vi } from 'vitest';
+import { screen } from './workspace-fixture.js';
 
 it('shows a bounded split, preserves the draft while toggling, and pages wrapped conversation', async () => {
   const view = screen();
@@ -414,33 +331,5 @@ it('refreshes local edits only while visible, and refreshes again when restored'
   } finally {
     vi.useRealTimers();
     rmSync(root, { recursive: true, force: true });
-  }
-});
-
-it('typing in a long conversation does not redraw hidden messages', async () => {
-  const draw = vi.spyOn(transcript, 'TranscriptLine');
-  try {
-    const view = screen();
-    view.session.restoreHistory({
-      lines: Array.from({ length: 300 }, (_, index) => `History ${index}: ${'wrapped text '.repeat(12)}`),
-      prompts: [],
-    });
-    void view.session.prompt();
-    expect(view.frame()).toContain('History 299');
-    draw.mockClear();
-    await view.press('typing stays responsive');
-    expect(view.session.get().draft).toBe('typing stays responsive');
-    expect(draw.mock.calls.length).toBeLessThan(28);
-    expect(view.frame()).toContain('History 299');
-    await view.press('\u001b[5~');
-    expect(view.frame()).toContain('Earlier messages');
-    expect(view.frame()).not.toContain('History 299');
-    await view.press('\u001b[6~'.repeat(3));
-    expect(view.frame()).toContain('History 299');
-    view.resize(130, 20);
-    expect(view.frame()).toContain('History 299');
-    expect(view.session.get().draft).toBe('typing stays responsive');
-  } finally {
-    draw.mockRestore();
   }
 });

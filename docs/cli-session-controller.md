@@ -57,6 +57,9 @@ Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling
 Reports route to the conversation, question, diff or diagnostics under the pointer;
 they never become composer text or choice answers. Delivery choices retain the
 conversation above their question. Compact layouts keep native terminal scrollback.
+Ctrl+T disables reporting for native selection and freezes the displayed session,
+sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
+subscribes to the latest controller state. Ctrl+C stays available while copying.
 Unmounting, including native agent handoffs, disables reporting; remounting restores it.
 This scrolling correction adds no telemetry event or creator-funnel dimension.
 

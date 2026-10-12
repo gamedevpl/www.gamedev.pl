@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Ctrl+T switches the terminal workspace to native text selection, pausing display updates until copying is finished (#1791).
+
 ### Fixed
 
 - `gamedevpl connect` shows the terminal workspace before waiting for account and Studio requests (#1791).

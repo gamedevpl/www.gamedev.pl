@@ -62,15 +62,23 @@ export function ReplApp({
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
   const [sidebar, setSidebar] = useState(true);
+  const [nativeSelection, setNativeSelection] = useState(false);
   const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
-  useMouseReporting(split);
+  const selecting = split && nativeSelection;
+  useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
   const rows = dimensions.rows - Number(split);
-  const changes = useWorkspaceChanges(checkout?.() ?? null, split && sidebar);
+  const changes = useWorkspaceChanges(checkout?.() ?? null, split && sidebar && !selecting);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
-  useEffect(() => session.subscribe(setState), [session]);
+  useEffect(
+    () =>
+      session.subscribe((next) => {
+        if (!selecting) setState(next);
+      }),
+    [session, selecting],
+  );
   useEffect(() => {
     const onResize = (): void => setDimensions({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
     // Resize the layout before Ink redraws against the new terminal width.
@@ -86,6 +94,14 @@ export function ReplApp({
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
+    if (key.ctrl && input === 't' && split) {
+      setNativeSelection((value) => !value);
+      return;
+    }
+    if (selecting) {
+      if (key.ctrl && input === 'c') session.cancel();
+      return;
+    }
     if (viewDiff) return;
     if (key.ctrl && input === 'b' && split) {
       setSidebar((visible) => !visible);
@@ -196,7 +212,14 @@ export function ReplApp({
     if (!key.ctrl && !key.meta && input) session.insertDraft(input);
   };
   useTerminalInput(onInput, (wheel) => {
-    if (debug || viewDiff || state.mode !== 'pick' || !wheelInside(choicePanel.current, wheel, dimensions.rows)) return;
+    if (
+      selecting ||
+      debug ||
+      viewDiff ||
+      state.mode !== 'pick' ||
+      !wheelInside(choicePanel.current, wheel, dimensions.rows)
+    )
+      return;
     setDetailScroll((previous) => ({
       promptId: state.promptId,
       offset: Math.max(
@@ -249,15 +272,17 @@ export function ReplApp({
       rows={rows}
       blocked={debug || viewDiff || state.mode === 'pick'}
       hidden={debug || viewDiff}
+      paused={selecting}
       panel={
         panelWidth > 0 ? (
           <WorkspacePanel state={state} changes={changes} rows={rows} width={panelWidth} color={color} />
         ) : undefined
       }
     >
-      {debug && readLogs && <TaskDebug read={readLogs} rows={rows} close={() => setDebug(false)} />}
+      {debug && readLogs && <TaskDebug read={readLogs} rows={rows} paused={selecting} close={() => setDebug(false)} />}
       {viewDiff && newestDiff && (
         <DiffViewer
+          paused={selecting}
           diff={newestDiff}
           rows={Math.max(5, rows - 1)}
           columns={width}
@@ -275,6 +300,7 @@ export function ReplApp({
         </Box>
         {state.mode === 'busy' ? (
           <BusyPanel
+            paused={selecting}
             activity={state.activity}
             since={state.busySince}
             lastOutputAt={state.lastOutputAt}
@@ -385,7 +411,14 @@ export function ReplApp({
                 : 'Working — input paused'}
         </Text>
         <Text dimColor wrap="truncate-end">
-          <RichText text={`${footer}${split ? ' · Ctrl+B sidebar · wheel / PgUp/PgDn chat' : ''}`} color={color} />
+          <RichText
+            text={
+              split
+                ? `${selecting ? 'Text selection · display paused · Ctrl+T resume' : 'Ctrl+T select text · wheel / PgUp/PgDn chat'} · Ctrl+B sidebar · ${footer}`
+                : footer
+            }
+            color={color}
+          />
         </Text>
       </Box>
     </ConversationLayout>

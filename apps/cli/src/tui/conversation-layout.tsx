@@ -10,12 +10,14 @@ function TranscriptViewport({
   color,
   blocked,
   layout,
+  paused,
 }: {
   lines: string[];
   offset: number;
   color: boolean;
   blocked: boolean;
   layout: ReactNode;
+  paused: boolean;
 }) {
   const viewport = useRef<DOMElement>(null);
   const panel = useRef<DOMElement>(null);
@@ -50,12 +52,12 @@ function TranscriptViewport({
   const page = Math.max(1, size.height + Number(distance > 0) - 1);
   useTerminalInput(
     (_input, key) => {
-      if (blocked) return;
+      if (blocked || paused) return;
       if (key.pageUp) setScroll(Math.max(0, start - page));
       if (key.pageDown) setScroll(start + page >= max ? null : start + page);
     },
     (wheel) => {
-      if (!wheelInside(panel.current, wheel, stdout.rows || 24)) return;
+      if (paused || !wheelInside(panel.current, wheel, stdout.rows || 24)) return;
       setScroll((value) => {
         const next = Math.max(0, Math.min(max, (value === null ? max : Math.min(value, max)) + wheel.direction * 3));
         return next >= max ? null : next;
@@ -106,6 +108,7 @@ export function ConversationLayout({
   hidden,
   panel,
   children,
+  paused = false,
 }: {
   lines: string[];
   offset: number;
@@ -117,6 +120,7 @@ export function ConversationLayout({
   hidden: boolean;
   panel?: ReactNode;
   children: ReactNode;
+  paused?: boolean;
 }) {
   // Keep Ink's static node mounted while split output waits for scrollback.
   const printed = useRef(offset);
@@ -128,7 +132,14 @@ export function ConversationLayout({
       </Static>
       <Box flexGrow={1} minWidth={0} flexDirection="column">
         {split && !hidden && (
-          <TranscriptViewport lines={lines} offset={offset} color={color} blocked={blocked} layout={children} />
+          <TranscriptViewport
+            lines={lines}
+            offset={offset}
+            color={color}
+            blocked={blocked}
+            paused={paused}
+            layout={children}
+          />
         )}
         <Box flexDirection="column" flexShrink={0}>
           {children}
