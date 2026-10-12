@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `gamedevpl connect` shows the terminal workspace before waiting for account and Studio requests.
+
 ## 0.40.0 — 2026-10-12
 
 ### Added

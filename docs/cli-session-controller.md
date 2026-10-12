@@ -39,6 +39,12 @@ and task cancellation, draft preservation and terminal behavior.
 
 ## Terminal workspace
 
+The host mounts the terminal before account verification or Studio token lookup.
+`connect` resolves independent account and Studio reads concurrently; the first screen
+shows the connection activity and game slug. Commands and local history still wait
+for those results, and account verification remains required before restoring history.
+This startup change adds no telemetry event or creator-funnel dimension.
+
 The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns /
 16 rows it renders a full-height conversation with a right sidebar; smaller terminals
 retain the static transcript. Both use `TranscriptLine`, the existing composer,

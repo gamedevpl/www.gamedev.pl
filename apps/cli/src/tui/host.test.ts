@@ -5,8 +5,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { historyStore } from './history.js';
 import { runInkRepl } from './host.js';
 import { handleReplLine } from '../repl.js';
+import { render } from 'ink';
+import { PassThrough } from 'node:stream';
+import type { TuiSession } from './session.js';
 
-vi.mock('ink', () => ({ render: () => ({ unmount: vi.fn() }) }));
+vi.mock('ink', () => ({ render: vi.fn(() => ({ unmount: vi.fn() })) }));
 vi.mock('./app.js', () => ({ ReplApp: () => null }));
 vi.mock('../main.js', () => ({ reportInstall: vi.fn() }));
 vi.mock('../agents.js', () => ({ discoverAgents: () => [], agentHint: () => '' }));
@@ -70,4 +73,57 @@ it.each([false, true])('enables shell execution only for terminal prompts (brows
   });
   expect(vi.mocked(handleReplLine).mock.calls[0]![0].allowShell).toBe(false);
   expect(vi.mocked(handleReplLine).mock.calls[1]![0].allowShell).toBe(!browserOnly);
+});
+
+it('paints the workspace and overlaps account and Studio reads before accepting commands', async () => {
+  let accountReady!: (value: unknown) => void;
+  let studioReady!: (value: string) => void;
+  const request = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        accountReady = resolve;
+      }),
+  );
+  const resolveToken = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        studioReady = resolve;
+      }),
+  );
+  const stdin = new PassThrough() as unknown as NodeJS.ReadStream;
+  vi.mocked(handleReplLine).mockResolvedValueOnce({ next: 'quit' });
+  const run = runInkRepl({
+    api: { origin: 'https://startup.test', request, requestBytes: vi.fn() } as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin, stdout: process.stdout },
+    token: null,
+    resolveToken,
+    slug: 'sky',
+    initialLine: '/connect sky',
+  });
+  try {
+    expect(render).toHaveBeenCalledOnce();
+    expect(request).toHaveBeenCalledOnce();
+    expect(resolveToken).toHaveBeenCalledOnce();
+    expect(handleReplLine).not.toHaveBeenCalled();
+    const element = vi.mocked(render).mock.calls[0]![0] as { props: { session: TuiSession } };
+    expect(element.props.session.get()).toMatchObject({
+      mode: 'busy',
+      activity: 'Connecting to Studio',
+      identity: 'sky',
+    });
+    accountReady({ user: { uid: 'owner', handle: 'creator' } });
+    await Promise.resolve();
+    expect(handleReplLine).not.toHaveBeenCalled();
+    studioReady('round');
+    expect(await run).toBe(0);
+    expect(handleReplLine).toHaveBeenCalledWith(expect.objectContaining({ token: 'round' }));
+    expect(element.props.session.get().identity).toBe('creator · sky');
+    expect(vi.mocked(render).mock.results[0]!.value.unmount).toHaveBeenCalledOnce();
+  } finally {
+    accountReady({ user: { uid: 'owner' } });
+    studioReady('round');
+    await run;
+    stdin.destroy();
+  }
 });
