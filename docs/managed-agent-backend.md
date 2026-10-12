@@ -434,6 +434,16 @@ from `buildPrompt` follows the same flag:
   the MCP browse tools — the spike measured that one change cutting a round from $15 to $0.64.
 - **MCP-only** (OpenAI, Gemini): `get_kit_api` once, then `search_kit_files` / `read_kit_file`.
 
+**Mounted workspace.** A provider that sets `workspaceArchiveDir` (today only Anthropic, at
+`/mnt/session/uploads`) gets the round's workspace before the agent starts:
+[`managed-workspace.ts`](../apps/api/src/agent-surface/managed-workspace.ts) reads
+`kits/<engineRef>.tgz` (the round's pin, else `kits/current.json`) and the round's base
+sources (the same read as `get_sources`), and the adapter uploads them through the Files API
+as `kit.tgz` and `sources.tgz` file resources, deleting the originals once the session exists.
+The kickoff then gives one unpack-and-`npm ci` command instead of the download steps. When the
+kit is unpublished, the read fails, or the vendor refuses the files, the round starts without a
+workspace on the plain shell kickoff. Vendors without `workspaceArchiveDir` never load it.
+
 The live registry does not yet pass a kit digest loader into the managed backend. When it
 does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
 to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent

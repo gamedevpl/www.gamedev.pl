@@ -139,6 +139,7 @@ import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import type { CimdFetcher } from './cimd-fetch.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-key-routes.js';
+import { createManagedWorkspaceLoader } from '../agent-surface/managed-workspace.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
 export interface BuildAppOptions {
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
@@ -517,6 +518,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                 const record = await store.getSubmission(jobId);
                 return record?.dispatch?.credentialRefs?.[sessionRef];
               },
+              ...(gamesStore && objectStore
+                ? { workspace: createManagedWorkspaceLoader({ store, gamesStore, objectStore, log: app.log }) }
+                : {}),
             })),
     },
     gameSeeder:
