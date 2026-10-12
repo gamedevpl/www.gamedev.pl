@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Local live preview opens through forwarded ports (GitHub Codespaces, Gitpod, tunnels) instead of answering 403; its secret URL token still gates access and cross-origin calls are refused (#1802).
+
 ## 0.43.1 — 2026-10-12
 
 ### Fixed

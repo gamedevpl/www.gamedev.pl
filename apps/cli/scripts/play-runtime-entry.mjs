@@ -24,6 +24,15 @@ let attemptedFingerprint = '',
   lastVisit = Date.now();
 let origin, currentBuild;
 const presence = playPresence(shutdown, () => !busy);
+// The path token gates access; only cross-origin calls are refused.
+function trusted(req) {
+  if (!req.headers.origin) return true;
+  try {
+    return new URL(req.headers.origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
 function treeStamp(dir) {
   try {
     return readdirSync(dir)
@@ -105,7 +114,7 @@ const server = createServer((req, res) => {
     res.end();
     return;
   }
-  if (req.headers.host !== new URL(origin).host || (req.headers.origin && req.headers.origin !== origin)) {
+  if (!trusted(req)) {
     res.writeHead(403);
     res.end();
     return;
@@ -188,14 +197,7 @@ function shutdown() {
 }
 server.listen(0, '127.0.0.1', () => {
   origin = 'http://127.0.0.1:' + server.address().port;
-  attachPlayPresence(
-    server,
-    presence,
-    (req) =>
-      req.headers.host === new URL(origin).host &&
-      (!req.headers.origin || req.headers.origin === origin) &&
-      req.url === '/' + token + '/presence',
-  );
+  attachPlayPresence(server, presence, (req) => trusted(req) && req.url === '/' + token + '/presence');
   const pendingState = statePath + '.' + token;
   writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key, root, slug, cliVersion }), {
     mode: 0o600,
