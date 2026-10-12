@@ -58,3 +58,12 @@ export async function storeCreatorReferenceImages(
   }
   return { ids, images };
 }
+
+// A refused request sends no images; drop the ones stored for it.
+export async function dropCreatorReferenceImages(
+  store: BuildMediaStore | undefined,
+  jobId: number,
+  ids: readonly string[],
+): Promise<void> {
+  if (store && ids.length) await store.deleteBuildShots(jobId, ids).catch(() => {});
+}

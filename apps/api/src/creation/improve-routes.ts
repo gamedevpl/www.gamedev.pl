@@ -4,6 +4,7 @@ import type { ManagedAvailabilityGate } from '../agent-surface/managed-availabil
 import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
+import { dropCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
@@ -169,6 +170,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           request.log.error({ err: shotError }, 'failed to store creator reference images');
         }
       }
+      const dropReferences = () => dropCreatorReferenceImages(store, jobId, referenceImageShotIds);
       const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       const requestedBuilder = parsed.data.builder;
@@ -181,9 +183,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           category: moderation.category,
           unavailable: moderation.unavailable,
         });
-        // A rejected message sends no images; drop the ones stored for it.
-        if (referenceImageShotIds.length)
-          await store.deleteBuildShots(jobId, referenceImageShotIds).catch(() => undefined);
+        await dropReferences();
         const rejection = rejectionFor(moderation);
         return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
@@ -225,6 +225,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (effectiveBuilder === 'platform' && managedAvailabilityGate) {
         const availability = await managedAvailabilityGate.peek(request.user!.uid, dateStr);
         if (!availability.available) {
+          await dropReferences();
           return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
         }
       }
@@ -264,11 +265,16 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         // A new job, so builder choice needs no active-round lock.
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
       });
-      if (reply.sent) return reply;
+      if (reply.sent) {
+        await dropReferences();
+        return reply;
+      }
       if (!started) {
+        await dropReferences();
         return reply.status(502).send({ error: 'failed to submit improvement request' });
       }
       if (started.route === 'unavailable') {
+        await dropReferences();
         return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: started.reason });
       }
       // Resolve it now — the new round carries this request forward.

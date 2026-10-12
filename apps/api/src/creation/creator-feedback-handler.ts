@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
+import { dropCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -196,6 +197,7 @@ export async function handleCreatorFeedback(
       request.log.error({ err: shotError }, 'failed to store creator reference images');
     }
   }
+  const dropReferences = () => dropCreatorReferenceImages(store, jobId, referenceImageShotIds);
   const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
   const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
   const requestedBuilder = parsed.data.builder;
@@ -224,6 +226,7 @@ export async function handleCreatorFeedback(
         agentEndedAt: record.agentEndedAt,
       })
     ) {
+      await dropReferences();
       return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: current });
     }
   }
@@ -236,9 +239,7 @@ export async function handleCreatorFeedback(
       category: moderation.category,
       unavailable: moderation.unavailable,
     });
-    // A rejected message sends no images; drop the ones stored for it.
-    if (store && referenceImageShotIds.length)
-      await store.deleteBuildShots(jobId, referenceImageShotIds).catch(() => undefined);
+    await dropReferences();
     const rejection = rejectionFor(moderation);
     return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
   }
@@ -282,6 +283,7 @@ export async function handleCreatorFeedback(
   if (store) {
     const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
     if (!quota.allowed) {
+      await dropReferences();
       if (quota.tier === 'blocked') {
         return reply.status(403).send({ error: 'account is blocked' });
       }

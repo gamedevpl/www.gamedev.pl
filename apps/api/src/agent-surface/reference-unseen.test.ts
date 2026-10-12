@@ -52,19 +52,14 @@ describe('reference_unseen', () => {
     expect((await store.getSubmission(7))?.referenceSeenAt).toBe(newer.createdAt);
   });
 
-  it('ignores images no queued message names, deleted ones, and a failed read', async () => {
-    const { store, older, newer, download } = await setup();
+  it('follows the stored images: a deleted one stops the warning, a failed read stays quiet', async () => {
+    const { store, older, newer } = await setup();
     const lookup = createReferenceLookup(store);
-    await download(newer.id);
-    // A refused request stored this one but queued no message.
-    await store.appendBuildShot(7, { data: 'cmVm', label: 'creator-reference', createdAt: '2026-10-11T13:00:00.000Z' });
-    expect(await lookup(7)).toBe(false);
     await store.deleteBuildShots(7, [older.id, newer.id]);
     expect(await lookup(7)).toBe(false);
     const broken = createReferenceLookup({
       getSubmission: async () => Promise.reject(new Error('down')),
       listBuildShots: async () => [],
-      listCreatorMessages: async () => [],
     });
     expect(await broken(7)).toBe(false);
     expect(referenceUnseen('b', 'a')).toBe(true);
