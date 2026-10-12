@@ -62,6 +62,11 @@ legacy coordinates; keyboard text uses a separate streaming UTF-8 decoder.
 Reader reference counts reapply byte preservation after Ink changes raw-mode
 ownership and restore Ink's UTF-8 encoding after the final reader unmounts.
 
+The host frames terminal escape sequences before Ink reads them. Partial CSI/SS3
+prefixes and legacy mouse payloads wait for the next read; a 100 ms deadline
+releases a standalone Escape key. Unmounting cancels that timer and disconnects
+the input bridge before native terminal handoffs.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

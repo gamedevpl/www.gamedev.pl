@@ -10,6 +10,7 @@ import { render } from 'ink';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
+import { bufferTerminalInput } from './input-frame.js';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => cleanups.splice(0).forEach((close) => close()));
@@ -22,6 +23,7 @@ function screen(
 ) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
+  const buffered = bufferTerminalInput(input as unknown as NodeJS.ReadStream);
   const frames: string[] = [];
   const terminal: string[] = [];
   const output = Object.assign(
@@ -36,7 +38,7 @@ function screen(
   );
   const element = () => createElement(ReplApp, { session, color: false, checkout, historyOffset, readLogs });
   const app = render(element(), {
-    stdin: input as unknown as NodeJS.ReadStream,
+    stdin: buffered.stdin,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
     exitOnCtrlC: false,
@@ -46,6 +48,7 @@ function screen(
   settle();
   cleanups.push(() => {
     app.unmount();
+    buffered.stop();
     session.close();
     input.end();
     output.end();
@@ -55,12 +58,24 @@ function screen(
     frame: () => frames.at(-1) ?? '',
     takeOutput: () => frames.splice(0).join(''),
     terminalOutput: () => terminal.join(''),
-    inputEncoding: () => input.readableEncoding,
-    close: () => app.unmount(),
-    async press(keys: string | Buffer) {
+    inputEncoding: () => buffered.stdin.readableEncoding,
+    close: () => {
+      app.unmount();
+      buffered.stop();
+    },
+    async press(keys: string | Buffer, fragmented = false) {
       settle();
       input.write(keys);
-      await vi.waitFor(() => expect(input.readableLength).toBe(0), { interval: 1 });
+      await vi.waitFor(
+        () => {
+          expect(input.readableLength).toBe(0);
+          expect(buffered.stdin.readableLength).toBe(0);
+        },
+        { interval: 1 },
+      );
+      if (keys === '\u001b' && !fragmented) {
+        await vi.waitFor(() => expect(buffered.hasPending()).toBe(false), { interval: 1 });
+      }
       settle();
     },
     resize(width: number, height: number) {
@@ -101,6 +116,28 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 39');
 });
+
+it.each([Buffer.from('\u001b[<64;10;5M'), Buffer.from([0x1b, 0x5b, 0x4d, 0x60, 42, 37])])(
+  'buffers a mouse report at every byte boundary without cancelling a choice',
+  async (report) => {
+    const view = screen();
+    for (let i = 0; i < 60; i++) view.session.writeLine(`Framed line ${i}`);
+    const answer = view.session.prompt(['Fix', 'Back'], 'Delivery choice');
+    for (let split = 1; split < report.length; split++) {
+      await view.press(report.subarray(0, split), true);
+      expect(view.session.get().mode).toBe('pick');
+      await view.press(report.subarray(split), true);
+      expect(view.session.get().mode).toBe('pick');
+      expect(view.session.get().pickIndex).toBe(0);
+    }
+    expect(view.frame()).toContain('Earlier messages');
+    await view.press('\u001b[', true);
+    await view.press('B');
+    expect(view.session.get().pickIndex).toBe(1);
+    await view.press('\r');
+    expect(await answer).toBe('Back');
+  },
+);
 
 it('captures the wheel in the conversation, ignores sidebar clicks, and restores terminal reporting', async () => {
   const view = screen();

@@ -21,6 +21,7 @@ import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
 import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
+import { bufferTerminalInput } from './input-frame.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -43,7 +44,12 @@ export async function runInkRepl(input: {
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
-  const host: { instance?: ReturnType<typeof render> } = {};
+  const host: { instance?: ReturnType<typeof render>; stopInput?: () => void } = {};
+  const unmount = () => {
+    host.instance?.unmount();
+    host.stopInput?.();
+    host.stopInput = undefined;
+  };
   const abort: Workshop['abort'] = { current: null };
   const telemetry = createCliTelemetry(input.api.origin);
   reportInstall(telemetry, input.env, isTty);
@@ -73,7 +79,7 @@ export async function runInkRepl(input: {
       return;
     }
     session.close();
-    host.instance?.unmount();
+    unmount();
     process.exit(EXIT_GREEN);
   });
   const bindHistory = (game: string): void => {
@@ -177,6 +183,8 @@ export async function runInkRepl(input: {
     const readLogs = () => taskLogTail(workshop?.lastLog);
     const mount = (historyOffset = 0) => {
       if (input.browserOnly) return;
+      const buffered = bufferTerminalInput(input.io.stdin);
+      host.stopInput = buffered.stop;
       host.instance = render(
         createElement(ReplApp, {
           session,
@@ -187,7 +195,7 @@ export async function runInkRepl(input: {
           checkout: () => (workshop?.slug === slug ? workshop : input.checkout?.slug === slug ? input.checkout : null),
         }),
         {
-          stdin: input.io.stdin,
+          stdin: buffered.stdin,
           stdout: input.io.stdout,
           exitOnCtrlC: false,
           patchConsole: false,
@@ -202,7 +210,7 @@ export async function runInkRepl(input: {
           'This agent requires an interactive terminal permission handoff. Choose another installed agent or use gamedevpl connect in a terminal.',
         );
       const offset = session.get().lines.length;
-      host.instance?.unmount();
+      unmount();
       try {
         return await runInteractive(request);
       } finally {
@@ -393,7 +401,7 @@ export async function runInkRepl(input: {
     watch?.stop();
     session.close();
     await browser.close();
-    host.instance?.unmount();
+    unmount();
     await telemetry.flush();
   }
   return EXIT_GREEN;
