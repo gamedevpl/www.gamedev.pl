@@ -5,6 +5,7 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
+import { mergeBuildHistory } from './studioBuildHistoryModel.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 import './studio-build-history.css';
 import './studio-credentials.css';
@@ -44,20 +45,15 @@ export function StudioBuildHistory({
   const [sealSuccess, setSealSuccess] = useState(false);
 
   const statusBuilds = status.recentBuilds ?? [];
-  const builds = extraBuilds
-    ? [
-        ...statusBuilds,
-        ...extraBuilds.filter((build) => !statusBuilds.some((current) => current.version === build.version)),
-      ]
-    : statusBuilds;
-  const headVersion = statusBuilds[0]?.version ?? builds[0]?.version;
+  const builds = mergeBuildHistory(statusBuilds, extraBuilds ?? []);
+  const headVersion = builds[0]?.version;
 
   useEffect(() => {
     setExtraBuilds(null);
   }, [status.slug]);
 
   const live = isBuildLive(status);
-  const head = statusBuilds[0];
+  const head = builds[0];
   const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
   const liveKey = !live ? 'idle' : playingPending ? 'livePlaying' : 'live';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);

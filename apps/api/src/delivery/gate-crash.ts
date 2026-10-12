@@ -117,6 +117,8 @@ export function createGateCrashProbe(
         !(await deps.recordJobTransition(record.jobId, transition, {
           roundGeneration,
           activityAt: lastRoundActivityAt(record),
+          deliveredVersion: record.deliveredVersion,
+          previewVersion: record.previewVersion,
         }))
       )
         return null;
