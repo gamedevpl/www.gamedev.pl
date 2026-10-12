@@ -21,7 +21,7 @@ import {
   memoryStore,
   type TokenStore,
 } from './keychain.js';
-import { runLoopbackLogin } from './login.js';
+import { runLogin } from './sign-in.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
@@ -291,7 +291,9 @@ export async function runCli(
         return EXIT_GREEN;
       }
       requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);
-      await runLoopbackLogin({
+      await runLogin({
+        loopback: flags.loopback === true,
+        noBrowser: flags['no-browser'] === true,
         origin,
         store: persist,
         stdout: io.stdout,

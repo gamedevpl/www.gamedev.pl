@@ -1,19 +1,14 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
-import { bindingFields, consentIdentity, tokenBindingLive, type ConsentIdentity } from './pat-grant-binding.js';
+import { bindingFields, consentIdentity, tokenBindingLive } from './pat-grant-binding.js';
+import type { OAuthDeviceAuthorization } from '../store/records/oauth-device.js';
 import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
-import {
-  CREATOR_SCOPE,
-  formatOAuthScope,
-  MAX_OAUTH_GRANTS_PER_UID,
-  OWNERSHIP_SCOPE,
-  parseOAuthScopes,
-  scopeIncludes,
-} from './oauth-scopes.js';
+import { CREATOR_SCOPE, formatOAuthScope, MAX_OAUTH_GRANTS_PER_UID, parseOAuthScopes } from './oauth-scopes.js';
 import {
   AS_REFRESH_TOKEN_TTL_MS,
   buildAsAccessTokenRecord,
@@ -28,22 +23,11 @@ export const DEVICE_POLL_INTERVAL_SEC = 5;
 export const MAX_PENDING_DEVICE_CODES = 64;
 
 const USER_CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ';
-
-type DeviceAuth = {
-  deviceCodeHash: string;
-  userCode: string;
-  clientId: string;
-  scope: string;
-  deviceName: string;
-  expiresAt: number;
-  intervalSec: number;
-  lastPollAt: number;
-  uid?: string;
-  approvedBy?: ConsentIdentity;
-  denied?: boolean;
-};
-
-const pending = new Map<string, DeviceAuth>();
+const deviceRequestSchema = z.object({
+  client_id: z.string().max(128).optional(),
+  scope: z.string().max(128).optional(),
+  device: z.string().max(256).optional(),
+});
 
 function hashDeviceCode(deviceCode: string): string {
   return createHash('sha256').update(deviceCode).digest('hex');
@@ -63,22 +47,17 @@ function mintUserCode(): string {
   return `${out.slice(0, 4)}-${out.slice(4)}`;
 }
 
-function prune(nowMs: number): void {
-  for (const [key, row] of pending) {
-    if (row.expiresAt <= nowMs) pending.delete(key);
-  }
-}
-
 function deviceConsent(uid: string, secret: string): string {
   return consentToken({ uid, clientId: GAMEDEV_CLI_CLIENT_ID, codeChallenge: 'device', secret });
 }
 
-function livePending(userCode: string, nowMs: number): DeviceAuth | undefined {
-  const row = pending.get(userCode);
-  return row && row.expiresAt > nowMs ? row : undefined;
-}
-
-function devicePage(input: { userCode: string; consentToken: string; error?: string; scope?: string }): string {
+function devicePage(input: {
+  userCode: string;
+  consentToken: string;
+  error?: string;
+  scope?: string;
+  deviceName?: string;
+}): string {
   const error = input.error ? `<p class="hint">${escapeHtml(input.error)}</p>` : '';
   const copy = input.scope ? copyForScope('en', 'gamedevpl CLI', input.scope) : null;
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
@@ -104,12 +83,13 @@ function devicePage(input: { userCode: string; consentToken: string; error?: str
   <main>
     <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
     <h1>Approve gamedevpl CLI</h1>
+    ${input.deviceName ? `<p class="lead">Device: <strong>${escapeHtml(input.deviceName)}</strong></p><p class="hint">Check that this code matches your terminal and this is the device you want to connect.</p>` : ''}
     ${permissions}
     ${error}
     <form method="post" action="/device">
       <input type="hidden" name="consent_token" value="${escapeHtml(input.consentToken)}" />
       ${disclosed}
-      <label>Code <input name="user_code" value="${escapeHtml(input.userCode)}" autocomplete="off" /></label>
+      <label>Code <input type="text" name="user_code" value="${escapeHtml(input.userCode)}" autocomplete="off" /></label>
       <div class="actions">
         <button type="submit" name="action" value="approve" class="approve">Approve</button>
         <button type="submit" name="action" value="deny">Deny</button>
@@ -135,7 +115,9 @@ export function registerOAuthDeviceRoutes(
       if (!cliSurfaceEnabled()) {
         return reply.status(404).send({ error: 'not found' });
       }
-      const body = (request.body ?? {}) as { client_id?: string; scope?: string; device?: string };
+      const parsed = deviceRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.status(400).send({ error: 'invalid_request' });
+      const body = parsed.data;
       const clientId = typeof body.client_id === 'string' ? body.client_id.trim() : '';
       if (!isGamedevCliClient(clientId)) {
         return reply.status(400).send({ error: 'invalid_client' });
@@ -145,24 +127,23 @@ export function registerOAuthDeviceRoutes(
         return reply.status(400).send({ error: 'invalid_scope' });
       }
       const nowMs = now();
-      prune(nowMs);
-      if (pending.size >= MAX_PENDING_DEVICE_CODES) {
-        return reply.status(429).send({ error: 'too_many_requests' });
-      }
       const deviceCode = randomBytes(32).toString('base64url');
       let userCode = mintUserCode();
-      while (pending.has(userCode)) userCode = mintUserCode();
-      const row: DeviceAuth = {
+      const row: OAuthDeviceAuthorization = {
         deviceCodeHash: hashDeviceCode(deviceCode),
         userCode,
         clientId,
         scope: formatOAuthScope(scopes),
         deviceName: sanitizeDeviceName(body.device),
-        expiresAt: nowMs + DEVICE_CODE_TTL_MS,
+        expiresAtMs: nowMs + DEVICE_CODE_TTL_MS,
         intervalSec: DEVICE_POLL_INTERVAL_SEC,
-        lastPollAt: 0,
       };
-      pending.set(userCode, row);
+      let created = await store.createOAuthDeviceAuthorization(row, nowMs, MAX_PENDING_DEVICE_CODES);
+      for (let retry = 0; created === 'collision' && retry < 5; retry++) {
+        userCode = mintUserCode();
+        created = await store.createOAuthDeviceAuthorization({ ...row, userCode }, nowMs, MAX_PENDING_DEVICE_CODES);
+      }
+      if (created !== 'created') return reply.status(429).send({ error: 'too_many_requests' });
       const base = canonicalAppBaseUrl();
       return reply.status(200).send({
         device_code: deviceCode,
@@ -185,11 +166,13 @@ export function registerOAuthDeviceRoutes(
       typeof (request.query as { user_code?: string }).user_code === 'string'
         ? (request.query as { user_code: string }).user_code.trim().toUpperCase()
         : '';
+    const row = userCode ? await store.getOAuthDeviceAuthorization(userCode, now()) : null;
     return reply.type('text/html').send(
       devicePage({
         userCode,
         consentToken: deviceConsent(uid, sessionSecret),
-        scope: userCode ? livePending(userCode, now())?.scope : undefined,
+        scope: row?.scope,
+        deviceName: row?.deviceName,
       }),
     );
   });
@@ -209,27 +192,28 @@ export function registerOAuthDeviceRoutes(
       disclosed_scope?: string;
     };
     const userCode = typeof body.user_code === 'string' ? body.user_code.trim().toUpperCase() : '';
-    const page = (error?: string, code = userCode, scope?: string) =>
-      reply.type('text/html').send(devicePage({ userCode: code, consentToken: expected, error, scope }));
+    const page = (error?: string, code = userCode, scope?: string, deviceName?: string) =>
+      reply.type('text/html').send(devicePage({ userCode: code, consentToken: expected, error, scope, deviceName }));
     if (!consentTokenValid(typeof body.consent_token === 'string' ? body.consent_token : '', expected)) {
       return page('Refresh this page and try again.');
     }
-    const row = livePending(userCode, now());
+    const row = await store.getOAuthDeviceAuthorization(userCode, now());
     if (!row) {
       return page('That code is unknown or expired.');
     }
     if (body.action === 'deny') {
-      row.denied = true;
+      if (!(await store.decideOAuthDeviceAuthorization(userCode, { denied: true }, now())))
+        return page('That code is already decided or expired.');
       return page('Denied. You can close this page.', '', row.scope);
     }
     if (body.action !== 'approve') {
-      return page('Choose Approve or Deny to continue.', userCode, row.scope);
+      return page('Choose Approve or Deny to continue.', userCode, row.scope, row.deviceName);
     }
-    if (scopeIncludes(row.scope, OWNERSHIP_SCOPE) && body.disclosed_scope !== row.scope) {
-      return page('Review the permissions below, then approve.', userCode, row.scope);
+    if (body.disclosed_scope !== row.scope) {
+      return page('Review the permissions below, then approve.', userCode, row.scope, row.deviceName);
     }
-    row.uid = uid;
-    row.approvedBy = identity;
+    if (!(await store.decideOAuthDeviceAuthorization(userCode, { ownerUid: uid, ...bindingFields(identity) }, now())))
+      return page('That code is already decided or expired.');
     return page('Approved. Return to your terminal.', '', row.scope);
   });
 }
@@ -243,60 +227,38 @@ export async function exchangeDeviceCode(
   if (!cliSurfaceEnabled()) return { ok: false, error: 'invalid_grant', status: 400 };
   if (!isGamedevCliClient(input.clientId)) return { ok: false, error: 'invalid_client', status: 400 };
   const hash = hashDeviceCode(input.deviceCode);
-  const row = [...pending.values()].find((item) => item.deviceCodeHash === hash);
-  prune(input.nowMs);
-  if (!row) return { ok: false, error: 'invalid_grant', status: 400 };
-  if (row.expiresAt <= input.nowMs) {
-    pending.delete(row.userCode);
-    return { ok: false, error: 'expired_token', status: 400 };
-  }
-  const minInterval = row.intervalSec * 1000;
-  if (input.nowMs - row.lastPollAt < minInterval) {
-    row.intervalSec += 5;
-    return { ok: false, error: 'slow_down', status: 400 };
-  }
-  row.lastPollAt = input.nowMs;
-  if (row.denied) {
-    pending.delete(row.userCode);
-    return { ok: false, error: 'access_denied', status: 400 };
-  }
-  if (!row.uid) return { ok: false, error: 'authorization_pending', status: 400 };
-  const binding = { ownerUid: row.uid, ...bindingFields(row.approvedBy ?? {}) };
+  const polled = await store.pollOAuthDeviceAuthorization(hash, input.clientId, input.nowMs);
+  if (!polled.ok) return { ...polled, status: 400 };
+  const row = polled.authorization;
+  const binding = { ownerUid: row.ownerUid!, ...bindingFields(row) };
   if (!(await tokenBindingLive(store, binding, input.nowMs))) {
-    pending.delete(row.userCode);
     return { ok: false, error: 'access_denied', status: 400 };
   }
 
   const grantId = randomUUID();
+  const access = generateAsAccessToken();
+  const refresh = generateAsRefreshToken();
   const grant: OAuthGrantRecord = {
     grantId,
     clientId: row.clientId,
-    ownerUid: row.uid,
+    ownerUid: row.ownerUid!,
     scope: row.scope,
     createdAt: new Date(input.nowMs).toISOString(),
+    lastUsedAt: new Date(input.nowMs).toISOString(),
     refreshFamilyId: grantId,
-    currentRefreshTokenId: '',
-    currentRefreshHash: '',
+    currentRefreshTokenId: refresh.tokenId,
+    currentRefreshHash: refresh.secretHash,
     refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
     deviceName: row.deviceName,
-    ...bindingFields(row.approvedBy ?? {}),
+    ...bindingFields(row),
   };
-  const created = await store.createOAuthGrant(grant, { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID });
-  if (!created) {
-    pending.delete(row.userCode);
-    return { ok: false, error: 'access_denied', status: 400 };
-  }
-  const access = generateAsAccessToken();
-  const refresh = generateAsRefreshToken();
-  const issued = await store.issueOAuthTokensFromGrant({
-    grantId,
-    refreshTokenId: refresh.tokenId,
-    refreshHash: refresh.secretHash,
-    refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
+  const issued = await store.completeOAuthDeviceAuthorization({
+    deviceCodeHash: hash,
+    grant,
+    maxPerOwner: MAX_OAUTH_GRANTS_PER_UID,
     accessToken: buildAsAccessTokenRecord(access, grant, input.nowMs),
     nowMs: input.nowMs,
   });
-  pending.delete(row.userCode);
-  if (!issued) return { ok: false, error: 'invalid_grant', status: 400 };
+  if (!issued.ok) return { ...issued, status: 400 };
   return { ok: true, accessToken: access.token, refreshToken: refresh.token, scope: row.scope };
 }

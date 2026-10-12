@@ -1,5 +1,8 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { stripUndefined } from '../firestore-util.js';
+import { FirestoreOAuthDeviceStore, InMemoryOAuthDeviceStore, type OAuthDeviceStore } from './oauth-device.js';
+import { completeFirestoreDeviceTokens, completeMemoryDeviceTokens } from './oauth-device-tokens.js';
+import type { DeviceTokenIssuanceInput, DeviceTokenIssuanceResult } from '../records/oauth-device.js';
 import type {
   OAuthAccessTokenRecord,
   OAuthAuthCodeRecord,
@@ -8,7 +11,8 @@ import type {
   RotateRefreshTokenResult,
 } from '../records/oauth.js';
 
-export interface OAuthStore {
+export interface OAuthStore extends OAuthDeviceStore {
+  completeOAuthDeviceAuthorization(input: DeviceTokenIssuanceInput): Promise<DeviceTokenIssuanceResult>;
   // Persists a dynamically registered or CIMD-cached OAuth client.
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
 
@@ -58,7 +62,7 @@ export interface OAuthStore {
   }): Promise<OAuthGrantRecord | null>;
 }
 
-export class InMemoryOAuthStore implements OAuthStore {
+export class InMemoryOAuthStore extends InMemoryOAuthDeviceStore implements OAuthStore {
   // Not private -- deleteAccountIdentity reaches across these (documented exception, see PR).
   oauthClients = new Map<string, OAuthClientRecord>();
   oauthGrants = new Map<string, OAuthGrantRecord>();
@@ -66,6 +70,19 @@ export class InMemoryOAuthStore implements OAuthStore {
   oauthAuthCodes = new Map<string, OAuthAuthCodeRecord>();
   // refresh token id -> grant id, for reuse detection after rotation.
   oauthRefreshTokenIndex = new Map<string, string>();
+
+  async completeOAuthDeviceAuthorization(input: DeviceTokenIssuanceInput): Promise<DeviceTokenIssuanceResult> {
+    return completeMemoryDeviceTokens(
+      {
+        authorizations: this.authorizations,
+        codes: this.codes,
+        grants: this.oauthGrants,
+        accessTokens: this.oauthAccessTokens,
+        refreshIndex: this.oauthRefreshTokenIndex,
+      },
+      input,
+    );
+  }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
     this.oauthClients.set(record.clientId, { ...record });
@@ -213,8 +230,14 @@ export class InMemoryOAuthStore implements OAuthStore {
   }
 }
 
-export class FirestoreOAuthStore implements OAuthStore {
-  constructor(private db: Firestore) {}
+export class FirestoreOAuthStore extends FirestoreOAuthDeviceStore implements OAuthStore {
+  constructor(private db: Firestore) {
+    super(db);
+  }
+
+  completeOAuthDeviceAuthorization(input: DeviceTokenIssuanceInput): Promise<DeviceTokenIssuanceResult> {
+    return completeFirestoreDeviceTokens(this.db, input);
+  }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
     await this.db.collection('oauthClients').doc(record.clientId).create(stripUndefined(record));

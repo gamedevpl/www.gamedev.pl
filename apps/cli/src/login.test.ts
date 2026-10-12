@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { runLoopbackLogin } from './login.js';
+import { runLogin } from './sign-in.js';
 import { runCli } from './main.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth.js';
 
@@ -191,6 +192,31 @@ describe('loopback login', () => {
       },
     });
     expect(io.read().out).toMatch(/^open https:\/\/www\.gamedev\.pl\/oauth\/authorize/m);
+  });
+
+  it('supports explicit loopback sign-in without launching the browser', async () => {
+    const store = memoryStore();
+    const io = sink();
+    const openUrl = vi.fn();
+    io.stdout.on('data', (chunk) => {
+      const match = String(chunk).match(/^open (https:\/\/\S+)/);
+      if (!match) return;
+      const url = new URL(match[1]!);
+      void fetch(`${url.searchParams.get('redirect_uri')}?code=c&state=${url.searchParams.get('state')}`);
+    });
+    await runLogin({
+      origin: 'https://www.gamedev.pl',
+      store,
+      stdout: io.stdout,
+      loopback: true,
+      noBrowser: true,
+      openUrl,
+      timeoutMs: 4000,
+      fetch: async () =>
+        new Response(JSON.stringify({ access_token: 'gdpl_oat_loopback', token_type: 'Bearer', scope: 'creator' })),
+    });
+    expect(openUrl).not.toHaveBeenCalled();
+    expect((await store.get())?.accessToken).toBe('gdpl_oat_loopback');
   });
 
   it('parses the callback against a fixed loopback origin, not Host', async () => {

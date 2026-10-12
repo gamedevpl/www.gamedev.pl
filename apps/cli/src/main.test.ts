@@ -109,7 +109,7 @@ describe('runCli verbs', () => {
     const streams = io();
     const code = await runCli(['node', 'gamedevpl', ...args], { XDG_CONFIG_HOME: config }, streams);
     expect(code).toBe(EXIT_GREEN);
-    expect(streams.read().out).toContain('open a browser and sign in');
+    expect(streams.read().out).toContain('approve sign-in on gamedev.pl');
     expect(readFileSync(settings, 'utf8')).toBe(saved);
   });
 
@@ -129,7 +129,7 @@ describe('runCli verbs', () => {
     const streams = io();
     expect(await runCli(['node', 'gamedevpl', '--help'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_GREEN);
     const out = streams.read().out;
-    expect(out).toContain('open a browser and sign in');
+    expect(out).toContain('approve sign-in on gamedev.pl');
     expect(out).not.toMatch(/gamedevpl <[a-z]+\|/);
   });
 

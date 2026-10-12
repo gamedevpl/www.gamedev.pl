@@ -29,7 +29,7 @@ export const BLURB: Record<SlashVerb, string> = {
   quota: "today's submission budget",
   notifications: 'unread notifications',
   help: 'this list',
-  login: 'open a browser and sign in',
+  login: `approve sign-in on gamedev.pl — ${CLI_BIN} login [--no-browser] [--loopback]`,
   logout: 'forget the stored grant',
   whoami: 'print the signed-in identity',
   submit: 'alias for push — deliver a preview from local files',

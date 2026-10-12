@@ -287,7 +287,7 @@ describe('repl turn loop', () => {
       write: (s) => lines.push(s),
     });
     expect(result.next).toBe('continue');
-    expect(lines.join('\n')).toContain('open a browser');
+    expect(lines.join('\n')).toContain('approve sign-in on gamedev.pl');
     expect(lines.join('\n')).not.toMatch(/gamedevpl <[a-z]+\|/);
   });
 

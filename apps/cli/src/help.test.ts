@@ -6,7 +6,7 @@ describe('formatHelp', () => {
   it('describes every verb instead of a pipe list', () => {
     const out = formatHelp();
     expect(out).not.toMatch(/gamedevpl <[a-z]+\|/);
-    expect(out).toContain('open a browser and sign in');
+    expect(out).toContain('approve sign-in on gamedev.pl');
     expect(out).toContain('open your browser workspace');
     expect(out).toContain('--terminal');
     expect(out).toContain('--preview');

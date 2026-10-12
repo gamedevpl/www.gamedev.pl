@@ -14,11 +14,11 @@ import { openUrl } from './open-url.js';
 import type { ApiClient } from './api.js';
 import { findCheckout } from './checkout.js';
 import { withPlaySignals, playApi } from './play-signals.js';
-import { runLoopbackLogin } from './login.js';
+import { runLogin } from './sign-in.js';
 
-export function workbenchLogin(input: Omit<Parameters<typeof runLoopbackLogin>[0], 'stdout'>) {
+export function workbenchLogin(input: Omit<Parameters<typeof runLogin>[0], 'stdout'>) {
   return async (write: (line: string) => void, abort?: AbortSignal) => {
-    await runLoopbackLogin({
+    await runLogin({
       ...input,
       abort,
       stdout: {

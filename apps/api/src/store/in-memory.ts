@@ -1,4 +1,4 @@
-import { SubmissionFacade } from './submission-facade.js';
+import { OAuthFacade } from './oauth-facade.js';
 import { InMemoryShelfStore } from './slices/shelf.js';
 import type { ShelfDocument } from './records/shelf.js';
 import { GuardedGameAccess, GuardedSubmissions, MemoryShelfGuard } from './shelf-guard-memory.js';
@@ -42,13 +42,6 @@ import type { JobCostEntry, JobSeedOutcome } from './records/dispatch.js';
 import { DELETED_ACCOUNT_UID } from './records/identity.js';
 import type { AccountIdentityDeletionResult, ClaimHandleResult, HandleRecord, User } from './records/identity.js';
 import type { PushSubscriptionRecord, StoredNotification } from './records/notifications.js';
-import type {
-  OAuthAccessTokenRecord,
-  OAuthAuthCodeRecord,
-  OAuthClientRecord,
-  OAuthGrantRecord,
-  RotateRefreshTokenResult,
-} from './records/oauth.js';
 import type { EditorDraftRecord, GameSaveRecord, PlayAffinityRecord, WorldEntryRecord } from './records/player-data.js';
 import type { CreationLimits, FeaturedPoolConfig, PublicPlayConfig, UsageCounters } from './records/quota.js';
 import type {
@@ -118,7 +111,7 @@ import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
-export class InMemoryStore extends SubmissionFacade implements Store {
+export class InMemoryStore extends OAuthFacade implements Store {
   private identityStore: InMemoryIdentityStore = new InMemoryIdentityStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
   );
@@ -218,7 +211,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private accessTokensStore = new InMemoryAccessTokensStore();
   private agentKeysStore = new InMemoryAgentKeysStore();
   private gameAdmissionStore = new InMemoryGameAdmissionStore();
-  private oauthStore = new InMemoryOAuthStore();
+  protected oauthStore = new InMemoryOAuthStore();
   private cliChatStore = new InMemoryCliChatStore();
 
   private revokeMemberActor(slug: string, uid: string, cancelActive: boolean): void {
@@ -340,6 +333,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     for (const [clientId, client] of [...this.oauthStore.oauthClients]) {
       if (client.ownerUid === uid) this.oauthStore.oauthClients.set(clientId, { ...client, ownerUid: undefined });
     }
+    await this.oauthStore.eraseOAuthDeviceAuthorizations(uid);
     const grantIds = new Set<string>();
     for (const [grantId, grant] of [...this.oauthStore.oauthGrants]) {
       if (grant.ownerUid !== uid) continue;
@@ -1622,77 +1616,6 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
     return this.agentKeysStore.revokeCreatorAgentKey(ownerUid, at);
-  }
-
-  async createOAuthClient(record: OAuthClientRecord): Promise<void> {
-    return this.oauthStore.createOAuthClient(record);
-  }
-
-  async getOAuthClient(clientId: string): Promise<OAuthClientRecord | null> {
-    return this.oauthStore.getOAuthClient(clientId);
-  }
-
-  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
-    return this.oauthStore.createOAuthGrant(record, opts);
-  }
-
-  async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.getOAuthGrant(grantId);
-  }
-
-  async getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.getOAuthGrantByRefreshTokenId(refreshTokenId);
-  }
-
-  async listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]> {
-    return this.oauthStore.listOAuthGrantsByOwner(ownerUid);
-  }
-
-  async revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean> {
-    return this.oauthStore.revokeOAuthGrant(grantId, ownerUid);
-  }
-
-  async createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void> {
-    return this.oauthStore.createOAuthAccessToken(record);
-  }
-
-  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getAsAccessToken(tokenId);
-  }
-
-  async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
-    return this.oauthStore.deleteOAuthAccessToken(tokenId);
-  }
-
-  async createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void> {
-    return this.oauthStore.createOAuthAuthCode(record);
-  }
-
-  async consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null> {
-    return this.oauthStore.consumeOAuthAuthCode(codeId, codeHash, nowMs);
-  }
-
-  async rotateOAuthRefreshToken(input: {
-    refreshTokenId: string;
-    refreshSecretHash: string;
-    newRefreshTokenId: string;
-    newRefreshHash: string;
-    newRefreshExpiresAt: string;
-    newAccessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<RotateRefreshTokenResult> {
-    return this.oauthStore.rotateOAuthRefreshToken(input);
-  }
-
-  async issueOAuthTokensFromGrant(input: {
-    grantId: string;
-    refreshTokenId: string;
-    refreshHash: string;
-    refreshExpiresAt: string;
-    accessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
 
   waitlistEntries = () => Array.from(this.accessStore.waitlist.values());
