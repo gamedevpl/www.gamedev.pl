@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createCloudBuildOutcomeReader,
-  createGateCrashProbe,
-  lastGateRunRef,
-  type GateCrashProbeDeps,
-} from './gate-crash.js';
+import { createCloudBuildOutcomeReader, createGateCrashProbe, type GateCrashProbeDeps } from './gate-crash.js';
 import { gateCrashStall } from '../creation/job-state.js';
 import type { SubmissionRecord } from '../platform/store.js';
 const NOW = Date.parse('2026-08-21T09:00:00.000Z');
@@ -36,25 +31,6 @@ function deps(overrides: Partial<GateCrashProbeDeps> = {}): GateCrashProbeDeps {
     ...overrides,
   };
 }
-
-describe('lastGateRunRef', () => {
-  it('ignores builds from an earlier round', () => {
-    const ref = lastGateRunRef(
-      [
-        { kind: 'gate_run', at: '2026-08-20T00:00:00.000Z', by: 'cloud-build', ref: 'old' },
-        { kind: 'gate_run', at: '2026-08-21T08:30:00.000Z', by: 'cloud-build', ref: 'current' },
-      ],
-      DELIVERED_AT,
-    );
-    expect(ref).toBe('current');
-  });
-
-  it('ignores costs that are not gate runs', () => {
-    expect(lastGateRunRef([{ kind: 'agent_session', at: DELIVERED_AT, by: 'copilot', ref: 'x' }], DELIVERED_AT)).toBe(
-      undefined,
-    );
-  });
-});
 
 describe('gateCrashStall', () => {
   it('reads the last transition, not the newest timestamp', () => {
@@ -94,7 +70,9 @@ describe('createGateCrashProbe', () => {
   });
 
   it('never calls a red verdict a crash', async () => {
-    const d = deps({ getManifest: vi.fn(async () => ({ gate: { green: false, ranAt: DELIVERED_AT } })) });
+    const d = deps({
+      getManifest: vi.fn(async () => ({ roundGeneration: 15, gate: { green: false, ranAt: DELIVERED_AT } })),
+    });
     expect(await createGateCrashProbe(d)(record())).toBeNull();
     expect(d.readBuildOutcome).not.toHaveBeenCalled();
   });
@@ -107,7 +85,7 @@ describe('createGateCrashProbe', () => {
 
   it('waits out the threshold before spending a build read', async () => {
     const d = deps();
-    d.getManifest = vi.fn(async () => ({ createdAt: new Date(NOW - 60_000).toISOString() }));
+    d.getManifest = vi.fn(async () => ({ roundGeneration: 15, createdAt: new Date(NOW - 60_000).toISOString() }));
     const fresh = record();
     expect(await createGateCrashProbe(d)(fresh)).toBeNull();
     expect(d.readBuildOutcome).not.toHaveBeenCalled();

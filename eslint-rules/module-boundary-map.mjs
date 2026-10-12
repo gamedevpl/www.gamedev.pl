@@ -559,6 +559,7 @@ const FILE_BUCKET = {
   'gate-trigger': 'delivery',
   'gate-crash': 'delivery',
   'gate-build-outcome': 'delivery',
+  'gate-build-identity': 'delivery',
   'gate-screenshot': 'delivery',
   'preview-stills-note': 'delivery',
   'gate-verdict-routes': 'delivery',

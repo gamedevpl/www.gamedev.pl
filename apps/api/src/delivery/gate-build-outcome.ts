@@ -1,6 +1,7 @@
 import { GoogleAuth } from 'google-auth-library';
+import { identityFromBuild, type CloudGateBuild, type GateBuildIdentity } from './gate-build-identity.js';
 
-export type GateBuildOutcome = 'running' | 'succeeded' | 'failed' | 'timed_out' | 'unknown';
+export type GateBuildOutcome = 'running' | 'succeeded' | 'failed' | 'timed_out' | 'unknown' | 'unrelated';
 
 // EXPIRED is a build that never got a worker.
 const FAILED_BUILD_STATUSES = new Set(['FAILURE', 'INTERNAL_ERROR', 'CANCELLED', 'EXPIRED']);
@@ -24,7 +25,7 @@ export interface GateBuildReaderOptions {
 // Needs no new IAM: the API already creates these builds.
 export function createCloudBuildOutcomeReader(
   options: GateBuildReaderOptions,
-): (buildId: string) => Promise<GateBuildOutcome> {
+): (buildId: string, candidate?: GateBuildIdentity) => Promise<GateBuildOutcome> {
   const fetchImpl = options.fetchImpl ?? fetch;
   let auth: GoogleAuth | null = null;
   const getAccessToken =
@@ -36,29 +37,41 @@ export function createCloudBuildOutcomeReader(
       return token;
     });
 
-  const reads = new Map<string, { expiresAt: number; result: Promise<GateBuildOutcome> }>();
-  const read = async (buildId: string): Promise<GateBuildOutcome> => {
+  type Read = { outcome: GateBuildOutcome; identity?: ReturnType<typeof identityFromBuild> };
+  const reads = new Map<string, { expiresAt: number; result: Promise<Read> }>();
+  const read = async (buildId: string): Promise<Read> => {
     try {
       // Never hang the sweep on one build read.
       const response = await fetchImpl(
         `https://cloudbuild.googleapis.com/v1/projects/${options.project}/builds/${encodeURIComponent(buildId)}`,
         { headers: { authorization: `Bearer ${await getAccessToken()}` }, signal: AbortSignal.timeout(10_000) },
       );
-      if (!response.ok) return 'unknown';
-      const body = (await response.json()) as { status?: string };
-      return outcomeFromBuildStatus(body?.status);
+      if (!response.ok) return { outcome: 'unknown' };
+      const body = (await response.json()) as CloudGateBuild;
+      return { outcome: outcomeFromBuildStatus(body?.status), identity: identityFromBuild(body) };
     } catch {
       // Unknown leaves the job exactly as it was found.
-      return 'unknown';
+      return { outcome: 'unknown' };
     }
   };
-  return (buildId) => {
+  return async (buildId, candidate) => {
     const now = Date.now();
     for (const [id, entry] of reads) if (entry.expiresAt <= now) reads.delete(id);
-    const cached = reads.get(buildId);
-    if (cached) return cached.result;
-    const result = read(buildId);
-    reads.set(buildId, { expiresAt: now + 30_000, result });
-    return result;
+    let cached = reads.get(buildId);
+    if (!cached) {
+      cached = { expiresAt: now + 30_000, result: read(buildId) };
+      reads.set(buildId, cached);
+    }
+    const result = await cached.result;
+    if (candidate) {
+      if (!result.identity) return 'unknown';
+      if (
+        result.identity.health ||
+        result.identity.slug !== candidate.slug ||
+        result.identity.version !== candidate.version
+      )
+        return 'unrelated';
+    }
+    return result.outcome;
   };
 }

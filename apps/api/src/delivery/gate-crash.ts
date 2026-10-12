@@ -4,31 +4,17 @@ import { createCloudBuildOutcomeReader, type GateBuildOutcome } from './gate-bui
 export { createCloudBuildOutcomeReader, outcomeFromBuildStatus } from './gate-build-outcome.js';
 export type { GateBuildOutcome, GateBuildReaderOptions } from './gate-build-outcome.js';
 
-import type { JobCostEntry, Store, SubmissionRecord } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canTransition, type JobTransition } from '../creation/job-state.js';
 import { lastRoundActivityAt } from '../platform/quiet-round.js';
 import type { GateCrash, VersionManifest } from './games-store.js';
+import { buildRefsForCandidate, type GateBuildIdentity } from './gate-build-identity.js';
 import { gateTriggerOptionsFromEnv } from './gate-trigger.js';
 
 // The A28 log metric keys on this exact string.
 export const DELIVERY_GATE_CRASHED_MSG = 'delivery gate crashed';
 
 const GATE_CRASH_THRESHOLD_MS = 10 * 60 * 1000;
-
-// Reuses the cost ledger's gate_run ref.
-export function lastGateRunRef(costs: JobCostEntry[] | undefined, since: string | undefined): string | undefined {
-  const floor = since ? Date.parse(since) : NaN;
-  let best: { at: number; ref: string } | undefined;
-  for (const entry of costs ?? []) {
-    if (entry.kind !== 'gate_run' || !entry.ref) continue;
-    const at = Date.parse(entry.at);
-    if (!Number.isFinite(at)) continue;
-    // Scoped to this round only.
-    if (Number.isFinite(floor) && at < floor) continue;
-    if (!best || at >= best.at) best = { at, ref: entry.ref };
-  }
-  return best?.ref;
-}
 
 interface CrashLogger {
   info: (context: object, message: string) => void;
@@ -56,7 +42,7 @@ export interface GateCrashProbeDeps {
   recordJobTransition: Store['recordJobTransition'];
   getManifest: (slug: string, version: string) => Promise<Partial<VersionManifest> | null>;
   putGateCrash: (slug: string, version: string, crash: GateCrash) => Promise<boolean>;
-  readBuildOutcome: (buildId: string) => Promise<GateBuildOutcome>;
+  readBuildOutcome: (buildId: string, candidate: GateBuildIdentity) => Promise<GateBuildOutcome>;
   log: CrashLogger & { warn?: (context: object, message: string) => void };
   now: () => number;
   thresholdMs: number;
@@ -90,13 +76,22 @@ export function createGateCrashProbe(
       if (!version || !manifest || manifest.gate || manifest.previewGate) return null;
       const since = manifest.createdAt ?? record.stateSince ?? record.createdAt;
       if (!Number.isFinite(Date.parse(since)) || deps.now() - Date.parse(since) <= deps.thresholdMs) return null;
-      const buildId = manifest.gateCrash?.buildId ?? lastGateRunRef(record.costs, since);
+      const refs = manifest.gateCrash
+        ? [manifest.gateCrash.buildId]
+        : buildRefsForCandidate(record.costs, since, version);
+      let buildId: string | undefined;
+      let outcome: GateBuildOutcome = 'unknown';
+      for (const ref of refs) {
+        outcome = manifest.gateCrash
+          ? manifest.gateCrash.status === 'timed_out'
+            ? 'timed_out'
+            : 'failed'
+          : await deps.readBuildOutcome(ref, { slug: record.slug, version });
+        if (outcome === 'unrelated') continue;
+        buildId = ref;
+        break;
+      }
       if (!buildId) return null;
-      const outcome = manifest.gateCrash
-        ? manifest.gateCrash.status === 'timed_out'
-          ? 'timed_out'
-          : 'failed'
-        : await deps.readBuildOutcome(buildId);
       if (outcome !== 'failed' && outcome !== 'timed_out') return null;
       if (
         !(await deps.putGateCrash(record.slug, version, {
@@ -142,10 +137,10 @@ interface GamesStoreLike {
   putGateCrash?: GateCrashProbeDeps['putGateCrash'];
 }
 
-let cachedReader: ((buildId: string) => Promise<GateBuildOutcome>) | null | undefined;
+let cachedReader: ReturnType<typeof createCloudBuildOutcomeReader> | null | undefined;
 
 // Null means unconfigured: local dev gets no probe, like the trigger.
-function outcomeReader(): ((buildId: string) => Promise<GateBuildOutcome>) | null {
+function outcomeReader(): ReturnType<typeof createCloudBuildOutcomeReader> | null {
   if (cachedReader !== undefined) return cachedReader;
   const project = gateTriggerOptionsFromEnv()?.project;
   cachedReader = project ? createCloudBuildOutcomeReader({ project }) : null;

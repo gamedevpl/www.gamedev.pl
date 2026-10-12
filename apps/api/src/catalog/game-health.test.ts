@@ -110,10 +110,10 @@ describe('startHealthCheck', () => {
       requestedAt: '2026-07-30T12:00:00.000Z',
       buildId: 'b-1',
     });
-    // Booked to the job that built the game — a health run is a gate run on the bill.
+    // Attribute the health build to the producing job.
     const submission = await store.getSubmission(jobId);
     expect(submission?.costs).toEqual([
-      { kind: 'gate_run', at: '2026-07-30T12:00:00.000Z', by: 'cloud-build', ref: 'b-1' },
+      { kind: 'gate_run', at: '2026-07-30T12:00:00.000Z', by: 'cloud-build', ref: 'b-1', version: 'v1' },
     ]);
   });
 

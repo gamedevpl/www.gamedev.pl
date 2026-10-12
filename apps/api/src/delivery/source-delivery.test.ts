@@ -166,6 +166,7 @@ describe('shared source delivery', () => {
       slug: SLUG,
       previewVersion: 'v-managed-1',
       title: 'Managed Comet',
+      costs: [{ ref: 'build-managed-1', version: 'v-managed-1' }],
     });
     expect(record?.deliveredVersion).toBeUndefined();
   });
@@ -196,7 +197,6 @@ describe('shared source delivery', () => {
       backend: BACKEND,
       authority,
     });
-    // A preview delivery is a 30-minute build too.
     expect(refused).toEqual({ accepted: false, rejected: 'gate_capacity' });
     expect(gate).toHaveBeenCalledTimes(1);
   });

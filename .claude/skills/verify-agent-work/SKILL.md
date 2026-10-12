@@ -104,6 +104,9 @@ and activity guards alone can still reject a successful retry as an old gate cra
 Exercise this window for preview and publish in both store implementations.
 Also test a retry that retains old version pointers: a manifest lacking a round
 generation must not be accepted as evidence for a later generation.
+Bind a build ID to its candidate version, not the newest cost timestamp: overlapping
+trigger responses can book an older candidate after the newer one. Check legacy IDs
+against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
