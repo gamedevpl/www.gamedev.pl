@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Interactive `/push`, `/submit` and `/publish` offer “Fix with agent” when platform source validation rejects delivery, including missing imports and exports.
+- Interactive `/push`, `/submit` and `/publish` offer “Fix with agent” when platform source validation rejects delivery, including missing imports and exports (#1794).
 
 ## 0.41.0 — 2026-10-12
 
