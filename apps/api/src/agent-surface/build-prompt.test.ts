@@ -128,7 +128,7 @@ describe('buildPrompt', () => {
       undelivered: true,
     });
     expect(prompt).toContain('ended without delivering');
-    expect(prompt).toContain('Nothing from that session is recoverable');
+    expect(prompt).toMatch(/`read_inbox` together.*Call `clear_staged_sources` before your first edit/);
     expect(prompt).not.toContain('npm run restore');
     expect(prompt).not.toContain('revise it, do not rebuild it');
     // The creator's words come from the channel, not the prompt.

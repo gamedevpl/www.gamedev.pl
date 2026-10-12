@@ -15,7 +15,7 @@ describe('builderSystemPrompt', () => {
 
   it('keeps one edit path per file on the shell lane only', () => {
     expect(builderSystemPrompt({ shell: true })).toContain('Change each file through one path only');
-    expect(builderSystemPrompt({ shell: true })).toContain('Do not patch over MCP separately');
+    expect(builderSystemPrompt({ shell: true })).toContain('Do not change anything over MCP');
     expect(builderSystemPrompt({ shell: false })).not.toContain('Change each file through one path only');
     expect(builderSystemPrompt({ shell: false })).toContain('Prefer patching single files');
     expect(builderSystemPrompt({ shell: true })).not.toContain('Prefer patching single files');
@@ -31,5 +31,12 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('run `npm run typecheck -- <slug>` from the kit root');
     expect(shell).not.toContain('no browser, npm ci');
     expect(builderSystemPrompt({ shell: false })).not.toContain('npm ci');
+  });
+
+  it('names one delivery path per edit size on the shell lane', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('send `patch_source_file` with the same old/new text you applied locally');
+    expect(shell).toContain('(up to 50 per call), then PUT them all from one bash loop');
+    expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
 });
