@@ -1,5 +1,6 @@
 // reference_unseen: a creator image newer than any the agent downloaded.
-import type { SubmissionRecord } from '../platform/store.js';
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { NudgeWarning } from './mcp-session-nudges.js';
 
 // Writes are where building blind costs the round.
@@ -24,3 +25,28 @@ export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
     'get_reference_images (or referenceImages on read_inbox) gives its URL; with a shell, curl it and read the ' +
     'file before building on. Without a shell, say in end.summary that you did not see it.',
 };
+
+const MAX_DERIVED = 1000;
+
+// Images stored before the marker existed: derive it once per job.
+export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'listBuildShots'>) {
+  const derived = new Map<number, string | null>();
+  return async (jobId: number): Promise<boolean> => {
+    try {
+      const record = await store.getSubmission(jobId);
+      if (!record) return false;
+      if (record.referenceLatestAt) return referenceUnseen(record);
+      if (!derived.has(jobId)) {
+        if (derived.size >= MAX_DERIVED) derived.clear();
+        const shots = await store.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS });
+        const stamps = shots.filter((shot) => shot.label === 'creator-reference').map((shot) => shot.createdAt);
+        derived.set(jobId, stamps.sort().at(-1) ?? null);
+      }
+      const latest = derived.get(jobId) ?? undefined;
+      return referenceUnseen({ referenceLatestAt: latest, referenceSeenAt: record.referenceSeenAt });
+    } catch {
+      // A soft warning; a failed read must not fail the write.
+      return false;
+    }
+  };
+}

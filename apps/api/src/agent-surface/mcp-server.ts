@@ -131,7 +131,7 @@ import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from './seed-status.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
-import { REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS, referenceUnseen } from './reference-unseen.js';
+import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
@@ -417,6 +417,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
+  const referenceLookup = store ? createReferenceLookup(store) : null;
   // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
   // Note ids each job's read_inbox already returned.
@@ -876,11 +877,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ) {
       prior.push(mustFixGateWarningForStatus(gateStatus, gateDelivery));
     }
-    if (
-      store &&
-      REFERENCE_WRITE_TOOLS.has(toolName) &&
-      referenceUnseen(await store.getSubmission(jobId).catch(() => null))
-    ) {
+    if (referenceLookup && REFERENCE_WRITE_TOOLS.has(toolName) && (await referenceLookup(jobId))) {
       prior.push(REFERENCE_UNSEEN_WARNING);
     }
 

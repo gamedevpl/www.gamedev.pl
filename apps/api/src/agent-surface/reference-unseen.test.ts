@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { mintReferenceImageToken, REFERENCE_IMAGE_DOWNLOAD_ROUTE } from './reference-image-url.js';
-import { referenceUnseen } from './reference-unseen.js';
+import { createReferenceLookup, referenceUnseen } from './reference-unseen.js';
 
 const SECRET = 'test-secret';
 const NOW = Date.parse('2026-10-11T23:00:00.000Z');
@@ -54,5 +54,23 @@ describe('reference_unseen', () => {
     expect(referenceUnseen(null)).toBe(false);
     expect(referenceUnseen({})).toBe(false);
     expect(referenceUnseen({ referenceLatestAt: 'b', referenceSeenAt: 'a' })).toBe(true);
+  });
+
+  it('derives the marker for images stored before it existed, and survives a failed read', async () => {
+    const { store, newer, download } = await setup();
+    const record = (await store.getSubmission(7))!;
+    const lookup = createReferenceLookup({
+      getSubmission: async () => ({ ...record, referenceLatestAt: undefined }),
+      listBuildShots: (jobId, opts) => store.listBuildShots(jobId, opts),
+    });
+    expect(await lookup(7)).toBe(true);
+    await download(newer.id);
+    record.referenceSeenAt = (await store.getSubmission(7))?.referenceSeenAt;
+    expect(await lookup(7)).toBe(false);
+    const broken = createReferenceLookup({
+      getSubmission: async () => Promise.reject(new Error('down')),
+      listBuildShots: async () => [],
+    });
+    expect(await broken(7)).toBe(false);
   });
 });
