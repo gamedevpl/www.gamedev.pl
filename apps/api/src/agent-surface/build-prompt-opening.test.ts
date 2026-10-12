@@ -1,0 +1,19 @@
+import { describe, expect, it } from 'vitest';
+import type { BuildBrief } from './agent-backend.js';
+import { buildPromptOpening } from './build-prompt-opening.js';
+
+const BRIEF = { jobId: 1, slug: 'rocks', spec: 's', channelToken: 't', apiBaseUrl: 'https://x' } as BuildBrief;
+
+describe('buildPromptOpening for an undelivered round', () => {
+  it('points at the brief and inbox when the creator note was queued', () => {
+    const opening = buildPromptOpening({ ...BRIEF, undelivered: true, feedback: 'faster' }, 'rocks', false);
+    expect(opening).toContain('`get_brief` and `read_inbox` together');
+  });
+
+  it('points at the inlined request when the queue write failed', () => {
+    const brief = { ...BRIEF, undelivered: true, feedback: 'faster', feedbackQueueFailed: true };
+    const opening = buildPromptOpening(brief, 'rocks', false);
+    expect(opening).toContain('“What the creator asked for” below');
+    expect(opening).not.toContain('`read_inbox` together');
+  });
+});

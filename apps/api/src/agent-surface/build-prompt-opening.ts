@@ -7,7 +7,7 @@ export function buildPromptOpening(brief: BuildBrief, slug: string, creating: bo
   if (brief.gateRepair)
     return `The gate rejected version ${brief.gateRepair.version} of \`${slug}\`. Repair that delivered game and submit it again.`;
   if (brief.undelivered)
-    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and take the request from \`get_brief\` and \`read_inbox\` together, reading \`get_transcript\` when the latest message is terse. Call \`clear_staged_sources\` before your first edit: files that session staged survive, and \`fromStaged\` would submit them unseen.`;
+    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. Call \`clear_staged_sources\` before your first edit: files that session staged survive, and \`fromStaged\` would submit them unseen.`;
   if (brief.feedback)
     return `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`;
   return `Build a new browser game in \`games/${slug}/\`.`;
@@ -24,4 +24,11 @@ export function gateRepairPrompt(brief: BuildBrief): string[] {
     brief.gateRepair.report.slice(0, 6000).replaceAll('```', '~~~'),
     '```',
   ];
+}
+
+// A failed queue write leaves the inlined section as the only copy.
+function undeliveredRequest(brief: BuildBrief): string {
+  return brief.feedback && brief.feedbackQueueFailed
+    ? 'take the request from “What the creator asked for” below, which no tool can return'
+    : 'take the request from `get_brief` and `read_inbox` together, reading `get_transcript` when the latest message is terse';
 }
