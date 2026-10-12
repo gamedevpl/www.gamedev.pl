@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.43.1 — 2026-10-12
+
 ### Fixed
 
 - Publication checks allow extended play plans to finish and report timeouts explicitly; `GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS` sets an optional limit (#1801).
