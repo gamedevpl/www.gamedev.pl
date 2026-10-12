@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Local Play shows live agent activity, progress, errors and task completion in the launching terminal; tool activity is limited to one update per ten seconds, and `--detach` records the same output in a private local log and prints its path.
 - `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object (#1796).
 
 ### Fixed

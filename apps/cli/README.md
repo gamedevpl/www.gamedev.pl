@@ -600,6 +600,13 @@ for intake, or `gamedevpl play [slug]` for a game. Use `--terminal` for terminal
 and `play --preview` for raw preview. Non-TTY browser launches use explicit
 `create --play` or `play --edit`; JSON and stop retain their previous behavior.
 Keep the terminal open; Ctrl+C ends the session and cancels active local work.
+The terminal shows live agent activity, progress, errors and task endings.
+Tool activity is limited to one update per ten seconds; messages, errors, questions
+and check stages appear immediately. Answer questions in Play.
+With `--detach`, this output goes to the private local file shown
+as `Play log: <path>`; use `tail -f "<path>"` to follow it. Reopening a detached session
+prints its log path again. Logs remain in temporary storage after shutdown and may
+contain prompts or local source text; `/logs` still opens the detailed task transcript.
 Use `--detach` to run independently of the terminal. Use Commands, Attachments and Devices for
 CLI/platform operations, local attachments, screenshots,
 recording, diagnostic traces and phone pairing on trusted Wi-Fi. Compatible game

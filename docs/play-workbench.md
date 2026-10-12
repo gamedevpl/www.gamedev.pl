@@ -16,6 +16,21 @@ Browser launches stay in the invoking terminal by default. `Ctrl+C` ends Play an
 cancels active local work. Use `gamedevpl --detach` or `gamedevpl play --detach` to
 run in the background; `create --detach` also works without a TTY.
 
+Foreground Play prints new conversation messages, agent activity, check stages,
+errors and task endings in the terminal. Answer questions and control work in Play;
+the terminal is a live activity view. Repeated status polls and restored conversation
+history are not replayed.
+Tool activity is limited to one entry per ten seconds, retaining the latest update.
+Messages, errors, questions and check stages appear immediately. Pending tool updates
+are discarded when the task ends, a question opens or a new phase begins.
+`--detach` writes the same timestamped output to an
+owner-only local temporary log, and the launcher prints `Play log: <path>`.
+Reopening that session prints the log path again; use `tail -f "<path>"` to watch it.
+The log remains after the session ends and appends across detached launches in the
+same scope, until removed or temporary storage is cleaned. It may contain prompts
+and local source text; it is never uploaded as telemetry. `/logs` continues to show
+the separate detailed agent task transcript.
+
 Raw preview uses the same full bleed game embedding as the workbench. Reload, sound
 and game instructions live in the overlaid Preview controls; they reserve no stage
 space. Build errors appear over the last playable build.
