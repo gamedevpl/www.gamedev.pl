@@ -1,6 +1,12 @@
 import { CLI_BIN } from './bin-name.js';
 import { CLI_VERSION } from './update.js';
-import { SLASH_VERBS, type SlashVerb } from './argv.js';
+import { jsonMode, SLASH_VERBS, type SlashVerb } from './argv.js';
+
+export function printVersion(flags: Record<string, string | boolean>, write: (line: string) => void): boolean {
+  if (flags.version !== true && flags.V !== true) return false;
+  write(`${jsonMode(flags) ? JSON.stringify({ version: CLI_VERSION }) : CLI_VERSION}\n`);
+  return true;
+}
 
 export const BLURB: Record<SlashVerb, string> = {
   recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
@@ -59,6 +65,7 @@ export function formatHelp(slash = false): string {
         `  ${CLI_BIN} [play] --detach       run the browser workspace in the background`,
         `  ${CLI_BIN} stop [slug]            stop Play in this checkout; --all stops all`,
         `  ${CLI_BIN} --terminal           interactive conversation in the terminal`,
+        `  ${CLI_BIN} --version            print the installed CLI version (-V)`,
         `  ${CLI_BIN} play --preview       open the raw game preview`,
         `  ${CLI_BIN} play --list          list running local Play sessions`,
         `  ${CLI_BIN} play --stop --all    stop all local Play sessions`,

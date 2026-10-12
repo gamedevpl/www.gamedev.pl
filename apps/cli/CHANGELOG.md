@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl --version` (or `-V`) prints the installed version without opening a session; `--json` returns a version object.
+
+### Fixed
+
+- Claude Auto approves ordinary Bash permission requests inside its sandbox, including local diagnostic scripts, while refusing sandbox overrides and writes outside the game directory; policy refusals identify the sandbox rather than blaming the creator.
+
 ## 0.40.0 — 2026-10-12
 
 ### Added

@@ -91,6 +91,7 @@ const BOOLEAN_FLAGS = new Set([
   'json',
   'help',
   'platform',
+  'version',
 ]);
 
 export function parseArgv(argv: string[]): { verb: string; args: string[]; flags: Record<string, string | boolean> } {

@@ -48,6 +48,7 @@ process.on('SIGTERM', () => {
   const sandbox = settings.find(value => value.sandbox)?.sandbox;
   if (!sandbox?.enabled || !sandbox.failIfUnavailable || sandbox.allowUnsandboxedCommands) throw new Error('missing sandbox');
   if (await rpc('Read', { file_path: process.cwd() + '/game.ts' }) !== 'allow') throw new Error('not auto');
+  if (await rpc('Bash', { command: 'MODE=fixture node -e "console.log(1)"' }) !== 'allow') throw new Error('sandboxed Bash denied');
   if (await rpc('Bash', { command: 'npm test', dangerouslyDisableSandbox: true }) !== 'deny') throw new Error('sandbox escaped');
   fs.writeFileSync('game.ts', 'finished');
   console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Done' }));

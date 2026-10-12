@@ -7,6 +7,7 @@ import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { isGitRemoteHelper, isLaunchedEntry, openCheckoutGame, runCli } from './main.js';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
+import { CLI_VERSION } from './update.js';
 
 function io() {
   const stdout = new PassThrough();
@@ -42,6 +43,34 @@ async function inPrivateTmpdir(run: () => Promise<void>): Promise<void> {
 }
 
 describe('runCli verbs', () => {
+  it.each([['--version'], ['-V'], ['--version', '--json']])(
+    'prints version without starting a session: %j',
+    async (...args) => {
+      const streams = io();
+      streams.stdin.isTTY = true;
+      Object.assign(streams.stdout, { isTTY: true });
+      const fetch = vi.fn(() => {
+        throw new Error('Version must stay offline');
+      });
+      vi.stubGlobal('fetch', fetch);
+      const cwd = vi.spyOn(process, 'cwd').mockImplementation(() => {
+        throw new Error('Version must not inspect the checkout');
+      });
+      try {
+        expect(await runCli(['node', 'gamedevpl', ...args], { GAMEDEV_ALLOW_FILE_KEYCHAIN: 'true' }, streams)).toBe(
+          EXIT_GREEN,
+        );
+        expect(streams.read()).toEqual({
+          out: `${args.includes('--json') ? JSON.stringify({ version: CLI_VERSION }) : CLI_VERSION}\n`,
+          err: '',
+        });
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        cwd.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
   it.each([
     ['conect', 'connect'],
     ['udpate', 'update'],
