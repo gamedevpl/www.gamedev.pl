@@ -5,6 +5,7 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
+import { mergeBuildHistory } from './studioBuildHistoryModel.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 import './studio-build-history.css';
 import './studio-credentials.css';
@@ -22,17 +23,13 @@ export function StudioBuildHistory({
   onSealed,
 }: {
   status: SubmissionStatus;
-  // Only sealing needs this — the rest of the panel is slug-keyed.
   token?: string;
-  // Shown when there's no live round and no build history.
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
-  // The build on stage now, flagged so creators know what they play.
   playingVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
-  // Called right after a successful seal, so the caller can refresh status immediately
-  // rather than wait out its own poll — `canSeal` would otherwise stay stale that long.
+  // Refresh immediately: the polling snapshot still permits sealing.
   onSealed?: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -48,18 +45,15 @@ export function StudioBuildHistory({
   const [sealSuccess, setSealSuccess] = useState(false);
 
   const statusBuilds = status.recentBuilds ?? [];
-  const builds = extraBuilds ?? statusBuilds;
-  // `extraBuilds` can lag a new build; the status head is current.
-  const headVersion = statusBuilds[0]?.version ?? builds[0]?.version;
+  const builds = mergeBuildHistory(statusBuilds, extraBuilds ?? []);
+  const headVersion = builds[0]?.version;
 
   useEffect(() => {
-    // Reset extra builds when game / status changes
     setExtraBuilds(null);
   }, [status.slug]);
 
   const live = isBuildLive(status);
-  // Promise play only when the gated build is on stage.
-  const head = statusBuilds[0];
+  const head = builds[0];
   const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
   const liveKey = !live ? 'idle' : playingPending ? 'livePlaying' : 'live';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
@@ -81,7 +75,7 @@ export function StudioBuildHistory({
         const res = await fetchGameBuilds(status.slug, { limit: 100, locale: i18n.language });
         setExtraBuilds(res.builds);
       } catch {
-        // Fall back to showing whatever we already have
+        // Keep the loaded history on a fetch failure.
       } finally {
         setLoadingOlder(false);
       }
@@ -211,7 +205,9 @@ export function StudioBuildHistory({
                 <span className="studio-build-history-verdict">
                   {build.status === 'kit_outdated'
                     ? t('studioPanel.buildHistory.kitOutdated')
-                    : t(`studioPanel.buildHistory.verdict.${build.verdict}`)}
+                    : build.status === 'timed_out' || build.status === 'crashed'
+                      ? t(`studioPanel.buildHistory.${build.status === 'timed_out' ? 'timedOut' : 'crashed'}`)
+                      : t(`studioPanel.buildHistory.verdict.${build.verdict}`)}
                 </span>
                 <time className="studio-build-history-time" dateTime={build.createdAt}>
                   {formatRelativeTime(build.createdAt, i18n.language)}

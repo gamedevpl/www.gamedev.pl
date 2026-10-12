@@ -1,12 +1,9 @@
-// Turns the newest build into one honest readout.
-
 import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
 export type BuildBarState = 'running' | 'green' | 'red' | 'starting';
 
 export interface BuildBarModel {
   state: BuildBarState;
-  // 0..1, or null before the first stage.
   fraction: number | null;
   label: string;
   etaMinutes: number | null;
@@ -16,7 +13,6 @@ export interface BuildBarModel {
   liveTag?: string | null;
 }
 
-// Median, so one outlier cannot move it.
 export function medianGateMinutes(builds: readonly RecentBuild[] | undefined): number | null {
   const spans: number[] = [];
   for (const build of builds ?? []) {
@@ -33,7 +29,6 @@ export function medianGateMinutes(builds: readonly RecentBuild[] | undefined): n
 
 export function formatBuildTag(version: string | null | undefined): string | null {
   if (!version) return null;
-  // Gate versions end in `-<hex>`; PR lane sends a bare sha.
   const match = version.match(/(?:^|-)([0-9a-f]{6,40})$/i);
   if (match) return `#${match[1].slice(0, 6).toLowerCase()}`;
   return version.length <= 10 ? `#${version}` : `#${version.slice(0, 8)}…`;
@@ -49,7 +44,6 @@ export function buildBarModel(
   const eta = medianGateMinutes(status?.recentBuilds);
   const priorRound =
     typeof status?.jobId === 'number' && typeof latest.jobId === 'number' && latest.jobId !== status.jobId;
-  // A prior round's newest build is not the one being processed.
   const processingVersion = priorRound ? null : (latest.version ?? null);
   const liveVersion = options?.liveVersion ?? null;
   const tags = {
@@ -69,10 +63,13 @@ export function buildBarModel(
     };
   }
 
+  if (latest.verdict === 'pending' && status?.failure?.reason === 'gate_crashed') {
+    return { state: 'red', fraction: null, label: t('studioPanel.buildBar.crashed'), etaMinutes: null, ...tags };
+  }
+
   if (latest.verdict === 'pending') {
     const gate = status?.gateProgress;
     const total = gate?.total ?? latest.total ?? null;
-    // Indeterminate, never a hard 0 that reads as stuck.
     if (!gate || !total) {
       return {
         state: 'starting',
@@ -92,14 +89,15 @@ export function buildBarModel(
   }
 
   if (latest.verdict === 'red') {
-    // Frozen where it died: early is ours, late is theirs.
     const total = latest.total ?? null;
     const fraction =
       total && typeof latest.failedIndex === 'number' ? Math.min(1, (latest.failedIndex + 1) / total) : 1;
     return {
       state: 'red',
       fraction,
-      label: t('studioPanel.buildBar.failed'),
+      label: t(
+        `studioPanel.buildBar.${latest.status === 'timed_out' ? 'timedOut' : latest.status === 'crashed' ? 'crashed' : 'failed'}`,
+      ),
       etaMinutes: null,
       ...tags,
     };

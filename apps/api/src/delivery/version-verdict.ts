@@ -30,6 +30,7 @@ export function applyGateVerdict(manifest: VersionManifest, result: GateResultIn
     ...(failedStage ? { failedStage } : {}),
   };
   delete manifest.gateProgress;
+  delete manifest.gateCrash;
 }
 
 export function applyPreviewGateVerdict(manifest: VersionManifest, result: GateResultInput, ranAt: string): void {
@@ -43,6 +44,7 @@ export function applyPreviewGateVerdict(manifest: VersionManifest, result: GateR
     ...(failedStage ? { failedStage } : {}),
   };
   delete manifest.gateProgress;
+  delete manifest.gateCrash;
 }
 
 export function applyHealthVerdict(
@@ -57,4 +59,5 @@ export function applyHealthVerdict(
     ...(result.report ? { report: result.report } : {}),
   };
   delete manifest.gateProgress;
+  delete manifest.gateCrash;
 }

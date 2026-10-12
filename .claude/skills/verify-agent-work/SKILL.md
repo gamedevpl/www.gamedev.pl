@@ -95,6 +95,19 @@ assertions pass alone and fail in the full gate. Check the response shape and ke
 real authorization, store and admission path; stub only the unrelated model decisions.
 Derive handover times from the created record instead of dating them before its creation.
 
+## Guard delivery identity as well as activity
+
+When a background probe changes a round after reading a delivery, compare both
+observed version pointers inside the store transaction, including their absence.
+Delivery setters can replace those pointers before the heartbeat changes; generation
+and activity guards alone can still reject a successful retry as an old gate crash.
+Exercise this window for preview and publish in both store implementations.
+Also test a retry that retains old version pointers: a manifest lacking a round
+generation must not be accepted as evidence for a later generation.
+Bind a build ID to its candidate version, not the newest cost timestamp: overlapping
+trigger responses can book an older candidate after the newer one. Check legacy IDs
+against the build configuration before attributing their outcome.
+
 ## Run the project's real gate
 
 Whatever the project's definition of green is — run all of it, in the isolated checkout:

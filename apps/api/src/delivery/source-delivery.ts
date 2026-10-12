@@ -579,6 +579,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             at: new Date(now()).toISOString(),
             by: 'cloud-build',
             ref: buildId,
+            version,
           })
           .catch((error) => {
             options.log?.error({ err: error, jobId: input.jobId }, 'could not record gate cost');

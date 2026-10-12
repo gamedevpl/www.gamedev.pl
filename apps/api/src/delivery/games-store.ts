@@ -1,23 +1,4 @@
 import { retryStorageWrite } from './storage-write-retry.js';
-// The games store: Cloud Storage as the system of record for creator game content.
-//
-// Today the games repo is that record, and git is the medium — which is why ~200 MB of
-// its history is regenerable PNG and MP4, why a takedown is not complete until a merge
-// and a green bake, and why publication means "somebody merged something". None of those
-// are properties anyone chose; they are properties of storing content in a repository.
-//
-// Here a game is a sequence of immutable versions:
-//
-//   games/<slug>/versions/<version>/manifest.json   provenance: job, engine ref, gate
-//   games/<slug>/versions/<version>/source/<path>   SPEC.md, GAME.json, game.ts, …
-//   games/<slug>/versions/<version>/media/<file>    produced by our gate, never uploaded
-//   games/<slug>/versions/<version>/bundle.html     produced by our gate, never uploaded
-//
-// Publication is a *registry* fact rather than a storage fact — which object exists says
-// nothing about what is live. That split is deliberate: it is what makes a takedown a
-// flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
-// resurrecting a withdrawn game.
-
 import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
@@ -57,20 +38,6 @@ export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../p
 
 export type { GateProgress } from './gate-progress.js';
 
-/**
- * Files an agent is allowed to deliver, and nothing else.
- *
- * This list is the delivery contract, and it is enforced server-side rather than trusted
- * to the agent's instructions. It is what makes "GameKit and other games are read-only"
- * structurally true instead of merely requested: there is no path an upload can name that
- * reaches `shared/`, `tools/`, or another game's directory, so a prompt-injected or
- * simply confused agent cannot widen its own scope.
- *
- * The list itself lives in `packages/contract/src/delivery-paths.ts` (re-exported by
- * `games-repo-contract.ts`, whose header holds the cross-repo ordering rule), so the CLI
- * and Studio read the same rules this file enforces. Change it there. Media bytes are
- * produced by our gate, never uploaded — `media/` paths are refused, not listed.
- */
 export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 
 /** Mirrors the games repo's own slug rule, so a name valid here is valid there. */
@@ -410,6 +377,7 @@ export interface VersionManifest {
   adopted?: { proposalId: string; byUid: string | null; at: string };
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
+  gateCrash?: GateCrash;
   /** Mid-gate milestone; cleared on verdict. */
   gateProgress?: GateProgress;
   /**
@@ -452,6 +420,13 @@ export interface VersionManifest {
   authorship?: 'agent' | 'owner' | 'mixed';
   summary?: string;
 }
+
+export type GateCrash = {
+  buildId: string;
+  ranAt: string;
+  status: 'crashed' | 'timed_out';
+  failedStage?: GateProgressStage;
+};
 
 /** What the gate wrote onto a candidate — green, red, or a kit-window refusal. */
 export type GateVerdict = {
@@ -627,6 +602,7 @@ export interface GamesStore {
     paths?: string[];
   }): Promise<{ cleared: number }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
+  putGateCrash?(slug: string, version: string, crash: GateCrash): Promise<boolean>;
   // Fills or replaces the changelog sentence on a version.
   setVersionSummary?(slug: string, version: string, summary: string): Promise<void>;
   /**
@@ -1219,6 +1195,32 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       return (listing.prefixes ?? []).length;
     },
 
+    async putGateCrash(slug, version, crash) {
+      const name = `${versionPrefix(slug, version)}/manifest.json`;
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const got = await readObjectWithGeneration(name);
+        if (!got) throw new Error(`no manifest for ${slug}@${version}`);
+        const manifest = parseVersionManifest(got.body);
+        if (manifest.gate || manifest.previewGate) return false;
+        if (manifest.gateCrash) return true;
+        manifest.gateCrash = {
+          ...crash,
+          ...(manifest.gateProgress ? { failedStage: manifest.gateProgress.stage } : {}),
+        };
+        delete manifest.gateProgress;
+        try {
+          await writeObject(name, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json', {
+            ifGenerationMatch: got.generation,
+          });
+          return true;
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      throw new Error(`could not record gate crash for ${slug}@${version}`);
+    },
+
     async putGateResult(slug, version, result) {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
@@ -1245,7 +1247,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const got = await readObjectWithGeneration(name);
         if (!got) throw new Error(`no manifest for ${slug}@${version}`);
         const manifest = parseVersionManifest(got.body);
-        if (manifest.gate || manifest.previewGate || manifest.health) return;
+        if (manifest.gate || manifest.previewGate || manifest.health || manifest.gateCrash) return;
         manifest.gateProgress = progress;
         try {
           await writeObject(name, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json', {
@@ -1261,7 +1263,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const final = await readObject(name);
       if (!final) throw new Error(`no manifest for ${slug}@${version}`);
       const finalManifest = parseVersionManifest(final);
-      if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
+      if (finalManifest.gate || finalManifest.previewGate || finalManifest.health || finalManifest.gateCrash) return;
     },
 
     async putPreviewGateResult(slug, version, result) {

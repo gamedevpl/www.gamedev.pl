@@ -675,6 +675,8 @@
       "resize": "Zmień szerokość panelu"
     },
     "buildHistory": {
+      "timedOut": "Przekroczono czas buildu",
+      "crashed": "Build przerwany",
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
       "livePlaying": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
       "idle": "Żaden build nie jest teraz uruchomiony",
@@ -711,6 +713,8 @@
       "playing": "Grasz"
     },
     "buildBar": {
+      "timedOut": "Przekroczono czas buildu",
+      "crashed": "Build przerwany",
       "starting": "Sprawdzanie się zaczyna",
       "roundInProgress": "Runda w toku",
       "failed": "Sprawdzian niezaliczony",
@@ -1297,6 +1301,7 @@
     "shareCopied": "Skopiowano!",
     "checksFailed": "Automatyczne testy tej wersji nie przechodzą. Agent zwykle to zauważa i poprawia — nie musisz nic robić.",
     "failure": {
+      "gate_crashed": "Automatyczna weryfikacja została przerwana. Twoje pliki są zapisane — agent może dostarczyć build ponownie, aby powtórzyć sprawdzenie.",
       "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",

@@ -32,15 +32,7 @@ export interface JobSeedOutcome {
   model?: string;
 }
 
-/**
- * One billed thing, attached to the job that incurred it.
- *
- * The units are deliberately plural. Copilot bills a *premium request* per session and
- * exposes no token counts at all — so credits is the only honest number we can record
- * for it, and a schema built around tokens would have had to lie or leave them zero.
- * `tokens` and `usd` exist unpopulated for the backend that would report them
- * (docs: architecture B), so that arriving is a writer, not a migration.
- */
+// Cost units follow the billing provider.
 export interface JobCostEntry {
   kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat' | 'tab_complete' | 'concept';
   at: string;
@@ -52,6 +44,7 @@ export interface JobCostEntry {
   by: string;
   /** The vendor's own id, so a line on a bill can be traced back to a job. */
   ref?: string;
+  version?: string;
   /**
    * AI credits billed. For an `agent_session` this starts as a placeholder of 1 at
    * dispatch (usage is not on the create response) and is overwritten with the real

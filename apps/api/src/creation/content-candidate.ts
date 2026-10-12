@@ -93,7 +93,13 @@ export async function deliverContentCandidate(input: {
   const gate = await input.onSourcesDelivered?.({ jobId, slug: input.slug, version });
   if (gate?.buildId) {
     await store
-      .recordJobCost(jobId, { kind: 'gate_run', at: new Date().toISOString(), by: 'cloud-build', ref: gate.buildId })
+      .recordJobCost(jobId, {
+        kind: 'gate_run',
+        at: new Date().toISOString(),
+        by: 'cloud-build',
+        ref: gate.buildId,
+        version,
+      })
       .catch(() => {});
   }
   return { version };

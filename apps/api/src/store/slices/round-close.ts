@@ -24,7 +24,7 @@ export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boole
   if (guard.state !== undefined && (resolveJobState(sub) ?? 'queued') !== guard.state) return false;
   if (guard.activityAt !== undefined && lastRoundActivityAt(sub) !== guard.activityAt) return false;
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
-  if (guard.deliveredVersion !== undefined && sub.deliveredVersion !== guard.deliveredVersion) return false;
+  if ('deliveredVersion' in guard && sub.deliveredVersion !== guard.deliveredVersion) return false;
   if ('previewVersion' in guard && sub.previewVersion !== guard.previewVersion) return false;
   return guard.dispatchRef === undefined || sub.dispatch?.refs.at(-1) === guard.dispatchRef;
 }

@@ -359,7 +359,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       const gate = await gateTrigger({ jobId, slug, version });
       if (gate?.buildId) {
         await store
-          .recordJobCost(jobId, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
+          .recordJobCost(jobId, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId, version })
           .catch(() => {});
       }
       invalidateStatusCache(jobId);

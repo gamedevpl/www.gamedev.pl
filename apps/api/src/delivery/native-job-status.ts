@@ -127,7 +127,13 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
               ...(manifest.previewGate.status ? { status: manifest.previewGate.status } : {}),
             };
           }
-          if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
+          if (
+            manifest?.gateProgress &&
+            !manifest.gate &&
+            !manifest.previewGate &&
+            !manifest.gateCrash &&
+            !gateCrashStall(record)
+          ) {
             status.gateProgress = manifest.gateProgress;
           }
           if (sealRefusal(record) === null && manifest?.previewGate?.green) {

@@ -87,6 +87,7 @@ export async function startHealthCheck(
       at: requestedAt,
       by: 'cloud-build',
       ref: buildId,
+      version,
     });
   }
 

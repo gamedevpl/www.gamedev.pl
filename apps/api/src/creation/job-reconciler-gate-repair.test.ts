@@ -43,7 +43,7 @@ function setup(green: boolean) {
     postGateScreenshot: async () => null,
     onGateRed,
   });
-  return { record, store, onGateRed, reconciler };
+  return { record, store, gamesStore, onGateRed, reconciler };
 }
 
 describe('gate repair reconciliation', () => {
@@ -123,5 +123,34 @@ describe('gate repair reconciliation', () => {
     expect(setJobCostFinished).toHaveBeenCalledOnce();
     expect(onGateRed).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ to: 'dispatched', reason: 'gate_repair' });
+  });
+});
+
+describe('gate crash reconciliation during a Studio poll', () => {
+  it('probes a missing verdict without waiting for the sweep', async () => {
+    const { record, gamesStore, store } = setup(false);
+    Object.assign(gamesStore, { getManifest: vi.fn(async () => ({ roundGeneration: 2 })) });
+    const probeGateCrash = vi.fn(async () => ({
+      to: 'needs_changes' as const,
+      by: 'gate' as const,
+      at: AT,
+      reason: 'gate_crashed',
+    }));
+    const reconciler = createJobReconciler({
+      store,
+      gamesStore,
+      probeGateCrash,
+      log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+      now: () => Date.parse(AT),
+      observeQuietMs: 0,
+      maxDeliveryNudges: 1,
+      backendForRecord: async () => undefined,
+      releaseWorkspace: async () => {},
+      resumeBuild: async () => ({}),
+      acknowledgeBuilderHandoff: async () => ({ started: false }),
+      postGateScreenshot: async () => null,
+    });
+    expect(await reconciler.reconcileGateVerdict(record)).toMatchObject({ reason: 'gate_crashed' });
+    expect(probeGateCrash).toHaveBeenCalledOnce();
   });
 });

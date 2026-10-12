@@ -1,18 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-
-import {
-  createCloudBuildOutcomeReader,
-  createGateCrashProbe,
-  lastGateRunRef,
-  outcomeFromBuildStatus,
-  type GateCrashProbeDeps,
-} from './gate-crash.js';
+import { createCloudBuildOutcomeReader, createGateCrashProbe, type GateCrashProbeDeps } from './gate-crash.js';
 import { gateCrashStall } from '../creation/job-state.js';
 import type { SubmissionRecord } from '../platform/store.js';
-
 const NOW = Date.parse('2026-08-21T09:00:00.000Z');
 const DELIVERED_AT = '2026-08-21T08:00:00.000Z';
-
 function record(overrides: Partial<SubmissionRecord> = {}): SubmissionRecord {
   return {
     jobId: 1000081,
@@ -28,11 +19,11 @@ function record(overrides: Partial<SubmissionRecord> = {}): SubmissionRecord {
     ...overrides,
   } as SubmissionRecord;
 }
-
 function deps(overrides: Partial<GateCrashProbeDeps> = {}): GateCrashProbeDeps {
   return {
     recordJobTransition: vi.fn(async () => true),
-    getManifest: vi.fn(async () => ({}) as { gate?: unknown; previewGate?: unknown }),
+    getManifest: vi.fn(async () => ({ createdAt: DELIVERED_AT, roundGeneration: 15 })),
+    putGateCrash: vi.fn(async () => true),
     readBuildOutcome: vi.fn(async () => 'failed' as const),
     log: { info: vi.fn(), warn: vi.fn() },
     now: () => NOW,
@@ -41,41 +32,8 @@ function deps(overrides: Partial<GateCrashProbeDeps> = {}): GateCrashProbeDeps {
   };
 }
 
-describe('outcomeFromBuildStatus', () => {
-  it('reads Cloud Build statuses into the three answers that matter', () => {
-    expect(outcomeFromBuildStatus('SUCCESS')).toBe('succeeded');
-    expect(outcomeFromBuildStatus('WORKING')).toBe('running');
-    expect(outcomeFromBuildStatus('QUEUED')).toBe('running');
-    // A build with no worker is as dead as one that threw.
-    expect(outcomeFromBuildStatus('EXPIRED')).toBe('failed');
-    expect(outcomeFromBuildStatus('TIMEOUT')).toBe('failed');
-    expect(outcomeFromBuildStatus(undefined)).toBe('unknown');
-  });
-});
-
-describe('lastGateRunRef', () => {
-  it('ignores builds from an earlier round', () => {
-    // A stale id would blame this round for an older failure.
-    const ref = lastGateRunRef(
-      [
-        { kind: 'gate_run', at: '2026-08-20T00:00:00.000Z', by: 'cloud-build', ref: 'old' },
-        { kind: 'gate_run', at: '2026-08-21T08:30:00.000Z', by: 'cloud-build', ref: 'current' },
-      ],
-      DELIVERED_AT,
-    );
-    expect(ref).toBe('current');
-  });
-
-  it('ignores costs that are not gate runs', () => {
-    expect(lastGateRunRef([{ kind: 'agent_session', at: DELIVERED_AT, by: 'copilot', ref: 'x' }], DELIVERED_AT)).toBe(
-      undefined,
-    );
-  });
-});
-
 describe('gateCrashStall', () => {
   it('reads the last transition, not the newest timestamp', () => {
-    // Append-ordered; a re-read verdict can carry an older `at`.
     expect(
       gateCrashStall({
         state: 'needs_changes',
@@ -103,14 +61,18 @@ describe('createGateCrashProbe', () => {
     const transition = await createGateCrashProbe(d)(record());
 
     expect(transition).toMatchObject({ to: 'needs_changes', by: 'gate', reason: 'gate_crashed' });
-    expect(d.recordJobTransition).toHaveBeenCalledWith(1000081, expect.objectContaining({ reason: 'gate_crashed' }));
-    // A28 keys on this line.
+    expect(d.recordJobTransition).toHaveBeenCalledWith(
+      1000081,
+      expect.objectContaining({ reason: 'gate_crashed' }),
+      expect.objectContaining({ roundGeneration: 15 }),
+    );
     expect(d.log.info).toHaveBeenCalledWith(expect.anything(), 'delivery gate crashed');
   });
 
   it('never calls a red verdict a crash', async () => {
-    // The gate exits non-zero on red too.
-    const d = deps({ getManifest: vi.fn(async () => ({ gate: { green: false } })) });
+    const d = deps({
+      getManifest: vi.fn(async () => ({ roundGeneration: 15, gate: { green: false, ranAt: DELIVERED_AT } })),
+    });
     expect(await createGateCrashProbe(d)(record())).toBeNull();
     expect(d.readBuildOutcome).not.toHaveBeenCalled();
   });
@@ -123,14 +85,19 @@ describe('createGateCrashProbe', () => {
 
   it('waits out the threshold before spending a build read', async () => {
     const d = deps();
-    const fresh = record({ stateSince: new Date(NOW - 60_000).toISOString() });
+    d.getManifest = vi.fn(async () => ({ roundGeneration: 15, createdAt: new Date(NOW - 60_000).toISOString() }));
+    const fresh = record();
     expect(await createGateCrashProbe(d)(fresh)).toBeNull();
     expect(d.readBuildOutcome).not.toHaveBeenCalled();
   });
 
   it('only looks at deliveries that are waiting on the gate', async () => {
     const d = deps();
-    expect(await createGateCrashProbe(d)(record({ state: 'building' }))).toBeNull();
+    expect(
+      await createGateCrashProbe(d)(
+        record({ state: 'building', deliveredVersion: undefined, previewVersion: undefined }),
+      ),
+    ).toBeNull();
     expect(await createGateCrashProbe(d)(record({ state: 'published' }))).toBeNull();
     expect(d.readBuildOutcome).not.toHaveBeenCalled();
   });
@@ -142,7 +109,6 @@ describe('createGateCrashProbe', () => {
   });
 
   it('leaves the job untouched when the build cannot be read', async () => {
-    // An API blip must not rewrite live jobs.
     const d = deps({ readBuildOutcome: vi.fn(async () => 'unknown' as const) });
     expect(await createGateCrashProbe(d)(record())).toBeNull();
     expect(d.recordJobTransition).not.toHaveBeenCalled();
