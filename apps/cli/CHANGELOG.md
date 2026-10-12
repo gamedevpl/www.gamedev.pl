@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Interactive workspace disables mouse reporting by default to preserve native text selection and normal scrolling, and keeps the sidebar hidden until opened with Ctrl+B (#1810).
+
 ## 0.44.0 — 2026-10-12
 
 ### Added

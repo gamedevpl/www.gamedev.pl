@@ -10,7 +10,7 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   void view.session.prompt();
   for (let i = 0; i < 40; i++) view.session.writeLine(`codex ▸ Message ${i} · ${'długa odpowiedź '.repeat(8)}`);
   view.session.setDraft('unfinished request');
-  expect(view.frame()).toContain('WORKSPACE');
+  expect(view.frame()).not.toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 39');
   expect(view.frame()).not.toContain('Message 0 ·');
   expect(view.frame().trimEnd().split('\n').length).toBeLessThan(28);
@@ -20,9 +20,11 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   await view.press('\u001b[6~');
   expect(view.frame()).toContain('Message 39');
   await view.press('\u0002');
-  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('unfinished request');
   expect(view.session.get().draft).toBe('unfinished request');
+  await view.press('\u0002');
+  expect(view.frame()).not.toContain('WORKSPACE');
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
   view.takeOutput();
@@ -62,6 +64,9 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   void view.session.prompt();
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1006h\u001b[?1000h');
+  await view.press('\u0014');
+  await view.press('\u0002');
   expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
@@ -293,6 +298,7 @@ it('keeps local ownership and queued messages visible without claiming a deliver
   view.session.setLocalTask('muse');
   await view.press('follow-up');
   await view.press('\r');
+  await view.press('\u0002');
   expect(view.frame()).toContain('Local agent: muse');
   expect(view.frame()).toContain('1 queued');
   expect(view.frame()).toContain('Delivery happens after /submit');
@@ -317,6 +323,7 @@ it('refreshes local edits only while visible, and refreshes again when restored'
     writeFileSync(join(game, 'game.ts'), 'before');
     const view = screen(150, 28, 0, () => ({ root, slug: 'sky' }));
     void view.session.prompt();
+    await view.press('\u0002');
     expect(view.frame()).toContain('No local changes');
     writeFileSync(join(game, 'game.ts'), 'after');
     await vi.advanceTimersByTimeAsync(3000);
