@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl login` and Play sign-in use a link and approval code that work in Codespaces and SSH; `--no-browser` keeps the browser closed and `--loopback` selects local callback sign-in.
+
 ## 0.43.1 — 2026-10-12
 
 ### Fixed

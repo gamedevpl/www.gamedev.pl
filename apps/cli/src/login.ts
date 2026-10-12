@@ -27,6 +27,7 @@ export type LoopbackLoginInput = {
   device?: string;
   timeoutMs?: number;
   abort?: AbortSignal;
+  noBrowser?: boolean;
 };
 
 function sameSecret(left: string, right: string): boolean {
@@ -177,7 +178,7 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
   try {
     input.abort?.throwIfAborted();
     input.stdout.write(`${g.work} opening the browser to sign in\n`);
-    const opened = await open(url);
+    const opened = input.noBrowser ? false : await open(url);
     if (!opened) input.stdout.write(`open ${url}\n`);
     result = await new Promise((resolve, reject) => {
       cancel = () => reject(input.abort?.reason);

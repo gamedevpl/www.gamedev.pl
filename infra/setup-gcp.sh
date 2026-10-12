@@ -121,9 +121,10 @@ gcloud secrets add-iam-policy-binding session-secret \
 # `ttls list` reports only fields that already have a policy, so a name match is the
 # existence check. Verified against the live ACTIVE playEvents policy on 2026-07-25.
 TELEMETRY_GROUPS="playEvents visitEvents"
-echo "==> 6/10 Ensuring the 90-day TTL policy on each telemetry collection group"
+OAUTH_DEVICE_GROUPS="oauthDeviceAuthorizations oauthDeviceCodes"
+echo "==> 6/10 Ensuring TTL policies for telemetry and OAuth device sessions"
 EXISTING_TTLS="$(gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null || true)"
-for GROUP in $TELEMETRY_GROUPS; do
+for GROUP in $TELEMETRY_GROUPS $OAUTH_DEVICE_GROUPS; do
   if printf '%s\n' "$EXISTING_TTLS" | grep -q "collectionGroups/${GROUP}/fields/expiresAt"; then
     echo "    ${GROUP}.expiresAt: already present."
   else

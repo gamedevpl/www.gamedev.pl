@@ -1,4 +1,4 @@
-import { SubmissionFacade } from './submission-facade.js';
+import { OAuthFacade } from './oauth-facade.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
@@ -37,13 +37,6 @@ import type { JobCostEntry, JobSeedOutcome } from './records/dispatch.js';
 import { DELETED_ACCOUNT_UID } from './records/identity.js';
 import type { AccountIdentityDeletionResult, ClaimHandleResult, HandleRecord, User } from './records/identity.js';
 import type { PushSubscriptionRecord, StoredNotification } from './records/notifications.js';
-import type {
-  OAuthAccessTokenRecord,
-  OAuthAuthCodeRecord,
-  OAuthClientRecord,
-  OAuthGrantRecord,
-  RotateRefreshTokenResult,
-} from './records/oauth.js';
 import type { EditorDraftRecord, GameSaveRecord, PlayAffinityRecord, WorldEntryRecord } from './records/player-data.js';
 import type { CreationLimits, FeaturedPoolConfig, PublicPlayConfig, UsageCounters } from './records/quota.js';
 import type {
@@ -112,11 +105,11 @@ import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } from './shelf-guard-firestore.js';
 
-export class FirestoreStore extends SubmissionFacade implements Store {
+export class FirestoreStore extends OAuthFacade implements Store {
   private db: GuardedFirestore;
   private telemetryStore: TelemetryStore;
   listTelemetryEventsAcross?: TelemetryStore['listTelemetryEventsAcross'];
-  private oauthStore: FirestoreOAuthStore;
+  protected oauthStore: FirestoreOAuthStore;
   private playerDataStore: FirestorePlayerDataStore;
   private worldEntriesStore: FirestoreWorldEntriesStore;
   private notificationsStore: FirestoreNotificationsStore;
@@ -356,6 +349,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     for (const ref of deleteRefs.values()) writes.push((batch) => batch.delete(ref));
 
     // Before the batch, so a failure here leaves users/{uid} retryable.
+    await this.oauthStore.eraseOAuthDeviceAuthorizations(uid);
 
     // Slug-keyed docs can be overwritten before this runs; re-check, don't blind-delete.
     const transferSlugs = new Set([...transfersSent.docs, ...transfersReceived.docs].map((doc) => doc.id));
@@ -1631,76 +1625,6 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.accessTokensStore.touchAccessToken(tokenId, at);
   }
 
-  async createOAuthClient(record: OAuthClientRecord): Promise<void> {
-    return this.oauthStore.createOAuthClient(record);
-  }
-
-  async getOAuthClient(clientId: string): Promise<OAuthClientRecord | null> {
-    return this.oauthStore.getOAuthClient(clientId);
-  }
-
-  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
-    return this.oauthStore.createOAuthGrant(record, opts);
-  }
-
-  async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.getOAuthGrant(grantId);
-  }
-
-  async getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.getOAuthGrantByRefreshTokenId(refreshTokenId);
-  }
-
-  async listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]> {
-    return this.oauthStore.listOAuthGrantsByOwner(ownerUid);
-  }
-
-  async revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean> {
-    return this.oauthStore.revokeOAuthGrant(grantId, ownerUid);
-  }
-
-  async createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void> {
-    return this.oauthStore.createOAuthAccessToken(record);
-  }
-
-  async getAsAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    return this.oauthStore.getAsAccessToken(tokenId);
-  }
-
-  async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
-    return this.oauthStore.deleteOAuthAccessToken(tokenId);
-  }
-
-  async createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void> {
-    return this.oauthStore.createOAuthAuthCode(record);
-  }
-
-  async consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null> {
-    return this.oauthStore.consumeOAuthAuthCode(codeId, codeHash, nowMs);
-  }
-
-  async rotateOAuthRefreshToken(input: {
-    refreshTokenId: string;
-    refreshSecretHash: string;
-    newRefreshTokenId: string;
-    newRefreshHash: string;
-    newRefreshExpiresAt: string;
-    newAccessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<RotateRefreshTokenResult> {
-    return this.oauthStore.rotateOAuthRefreshToken(input);
-  }
-
-  async issueOAuthTokensFromGrant(input: {
-    grantId: string;
-    refreshTokenId: string;
-    refreshHash: string;
-    refreshExpiresAt: string;
-    accessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<OAuthGrantRecord | null> {
-    return this.oauthStore.issueOAuthTokensFromGrant(input);
-  }
   getCliChat = (uid: string, conversationId?: string) => this.cliChatStore.getCliChat(uid, conversationId);
   putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

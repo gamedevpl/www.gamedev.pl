@@ -1,5 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { stripUndefined } from '../firestore-util.js';
+import { FirestoreOAuthDeviceStore, InMemoryOAuthDeviceStore, type OAuthDeviceStore } from './oauth-device.js';
 import type {
   OAuthAccessTokenRecord,
   OAuthAuthCodeRecord,
@@ -8,7 +9,7 @@ import type {
   RotateRefreshTokenResult,
 } from '../records/oauth.js';
 
-export interface OAuthStore {
+export interface OAuthStore extends OAuthDeviceStore {
   // Persists a dynamically registered or CIMD-cached OAuth client.
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
 
@@ -58,7 +59,7 @@ export interface OAuthStore {
   }): Promise<OAuthGrantRecord | null>;
 }
 
-export class InMemoryOAuthStore implements OAuthStore {
+export class InMemoryOAuthStore extends InMemoryOAuthDeviceStore implements OAuthStore {
   // Not private -- deleteAccountIdentity reaches across these (documented exception, see PR).
   oauthClients = new Map<string, OAuthClientRecord>();
   oauthGrants = new Map<string, OAuthGrantRecord>();
@@ -213,8 +214,10 @@ export class InMemoryOAuthStore implements OAuthStore {
   }
 }
 
-export class FirestoreOAuthStore implements OAuthStore {
-  constructor(private db: Firestore) {}
+export class FirestoreOAuthStore extends FirestoreOAuthDeviceStore implements OAuthStore {
+  constructor(private db: Firestore) {
+    super(db);
+  }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
     await this.db.collection('oauthClients').doc(record.clientId).create(stripUndefined(record));

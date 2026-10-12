@@ -119,6 +119,7 @@ describe('OAuth device authorization (CL-08)', () => {
       payload: new URLSearchParams({
         user_code: body.user_code,
         action: 'approve',
+        disclosed_scope: 'creator',
         consent_token: deviceConsent(),
       }).toString(),
     });
@@ -185,6 +186,7 @@ describe('OAuth device authorization (CL-08)', () => {
       payload: new URLSearchParams({
         user_code: body.user_code,
         action: 'approve',
+        disclosed_scope: 'creator',
         consent_token: deviceConsent(),
       }).toString(),
     });
@@ -340,6 +342,7 @@ describe('OAuth device authorization (CL-08)', () => {
       payload: new URLSearchParams({
         user_code: body.user_code,
         action: 'approve',
+        disclosed_scope: 'creator',
         consent_token: deviceConsent(),
       }).toString(),
     });
@@ -377,6 +380,7 @@ describe('OAuth device authorization (CL-08)', () => {
       payload: new URLSearchParams({
         user_code: body.user_code,
         action: 'approve',
+        disclosed_scope: 'creator',
         consent_token: deviceConsent(),
       }).toString(),
     });

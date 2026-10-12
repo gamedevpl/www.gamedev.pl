@@ -80,6 +80,8 @@ const BOOLEAN_FLAGS = new Set([
   'manual',
   'reset',
   'no-open',
+  'no-browser',
+  'loopback',
   'stop',
   'list',
   'all',

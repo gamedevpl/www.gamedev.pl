@@ -4,7 +4,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { consentToken } from './oauth-as.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
-import { InMemoryStore } from './store.js';
+import type { InMemoryStore, Store } from './store.js';
 
 export const SESSION_SECRET = 'dev-session-secret-change-me';
 export const MCP_SECRET = 'oauth-cli-mcp-secret';
@@ -24,7 +24,7 @@ export function enableCliSurface(): () => void {
   };
 }
 
-export async function buildOAuthApp(store: InMemoryStore, extra?: { now?: () => number }) {
+export async function buildOAuthApp(store: Store, extra?: { now?: () => number }) {
   return buildApp({
     store,
     sessionSecret: SESSION_SECRET,
