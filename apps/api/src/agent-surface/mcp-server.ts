@@ -876,7 +876,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ) {
       prior.push(mustFixGateWarningForStatus(gateStatus, gateDelivery));
     }
-    if (store && REFERENCE_WRITE_TOOLS.has(toolName) && referenceUnseen(await store.getSubmission(jobId))) {
+    if (
+      store &&
+      REFERENCE_WRITE_TOOLS.has(toolName) &&
+      referenceUnseen(await store.getSubmission(jobId).catch(() => null))
+    ) {
       prior.push(REFERENCE_UNSEEN_WARNING);
     }
 

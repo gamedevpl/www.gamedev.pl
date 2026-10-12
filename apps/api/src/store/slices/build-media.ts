@@ -266,20 +266,25 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await writeAgentRoundDocuments(this.db, jobId, generation, [
       { ref: this.shotsCollection(jobId).doc(record.id), data: document },
-      // Stamped at write time, so this is the newest image.
-      ...(record.label === 'creator-reference'
-        ? [{ ref: this.jobRef(jobId), merge: true as const, data: { referenceLatestAt: record.createdAt } }]
-        : []),
     ]);
+    // A soft signal; failing it must not fail the stored image.
+    if (record.label === 'creator-reference') {
+      await this.raiseMark(jobId, 'referenceLatestAt', record.createdAt).catch(() => undefined);
+    }
     return record;
   }
 
   async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
+    await this.raiseMark(jobId, 'referenceSeenAt', shotCreatedAt);
+  }
+
+  // Overlapping writes commit in any order; a mark only moves forward.
+  private async raiseMark(jobId: number, field: 'referenceLatestAt' | 'referenceSeenAt', at: string): Promise<void> {
     await this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
-      const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
-      if (!job.exists || (seen && seen >= shotCreatedAt)) return;
-      transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
+      const current = (job.data() as SubmissionRecord | undefined)?.[field];
+      if (!job.exists || (current && current >= at)) return;
+      transaction.update(this.jobRef(jobId), { [field]: at });
     });
   }
 
