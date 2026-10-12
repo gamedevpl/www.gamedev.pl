@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - `gamedevpl connect` shows the terminal workspace before waiting for account and Studio requests (#1791).
+- Typing in a long terminal conversation renders only the visible messages, keeping input responsive (#1791).
 
 ## 0.40.0 — 2026-10-12
 

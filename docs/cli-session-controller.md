@@ -47,7 +47,9 @@ This startup change adds no telemetry event or creator-funnel dimension.
 
 The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns /
 16 rows it renders a full-height conversation with a right sidebar; smaller terminals
-retain the static transcript. Both use `TranscriptLine`, the existing composer,
+retain the static transcript. The scrollable view measures message heights, then replaces
+offscreen messages with spacers; typing reuses the visible transcript. Width changes
+remeasure wrapping, and appended messages retain earlier heights. Both use `TranscriptLine`, the existing composer,
 choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
