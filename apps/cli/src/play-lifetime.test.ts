@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -63,6 +63,14 @@ it.each([false, true])(
       pid = JSON.parse(readFileSync(path, 'utf8')).pid;
       expect(pid === child.pid).toBe(!detach);
       const parsed = new URL(url);
+      const logPath = detach ? JSON.parse(readFileSync(path, 'utf8')).logPath : undefined;
+      const output = () => (detach ? readFileSync(logPath, 'utf8') : read());
+      if (detach) {
+        expect(read()).toContain(`Play log: ${logPath}`);
+        if (process.platform !== 'win32') expect(statSync(logPath).mode & 0o777).toBe(0o600);
+      }
+      const headers = { Authorization: `Bearer ${parsed.hash.slice(1)}` };
+      const getState = () => fetch(`${parsed.origin}/state`, { headers }).then((response) => response.json());
       const state = await fetch(`${parsed.origin}/state`, {
         headers: { Authorization: `Bearer ${parsed.hash.slice(1)}` },
       }).then((response) => response.json());
@@ -72,10 +80,38 @@ it.each([false, true])(
         expect(child.exitCode).toBeNull();
         expect(read()).toContain('Ctrl+C ends Play');
       }
+      let question;
+      await vi.waitFor(async () => {
+        question = await getState();
+        expect(question.question).toContain('Sign in');
+        expect(output()).toContain('Answer in Play: Sign in');
+      });
+      const send = (command: unknown) =>
+        fetch(`${parsed.origin}/commands`, {
+          method: 'POST',
+          headers: { ...headers, Origin: parsed.origin, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version: 1, sessionId: state.sessionId, command }),
+        }).then((response) => response.json());
+      expect(
+        await send({ id: 'offline', kind: 'input', promptId: question.promptId, text: 'Continue offline' }),
+      ).toMatchObject({ status: 'accepted' });
+      let ready;
+      await vi.waitFor(async () => {
+        ready = await getState();
+        expect(ready.mode).toBe('prompt');
+        expect(ready.question).toBe('');
+        expect(output()).toContain('Ready for your next request in Play.');
+      });
+      expect(await send({ id: 'retry', kind: 'action', promptId: ready.promptId, action: 'retry' })).toMatchObject({
+        status: 'accepted',
+      });
+      await vi.waitFor(() => expect(output()).toContain('no pending task to retry'));
+      if (detach) expect(read()).not.toContain('no pending task to retry');
       const reopened = launch(root, ['play', '--edit', '--no-open', ...(detach ? [] : ['--detach'])]);
       try {
         await stopped(reopened.child, reopened.read);
         expect(reopened.read()).toContain('lifetime stays with the original launch');
+        if (detach) expect(reopened.read()).toContain(`Play log: ${logPath}`);
         expect(JSON.parse(readFileSync(path, 'utf8')).pid).toBe(pid);
       } finally {
         reopened.child.kill();
@@ -85,6 +121,7 @@ it.each([false, true])(
         timeout: 8000,
       });
       await stopped(child, read);
+      expect(output()).toContain('Play session ended.');
       const journal = JSON.parse(readFileSync(path, 'utf8'));
       expect(journal.pid).toBeUndefined();
       expect(journal.url).toBeUndefined();
