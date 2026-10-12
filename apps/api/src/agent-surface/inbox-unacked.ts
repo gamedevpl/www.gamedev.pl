@@ -9,6 +9,6 @@ export function unackedWarning(payload: unknown, readIds: ReadonlySet<string>): 
   if (ids.length === 0) return null;
   return {
     code: 'inbox_unacked',
-    message: `${ids.length} creator message(s) you read are still unacknowledged; end with ackInboxIds ${JSON.stringify(ids)} (or ack_inbox) once this delivery answers them.`,
+    message: `${ids.length} creator message(s) read_inbox returned are still pending until acknowledged: ${JSON.stringify(ids)}.`,
   };
 }
