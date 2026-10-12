@@ -80,8 +80,11 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
    - **Verification ladder:** while iterating, run only `npm run typecheck -- <slug>`, then
      deliver `mode=preview`; the server verifies that lane. A preview does not require a
-     browser, `npm ci`, capture, playtest, or agency. When a browser is available and the
-     draft is approaching delivery, `npm run check:game -- <slug> --preview` is optional.
+     browser, capture, playtest, or agency, and `npm ci` only where the typecheck needs it.
+     The managed shell lane unpacks the kit without `node_modules`, so it runs
+     `npm ci --ignore-scripts` once there and keeps the game in the kit's `games/<slug>/`.
+     When a browser is available and the draft is approaching delivery,
+     `npm run check:game -- <slug> --preview` is optional.
      Run the full gate only immediately before a `mode=publish` seal.
    - Each successful stage/patch refreshes Studio’s heartbeat (so a long staging loop is not
      mistaken for quiet / offline)
