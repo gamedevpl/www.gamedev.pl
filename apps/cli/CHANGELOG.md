@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Mouse-wheel and trackpad scrolling stays inside the terminal workspace conversation, questions, diffs and diagnostics; delivery choices keep check output visible.
+- Mouse-wheel and trackpad scrolling stays inside the terminal workspace conversation, questions, diffs and diagnostics; delivery choices keep check output visible (#1786).
 
 ## 0.39.0 — 2026-10-11
 
