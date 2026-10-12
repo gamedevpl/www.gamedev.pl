@@ -27,13 +27,15 @@ type RoundSources =
   | { kind: 'none' }
   | { kind: 'broken' };
 
+export type SourcesLog = Pick<FastifyRequest['log'], 'error'>;
+
 // Round base: own candidate, sibling, publication, or round 0.
-async function loadRoundSources(
+export async function loadRoundSources(
   store: Store,
   gamesStore: GamesStore,
   record: SubmissionRecord,
   actorUid: string | undefined,
-  log: FastifyRequest['log'],
+  log: SourcesLog,
 ): Promise<RoundSources> {
   const slug = record.slug;
   const version = slug ? await resolveAuthorizedRoundBaseVersion(store, record, slug, actorUid) : null;

@@ -4,7 +4,7 @@ import type { BuildBrief } from './agent-backend.js';
 import { buildPromptOpening, gateRepairPrompt } from './build-prompt-opening.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
-export function buildPrompt(brief: BuildBrief, lane: { shell: boolean } = { shell: false }): string {
+export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false }): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const creating = Boolean(brief.createGame);
   const lines = [
@@ -50,7 +50,7 @@ export function buildPrompt(brief: BuildBrief, lane: { shell: boolean } = { shel
     // Measured: 15s of a two-minute round spent finding nothing.
     '- There is no repository checkout here. The kit you unpack is the only copy of any of it.',
     '',
-    ...channelDelivery(brief, creating, lane.shell),
+    ...channelDelivery(brief, creating, lane.shell, lane.workspace),
     ...gateRepairPrompt(brief),
   ];
 
@@ -65,8 +65,16 @@ export function buildPrompt(brief: BuildBrief, lane: { shell: boolean } = { shel
   return finish(lines, brief);
 }
 
+// workspace: mounted-kit kickoff lines, replacing the download steps.
+type PromptLane = { shell: boolean; workspace?: string[] };
+
+const SHELL_DOWNLOAD = [
+  'A larger game comes back truncated: GET its `archive` once (exact headers), unpack it inside the kit’s `games/`, read locally.',
+  'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference. In it run `npm ci --ignore-scripts` once, keep the game in `games/<slug>/`, and run `npm run typecheck -- <slug>` before each submit.',
+];
+
 // The push contract: report and upload over the build channel, clocked.
-function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): string[] {
+function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean, workspace?: string[]): string[] {
   return [
     '## This round is on a clock',
     '',
@@ -91,16 +99,14 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
     'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
     'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
-    shell
-      ? 'A larger game comes back truncated: GET its `archive` once (exact headers), unpack it inside the kit’s `games/`, read locally.'
-      : 'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
     ...(shell
       ? [
-          'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference. In it run `npm ci --ignore-scripts` once, keep the game in `games/<slug>/`, and run `npm run typecheck -- <slug>` before each submit.',
+          ...(workspace ?? SHELL_DOWNLOAD),
           'Stage with `patch_source_file` / `stage_source_file`, or PUT changed files to `stage_upload_url`.',
           'Creator images (`referenceImages` from `read_inbox`, `get_reference_images`) are part of the request: curl each and `read` the file before your first edit.',
         ]
       : [
+          'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
           'Call `get_kit` for kitEngineRef, then `get_kit_api` once with it: that is your API and file-shape reference.',
           'Fill its gaps with `search_kit_files` / `read_kit_file`; do not download or unpack the kit archive.',
           'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
