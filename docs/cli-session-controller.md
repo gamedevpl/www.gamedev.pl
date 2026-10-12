@@ -59,8 +59,8 @@ that accept tracking but ignore the SGR encoding mode.
 
 TUI input readers preserve bytes through latin1 stream decoding before parsing
 legacy coordinates; keyboard text uses a separate streaming UTF-8 decoder.
-Reader reference counts reapply byte preservation after Ink changes raw-mode
-ownership and restore Ink's UTF-8 encoding after the final reader unmounts.
+Reader reference counts preserve bytes during direct Ink mounts. The input
+bridge owns physical encoding and restores it when the bridge disconnects.
 
 The host frames terminal escape sequences before Ink reads them. Partial CSI/SS3
 prefixes and legacy mouse payloads wait for the next read; a 100 ms deadline
@@ -70,6 +70,8 @@ the input bridge before native terminal handoffs.
 Completed CSI/SS3/mouse frames remain separate readable objects, because Ink
 parses one key per read. Adjacent plain text stays grouped for pasted input;
 framing also retains double-Escape Meta key sequences.
+Frames are byte strings and ignore Ink encoding resets, which otherwise merge
+queued frames and can replace legacy coordinate bytes before the parser sees them.
 
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,

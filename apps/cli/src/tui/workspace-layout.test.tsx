@@ -58,7 +58,7 @@ function screen(
     frame: () => frames.at(-1) ?? '',
     takeOutput: () => frames.splice(0).join(''),
     terminalOutput: () => terminal.join(''),
-    inputEncoding: () => buffered.stdin.readableEncoding,
+    inputEncoding: () => input.readableEncoding,
     close: () => {
       app.unmount();
       buffered.stop();

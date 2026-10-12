@@ -44,11 +44,11 @@ export function bufferTerminalInput(source: NodeJS.ReadStream) {
         clearTimeout(timer);
         const framed = frameInput(pending + (typeof chunk === 'string' ? chunk : chunk.toString('latin1')));
         pending = framed.pending;
-        for (const frame of framed.frames) this.push(Buffer.from(frame, 'latin1'));
+        for (const frame of framed.frames) this.push(frame);
         if (pending) {
           // Escape needs a deadline because it is also a standalone key.
           timer = setTimeout(() => {
-            this.push(Buffer.from(pending, 'latin1'));
+            this.push(pending);
             pending = '';
           }, 100);
           timer.unref();
@@ -68,6 +68,8 @@ export function bufferTerminalInput(source: NodeJS.ReadStream) {
       unref: () => source.unref(),
     },
   );
+  // Ink's encoding resets must not merge or decode queued protocol frames.
+  stream.setEncoding = (_encoding: BufferEncoding) => stream;
   // Keep physical bytes intact before Ink configures its own input stream.
   source.setEncoding('latin1');
   source.pipe(stream);

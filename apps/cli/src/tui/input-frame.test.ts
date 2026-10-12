@@ -25,6 +25,8 @@ it('preserves frame boundaries when Ink drains a batched read', async () => {
   bridge.stdin.setEncoding('latin1');
   const frames: string[] = [];
   bridge.stdin.on('readable', () => {
+    bridge.stdin.setEncoding('utf8');
+    bridge.stdin.setEncoding('latin1');
     let frame: string | null;
     while ((frame = bridge.stdin.read()) !== null) frames.push(frame);
   });
@@ -73,7 +75,7 @@ it('preserves non-ASCII coordinate bytes across the physical input bridge', asyn
   const bridge = bufferTerminalInput(source as unknown as NodeJS.ReadStream);
   const chunks: Buffer[] = [];
   bridge.stdin.on('data', (chunk) => {
-    chunks.push(Buffer.from(chunk));
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'latin1') : Buffer.from(chunk));
   });
   try {
     const report = Buffer.from([0x1b, 0x5b, 0x4d, 0x60, 132, 37]);
