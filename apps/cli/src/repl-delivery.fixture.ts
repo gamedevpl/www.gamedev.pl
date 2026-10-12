@@ -9,6 +9,7 @@ import { memoryStore } from './keychain.js';
 import { handleReplLine } from './repl.js';
 import type { Workshop } from './workshop.js';
 import type { VerifyStage } from './verify.js';
+import type { TreeFile } from './checkout-sync.js';
 
 export const roots: string[] = [];
 afterEach(() => {
@@ -34,6 +35,19 @@ export function fixture() {
     onDelivery: undefined as (() => void) | undefined,
   };
   const requests: { path: string; method: string; body?: Record<string, unknown> }[] = [];
+  const stagedFiles = new Map<string, { content?: string; stagedBy: string }>();
+  const deliverySnapshots: TreeFile[][] = [];
+  const sources = () => {
+    const files = new Map<string, TreeFile & { stagedBy?: string }>(original.map((file) => [file.path, file]));
+    const deleted: string[] = [];
+    for (const [path, staged] of stagedFiles) {
+      if (staged.content === undefined) {
+        files.delete(path);
+        deleted.push(path);
+      } else files.set(path, { path, content: staged.content, stagedBy: staged.stagedBy });
+    }
+    return { files: [...files.values()], deleted };
+  };
   const json = (value: unknown, status = 200) =>
     new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
   const api = createApi({
@@ -50,7 +64,7 @@ export function fixture() {
         return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
       if (path.includes('/tree')) return json({ version: 'v1', files: original });
       if (path.endsWith('/api/submissions/tok')) return json({ status: 'needs_changes', builder: 'self' });
-      if (path.endsWith('/sources')) return json({ files: original });
+      if (path.endsWith('/sources')) return json(sources());
       if (path.endsWith('/sources/session'))
         return json(
           init?.method === 'POST'
@@ -58,12 +72,22 @@ export function fixture() {
             : { locked: state.locked, canTakeOver: true, jobId: 2, generation: 1 },
         );
       if (path.endsWith('/sources/deliver')) {
+        deliverySnapshots.push(sources().files.map(({ path, content }) => ({ path, content })));
         state.onDelivery?.();
         return state.deliveryFailure
           ? json(state.deliveryFailure.body, state.deliveryFailure.status)
           : json({ accepted: true, version: 'v2', gateStarted: true });
       }
-      if (path.endsWith('/sources/stage')) return json({ accepted: true });
+      if (path.endsWith('/sources/stage')) {
+        const body = JSON.parse(String(init?.body));
+        stagedFiles.set(body.path, { content: body.content, stagedBy: 'owner' });
+        return json({ accepted: true });
+      }
+      if (path.endsWith('/sources/stage/delete')) {
+        const body = JSON.parse(String(init?.body));
+        stagedFiles.set(body.path, { stagedBy: 'owner' });
+        return json({ accepted: true });
+      }
       return new Response('{}', { status: 404 });
     },
   });
@@ -95,5 +119,5 @@ export function fixture() {
   const run = (line = '/push') =>
     handleReplLine({ line, api, token: ws.token, workshop: ws, pick, write: (s) => lines.push(s) });
   const writes = () => requests.filter((r) => ['PUT', 'POST'].includes(r.method));
-  return { root, source, ws, api, state, requests, checks, lines, pick, run, writes };
+  return { root, source, ws, api, state, requests, checks, lines, pick, run, writes, stagedFiles, deliverySnapshots };
 }

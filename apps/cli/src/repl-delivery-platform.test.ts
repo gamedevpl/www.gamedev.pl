@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, renameSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { BACK, fixture } from './repl-delivery.fixture.js';
 
@@ -68,6 +69,81 @@ it('keeps a successful platform repair local when delivery is declined', async (
   expect(f.deliveries()).toHaveLength(1);
   expect(readFileSync(f.source, 'utf8')).toBe('C');
   expect(f.ws.telemetry!.record).not.toHaveBeenCalledWith('delivered');
+});
+
+it.each(['delete', 'rename', 'restore committed tree'])(
+  'reconciles the rejected upload when an agent repairs it by %s',
+  async (repair) => {
+    const f = platformFixture();
+    const obsolete = join(f.root, 'games', 'example', 'obsolete.ts');
+    const replacement = join(f.root, 'games', 'example', 'replacement.ts');
+    writeFileSync(obsolete, 'broken module');
+    f.pick.mockResolvedValueOnce('Fix with agent').mockResolvedValueOnce('Send preview');
+    vi.mocked(f.ws.runAdapter!).mockImplementationOnce(async () => {
+      if (repair === 'rename') renameSync(obsolete, replacement);
+      else rmSync(obsolete);
+      if (repair === 'restore committed tree') writeFileSync(f.source, 'A');
+      f.state.deliveryFailure = undefined;
+      return { code: 0 };
+    });
+    await f.run();
+    expect(f.deliveries()).toHaveLength(2);
+    expect(f.deliverySnapshots[0]).toContainEqual({ path: 'obsolete.ts', content: 'broken module' });
+    expect(f.deliverySnapshots[1]!.some((file) => file.path === 'obsolete.ts')).toBe(false);
+    if (repair === 'rename') {
+      expect(f.deliverySnapshots[1]).toContainEqual({ path: 'replacement.ts', content: 'broken module' });
+    } else if (repair === 'restore committed tree') {
+      expect(f.deliverySnapshots[1]).toEqual([{ path: 'game.ts', content: 'A' }]);
+    }
+    expect(f.writes()).toContainEqual(
+      expect.objectContaining({
+        path: expect.stringContaining('/sources/stage/delete'),
+        body: { path: 'obsolete.ts' },
+      }),
+    );
+    expect(f.ws.telemetry!.record).toHaveBeenCalledWith('delivered');
+  },
+);
+
+it('preserves unrelated staged work while reconciling a rejected upload', async () => {
+  const f = platformFixture();
+  f.pick.mockResolvedValueOnce('Fix with agent');
+  f.pick.mockImplementationOnce(async () => {
+    f.stagedFiles.set('unrelated.ts', { content: 'Studio edit', stagedBy: 'owner' });
+    return 'Send preview';
+  });
+  await f.run();
+  expect(f.deliveries()).toHaveLength(1);
+  expect(f.lines.join('\n')).toContain('Studio has unsent staged files (unrelated.ts)');
+  expect(f.stagedFiles.get('unrelated.ts')).toEqual({ content: 'Studio edit', stagedBy: 'owner' });
+  expect(f.writes().filter((r) => r.path.endsWith('/sources/stage'))).toHaveLength(1);
+  expect(f.writes().some((r) => r.path.endsWith('/stage/discard'))).toBe(false);
+});
+
+it.each(['owner', 'agent'])('does not replace a rejected path subsequently edited by %s', async (stagedBy) => {
+  const f = platformFixture();
+  f.pick.mockResolvedValueOnce('Fix with agent');
+  f.pick.mockImplementationOnce(async () => {
+    f.stagedFiles.set('game.ts', { content: 'new external edit', stagedBy });
+    return 'Send preview';
+  });
+  await f.run();
+  expect(f.deliveries()).toHaveLength(1);
+  expect(f.lines.join('\n')).toContain('Studio staging changed since the rejected upload (game.ts)');
+  expect(f.stagedFiles.get('game.ts')).toEqual({ content: 'new external edit', stagedBy });
+  expect(f.writes().filter((r) => r.path.endsWith('/sources/stage'))).toHaveLength(1);
+});
+
+it('can retry after the rejected staging has already been cleared in Studio', async () => {
+  const f = platformFixture();
+  f.pick.mockResolvedValueOnce('Fix with agent');
+  f.pick.mockImplementationOnce(async () => {
+    f.stagedFiles.clear();
+    return 'Send preview';
+  });
+  await f.run();
+  expect(f.deliveries()).toHaveLength(2);
+  expect(f.deliverySnapshots[1]).toEqual([{ path: 'game.ts', content: 'C' }]);
 });
 
 it('refreshes platform diagnostics after a confirmed retry without running an agent', async () => {

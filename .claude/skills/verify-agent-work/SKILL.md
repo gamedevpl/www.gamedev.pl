@@ -547,6 +547,12 @@ Reminting a session from a channel key must preserve its actor and revocation re
 
 ## Read the diff against the spec
 
+Failed deliveries still leave a staging overlay. Repair/retry tests must model that
+overlay instead of always returning the committed files. Probe deleting and renaming a
+new rejected file, and restoring the committed tree: a confirmed retry must reconcile
+the rejected paths and reach validation again. Preserve unrelated staging and stop if
+another editor changed the acknowledged rejected paths.
+
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
 
 ```bash

@@ -340,6 +340,9 @@ missing imports/exports, metadata and editor data. The agent receives the platfo
 diagnostic report. Network, account and rate-limit failures do not offer agent repair.
 Rejected uploads stay staged; no delivery was accepted.
 Choosing Back or cancelling keeps local edits and makes no further upload.
+Confirmed retries reconcile the paths staged by the rejected upload, including files the
+agent removed or renamed and repairs that restore the committed tree. Unrelated staged
+work is preserved; changed rejected paths require reviewing Studio before retrying.
 
 If game sources change during verification or while choosing a repair, the session
 withholds agent repair until **Check again** supplies fresh diagnostics. Kept-local

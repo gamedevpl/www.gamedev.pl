@@ -187,6 +187,7 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
         }
         input.write(error.message);
         if (!(await recoverVerification(input, delivery, error, pick, ws))) return;
+        if (error instanceof DeliveryValidationError) delivery.rejectedUpload = error.upload;
       }
     }
   } catch (error) {
