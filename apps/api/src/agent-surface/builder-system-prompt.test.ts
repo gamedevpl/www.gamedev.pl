@@ -36,7 +36,7 @@ describe('builderSystemPrompt', () => {
   it('names one delivery path per edit size on the shell lane', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('send `patch_source_file` with the same old/new text you applied locally');
-    expect(shell).toContain('PUT them from one bash loop');
+    expect(shell).toContain('(up to 50 per call), then PUT them all from one bash loop');
     expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
 });
