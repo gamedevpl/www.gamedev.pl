@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Delivery progress shows the current step out of eight and local check counts for `publish`, `push` and `submit` (#1789).
+
 ## 0.39.1 — 2026-10-12
 
 ### Fixed

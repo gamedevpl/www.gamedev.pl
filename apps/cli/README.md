@@ -211,6 +211,13 @@ gamedevpl status <token-or-slug>
 `submit` is preview-mode delivery. A green gate is not a publish. `--publish` runs the
 full local ladder and delivers `mode=publish`; an operator still publishes.
 
+Delivery progress shows the current stage out of eight, local check counts (two for
+preview, three for publish), and file upload counts. For example:
+`[2/8] Checking local game 3/3: npm run check:game -- trenchline-command`.
+The terminal spinner also shows elapsed time. These counts describe stages, not a
+time estimate; delivery ends at platform acceptance and checkout refresh, before
+the server gate and operator approval. `--json` omits progress output.
+
 ## In a checkout
 
 `gamedevpl` started inside a checkout (any subdirectory) opens that game. It shows the

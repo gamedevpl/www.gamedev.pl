@@ -7,10 +7,12 @@ import { runLadder, runLadderAsync, VerificationError } from './verify.js';
 describe('verification ladder', () => {
   it.each([false, true])('passes the selected game to every check (publish=%s)', (publish) => {
     const ran: string[][] = [];
+    const progress: string[] = [];
     const result = runLadder({
       cwd: '/tmp/game',
       slug: 'trenchline-command',
       publish,
+      onStage: (message) => progress.push(message),
       run: (_cmd, args) => {
         ran.push(args);
         return { status: 0, stderr: '' };
@@ -21,6 +23,11 @@ describe('verification ladder', () => {
       ['run', 'typecheck', '--', 'trenchline-command'],
       ['run', 'check:static', '--', 'trenchline-command'],
       ...(publish ? [['run', 'check:game', '--', 'trenchline-command']] : []),
+    ]);
+    expect(progress).toEqual([
+      `Checking local game 1/${publish ? 3 : 2}: npm run typecheck -- trenchline-command`,
+      `Checking local game 2/${publish ? 3 : 2}: npm run check:static -- trenchline-command`,
+      ...(publish ? ['Checking local game 3/3: npm run check:game -- trenchline-command'] : []),
     ]);
   });
 
