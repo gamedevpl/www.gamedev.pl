@@ -58,26 +58,68 @@ function fixture() {
   return { dest, slug, api, stdout, stderr, messages, reply, io: { stdout: stdout.io, stderr: stderr.io } };
 }
 
-it('animates during real local checks and reports uploads and acceptance separately', async () => {
+it.each([false, true])('numbers delivery stages during real local checks (publish=%s)', async (publish) => {
   const f = fixture();
   writeFileSync(join(f.dest, 'check.cjs'), 'setTimeout(() => process.exit(0), 1200)\n');
   writeFileSync(
     join(f.dest, 'package.json'),
-    JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node -e "process.exit(0)"' } }),
+    JSON.stringify({
+      scripts: {
+        typecheck: 'node check.cjs',
+        'check:static': 'node -e "process.exit(0)"',
+        'check:game': 'node -e "process.exit(0)"',
+      },
+    }),
   );
-  const pending = submitCommand({ delivery: f, io: f.io, asJson: false });
-  expect(f.stderr.read()).toContain('Checking platform sources');
+  const pending = submitCommand({ delivery: { ...f, publish }, io: f.io, asJson: false });
+  expect(f.stderr.read()).toContain('[1/8] Checking platform sources');
   await vi.waitFor(() => expect(f.stderr.read()).toContain('npm run typecheck'));
   expect(f.stdout.read()).toBe('');
   await vi.waitFor(() => expect(f.stderr.read()).toContain('(1s)'), { timeout: 3000 });
   await pending;
-  expect(f.stderr.read()).toContain('npm run check:static');
-  expect(f.stderr.read()).toContain('Uploading file 1/1: game.ts');
-  expect(f.stderr.read()).toContain('waiting for platform acceptance');
-  expect(f.stderr.read()).toContain('Delivery accepted — updating local checkout');
+  const checks = publish ? 3 : 2;
+  expect(f.stderr.read()).toContain(`[2/8] Checking local game 1/${checks}: npm run typecheck`);
+  expect(f.stderr.read()).toContain(`[2/8] Checking local game 2/${checks}: npm run check:static`);
+  if (publish) expect(f.stderr.read()).toContain('[2/8] Checking local game 3/3: npm run check:game');
+  expect(f.stderr.read()).toContain('[3/8] Rechecking platform sources');
+  expect(f.stderr.read()).toContain('[4/8] Preparing delivery session');
+  expect(f.stderr.read()).toContain('[5/8] Checking staged files');
+  expect(f.stderr.read()).toContain('[6/8] Uploading file 1/1: game.ts');
+  expect(f.stderr.read()).toContain(
+    `[7/8] Sending ${publish ? 'publish' : 'preview'} — waiting for platform acceptance`,
+  );
+  expect(f.stderr.read()).toContain('[8/8] Delivery accepted — updating local checkout');
   expect(f.stderr.read().endsWith('\r\u001b[2K')).toBe(true);
-  expect(f.stdout.read()).toContain('delivery accepted push-progress @ v2 (preview)');
+  expect(f.stdout.read()).toContain(`delivery accepted push-progress @ v2 (${publish ? 'publish' : 'preview'})`);
   expect(f.stdout.read()).toContain('not published');
+});
+
+it('shows numbered plain-text progress when publishing unchanged sources', async () => {
+  const f = fixture();
+  writeFileSync(join(f.dest, 'games', f.slug, 'game.ts'), 'old');
+  const stderr = stream();
+  await submitCommand({
+    delivery: { ...f, publish: true, run: () => ({ status: 0, stderr: '' }) },
+    io: { stdout: f.stdout.io, stderr: stderr.io },
+    asJson: false,
+  });
+  const lines = stderr.read().trim().split('\n');
+  expect(lines.map((line) => line.match(/^\[(\d)\/8\]/)?.[1])).toEqual([
+    '1',
+    '2',
+    '2',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+  ]);
+  expect(stderr.read()).toContain('[6/8] No changed files to upload');
+  expect(stderr.read()).not.toContain('\u001b');
+  expect(f.messages.some((path) => path.endsWith('/sources/stage'))).toBe(false);
+  expect(f.stdout.read()).toContain('delivery accepted push-progress @ v2 (publish)');
 });
 
 it('clears progress after a red check and never uploads the failed sources', async () => {

@@ -85,8 +85,8 @@ export function runLadder(input: {
   const run: VerifyRun = input.run ?? ((cmd, args, cwd, env) => spawnSync(cmd, args, { cwd, env, encoding: 'utf8' }));
   const env = childEnv(process.env, '');
   const steps = verificationSteps(input.cwd, input.publish, input.slug);
-  for (const step of steps) {
-    input.onStage?.(`Checking local game: npm ${step.args.join(' ')}`);
+  for (const [index, step] of steps.entries()) {
+    input.onStage?.(`Checking local game ${index + 1}/${steps.length}: npm ${step.args.join(' ')}`);
     const result = run('npm', step.args, input.cwd, env);
     if ((result.status ?? 1) !== 0) {
       return {
@@ -120,9 +120,10 @@ export async function runLadderAsync(input: {
 }): Promise<ReturnType<typeof runLadder>> {
   if (input.run) return runLadder({ ...input, publish: input.publish === true });
   const env = childEnv(process.env, '');
-  for (const { stage, args } of verificationSteps(input.cwd, input.publish === true, input.slug)) {
+  const steps = verificationSteps(input.cwd, input.publish === true, input.slug);
+  for (const [index, { stage, args }] of steps.entries()) {
     if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
-    input.onStage?.(`Checking local game: npm ${args.join(' ')}`);
+    input.onStage?.(`Checking local game ${index + 1}/${steps.length}: npm ${args.join(' ')}`);
     const child = spawnCommand({
       command: 'npm',
       args,

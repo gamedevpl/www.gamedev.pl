@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Delivery progress shows the current step out of eight and local check counts for `publish`, `push` and `submit`.
+
 ### Fixed
 
 - Mouse-wheel and trackpad scrolling stays inside the terminal workspace conversation, questions, diffs and diagnostics; delivery choices keep check output visible (#1786).
