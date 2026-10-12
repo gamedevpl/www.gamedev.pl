@@ -3188,13 +3188,16 @@ declare const GameKit: { defineGame(): unknown };
       // Inline base64 flooded a live round's context; a url is all the agent needs.
       const store = new InMemoryStore();
       await seedJob(store);
+      const ids: string[] = [];
       for (const minute of ['01', '03', '02']) {
-        await store.appendBuildShot(ISSUE, {
+        const shot = await store.appendBuildShot(ISSUE, {
           data: TINY_PNG,
           label: 'creator-reference',
           createdAt: `2026-10-11T10:${minute}:00.000Z`,
         });
+        ids.push(shot.id);
       }
+      await store.appendCreatorMessage(ISSUE, `Ice floes.\n\nreferenceImageShotIds: ${ids.join(',')}`);
       app = await createApp(store);
       const sessionId = await initialize(app);
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
@@ -3219,6 +3222,17 @@ declare const GameKit: { defineGame(): unknown };
         '10:01',
       ]);
       expect(result.structuredContent.images.every((image) => image.url.startsWith('http'))).toBe(true);
+      // A write warns until the newest image is downloaded.
+      const codes = async () =>
+        (
+          (await callTool(app!, 'stage_upload_url', { sessionKey, paths: ['game.ts'] })).structured as {
+            warnings?: Array<{ code: string }>;
+          }
+        ).warnings?.map((warning) => warning.code) ?? [];
+      expect(await codes()).toContain('reference_unseen');
+      const newest = new URL(result.structuredContent.images[0]!.url);
+      expect((await app.inject({ method: 'GET', url: newest.pathname + newest.search })).statusCode).toBe(200);
+      expect(await codes()).not.toContain('reference_unseen');
     });
   });
 

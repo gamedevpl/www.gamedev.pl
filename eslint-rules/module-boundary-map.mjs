@@ -516,6 +516,7 @@ const FILE_BUCKET = {
   'game-manifest-hint': 'agent-surface',
   'inbox-reference-images': 'agent-surface',
   'reference-image-url': 'agent-surface',
+  'reference-unseen': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
   'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',

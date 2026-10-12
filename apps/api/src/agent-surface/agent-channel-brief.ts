@@ -1,4 +1,3 @@
-import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
@@ -29,6 +28,9 @@ export interface AgentChannelBriefRoutesDeps {
   now?: () => number;
 }
 
+// Several pending messages of up to four images each.
+const MAX_LISTED_REFERENCES = 24;
+
 export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: AgentChannelBriefRoutesDeps): void {
   const { resolveBuild, store, agentTokenSecret } = deps;
   const now = deps.now ?? Date.now;
@@ -43,9 +45,10 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
 
       const pending = await store!.listPendingCreatorMessages(jobId);
       const seed = seedPayload(record);
-      const referenceShots = (await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })).filter(
-        (shot) => shot.label === 'creator-reference',
-      );
+      const referenceShots = await store!.listBuildShots(jobId, {
+        label: 'creator-reference',
+        limit: MAX_LISTED_REFERENCES,
+      });
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -74,9 +77,11 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       if (!resolved) return reply;
       const { jobId } = resolved;
 
-      const summaries = (await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })).filter(
-        (shot) => shot.label === 'creator-reference',
-      );
+      // By label, so newer screenshots never push a reference out of reach.
+      const summaries = await store!.listBuildShots(jobId, {
+        label: 'creator-reference',
+        limit: MAX_LISTED_REFERENCES,
+      });
       // URLs instead of bytes: the agent downloads what it needs.
       if ((request.query as { urls?: string }).urls === '1' && agentTokenSecret) {
         const base = `${canonicalAppBaseUrl()}${REFERENCE_IMAGE_DOWNLOAD_ROUTE}`;
@@ -109,6 +114,10 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       if (!claim || !store) return reply.status(404).send({ error: 'not found' });
       const shot = await store.getBuildShot(claim.jobId, claim.shotId);
       if (!shot || shot.label !== 'creator-reference') return reply.status(404).send({ error: 'not found' });
+      // Seen once the body is fully sent; a failed mark stays silent.
+      reply.raw.once('finish', () => {
+        void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+      });
       return reply
         .header('content-type', shot.mediaType ?? 'image/png')
         .header('cache-control', 'private, max-age=300')
