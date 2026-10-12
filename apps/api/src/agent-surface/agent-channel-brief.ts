@@ -1,4 +1,3 @@
-import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
@@ -29,7 +28,6 @@ export interface AgentChannelBriefRoutesDeps {
   now?: () => number;
 }
 
-const REFERENCE_SCAN = 80;
 const MAX_LISTED_REFERENCES = 8;
 
 export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: AgentChannelBriefRoutesDeps): void {
@@ -46,9 +44,10 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
 
       const pending = await store!.listPendingCreatorMessages(jobId);
       const seed = seedPayload(record);
-      const referenceShots = (await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })).filter(
-        (shot) => shot.label === 'creator-reference',
-      );
+      const referenceShots = await store!.listBuildShots(jobId, {
+        label: 'creator-reference',
+        limit: MAX_LISTED_REFERENCES,
+      });
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -77,12 +76,11 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       if (!resolved) return reply;
       const { jobId } = resolved;
 
-      // Past the default page, so a reference behind agent screenshots stays reachable.
-      const summaries = (
-        await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS, limit: REFERENCE_SCAN })
-      )
-        .filter((shot) => shot.label === 'creator-reference')
-        .slice(0, MAX_LISTED_REFERENCES);
+      // By label, so newer screenshots never push a reference out of reach.
+      const summaries = await store!.listBuildShots(jobId, {
+        label: 'creator-reference',
+        limit: MAX_LISTED_REFERENCES,
+      });
       // URLs instead of bytes: the agent downloads what it needs.
       if ((request.query as { urls?: string }).urls === '1' && agentTokenSecret) {
         const base = `${canonicalAppBaseUrl()}${REFERENCE_IMAGE_DOWNLOAD_ROUTE}`;

@@ -1,5 +1,4 @@
 // reference_unseen: a creator image newer than any the agent downloaded.
-import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { NudgeWarning } from './mcp-session-nudges.js';
 
@@ -27,8 +26,6 @@ export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
 };
 
 const MAX_DERIVED = 1000;
-// Wide enough to reach a legacy reference behind later gate frames.
-const LEGACY_SCAN = 200;
 
 // Images stored before the marker existed: derive it once per job.
 export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'listBuildShots'>) {
@@ -41,9 +38,8 @@ export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'list
       if (record.referenceLatestAt) return referenceUnseen(record);
       if (!derived.has(jobId)) {
         if (derived.size >= MAX_DERIVED) derived.clear();
-        const shots = await store.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS, limit: LEGACY_SCAN });
-        const stamps = shots.filter((shot) => shot.label === 'creator-reference').map((shot) => shot.createdAt);
-        derived.set(jobId, { latest: stamps.sort().at(-1) ?? null });
+        const [newest] = await store.listBuildShots(jobId, { label: 'creator-reference', limit: 1 });
+        derived.set(jobId, { latest: newest?.createdAt ?? null });
       }
       const latest = derived.get(jobId)?.latest ?? undefined;
       return referenceUnseen({ referenceLatestAt: latest, referenceSeenAt: record.referenceSeenAt });

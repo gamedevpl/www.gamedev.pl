@@ -18,6 +18,8 @@ const SHOT_PAGE_SIZE = 24;
 
 export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
+  // Only shots with this label, however many newer shots exist.
+  label?: string;
 }
 
 // Narrows a count to one delivery's frames in one round.
@@ -144,6 +146,7 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return [...(this.buildShots.get(jobId) ?? [])]
       .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !opts?.label || shot.label === opts.label)
       .sort(byNewestFirst)
       .slice(0, opts?.limit ?? 12)
       .map(({ data: _data, ...summary }) => ({ ...summary }));
@@ -299,6 +302,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     const limit = opts?.limit ?? 12;
+    if (opts?.label) {
+      // Equality only: the single-field index serves it, no composite needed.
+      const snap = await this.shotsCollection(jobId)
+        .where('label', '==', opts.label)
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .get();
+      return snap.docs
+        .map((doc) => doc.data() as BuildShotSummary)
+        .sort(byNewestFirst)
+        .slice(0, limit);
+    }
     const page = Math.max(limit, SHOT_PAGE_SIZE);
     const kept: BuildShotSummary[] = [];
     let after: { id: string } | undefined;
