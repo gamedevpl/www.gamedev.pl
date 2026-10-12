@@ -28,7 +28,8 @@ describe('builderSystemPrompt', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('run `npm ci --ignore-scripts` in it once');
     expect(shell).toContain('`gamedevpl-creator-kit/games/<slug>/`');
-    expect(shell).toContain('run `npm run typecheck -- <slug>` from the kit root');
+    expect(shell).toContain('until it prints `typecheck exit 0`');
+    expect(shell).toContain('Never tell the creator a typecheck passed unless you saw that line');
     expect(shell).not.toContain('no browser, npm ci');
     expect(builderSystemPrompt({ shell: false })).not.toContain('npm ci');
   });

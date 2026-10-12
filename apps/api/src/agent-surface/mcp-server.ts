@@ -125,6 +125,7 @@ import {
   unreadFromPayload,
   type NudgeWarning,
 } from './mcp-session-nudges.js';
+import { unackedWarning } from './inbox-unacked.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import type { ProposalBase } from '../platform/store.js';
@@ -800,6 +801,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (unread !== null) {
       nudgeTracker.notePendingCount(jobId, unread.count, nowMs, unread.images);
     }
+    const unacked = toolName === 'submit_sources' ? unackedWarning(data, seen) : null;
+    if (unacked) data = { ...data, warnings: [...(Array.isArray(data.warnings) ? data.warnings : []), unacked] };
 
     // Only brief/seed payloads carry seed lifecycle status. Gate and other tools also
     // use a `status` field (e.g. pending/green) — never treat those as seedStatus.

@@ -519,6 +519,7 @@ const FILE_BUCKET = {
   'inbox-reference-images': 'agent-surface',
   'reference-image-url': 'agent-surface',
   'reference-unseen': 'agent-surface',
+  'inbox-unacked': 'agent-surface',
   'capture-plan-hint': 'agent-surface',
   'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',

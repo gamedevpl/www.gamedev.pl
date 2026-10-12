@@ -265,6 +265,7 @@ export const WARNINGS_PROP = {
             'patch_incomplete',
             'byte_budget_low',
             'reference_unseen',
+            'inbox_unacked',
           ],
         },
         message: { type: 'string' },
