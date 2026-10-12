@@ -75,6 +75,20 @@ type VerifyRun = (
   env: NodeJS.ProcessEnv,
 ) => { status: number | null; stderr: string; stdout?: string };
 
+function verificationTimeout(stage: VerifyStage): number | undefined {
+  if (stage !== 'check_game') return 5 * 60_000;
+  const value = process.env.GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS;
+  if (value === undefined || value === '0') return;
+  const seconds = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
+    throw new CliError('GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS must be 0 or a positive integer up to 2147483.', EXIT_RED);
+  return seconds * 1000;
+}
+
+function timeoutDetail(args: string[], timeoutMs: number | undefined): string {
+  return `npm ${args.join(' ')} timed out after ${timeoutMs! / 1000}s.`;
+}
+
 export function runLadder(input: {
   cwd: string;
   slug?: string;
@@ -124,12 +138,17 @@ export async function runLadderAsync(input: {
   for (const [index, { stage, args }] of steps.entries()) {
     if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
     input.onStage?.(`Checking local game ${index + 1}/${steps.length}: npm ${args.join(' ')}`);
+    const timeoutMs = verificationTimeout(stage);
+    let timedOut = false;
     const child = spawnCommand({
       command: 'npm',
       args,
       cwd: input.cwd,
       env,
-      timeoutMs: 5 * 60_000,
+      timeoutMs,
+      onTimeout: () => {
+        timedOut = true;
+      },
       abort: input.abort,
     });
     let detail = '';
@@ -141,6 +160,10 @@ export async function runLadderAsync(input: {
       child.once('error', reject);
       child.once('close', resolve);
     });
+    if (timedOut)
+      return { ok: false, stage, detail: [timeoutDetail(args, timeoutMs), detail].filter(Boolean).join('\n') };
+    if (input.abort.aborted)
+      return { ok: false, stage, detail: ['Verification stopped', detail].filter(Boolean).join('\n') };
     if (code !== 0) return { ok: false, stage, detail };
   }
   return { ok: true };

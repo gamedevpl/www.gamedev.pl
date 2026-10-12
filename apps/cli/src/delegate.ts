@@ -25,6 +25,7 @@ export function spawnCommand(input: {
   cwd: string;
   env: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  onTimeout?: () => void;
   shell?: string;
   abort?: AbortSignal;
 }): ChildProcess {
@@ -55,7 +56,13 @@ export function spawnCommand(input: {
     signalGroup('SIGTERM');
     escalation ??= setTimeout(() => signalGroup('SIGKILL'), 2_000);
   };
-  const timer = input.timeoutMs === undefined ? undefined : setTimeout(kill, input.timeoutMs);
+  const timer =
+    input.timeoutMs === undefined
+      ? undefined
+      : setTimeout(() => {
+          input.onTimeout?.();
+          kill();
+        }, input.timeoutMs);
   const cleanup = () => {
     clearTimeout(timer);
     clearTimeout(escalation);

@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { runLadderAsync } from './verify.js';
 
 it('forwards the selected slug through npm to real publication checks', async () => {
@@ -63,3 +63,35 @@ it('cancels a real verification child and never starts the next stage', async ()
     rmSync(root, { recursive: true, force: true });
   }
 }, 5000);
+
+it('kills a real publication check at the configured limit with clear diagnostics', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-verify-timeout-'));
+  vi.stubEnv('GAMEDEV_CHECK_GAME_TIMEOUT_SECONDS', '2');
+  try {
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        scripts: {
+          typecheck: 'node -e ""',
+          'check:static': 'node -e ""',
+          'check:game': 'node wait.cjs',
+        },
+      }),
+    );
+    writeFileSync(join(root, 'wait.cjs'), 'console.log("waiting for replay"); setInterval(() => {}, 1000);');
+    const result = await runLadderAsync({
+      cwd: root,
+      slug: 'trenchline-command',
+      publish: true,
+      abort: new AbortController().signal,
+    });
+    expect(result).toMatchObject({ ok: false, stage: 'check_game' });
+    if (!result.ok) {
+      expect(result.detail).toContain('npm run check:game -- trenchline-command timed out after 2s.');
+      expect(result.detail).toContain('waiting for replay');
+    }
+  } finally {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
