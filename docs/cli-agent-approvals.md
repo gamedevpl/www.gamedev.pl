@@ -72,6 +72,23 @@ still scoped as requested: one invocation, or the current turn for a Codex profi
 Remembered Claude commands receive a separate one-invocation reply each time;
 the CLI does not send a session-wide grant to the vendor.
 
+Claude's sandbox auto-allow does not eliminate every Bash permission request.
+Commands such as `MODE=test node harness.js`, `make CC=clang`, and calls covered by
+content-scoped ask rules can still prompt while remaining sandboxed (see
+[Claude sandbox modes](https://code.claude.com/docs/en/sandboxing#auto-allow-mode)).
+In Auto, `claude-local-approval.ts` routes those requests through the approval
+handler with their exact input. The required sandbox flags remain enabled;
+`dangerouslyDisableSandbox` requests and file edits outside the task directory,
+including symlinks, are refused before approval. These refusals name the sandbox
+policy in both the tool result and local transcript. Ask and YOLO retain their
+existing semantics. GenAIcode 2.13.2's blanket refusal of Bash prompts is bypassed
+only for ordinary workspace-sandboxed Bash requests; its input validation,
+one-call serialization, cancellation and file-path guard are retained.
+
+This changes creator-funnel question 4: existing `cli_step` events for
+`delegate_used`, `verify_failed` and `delivered` still measure task outcomes.
+Policy reasons and shell commands remain local and are not telemetry dimensions.
+
 ## Implemented transports
 
 | Adapter | Mechanism                                                                                                                    | Behavior                                                                                                                                                                                                                                                                                                          |

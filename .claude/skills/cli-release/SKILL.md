@@ -102,6 +102,12 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **A Claude Bash permission prompt does not prove a sandbox escape.** With
+  sandbox auto-allow enabled, variable-prefixed commands and content-scoped ask
+  rules can still prompt. Test ordinary Bash through the real local MCP endpoint,
+  alongside explicit sandbox overrides and symlinked file writes. A resume fixture
+  that only approves Read and rejects an override misses a broken Bash path.
+
 - **Auto-merge can close the release PR while verification is running.** Check the
   PR's current state before pushing another release-branch commit. A commit pushed
   after the cutoff needs a separate PR; it is not part of the published tag.

@@ -35,7 +35,7 @@ import { submitCommand } from './submit-command.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
-import { formatHelp } from './help.js';
+import { formatHelp, printVersion } from './help.js';
 import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
 import { preflightAdapter } from './adapters.js';
 import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
@@ -152,6 +152,7 @@ export async function runCli(
   }
   const { verb, args, flags } = parseArgv(argv);
   const asJson = jsonMode(flags);
+  if (printVersion(flags, (line) => io.stdout.write(line))) return EXIT_GREEN;
   const origin = originFromEnv(env);
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });

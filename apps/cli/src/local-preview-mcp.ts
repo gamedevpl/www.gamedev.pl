@@ -1,6 +1,7 @@
 import { progressTool, progressReporter } from './local-progress.js';
 import type { ApproveTool } from './agent-approval.js';
-import { claudeApprovalTool, resolvePermissions, type AgentTask } from 'genaicode/agents';
+import { resolvePermissions, type AgentTask } from 'genaicode/agents';
+import { claudeLocalApproval } from './claude-local-approval.js';
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
@@ -76,7 +77,7 @@ export async function startLocalPreviewMcp(input: {
   const signal = AbortSignal.any([input.abort, controller.signal]);
   const sandbox = resolvePermissions(input.sandbox?.permissions).sandbox;
   const approval = input.onApproval
-    ? claudeApprovalTool(input.onApproval, sandbox ? { sandbox, cwd: input.sandbox!.cwd } : {})
+    ? claudeLocalApproval(input.onApproval, sandbox ? { sandbox, cwd: input.sandbox!.cwd } : {}, input.write)
     : undefined;
   const source = input.previewUrl ? previewSource(input.previewUrl, signal) : undefined;
   const report = progressReporter(input.progress ?? ((text) => input.write(text)));
