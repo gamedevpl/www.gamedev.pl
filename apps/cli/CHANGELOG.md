@@ -15,6 +15,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Claude Auto approves ordinary Bash permission requests inside its sandbox, including local diagnostic scripts, while refusing sandbox overrides and writes outside the game directory; policy refusals identify the sandbox rather than blaming the creator (#1796).
 
+## 0.41.1 — 2026-10-12
+
+### Fixed
+
+- Interactive `/push`, `/submit` and `/publish` offer “Fix with agent” when platform source validation rejects delivery, including missing imports and exports (#1794).
+
 ## 0.41.0 — 2026-10-12
 
 ### Added

@@ -28,6 +28,7 @@
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
 #   PUBLIC_PLAY_SLUGS=...      (comma-separated published slugs playable from external links)
+#   PUBLIC_KIT_DOWNLOAD=true   (unlisted /api/kit/<engineRef>.tgz download, no sign-in; default false)
 #   MCP_UI=...                 ("true" or "1", case-insensitive, opens MCP Apps views on
 #                               /api/mcp — SEP-1865. Inert for any client that does not
 #                               negotiate the extension; any other value keeps the
@@ -149,6 +150,7 @@ PUBLIC_PLAY_SLUGS="${PUBLIC_PLAY_SLUGS:-}"
 EDITORKIT_V2="${EDITORKIT_V2:-true}"
 # Concept proposals (NP-1v). Off unless an operator turns them on.
 DREAMS_ENABLED="${DREAMS_ENABLED:-false}"
+PUBLIC_KIT_DOWNLOAD="${PUBLIC_KIT_DOWNLOAD:-false}"
 # The agent writer is its own switch; see .claude/skills/byoca-mcp.
 AGENT_PROPOSALS_ENABLED="${AGENT_PROPOSALS_ENABLED:-false}"
 # CreatorQA option tiles. Off until OPTION_IMAGE_MODEL names an image model.
@@ -341,7 +343,7 @@ fi
 
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
-ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|DREAMS_ENABLED=${DREAMS_ENABLED}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|SHELF_DOCUMENT_READS=${SHELF_DOCUMENT_READS}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
+ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}|EDITORKIT_V2=${EDITORKIT_V2}|DREAMS_ENABLED=${DREAMS_ENABLED}|PUBLIC_KIT_DOWNLOAD=${PUBLIC_KIT_DOWNLOAD}|AGENT_PROPOSALS_ENABLED=${AGENT_PROPOSALS_ENABLED}|SHELF_DOCUMENT_READS=${SHELF_DOCUMENT_READS}|GLOBAL_DAILY_DREAM_CAP=${GLOBAL_DAILY_DREAM_CAP}"
 ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
 if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}"
