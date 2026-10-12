@@ -264,27 +264,32 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       createdAt: shot.createdAt ?? new Date().toISOString(),
     };
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    if (record.label === 'creator-reference') {
+      // Shot and marker commit together, so the marker never lags an image.
+      await this.db.runTransaction(async (transaction) => {
+        const job = await transaction.get(this.jobRef(jobId));
+        const data = job.exists ? (job.data() as SubmissionRecord) : undefined;
+        if (generation !== undefined) assertAgentRound(data, generation);
+        transaction.set(this.shotsCollection(jobId).doc(record.id), document);
+        if (data && !(data.referenceLatestAt && data.referenceLatestAt >= record.createdAt)) {
+          transaction.update(this.jobRef(jobId), { referenceLatestAt: record.createdAt });
+        }
+      });
+      return record;
+    }
     await writeAgentRoundDocuments(this.db, jobId, generation, [
       { ref: this.shotsCollection(jobId).doc(record.id), data: document },
     ]);
-    // A soft signal; failing it must not fail the stored image.
-    if (record.label === 'creator-reference') {
-      await this.raiseMark(jobId, 'referenceLatestAt', record.createdAt).catch(() => undefined);
-    }
     return record;
   }
 
+  // Overlapping downloads commit in any order; the mark only moves forward.
   async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
-    await this.raiseMark(jobId, 'referenceSeenAt', shotCreatedAt);
-  }
-
-  // Overlapping writes commit in any order; a mark only moves forward.
-  private async raiseMark(jobId: number, field: 'referenceLatestAt' | 'referenceSeenAt', at: string): Promise<void> {
     await this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
-      const current = (job.data() as SubmissionRecord | undefined)?.[field];
-      if (!job.exists || (current && current >= at)) return;
-      transaction.update(this.jobRef(jobId), { [field]: at });
+      const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
+      if (!job.exists || (seen && seen >= shotCreatedAt)) return;
+      transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
     });
   }
 
