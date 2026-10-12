@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
+import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { InMemoryStore } from '../platform/store.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { mintReferenceImageToken, REFERENCE_IMAGE_DOWNLOAD_ROUTE } from './reference-image-url.js';
@@ -34,7 +35,7 @@ async function setup() {
       method: 'GET',
       url: `${REFERENCE_IMAGE_DOWNLOAD_ROUTE}?t=${mintReferenceImageToken(SECRET, { jobId: 7, shotId, nowMs: NOW }).token}`,
     });
-  return { store, older, newer, download };
+  return { store, server, older, newer, download };
 }
 
 describe('reference_unseen', () => {
@@ -72,5 +73,18 @@ describe('reference_unseen', () => {
       listBuildShots: async () => [],
     });
     expect(await broken(7)).toBe(false);
+  });
+
+  it('still lists the reference behind a full page of agent screenshots', async () => {
+    const { store, server, newer } = await setup();
+    for (let i = 0; i < 20; i += 1) {
+      await store.appendBuildShot(7, {
+        data: 'c2hvdA==',
+        label: 'opening',
+        createdAt: `2026-10-11T14:${String(i).padStart(2, '0')}:00.000Z`,
+      });
+    }
+    const listed = await server.inject({ method: 'GET', url: `${AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES}?urls=1` });
+    expect((listed.json().images as Array<{ id: string }>).map((image) => image.id)).toContain(newer.id);
   });
 });
