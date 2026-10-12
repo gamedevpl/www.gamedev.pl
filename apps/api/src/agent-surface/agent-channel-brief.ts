@@ -28,7 +28,8 @@ export interface AgentChannelBriefRoutesDeps {
   now?: () => number;
 }
 
-const MAX_LISTED_REFERENCES = 8;
+// Several pending messages of up to four images each.
+const MAX_LISTED_REFERENCES = 24;
 
 export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: AgentChannelBriefRoutesDeps): void {
   const { resolveBuild, store, agentTokenSecret } = deps;

@@ -1290,7 +1290,7 @@ known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
 | `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                                                                                                                                            |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that breaks the gate (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting. (`index.html` isn't in this lane: a fresh write is a hard refusal, not a warning — see "index.html can never be freshly written again") |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                                                                                                                                             |
-| `reference_unseen`      | On stage/submit replies: the newest creator reference image was never downloaded (`referenceLatestAt` > `referenceSeenAt`, set by the signed download route). Shell: curl + read it before building on; no shell: say so in `end.summary`                                                      |
+| `reference_unseen`      | On stage/submit replies: the newest stored creator reference image is newer than `referenceSeenAt` (set by the signed download route). Shell: curl + read it before building on; no shell: say so in `end.summary`                                                                             |
 
 ## Builder handoff (Studio)
 

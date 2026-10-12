@@ -1,5 +1,5 @@
 // reference_unseen: a creator image newer than any the agent downloaded.
-import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { Store } from '../platform/store.js';
 import type { NudgeWarning } from './mcp-session-nudges.js';
 
 // Writes are where building blind costs the round.
@@ -10,11 +10,8 @@ export const REFERENCE_WRITE_TOOLS = new Set([
   'submit_sources',
 ]);
 
-export function referenceUnseen(
-  record: Pick<SubmissionRecord, 'referenceLatestAt' | 'referenceSeenAt'> | null,
-): boolean {
-  const latest = record?.referenceLatestAt;
-  return Boolean(latest && !(record.referenceSeenAt && record.referenceSeenAt >= latest));
+export function referenceUnseen(newestAt: string | undefined, seenAt: string | undefined): boolean {
+  return Boolean(newestAt && !(seenAt && seenAt >= newestAt));
 }
 
 export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
@@ -25,24 +22,15 @@ export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
     'file before building on. Without a shell, say in end.summary that you did not see it.',
 };
 
-const MAX_DERIVED = 1000;
-
-// Images stored before the marker existed: derive it once per job.
+// Stored references are the source; a label query reads only them.
 export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'listBuildShots'>) {
-  const derived = new Map<number, { latest: string | null }>();
   return async (jobId: number): Promise<boolean> => {
     try {
-      const record = await store.getSubmission(jobId);
-      if (!record) return false;
-      // New images set the marker atomically with the shot.
-      if (record.referenceLatestAt) return referenceUnseen(record);
-      if (!derived.has(jobId)) {
-        if (derived.size >= MAX_DERIVED) derived.clear();
-        const [newest] = await store.listBuildShots(jobId, { label: 'creator-reference', limit: 1 });
-        derived.set(jobId, { latest: newest?.createdAt ?? null });
-      }
-      const latest = derived.get(jobId)?.latest ?? undefined;
-      return referenceUnseen({ referenceLatestAt: latest, referenceSeenAt: record.referenceSeenAt });
+      const [record, [newest]] = await Promise.all([
+        store.getSubmission(jobId),
+        store.listBuildShots(jobId, { label: 'creator-reference', limit: 1 }),
+      ]);
+      return Boolean(record) && referenceUnseen(newest?.createdAt, record?.referenceSeenAt);
     } catch {
       // A soft warning; a failed read must not fail the write.
       return false;

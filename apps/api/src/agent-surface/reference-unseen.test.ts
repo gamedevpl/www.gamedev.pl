@@ -39,40 +39,30 @@ async function setup() {
 }
 
 describe('reference_unseen', () => {
-  it('tracks the newest creator image and clears only when that one is downloaded', async () => {
+  it('warns about the newest creator image until that one is downloaded', async () => {
     const { store, older, newer, download } = await setup();
-    expect(await store.getSubmission(7)).toMatchObject({ referenceLatestAt: newer.createdAt });
-    expect(referenceUnseen(await store.getSubmission(7))).toBe(true);
+    const lookup = createReferenceLookup(store);
+    expect(await lookup(7)).toBe(true);
     expect((await download(older.id)).statusCode).toBe(200);
-    expect(referenceUnseen(await store.getSubmission(7))).toBe(true);
+    expect(await lookup(7)).toBe(true);
     expect((await download(newer.id)).statusCode).toBe(200);
-    expect(referenceUnseen(await store.getSubmission(7))).toBe(false);
+    expect(await lookup(7)).toBe(false);
     await store.markReferenceSeen(7, older.createdAt);
     expect((await store.getSubmission(7))?.referenceSeenAt).toBe(newer.createdAt);
   });
 
-  it('stays quiet without creator images', () => {
-    expect(referenceUnseen(null)).toBe(false);
-    expect(referenceUnseen({})).toBe(false);
-    expect(referenceUnseen({ referenceLatestAt: 'b', referenceSeenAt: 'a' })).toBe(true);
-  });
-
-  it('derives the marker for images stored before it existed, and survives a failed read', async () => {
-    const { store, newer, download } = await setup();
-    const record = (await store.getSubmission(7))!;
-    const lookup = createReferenceLookup({
-      getSubmission: async () => ({ ...record, referenceLatestAt: undefined }),
-      listBuildShots: (jobId, opts) => store.listBuildShots(jobId, opts),
-    });
-    expect(await lookup(7)).toBe(true);
-    await download(newer.id);
-    record.referenceSeenAt = (await store.getSubmission(7))?.referenceSeenAt;
+  it('follows the stored images: a deleted one stops the warning, a failed read stays quiet', async () => {
+    const { store, older, newer } = await setup();
+    const lookup = createReferenceLookup(store);
+    await store.deleteBuildShots(7, [older.id, newer.id]);
     expect(await lookup(7)).toBe(false);
     const broken = createReferenceLookup({
       getSubmission: async () => Promise.reject(new Error('down')),
       listBuildShots: async () => [],
     });
     expect(await broken(7)).toBe(false);
+    expect(referenceUnseen('b', 'a')).toBe(true);
+    expect(referenceUnseen(undefined, undefined)).toBe(false);
   });
 
   it('still lists the reference behind a full page of agent screenshots', async () => {

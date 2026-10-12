@@ -236,6 +236,9 @@ export async function handleCreatorFeedback(
       category: moderation.category,
       unavailable: moderation.unavailable,
     });
+    // A rejected message sends no images; drop the ones stored for it.
+    if (store && referenceImageShotIds.length)
+      await store.deleteBuildShots(jobId, referenceImageShotIds).catch(() => undefined);
     const rejection = rejectionFor(moderation);
     return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
   }
