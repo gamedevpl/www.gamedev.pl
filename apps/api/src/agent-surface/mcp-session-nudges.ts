@@ -20,7 +20,8 @@ export type NudgeCode =
   | 'card_unopened'
   | 'must_fix_gate'
   | 'must_deliver'
-  | 'reference_unseen';
+  | 'reference_unseen'
+  | 'inbox_unacked';
 
 export interface NudgeWarning {
   code: NudgeCode;

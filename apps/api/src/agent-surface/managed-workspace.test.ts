@@ -83,6 +83,7 @@ describe('workspace kickoff', () => {
     }).join('\n');
     expect(lines).toContain('tar xzf /mnt/session/uploads/kit.tgz -C /workspace');
     expect(lines).toContain('tar xzf /mnt/session/uploads/sources.tgz -C /workspace/gamedevpl-creator-kit/games');
+    expect(lines).toContain('npm config set update-notifier false && mkdir -p /workspace');
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).toContain('If it is not eng_new');

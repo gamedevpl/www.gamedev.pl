@@ -76,6 +76,7 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
 export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): string[] {
   const kitDir = `${WORKSPACE_ROOT}/gamedevpl-creator-kit`;
   const unpack = [
+    'npm config set update-notifier false',
     `mkdir -p ${WORKSPACE_ROOT}`,
     `tar xzf ${dir}/${KIT_ARCHIVE} -C ${WORKSPACE_ROOT}`,
     ...(workspace.slug ? [`tar xzf ${dir}/${SOURCES_ARCHIVE} -C ${kitDir}/games`] : []),
@@ -89,7 +90,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive.`,
     `Call \`get_kit\` only for kitEngineRef. If it is not ${workspace.engineRef}, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
-    'Edit there and run `npm run typecheck -- <slug>` from the kit root before each submit.',
+    'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
   ];
 }
 

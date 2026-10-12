@@ -1294,6 +1294,7 @@ known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that breaks the gate (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting. (`index.html` isn't in this lane: a fresh write is a hard refusal, not a warning — see "index.html can never be freshly written again") |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                                                                                                                                             |
 | `reference_unseen`      | On stage/submit replies: the newest stored creator reference image is newer than `referenceSeenAt` (set by the signed download route). Shell: curl + read it before building on; no shell: say so in `end.summary`                                                                             |
+| `inbox_unacked`         | On `submit_sources` replies: ids of creator notes `read_inbox` returned that are still pending until acknowledged (fact only; the system prompt says to ack)                                                                                                                                   |
 
 ## Builder handoff (Studio)
 

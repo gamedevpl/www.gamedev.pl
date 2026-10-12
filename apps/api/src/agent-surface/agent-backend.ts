@@ -44,6 +44,8 @@ export interface BuildBrief {
    * inventing a change request the creator never made.
    */
   undelivered?: boolean;
+  // The round's last preview, when an undelivered nudge follows one.
+  previewVersion?: string;
   gateRepair?: { version: string; report: string };
   /**
    * A generated first draft of the game the workspace should already contain.

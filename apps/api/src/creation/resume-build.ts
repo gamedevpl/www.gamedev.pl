@@ -184,6 +184,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.undelivered ? { undelivered: true } : {}),
+        ...(input.undelivered && record?.previewVersion ? { previewVersion: record.previewVersion } : {}),
         ...(input.gateRepair ? { gateRepair: input.gateRepair } : {}),
         ...(input.feedbackQueueFailed ? { feedbackQueueFailed: true } : {}),
         ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
