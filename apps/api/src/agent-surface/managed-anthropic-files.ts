@@ -24,7 +24,7 @@ export interface MountedFile {
 
 async function upload(client: AnthropicFilesClient, archive: ManagedWorkspaceArchive): Promise<MountedFile> {
   const form = new FormData();
-  form.append('file', new Blob([archive.bytes], { type: 'application/gzip' }), archive.name);
+  form.append('file', new Blob([new Uint8Array(archive.bytes)], { type: 'application/gzip' }), archive.name);
   const response = await client.fetchImpl(`${client.baseUrl}/v1/files`, {
     method: 'POST',
     headers: { 'x-api-key': client.apiKey, 'anthropic-version': client.apiVersion },
