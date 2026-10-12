@@ -85,3 +85,28 @@ it('pauses diagnostics polling while selecting text', async () => {
     vi.useRealTimers();
   }
 });
+
+it('keeps selection paused across compact resizes and can resume before widening', async () => {
+  const view = screen();
+  void view.session.prompt();
+  view.session.writeLine('Original output');
+  await view.press('saved draft');
+  await view.press('\u0014');
+  view.resize(80, 12);
+  expect(view.frame()).toContain('Text selection');
+  expect(view.frame()).toContain('Ctrl+T resume');
+  view.session.writeLine('New output while compact');
+  expect(view.frame()).not.toContain('New output while compact');
+  view.resize(150, 28);
+  expect(view.frame()).toContain('Text selection');
+  expect(view.frame()).not.toContain('New output while compact');
+  view.resize(80, 12);
+  await view.press('\u0014');
+  expect(view.frame()).not.toContain('Text selection');
+  expect(view.takeOutput()).toContain('New output while compact');
+  view.resize(150, 28);
+  expect(view.frame()).not.toContain('Text selection');
+  expect(view.frame()).toContain('New output while compact');
+  expect(view.session.get().draft).toBe('saved draft');
+  expect(view.terminalOutput().split('\u001b[?1006h\u001b[?1000h')).toHaveLength(3);
+});

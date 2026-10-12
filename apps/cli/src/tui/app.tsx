@@ -64,7 +64,7 @@ export function ReplApp({
   const [sidebar, setSidebar] = useState(true);
   const [nativeSelection, setNativeSelection] = useState(false);
   const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
-  const selecting = split && nativeSelection;
+  const selecting = nativeSelection;
   useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
@@ -94,7 +94,7 @@ export function ReplApp({
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
-    if (key.ctrl && input === 't' && split) {
+    if (key.ctrl && input === 't' && (split || selecting)) {
       setNativeSelection((value) => !value);
       return;
     }
@@ -413,9 +413,11 @@ export function ReplApp({
         <Text dimColor wrap="truncate-end">
           <RichText
             text={
-              split
-                ? `${selecting ? 'Text selection · display paused · Ctrl+T resume' : 'Ctrl+T select text · wheel / PgUp/PgDn chat'} · Ctrl+B sidebar · ${footer}`
-                : footer
+              selecting
+                ? `Text selection · display paused · Ctrl+T resume · ${footer}`
+                : split
+                  ? `Ctrl+T select text · wheel / PgUp/PgDn chat · Ctrl+B sidebar · ${footer}`
+                  : footer
             }
             color={color}
           />
