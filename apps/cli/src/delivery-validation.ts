@@ -3,8 +3,10 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 import type { TreeFile } from './checkout-sync.js';
 import { verificationFilesHash } from './verification-source.js';
+import { cliUsage } from './bin-name.js';
 
 export type RejectedUpload = { files: TreeFile[]; paths: string[] };
+type RetryContext = { publish?: boolean; interactive?: boolean; force?: boolean; takeover?: boolean };
 
 export class DeliveryValidationError extends CliError {
   readonly stage = 'delivery';
@@ -14,9 +16,22 @@ export class DeliveryValidationError extends CliError {
   constructor(
     error: CliError,
     readonly upload: RejectedUpload,
+    context: RetryContext,
   ) {
     const detail = stripTerminalControls(error.message).trim();
-    super(detail, EXIT_REFUSED, 'Fix the reported errors, then retry /push. Staged files are kept.');
+    const verb = context.publish ? 'publish' : 'push';
+    const retry = [
+      context.interactive ? `/${verb}` : cliUsage(verb),
+      context.force ? '--force' : '',
+      context.takeover ? '--takeover' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    super(
+      detail,
+      EXIT_REFUSED,
+      `Fix the reported errors, then retry ${retry} in the same checkout. Staged files are kept.`,
+    );
     this.detail = detail;
     this.sourceHash = verificationFilesHash(upload.files);
     this.apiCode = error.apiCode;
@@ -24,9 +39,13 @@ export class DeliveryValidationError extends CliError {
   }
 }
 
-export function deliveryValidationError(error: unknown, upload: RejectedUpload): DeliveryValidationError | undefined {
+export function deliveryValidationError(
+  error: unknown,
+  upload: RejectedUpload,
+  context: RetryContext,
+): DeliveryValidationError | undefined {
   if (error instanceof CliError && error.httpStatus === 400 && error.apiCode === 'invalid_upload') {
-    return new DeliveryValidationError(error, upload);
+    return new DeliveryValidationError(error, upload, context);
   }
   return undefined;
 }

@@ -119,6 +119,7 @@ async function submitGameUnlocked(input: {
   takeover?: boolean;
   expectedSession?: DeliverySession;
   rejectedUpload?: RejectedUpload;
+  interactive?: boolean;
   run?: Parameters<typeof runLadder>[0]['run'];
   onProgress?: (message: string) => void;
   abort?: AbortSignal;
@@ -268,7 +269,7 @@ async function submitGameUnlocked(input: {
       attestation: true,
     });
   } catch (error) {
-    const validation = deliveryValidationError(error, { files: uploaded, paths: staged });
+    const validation = deliveryValidationError(error, { files: uploaded, paths: staged }, input);
     if (validation) throw validation;
     mapHttpError(error);
   }

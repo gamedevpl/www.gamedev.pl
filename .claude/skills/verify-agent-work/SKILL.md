@@ -555,6 +555,8 @@ overlay instead of always returning the committed files. Probe deleting and rena
 new rejected file, and restoring the committed tree: a confirmed retry must reconcile
 the rejected paths and reach validation again. Preserve unrelated staging and stop if
 another editor changed the acknowledged rejected paths.
+Retry guidance is behavior too: check preview versus publication and shell versus
+interactive commands, preserving the original mode and delivery flags.
 
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
 

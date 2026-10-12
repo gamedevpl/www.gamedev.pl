@@ -165,6 +165,7 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
       dest,
       force: parsed.flags.force === true,
       publish: parsed.flags.publish === true,
+      interactive: true,
       takeover: parsed.flags.takeover === true,
       run: ws?.run,
       onProgress: input.onActivity ?? input.write,
