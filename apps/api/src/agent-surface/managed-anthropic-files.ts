@@ -40,18 +40,28 @@ async function upload(client: AnthropicFilesClient, archive: ManagedWorkspaceArc
   return { id: parsed.data.id, name: archive.name };
 }
 
+const DELETE_ATTEMPTS = 3;
+
+// fetch resolves on 429/5xx; success means ok or already gone.
+async function deleteOnce(client: AnthropicFilesClient, file: MountedFile): Promise<boolean> {
+  const response = await client
+    .fetchImpl(`${client.baseUrl}/v1/files/${encodeURIComponent(file.id)}`, {
+      method: 'DELETE',
+      headers: { 'x-api-key': client.apiKey, 'anthropic-version': client.apiVersion },
+      signal: AbortSignal.timeout(client.timeoutMs),
+    })
+    .catch(() => null);
+  return response !== null && (response.ok || response.status === 404);
+}
+
+// Unpublished sources must not outlive the dispatch; retry failed deletes.
 export async function deleteAnthropicFiles(client: AnthropicFilesClient, files: readonly MountedFile[]): Promise<void> {
-  await Promise.all(
-    files.map((file) =>
-      client
-        .fetchImpl(`${client.baseUrl}/v1/files/${encodeURIComponent(file.id)}`, {
-          method: 'DELETE',
-          headers: { 'x-api-key': client.apiKey, 'anthropic-version': client.apiVersion },
-          signal: AbortSignal.timeout(client.timeoutMs),
-        })
-        .catch(() => undefined),
-    ),
-  );
+  let pending = [...files];
+  for (let attempt = 0; attempt < DELETE_ATTEMPTS && pending.length; attempt += 1) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+    const done = await Promise.all(pending.map((file) => deleteOnce(client, file)));
+    pending = pending.filter((_, index) => !done[index]);
+  }
 }
 
 // All or nothing: a partial upload is deleted before the error surfaces.

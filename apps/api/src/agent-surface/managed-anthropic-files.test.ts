@@ -82,4 +82,25 @@ describe('anthropic mounted workspace', () => {
     const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
     expect(calls.filter(([, init]) => init.method === 'DELETE')).toHaveLength(2);
   });
+
+  it('retries a delete the API answered with a server error', async () => {
+    const deletes: string[] = [];
+    const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/files') && init.method === 'POST') return jsonResponse({ id: 'file_r' });
+      if (url.includes('/v1/files/') && init.method === 'DELETE') {
+        deletes.push(url);
+        return deletes.length === 1 ? jsonResponse({ error: 'busy' }, 503) : jsonResponse({});
+      }
+      if (url.endsWith('/v1/sessions?beta=true')) return jsonResponse({ id: 'sess_r', status: 'queued' });
+      throw new Error(`unexpected request ${url}`);
+    });
+
+    await provider(fetchImpl).startSession({
+      correlationId: '7',
+      prompt: 'p',
+      model: 'm',
+      workspaceArchives: [ARCHIVES[0]!],
+    });
+    expect(deletes).toEqual(['https://api.anthropic.com/v1/files/file_r', 'https://api.anthropic.com/v1/files/file_r']);
+  });
 });
