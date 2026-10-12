@@ -45,6 +45,37 @@ retain the static transcript. Both use `TranscriptLine`, the existing composer,
 choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
+Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling.
+Reports route to the conversation, question, diff or diagnostics under the pointer;
+they never become composer text or choice answers. Delivery choices retain the
+conversation above their question. Compact layouts keep native terminal scrollback.
+Unmounting, including native agent handoffs, disables reporting; remounting restores it.
+This scrolling correction adds no telemetry event or creator-funnel dimension.
+
+Input retains Ink's raw Escape byte before its keyboard normalization, so pasted
+`[<...` and `[M...` strings remain ordinary text. The decoder consumes SGR and
+legacy `CSI M` reports, including partial payloads across reads, for multiplexers
+that accept tracking but ignore the SGR encoding mode.
+
+TUI input readers preserve bytes through latin1 stream decoding before parsing
+legacy coordinates; keyboard text uses a separate streaming UTF-8 decoder.
+Reader reference counts preserve bytes during direct Ink mounts. The input
+bridge owns physical encoding and restores it when the bridge disconnects.
+
+The host frames terminal escape sequences before Ink reads them. Partial CSI/SS3
+prefixes and legacy mouse payloads wait for the next read. Recognized incomplete
+mouse reports have no deadline; a 100 ms deadline releases ambiguous Escape/Meta
+prefixes that can be standalone keys. Unmounting cancels that timer and disconnects
+the input bridge before native terminal handoffs.
+
+Completed CSI/SS3/mouse frames remain separate readable objects, because Ink
+parses one key per read. Adjacent plain text stays grouped for pasted input;
+framing also retains double-Escape Meta key sequences and Linux-console `ESC[[` function keys.
+Complete SS3 frames retain every suffix; keys Ink does not recognize are ignored
+instead of exposing their protocol bytes as composer text.
+Frames are byte strings and ignore Ink encoding resets, which otherwise merge
+queued frames and can replace legacy coordinate bytes before the parser sees them.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

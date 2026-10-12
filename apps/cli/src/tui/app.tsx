@@ -1,8 +1,8 @@
 import { TaskDebug } from './debug.js';
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Text, useInput, useStdout, type Key } from 'ink';
+import { useEffect, useRef, useState } from 'react';
+import { Box, Text, useStdout, type DOMElement, type Key } from 'ink';
 import wrapAnsi from 'wrap-ansi';
 import { RichText } from './transcript.js';
 import { CLI_BIN } from '../bin-name.js';
@@ -13,6 +13,7 @@ import { DiffViewer } from './diff.js';
 import { ConversationLayout } from './conversation-layout.js';
 import { WorkspacePanel, useWorkspaceChanges } from './workspace-panel.js';
 import type { WorkspaceCheckout } from './workspace-status.js';
+import { useMouseReporting, useTerminalInput, wheelInside } from './mouse.js';
 
 export function draftViewport(draft: string, cursor: number, width: number) {
   const chars = [...draft];
@@ -62,6 +63,8 @@ export function ReplApp({
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
   const [sidebar, setSidebar] = useState(true);
   const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  useMouseReporting(split);
+  const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
   const rows = dimensions.rows - Number(split);
@@ -192,10 +195,16 @@ export function ReplApp({
     }
     if (!key.ctrl && !key.meta && input) session.insertDraft(input);
   };
-  // Ink re-subscribes handlers late; keys must see the latest state.
-  const latestInput = useRef(onInput);
-  latestInput.current = onInput;
-  useInput(useCallback((input: string, key: Key) => latestInput.current(input, key), []));
+  useTerminalInput(onInput, (wheel) => {
+    if (debug || viewDiff || state.mode !== 'pick' || !wheelInside(choicePanel.current, wheel, dimensions.rows)) return;
+    setDetailScroll((previous) => ({
+      promptId: state.promptId,
+      offset: Math.max(
+        0,
+        Math.min((previous.promptId === state.promptId ? previous.offset : 0) + wheel.direction * 3, maxOffset),
+      ),
+    }));
+  });
 
   const border = color ? 'round' : 'single';
   const accent = color ? (shellMode ? 'yellow' : 'cyan') : undefined;
@@ -239,6 +248,7 @@ export function ReplApp({
       width={split ? dimensions.columns : width}
       rows={rows}
       blocked={debug || viewDiff || state.mode === 'pick'}
+      hidden={debug || viewDiff}
       panel={
         panelWidth > 0 ? (
           <WorkspacePanel state={state} changes={changes} rows={rows} width={panelWidth} color={color} />
@@ -273,7 +283,14 @@ export function ReplApp({
             previewKey={state.localTask ? 'Ctrl+O' : 'o'}
           />
         ) : (
-          <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
+          <Box
+            ref={choicePanel}
+            flexDirection="column"
+            flexShrink={0}
+            borderStyle={border}
+            borderColor={accent}
+            paddingX={1}
+          >
             {state.mode === 'pick' ? (
               <>
                 <Text bold color={accent}>
@@ -368,7 +385,7 @@ export function ReplApp({
                 : 'Working — input paused'}
         </Text>
         <Text dimColor wrap="truncate-end">
-          <RichText text={`${footer}${split ? ' · Ctrl+B sidebar · PgUp/PgDn chat' : ''}`} color={color} />
+          <RichText text={`${footer}${split ? ' · Ctrl+B sidebar · wheel / PgUp/PgDn chat' : ''}`} color={color} />
         </Text>
       </Box>
     </ConversationLayout>
