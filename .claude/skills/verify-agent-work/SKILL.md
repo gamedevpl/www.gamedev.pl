@@ -114,6 +114,9 @@ Two concrete instances of that (observed 2026-07-23):
   commit — CodeQL ran but `on: push` CI/Deploy workflows never got runs created (no failed
   run, just _nothing_). Always confirm runs exist for the exact head SHA
   (`gh api "repos/<r>/actions/runs?head_sha=<sha>"`); if none, retrigger with an empty commit.
+  For PR-only CI, check `mergeable_state` first: a merge conflict suppresses those runs
+  while dynamic CodeQL still runs. Fetch current master and resolve conflicts before
+  retriggering; the PR's recorded base SHA can lag behind the current master ref.
 - **Scanner version drift makes local verification meaningless.** gitleaks 8.18.2 (CI) and
   8.30.1 (local) each flagged _different_ false positives over full history — a local "no
   leaks" pass said nothing about CI's verdict. Verify with the exact version CI pins, and
@@ -546,6 +549,14 @@ credentials. Actor fences must not classify every future credential by the row a
 Reminting a session from a channel key must preserve its actor and revocation revision.
 
 ## Read the diff against the spec
+
+Failed deliveries still leave a staging overlay. Repair/retry tests must model that
+overlay instead of always returning the committed files. Probe deleting and renaming a
+new rejected file, and restoring the committed tree: a confirmed retry must reconcile
+the rejected paths and reach validation again. Preserve unrelated staging and stop if
+another editor changed the acknowledged rejected paths.
+Retry guidance is behavior too: check preview versus publication and shell versus
+interactive commands, preserving the original mode and delivery flags.
 
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
 

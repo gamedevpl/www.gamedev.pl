@@ -20,6 +20,7 @@ import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder, runLadderAsync } from './verify.js';
 import { verificationSourceHash } from './verification-source.js';
 import { deliveryProgress } from './delivery-progress.js';
+import { deliveryValidationError, rejectedStagedPaths, type RejectedUpload } from './delivery-validation.js';
 
 export type DeliverMode = 'preview' | 'publish';
 
@@ -117,6 +118,8 @@ async function submitGameUnlocked(input: {
   publish?: boolean;
   takeover?: boolean;
   expectedSession?: DeliverySession;
+  rejectedUpload?: RejectedUpload;
+  interactive?: boolean;
   run?: Parameters<typeof runLadder>[0]['run'];
   onProgress?: (message: string) => void;
   abort?: AbortSignal;
@@ -132,7 +135,14 @@ async function submitGameUnlocked(input: {
     first = await inspectGame(input);
   }
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, first.tree.version);
-  if (first.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
+  if (
+    first.sync.kind === 'clean' &&
+    !recovered &&
+    !input.rejectedUpload &&
+    !input.publish &&
+    !input.force &&
+    !input.takeover
+  ) {
     return { kind: 'nothing', sync: first.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
   }
   if (
@@ -169,7 +179,14 @@ async function submitGameUnlocked(input: {
     const refused = syncRefuse(latest.sync, 'submit');
     throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
   }
-  if (latest.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
+  if (
+    latest.sync.kind === 'clean' &&
+    !recovered &&
+    !input.rejectedUpload &&
+    !input.publish &&
+    !input.force &&
+    !input.takeover
+  ) {
     return { kind: 'nothing', sync: latest.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
@@ -181,7 +198,7 @@ async function submitGameUnlocked(input: {
   progress('session', 'Preparing delivery session');
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
   const remoteFiles = trackedTree(input.dest, input.slug, latest.tree.files);
-  const paths =
+  const changedPaths =
     takenOver || recovered
       ? [
           ...new Set(
@@ -195,6 +212,8 @@ async function submitGameUnlocked(input: {
       : input.force
         ? changedPathsForced(localGameFiles(input.dest, input.slug), remoteFiles)
         : latest.sync.local;
+  const retryPaths = await rejectedStagedPaths(input.api, input.slug, input.rejectedUpload);
+  const paths = [...new Set([...changedPaths, ...retryPaths])].sort();
   let extra: string[] = [];
   progress('staged', 'Checking staged files');
   try {
@@ -250,6 +269,8 @@ async function submitGameUnlocked(input: {
       attestation: true,
     });
   } catch (error) {
+    const validation = deliveryValidationError(error, { files: uploaded, paths: staged }, input);
+    if (validation) throw validation;
     mapHttpError(error);
   }
   if (!delivered.accepted) {

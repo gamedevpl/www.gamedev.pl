@@ -390,6 +390,7 @@ export async function offerSubmit(input: {
       run: ws.run,
       takeover,
       expectedSession: session ?? undefined,
+      interactive: !ws.unattended,
     });
     if (result.kind === 'delivered') ws.telemetry?.record('delivered');
     input.write(formatSubmitLines(result, ws.slug).join('\n'));

@@ -18,7 +18,9 @@ export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv):
   return tokens?.accessToken ?? null;
 }
 
-function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
+type ApiErrorBody = { error?: string; message?: string; code?: string };
+
+function throwForStatus(res: Response, errBody: ApiErrorBody): never {
   const error =
     res.status === 422 && errBody.error === 'content_rejected'
       ? moderationRefusal()
@@ -28,7 +30,7 @@ function throwForStatus(res: Response, errBody: { error?: string; message?: stri
             res.status === 404 ? 'not found' : (errBody.message ?? errBody.error ?? `request failed (${res.status})`),
             EXIT_REFUSED,
           );
-  error.apiCode = errBody.error;
+  error.apiCode = errBody.code ?? errBody.error;
   error.httpStatus = res.status;
   throw error;
 }
@@ -116,7 +118,7 @@ export function createApi(input: {
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
       if (!res.ok) {
-        throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
+        throwForStatus(res, (await res.json().catch(() => ({}))) as ApiErrorBody);
       }
       return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
     },
@@ -126,7 +128,7 @@ export function createApi(input: {
         signal,
       });
       if (!res.ok) {
-        throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
+        throwForStatus(res, (await res.json().catch(() => ({}))) as ApiErrorBody);
       }
       return Buffer.from(await res.arrayBuffer());
     },
