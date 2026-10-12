@@ -114,8 +114,10 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       if (!claim || !store) return reply.status(404).send({ error: 'not found' });
       const shot = await store.getBuildShot(claim.jobId, claim.shotId);
       if (!shot || shot.label !== 'creator-reference') return reply.status(404).send({ error: 'not found' });
-      // Feeds reference_unseen; a failed mark must not block the image.
-      await store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+      // Seen once the body is fully sent; a failed mark stays silent.
+      reply.raw.once('finish', () => {
+        void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+      });
       return reply
         .header('content-type', shot.mediaType ?? 'image/png')
         .header('cache-control', 'private, max-age=300')

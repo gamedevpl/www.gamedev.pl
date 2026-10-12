@@ -3188,13 +3188,16 @@ declare const GameKit: { defineGame(): unknown };
       // Inline base64 flooded a live round's context; a url is all the agent needs.
       const store = new InMemoryStore();
       await seedJob(store);
+      const ids: string[] = [];
       for (const minute of ['01', '03', '02']) {
-        await store.appendBuildShot(ISSUE, {
+        const shot = await store.appendBuildShot(ISSUE, {
           data: TINY_PNG,
           label: 'creator-reference',
           createdAt: `2026-10-11T10:${minute}:00.000Z`,
         });
+        ids.push(shot.id);
       }
+      await store.appendCreatorMessage(ISSUE, `Ice floes.\n\nreferenceImageShotIds: ${ids.join(',')}`);
       app = await createApp(store);
       const sessionId = await initialize(app);
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
