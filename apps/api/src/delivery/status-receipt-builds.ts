@@ -45,7 +45,8 @@ export async function refreshReceiptGateProgress(
   if (!record.slug || !version || !gamesStore?.getManifest) return undefined;
   try {
     const manifest = await gamesStore.getManifest(record.slug, version);
-    if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) status.gateProgress = manifest.gateProgress;
+    if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate && !manifest.gateCrash)
+      status.gateProgress = manifest.gateProgress;
     else delete status.gateProgress;
     return manifest?.jobId === jobId ? version : undefined;
   } catch {

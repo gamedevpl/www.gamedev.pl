@@ -172,12 +172,12 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
   );
 }
 
-/** Failure reasons with their own copy; anything newer gets the generic sentence. */
 const FAILURE_COPY_KEYS = new Set([
   'task_failed',
   'task_timed_out',
   'task_completed_without_delivery',
   'gate_red',
+  'gate_crashed',
   'self_build_delivery_cap',
 ]);
 

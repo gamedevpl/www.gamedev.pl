@@ -669,6 +669,8 @@
       "resize": "Resize details panel"
     },
     "buildHistory": {
+      "timedOut": "Build timed out",
+      "crashed": "Build interrupted",
       "live": "Checking your latest changes now",
       "livePlaying": "Checking your latest build — you can already play it",
       "idle": "No build is running right now",
@@ -703,6 +705,8 @@
       "playing": "Playing"
     },
     "buildBar": {
+      "timedOut": "Build timed out",
+      "crashed": "Build interrupted",
       "starting": "Verification starting",
       "roundInProgress": "Round in progress",
       "failed": "Check failed",
@@ -1287,6 +1291,7 @@
     "shareCopied": "Copied!",
     "checksFailed": "Automatic checks are failing on this build. The agent usually notices and fixes it — no action needed from you.",
     "failure": {
+      "gate_crashed": "Automated verification was interrupted. Your files are saved — your agent can submit again to retry the checks.",
       "task_failed": "The build agent stopped unexpectedly before finishing. Your game and everything built so far are safe — send feedback below to start another round.",
       "task_timed_out": "The build ran out of time before finishing. Your progress is safe — send feedback below to start another round.",
       "task_completed_without_delivery": "The agent finished without delivering the game. Send feedback below to start another round.",

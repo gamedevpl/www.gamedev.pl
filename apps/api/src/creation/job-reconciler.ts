@@ -293,12 +293,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     return onGateRed({ record, version, report });
   }
 
-  async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
+  async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
     const redPendingRepair =
       state === 'needs_changes' && ['gate_red', 'kit_outdated'].includes(record.transitions?.at(-1)?.reason ?? '');
     try {
+      if (state === 'needs_changes' && record.transitions?.at(-1)?.reason === 'gate_crashed')
+        return probeGateCrash(record, { store, gamesStore, log, now });
       if (state !== 'building' && state !== 'submitted' && !redPendingRepair) {
         if (state === 'ready_for_review') await retryClosedPreviewDream(record, gamesStore, onPreviewGateGreen, now);
         return null;
@@ -320,7 +322,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           break;
         }
       }
-      if (!version || !manifest) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
+      if (!version || !manifest) return probeGateCrash(record, { store, gamesStore, log, now });
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -406,7 +408,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       }
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
-      if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
+      if (!preview) return probeGateCrash(record, { store, gamesStore, log, now });
       if (redPendingRepair && preview.green) return null;
       await emitGateMetric({
         mode: 'preview',

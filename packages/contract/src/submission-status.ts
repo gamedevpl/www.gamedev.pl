@@ -134,7 +134,7 @@ export interface RecentBuild {
   mode: DeliveryMode;
   // 'pending' until this version's own gate reports a verdict.
   verdict: 'pending' | 'green' | 'red';
-  status?: 'kit_outdated';
+  status?: 'kit_outdated' | 'crashed' | 'timed_out';
   // Where a red run died, so the bar freezes there.
   failedStage?: GateProgressStage;
   failedIndex?: number;
