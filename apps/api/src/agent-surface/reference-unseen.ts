@@ -27,22 +27,28 @@ export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
 };
 
 const MAX_DERIVED = 1000;
+// Short-lived, so a later image whose mark failed is still found.
+const DERIVED_TTL_MS = 60_000;
 
-// Images stored before the marker existed: derive it once per job.
-export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'listBuildShots'>) {
-  const derived = new Map<number, string | null>();
+// Images stored before the marker existed: derive it from the shots.
+export function createReferenceLookup(
+  store: Pick<Store, 'getSubmission' | 'listBuildShots'>,
+  now: () => number = Date.now,
+) {
+  const derived = new Map<number, { latest: string | null; at: number }>();
   return async (jobId: number): Promise<boolean> => {
     try {
       const record = await store.getSubmission(jobId);
       if (!record) return false;
       if (record.referenceLatestAt) return referenceUnseen(record);
-      if (!derived.has(jobId)) {
+      const cached = derived.get(jobId);
+      if (!cached || now() - cached.at >= DERIVED_TTL_MS) {
         if (derived.size >= MAX_DERIVED) derived.clear();
         const shots = await store.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS });
         const stamps = shots.filter((shot) => shot.label === 'creator-reference').map((shot) => shot.createdAt);
-        derived.set(jobId, stamps.sort().at(-1) ?? null);
+        derived.set(jobId, { latest: stamps.sort().at(-1) ?? null, at: now() });
       }
-      const latest = derived.get(jobId) ?? undefined;
+      const latest = derived.get(jobId)?.latest ?? undefined;
       return referenceUnseen({ referenceLatestAt: latest, referenceSeenAt: record.referenceSeenAt });
     } catch {
       // A soft warning; a failed read must not fail the write.

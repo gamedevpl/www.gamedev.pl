@@ -67,6 +67,20 @@ describe('reference_unseen', () => {
     await download(newer.id);
     record.referenceSeenAt = (await store.getSubmission(7))?.referenceSeenAt;
     expect(await lookup(7)).toBe(false);
+    let clock = 0;
+    const stamps = ['2026-10-11T10:00:00.000Z'];
+    const ticking = createReferenceLookup(
+      {
+        getSubmission: async () => ({ ...record, referenceLatestAt: undefined }),
+        listBuildShots: async () =>
+          stamps.map((createdAt, i) => ({ id: `s${i}`, createdAt, label: 'creator-reference' }) as never),
+      },
+      () => clock,
+    );
+    expect(await ticking(7)).toBe(false);
+    stamps.push('2026-10-11T13:00:00.000Z');
+    clock = 60_000;
+    expect(await ticking(7)).toBe(true);
     const broken = createReferenceLookup({
       getSubmission: async () => Promise.reject(new Error('down')),
       listBuildShots: async () => [],
