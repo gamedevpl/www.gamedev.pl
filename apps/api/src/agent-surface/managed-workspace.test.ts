@@ -145,4 +145,12 @@ describe('startWithWorkspace', () => {
     ).rejects.toThrow('quota');
     expect(startSession).toHaveBeenCalledTimes(1);
   });
+
+  it('starts the plain round when the workspace read stalls', async () => {
+    const startSession = vi.fn(async () => ({ id: 's', state: 'queued' as const }));
+    const provider = { startSession, workspaceArchiveDir: '/mnt/session/uploads' } as unknown as ManagedAgentProvider;
+    const stalled = () => new Promise<ManagedWorkspace | null>(() => {});
+    await startWithWorkspace(provider, stalled, REQUEST, () => 'ws', undefined, 10);
+    expect(startSession).toHaveBeenCalledWith(REQUEST);
+  });
 });

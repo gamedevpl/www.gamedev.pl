@@ -91,6 +91,17 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   ];
 }
 
+// A stalled storage read must not hold the dispatch.
+const WORKSPACE_LOAD_TIMEOUT_MS = 20_000;
+
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`workspace load exceeded ${ms} ms`)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
 // A refused upload retries the round without the workspace.
 export async function startWithWorkspace(
   provider: Pick<ManagedAgentProvider, 'startSession' | 'workspaceArchiveDir'>,
@@ -98,11 +109,12 @@ export async function startWithWorkspace(
   request: ManagedSessionRequest,
   promptWith: (kickoff: string[]) => string,
   log?: { warn: (context: object, message: string) => void },
+  loadTimeoutMs = WORKSPACE_LOAD_TIMEOUT_MS,
 ): Promise<ManagedSession> {
   const dir = provider.workspaceArchiveDir;
   const workspace =
     dir && load
-      ? await load().catch((error: unknown) => {
+      ? await withDeadline(load(), loadTimeoutMs).catch((error: unknown) => {
           log?.warn({ err: error }, 'managed workspace could not be assembled; starting without it');
           return null;
         })
