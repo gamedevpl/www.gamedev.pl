@@ -152,6 +152,9 @@ export interface SubmissionRecord {
    */
   agentEndedAt?: string;
   agentEndedBy?: AgentEndedBy;
+  // Newest creator reference image: stored, and downloaded.
+  referenceLatestAt?: string;
+  referenceSeenAt?: string;
   /**
    * Latest MCP presence thought (closed vocabulary key + timestamp).
    *

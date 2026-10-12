@@ -3219,6 +3219,17 @@ declare const GameKit: { defineGame(): unknown };
         '10:01',
       ]);
       expect(result.structuredContent.images.every((image) => image.url.startsWith('http'))).toBe(true);
+      // A write warns until the newest image is downloaded.
+      const codes = async () =>
+        (
+          (await callTool(app!, 'stage_upload_url', { sessionKey, paths: ['game.ts'] })).structured as {
+            warnings?: Array<{ code: string }>;
+          }
+        ).warnings?.map((warning) => warning.code) ?? [];
+      expect(await codes()).toContain('reference_unseen');
+      const newest = new URL(result.structuredContent.images[0]!.url);
+      expect((await app.inject({ method: 'GET', url: newest.pathname + newest.search })).statusCode).toBe(200);
+      expect(await codes()).not.toContain('reference_unseen');
     });
   });
 

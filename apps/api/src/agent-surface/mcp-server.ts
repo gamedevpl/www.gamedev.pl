@@ -131,6 +131,7 @@ import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from './seed-status.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
+import { REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS, referenceUnseen } from './reference-unseen.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
@@ -874,6 +875,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         toolName === 'report_progress')
     ) {
       prior.push(mustFixGateWarningForStatus(gateStatus, gateDelivery));
+    }
+    if (store && REFERENCE_WRITE_TOOLS.has(toolName) && referenceUnseen(await store.getSubmission(jobId))) {
+      prior.push(REFERENCE_UNSEEN_WARNING);
     }
 
     const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs, {

@@ -264,6 +264,7 @@ export const WARNINGS_PROP = {
             'must_deliver',
             'patch_incomplete',
             'byte_budget_low',
+            'reference_unseen',
           ],
         },
         message: { type: 'string' },

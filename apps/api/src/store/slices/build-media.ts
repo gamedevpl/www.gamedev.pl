@@ -85,6 +85,9 @@ export interface BuildMediaStore {
   // Drops shots by id; a card that never posted leaves none.
   deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
+  // An agent downloaded the reference image created at shotCreatedAt; never moves back.
+  markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void>;
+
   appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
@@ -121,7 +124,21 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     const existing = this.buildShots.get(jobId) ?? [];
     existing.push(record);
     this.buildShots.set(jobId, existing);
+    const job = this.submissions?.get(jobId);
+    if (
+      job &&
+      record.label === 'creator-reference' &&
+      !(job.referenceLatestAt && job.referenceLatestAt >= record.createdAt)
+    ) {
+      this.submissions!.set(jobId, { ...job, referenceLatestAt: record.createdAt });
+    }
     return { ...record };
+  }
+
+  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
+    const job = this.submissions?.get(jobId);
+    if (!job || (job.referenceSeenAt && job.referenceSeenAt >= shotCreatedAt)) return;
+    this.submissions!.set(jobId, { ...job, referenceSeenAt: shotCreatedAt });
   }
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
@@ -249,8 +266,25 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
     await writeAgentRoundDocuments(this.db, jobId, generation, [
       { ref: this.shotsCollection(jobId).doc(record.id), data: document },
+      // Stamped at write time, so this is the newest image.
+      ...(record.label === 'creator-reference'
+        ? [{ ref: this.jobRef(jobId), merge: true as const, data: { referenceLatestAt: record.createdAt } }]
+        : []),
     ]);
     return record;
+  }
+
+  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
+    await this.db.runTransaction(async (transaction) => {
+      const job = await transaction.get(this.jobRef(jobId));
+      const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
+      if (!job.exists || (seen && seen >= shotCreatedAt)) return;
+      transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
+    });
+  }
+
+  private jobRef(jobId: number) {
+    return this.db.collection('submissions').doc(String(jobId));
   }
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
