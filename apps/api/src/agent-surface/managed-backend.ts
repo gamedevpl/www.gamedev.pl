@@ -147,8 +147,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
-    // Before the call: a vendor may run, and end, before startSession resolves.
-    const requestedAt = Date.now();
+    // Set at the vendor call, after workspace assembly; vendors may end early.
+    let requestedAt = Date.now();
     const shell = options.provider.shell === true;
     const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
@@ -170,7 +170,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     };
     const load = options.workspace ? () => options.workspace!(brief) : undefined;
     const withWorkspace = (lines: string[]) => buildPrompt(effectiveBrief, { shell, workspace: lines });
-    const session = await startWithWorkspace(options.provider, load, request, withWorkspace, options.log);
+    const vendor = {
+      workspaceArchiveDir: options.provider.workspaceArchiveDir,
+      startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),
+    };
+    const session = await startWithWorkspace(vendor, load, request, withWorkspace, options.log);
     startedAt.set(session.id, requestedAt);
     sessionJobs.set(session.id, {
       jobId: brief.jobId,
