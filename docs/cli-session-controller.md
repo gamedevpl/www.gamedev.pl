@@ -52,6 +52,11 @@ conversation above their question. Compact layouts keep native terminal scrollba
 Unmounting, including native agent handoffs, disables reporting; remounting restores it.
 This scrolling correction adds no telemetry event or creator-funnel dimension.
 
+Input retains Ink's raw Escape byte before its keyboard normalization, so pasted
+`[<...` and `[M...` strings remain ordinary text. The decoder consumes SGR and
+legacy `CSI M` reports, including partial payloads across reads, for multiplexers
+that accept tracking but ignore the SGR encoding mode.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

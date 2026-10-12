@@ -13,7 +13,7 @@ export function mouseDecoder() {
     const wheels: Wheel[] = [];
     while (rest) {
       // eslint-disable-next-line no-control-regex
-      const index = rest.search(/\u001b\[<|^\[</);
+      const index = rest.search(/\u001b\[<|\u001b\[M/);
       if (index < 0) {
         text += rest;
         break;
@@ -21,11 +21,24 @@ export function mouseDecoder() {
       mouse = true;
       text += rest.slice(0, index);
       rest = rest.slice(index);
+      if (rest.startsWith('\u001b[M')) {
+        if (rest.length < 6) {
+          pending = rest;
+          break;
+        }
+        const button = rest.charCodeAt(3) - 32;
+        const x = rest.charCodeAt(4) - 32;
+        const y = rest.charCodeAt(5) - 32;
+        if ((button & 0b1100011) === 64 && x > 0 && y > 0) wheels.push({ x, y, direction: -1 });
+        else if ((button & 0b1100011) === 65 && x > 0 && y > 0) wheels.push({ x, y, direction: 1 });
+        rest = rest.slice(6);
+        continue;
+      }
       // eslint-disable-next-line no-control-regex
-      const match = /^(?:\u001b)?\[<(\d+);(\d+);(\d+)([Mm])/.exec(rest);
+      const match = /^\u001b\[<(\d+);(\d+);(\d+)([Mm])/.exec(rest);
       if (!match) {
         // eslint-disable-next-line no-control-regex
-        if (/^(?:\u001b)?\[<[\d;]*$/.test(rest) && rest.length < 64) pending = rest;
+        if (/^\u001b\[<[\d;]*$/.test(rest) && rest.length < 64) pending = rest;
         break;
       }
       const button = Number(match[1]);
@@ -44,13 +57,26 @@ export function mouseDecoder() {
 
 export function useTerminalInput(onKey: (input: string, key: Key) => void, onWheel?: (wheel: Wheel) => void) {
   const decode = useRef(mouseDecoder());
+  const rawInput = useRef('');
+  const { internal_eventEmitter: emitter } = useStdin();
   const handlers = useRef({ onKey, onWheel });
   handlers.current = { onKey, onWheel };
+  useLayoutEffect(() => {
+    // Ink strips Escape before callbacks; retain it to distinguish pasted text.
+    const capture = (data: string) => {
+      rawInput.current = data;
+    };
+    emitter.prependListener('input', capture);
+    return () => {
+      emitter.off('input', capture);
+    };
+  }, [emitter]);
   useInput(
     useCallback((input, key) => {
-      const event = decode.current(input);
+      const event = decode.current(rawInput.current);
       for (const wheel of event.wheels) handlers.current.onWheel?.(wheel);
-      if (!event.mouse || event.text) handlers.current.onKey(event.text, key);
+      if (!event.mouse) handlers.current.onKey(input, key);
+      else if (event.text) handlers.current.onKey(event.text, key);
     }, []),
   );
 }
@@ -60,9 +86,9 @@ export function useMouseReporting(enabled: boolean) {
   const { stdin } = useStdin();
   useLayoutEffect(() => {
     if (!enabled || !stdout.isTTY || !stdin.isTTY) return;
-    stdout.write('\u001b[?1000h\u001b[?1006h');
+    stdout.write('\u001b[?1006h\u001b[?1000h');
     return () => {
-      if (!stdout.writableEnded && !stdout.destroyed) stdout.write('\u001b[?1006l\u001b[?1000l');
+      if (!stdout.writableEnded && !stdout.destroyed) stdout.write('\u001b[?1000l\u001b[?1006l');
     };
   }, [enabled, stdin, stdout]);
 }

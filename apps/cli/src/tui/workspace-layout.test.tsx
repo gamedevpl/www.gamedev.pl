@@ -106,7 +106,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   void view.session.prompt();
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
-  expect(view.terminalOutput()).toContain('\u001b[?1000h\u001b[?1006h');
+  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
   expect(view.frame()).not.toContain('Message 59');
@@ -119,7 +119,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   expect(view.frame()).toContain('Message 59');
   expect(view.frame()).not.toContain('Earlier messages');
   view.resize(80, 24);
-  expect(view.terminalOutput()).toContain('\u001b[?1006l\u001b[?1000l');
+  expect(view.terminalOutput()).toContain('\u001b[?1000l\u001b[?1006l');
   view.resize(150, 28);
   const resets = view.terminalOutput().split('\u001b[?1006l').length;
   view.close();
@@ -137,6 +137,31 @@ it('scrolls during local work without putting fragmented mouse reports into the 
   expect(view.session.get().draft).toBe('follow-up');
   await view.press('\u001b[<65;10;5M'.repeat(10));
   expect(view.frame()).toContain('Agent line 59');
+});
+
+it.each([80, 150])('keeps mouse-like pasted text intact at width %i', async (columns) => {
+  const view = screen(columns, 28);
+  void view.session.prompt();
+  for (const paste of ['[<T>() => T]', '[<64;10;5M', '[MABC']) {
+    view.session.setDraft('');
+    await view.press(paste);
+    expect(view.session.get().draft).toBe(paste);
+  }
+});
+
+it('handles legacy wheel reports while an agent runs without leaking bytes into its draft', async () => {
+  const view = screen();
+  view.session.setLocalTask('claude');
+  for (let i = 0; i < 60; i++) view.session.writeLine(`Legacy line ${i}`);
+  view.session.setDraft('follow-up');
+  await view.press('\u001b[M`*%'.repeat(3));
+  expect(view.frame()).toContain('Earlier messages');
+  expect(view.frame()).not.toContain('Legacy line 59');
+  expect(view.session.get().draft).toBe('follow-up');
+  await view.press('\u001b[Ma*%'.repeat(10));
+  expect(view.frame()).toContain('Legacy line 59');
+  await view.press('\u001b[M *%\u001b[M#*%');
+  expect(view.session.get().draft).toBe('follow-up');
 });
 
 it('keeps verification output visible and scrollable while a delivery choice is open', async () => {
