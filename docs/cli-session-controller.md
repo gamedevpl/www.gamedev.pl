@@ -45,6 +45,13 @@ retain the static transcript. Both use `TranscriptLine`, the existing composer,
 choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
+Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling.
+Reports route to the conversation, question, diff or diagnostics under the pointer;
+they never become composer text or choice answers. Delivery choices retain the
+conversation above their question. Compact layouts keep native terminal scrollback.
+Unmounting, including native agent handoffs, disables reporting; remounting restores it.
+This scrolling correction adds no telemetry event or creator-funnel dimension.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching

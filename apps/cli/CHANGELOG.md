@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Mouse-wheel and trackpad scrolling stays inside the terminal workspace conversation, questions, diffs and diagnostics; delivery choices keep check output visible.
+
 ## 0.39.0 — 2026-10-11
 
 ### Added
