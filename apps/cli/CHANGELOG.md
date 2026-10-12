@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.41.0 — 2026-10-12
+
 ### Added
 
 - Ctrl+T switches the terminal workspace to native text selection, pausing display updates until copying is finished (#1791).
