@@ -6,6 +6,7 @@ import { parseKitRegistry } from '../platform/kit-registry.js';
 import type { Store } from '../platform/store.js';
 import type { BuildBrief } from './agent-backend.js';
 import { loadRoundSources, type SourcesLog } from './agent-channel-sources.js';
+import { readGateVerdict } from './gate-verdict.js';
 import {
   ManagedAgentError,
   type ManagedAgentProvider,
@@ -56,8 +57,9 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const registry = await deps.objectStore.readObject('kits/current.json');
     if (!registry) return null;
     const current = parseKitRegistry(registry.toString('utf8')).current;
-    // The pin get_kit honours, so both report one kit.
-    const pinned = record.roundKitEngineRef;
+    // get_kit's choice: the round pin, unless kit_outdated forced current.
+    const outdated = (await readGateVerdict(deps.gamesStore, record))?.status === 'kit_outdated';
+    const pinned = outdated ? undefined : record.roundKitEngineRef;
     const pinnedKit = pinned && pinned !== current ? await deps.objectStore.readObject(`kits/${pinned}.tgz`) : null;
     const engineRef = pinnedKit ? pinned! : current;
     const kit = pinnedKit ?? (await deps.objectStore.readObject(`kits/${current}.tgz`));
@@ -86,7 +88,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   return [
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive.`,
-    `Call \`get_kit\` only for kitEngineRef; if it is not ${workspace.engineRef}, extract its kitUrl into ${WORKSPACE_ROOT} instead.`,
+    `Call \`get_kit\` only for kitEngineRef. If it is not ${workspace.engineRef}, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
     'Edit there and run `npm run typecheck -- <slug>` from the kit root before each submit.',
   ];
 }

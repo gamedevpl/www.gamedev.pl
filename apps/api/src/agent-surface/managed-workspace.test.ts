@@ -54,6 +54,21 @@ describe('managed workspace loader', () => {
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('OLD');
   });
 
+  it('drops the pin after a kit_outdated verdict, as get_kit does', async () => {
+    const objects = { ...KITS, 'kits/eng_old.tgz': 'OLD' };
+    const base = deps({ slug: 'rocks', previewVersion: 'v1', roundKitEngineRef: 'eng_old' }, objects);
+    const gamesStore = {
+      ...base.gamesStore,
+      getManifest: async () => ({
+        sourceFiles: ['game.ts'],
+        gate: { green: false, ranAt: 't', status: 'kit_outdated' },
+      }),
+    } as unknown as ManagedWorkspaceDeps['gamesStore'];
+    const workspace = await createManagedWorkspaceLoader({ ...base, gamesStore })(BRIEF);
+    expect(workspace?.engineRef).toBe('eng_new');
+    expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
+  });
+
   it('mounts nothing when the kit is not published', async () => {
     expect(await createManagedWorkspaceLoader(deps({ slug: 'rocks' }, {}))(BRIEF)).toBeNull();
   });
@@ -70,7 +85,8 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('tar xzf /mnt/session/uploads/sources.tgz -C /workspace/gamedevpl-creator-kit/games');
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('`games/rocks/`');
-    expect(lines).toContain('if it is not eng_new');
+    expect(lines).toContain('If it is not eng_new');
+    expect(lines).toMatch(/delete the kit directory.*npm ci --ignore-scripts` again/);
   });
 
   it('replaces the download steps in the shell kickoff', () => {
