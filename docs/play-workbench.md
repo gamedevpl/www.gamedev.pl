@@ -19,7 +19,8 @@ run in the background; `create --detach` also works without a TTY.
 Foreground Play prints new conversation messages, agent activity, check stages,
 errors and task endings in the terminal. Answer questions and control work in Play;
 the terminal is a live activity view. Repeated status polls and restored conversation
-history are not replayed.
+history are not replayed. Studio polling snapshots remain in the browser; announced
+round boundaries enter the log once through the conversation stream.
 Tool activity is limited to one entry per ten seconds, retaining the latest update.
 Messages, errors, questions and check stages appear immediately. Pending tool updates
 are discarded when the task ends, a question opens or a new phase begins.

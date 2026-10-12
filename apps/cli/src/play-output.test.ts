@@ -14,6 +14,8 @@ import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { createSessionController } from './session-controller.js';
 import { openPlayLog, playOutputText, startPlayOutput } from './play-output.js';
+import { createRoundWatch } from './tui/round-watch.js';
+import type { ApiClient } from './api.js';
 
 it('shows agent progress, validation, errors and questions once without recording drafts or polling noise', async () => {
   const session = createSessionController('banner');
@@ -49,7 +51,7 @@ it('shows agent progress, validation, errors and questions once without recordin
   expect(text).toContain('Agent started: claude');
   expect(text).toContain('claude ▸ Checking wagon physics');
   expect(text.match(/Running a shell command/g)).toHaveLength(1);
-  expect(text.match(/Studio: queued/g)).toHaveLength(1);
+  expect(text).not.toContain('no_agent_yet');
   expect(text).toContain('Verifying game [2/8]');
   expect(text).toContain('Validation needs changes: collision check failed');
   expect(text.match(/Answer in Play: How should we continue/g)).toHaveLength(1);
@@ -59,6 +61,43 @@ it('shows agent progress, validation, errors and questions once without recordin
   expect(text.match(/Play session ended/g)).toHaveLength(1);
   expect(text).not.toMatch(/banner|private draft|unsent draft|After unsubscribe/);
   expect(output.every((line) => /^\[\d{4}-\d{2}-\d{2}T/.test(line))).toBe(true);
+});
+
+it('keeps polling snapshots in the browser and logs an announced round boundary only once', async () => {
+  const session = createSessionController('');
+  const output: string[] = [];
+  const stop = startPlayOutput(session, (line) => output.push(line));
+  const api = {
+    origin: 'https://example.test',
+    request: vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'building' })
+      .mockResolvedValueOnce({ status: 'building', stall: 'quiet' })
+      .mockResolvedValueOnce({ status: 'needs_changes', previewGate: { green: true } }),
+    requestBytes: vi.fn(),
+  } as ApiClient;
+  const watch = createRoundWatch({
+    getToken: () => 'test-round',
+    api,
+    setLive: (live) => session.setLive(live.map((line, index) => (index === 0 ? `Studio: ${line}` : line))),
+    announce: session.writeLine,
+    onStatus: (status) => {
+      if (status.status === 'needs_changes') watch.stop();
+    },
+    sleep: async () => undefined,
+  });
+  try {
+    await watch.run;
+    expect(api.request).toHaveBeenCalledTimes(3);
+    expect(session.get().live[0]).toBe('Studio: round finished — Studio is waiting (preview green)');
+    const text = output.join('');
+    expect(text.match(/round finished — Studio is waiting/g)).toHaveLength(1);
+    expect(text).not.toMatch(/Studio: Studio:|building|quiet/);
+  } finally {
+    watch.stop();
+    stop();
+    session.close();
+  }
 });
 
 it('coalesces tool activity over ten seconds while messages, errors and phase changes remain immediate', () => {

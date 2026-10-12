@@ -85,9 +85,6 @@ export function startPlayOutput(session: SessionController, write: (line: string
       showActivity(state.activity);
       activity = state.activity;
     }
-    for (const line of state.live) {
-      if (!previous.live.includes(line)) show(`Studio: ${line}`);
-    }
     if (state.queued.length !== previous.queued.length && state.queued.length) {
       show(`Queued follow-ups: ${state.queued.length}`);
     }
