@@ -48,9 +48,15 @@ describe('connect entry points', () => {
     const fetch = backend();
     expect(await runCli(['node', 'cli', 'connect', 'sky'], env, streams())).toBe(0);
     expect(runInkRepl).toHaveBeenCalledWith(
-      expect.objectContaining({ token: 'tok', slug: 'sky', initialLine: '/connect sky' }),
+      expect.objectContaining({
+        token: null,
+        resolveToken: expect.any(Function),
+        slug: 'sky',
+        initialLine: '/connect sky',
+      }),
     );
-    expect(fetch.mock.calls.every(([url]) => !url.endsWith('/connect'))).toBe(true);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await vi.mocked(runInkRepl).mock.calls[0]![0].resolveToken!()).toBe('tok');
   });
   it('keeps explicit agents in the checkout-aware interactive flow', async () => {
     const fetch = backend();
@@ -73,9 +79,13 @@ describe('connect entry points', () => {
     io.stderr.on('data', (chunk) => {
       error += String(chunk);
     });
+    vi.mocked(runInkRepl).mockImplementationOnce(async (input) => {
+      await input.resolveToken!();
+      return 0;
+    });
     expect(await runCli(['node', 'cli', 'connect', 'new-idea'], env, io)).toBe(4);
     expect(error).toContain('to create a new game, run gamedevpl and describe your idea');
-    expect(runInkRepl).not.toHaveBeenCalled();
+    expect(runInkRepl).toHaveBeenCalled();
   });
 
   it.each([true, false])('keeps explicit manual setup noninteractive (tty=%s)', async (tty) => {

@@ -10,6 +10,7 @@ export function BusyPanel({
   color,
   previewAvailable,
   previewKey = 'o',
+  paused = false,
 }: {
   activity: string;
   since: number;
@@ -17,12 +18,14 @@ export function BusyPanel({
   color: boolean;
   previewAvailable: boolean;
   previewKey?: string;
+  paused?: boolean;
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
+    if (paused) return;
     const timer = setInterval(() => setTick((value) => value + 1), 100);
     return () => clearInterval(timer);
-  }, []);
+  }, [paused]);
   const elapsed = Math.max(0, Math.floor((Date.now() - since) / 1000));
   const silent = Math.max(0, Math.floor((Date.now() - lastOutputAt) / 1000));
   const duration = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;

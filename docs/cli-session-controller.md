@@ -39,9 +39,17 @@ and task cancellation, draft preservation and terminal behavior.
 
 ## Terminal workspace
 
+The host mounts the terminal before account verification or Studio token lookup.
+`connect` resolves independent account and Studio reads concurrently; the first screen
+shows the connection activity and game slug. Commands and local history still wait
+for those results, and account verification remains required before restoring history.
+This startup change adds no telemetry event or creator-funnel dimension.
+
 The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns /
 16 rows it renders a full-height conversation with a right sidebar; smaller terminals
-retain the static transcript. Both use `TranscriptLine`, the existing composer,
+retain the static transcript. The scrollable view measures message heights, then replaces
+offscreen messages with spacers; typing reuses the visible transcript. Width changes
+remeasure wrapping, and appended messages retain earlier heights. Both use `TranscriptLine`, the existing composer,
 choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
@@ -49,6 +57,10 @@ Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling
 Reports route to the conversation, question, diff or diagnostics under the pointer;
 they never become composer text or choice answers. Delivery choices retain the
 conversation above their question. Compact layouts keep native terminal scrollback.
+Ctrl+T disables reporting for native selection and freezes the displayed session,
+sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
+subscribes to the latest controller state. Ctrl+C stays available while copying. Resizing below the split threshold keeps
+the selection pause and its Ctrl+T resume hint active.
 Unmounting, including native agent handoffs, disables reporting; remounting restores it.
 This scrolling correction adds no telemetry event or creator-funnel dimension.
 
