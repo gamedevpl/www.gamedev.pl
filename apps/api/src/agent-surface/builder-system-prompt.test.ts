@@ -22,4 +22,14 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: true })).toContain('look at each before your first source edit');
     expect(builderSystemPrompt({ shell: false })).toContain('you cannot open their URLs here');
   });
+
+  // Kit typecheck needs node_modules and the game in games/<slug>/.
+  it('sets the unpacked kit up as a typecheck workspace on the shell lane only', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('run `npm ci --ignore-scripts` in it once');
+    expect(shell).toContain('`gamedevpl-creator-kit/games/<slug>/`');
+    expect(shell).toContain('run `npm run typecheck -- <slug>` from the kit root');
+    expect(shell).not.toContain('no browser, npm ci');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('npm ci');
+  });
 });

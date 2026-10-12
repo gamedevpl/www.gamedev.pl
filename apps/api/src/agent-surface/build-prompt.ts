@@ -92,11 +92,11 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean): 
     'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
     'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
     shell
-      ? 'A larger game comes back truncated: GET its `archive` once (exact headers), unpack, read locally.'
+      ? 'A larger game comes back truncated: GET its `archive` once (exact headers), unpack it inside the kit’s `games/`, read locally.'
       : 'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
     ...(shell
       ? [
-          'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference.',
+          'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference. In it run `npm ci --ignore-scripts` once, keep the game in `games/<slug>/`, and run `npm run typecheck -- <slug>` before each submit.',
           'Stage with `patch_source_file` / `stage_source_file`, or PUT changed files to `stage_upload_url`.',
           'Creator images (`referenceImages` from `read_inbox`, `get_reference_images`) are part of the request: curl each and `read` the file before your first edit.',
         ]
