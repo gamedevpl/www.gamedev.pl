@@ -11,7 +11,7 @@ export function buildPromptOpening(brief: BuildBrief, slug: string, creating: bo
     return `The gate rejected version ${brief.gateRepair.version} of \`${slug}\`. Repair that delivered game and submit it again.`;
   // Operator retries carry no feedback; only creator notes get this.
   if (brief.undelivered && brief.previewVersion && brief.feedback)
-    return `The creator played your latest preview of \`${slug}\` (version ${brief.previewVersion}) and wrote again; this continues the same round. Revise that version, do not rebuild it: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
+    return `Your latest preview of \`${slug}\` (version ${brief.previewVersion}) was delivered and the creator has written since; this continues the same round. Revise that version, do not rebuild it: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
   if (brief.undelivered)
     return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
   if (brief.feedback)

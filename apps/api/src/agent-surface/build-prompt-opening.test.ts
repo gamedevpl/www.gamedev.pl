@@ -20,7 +20,9 @@ describe('buildPromptOpening for an undelivered round', () => {
   it('names the played preview instead of a lost session when one exists', () => {
     const brief = { ...BRIEF, undelivered: true, feedback: 'slower', previewVersion: 'v1' };
     const opening = buildPromptOpening(brief, 'rocks', false);
-    expect(opening).toContain('The creator played your latest preview of `rocks` (version v1)');
+    expect(opening).toContain(
+      'Your latest preview of `rocks` (version v1) was delivered and the creator has written since',
+    );
     expect(opening).not.toContain('ended without delivering');
     expect(opening).toContain('Call `clear_staged_sources` before your first edit');
   });
