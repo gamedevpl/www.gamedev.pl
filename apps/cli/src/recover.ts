@@ -1,3 +1,4 @@
+import { sourceProject, gameSourceRoot } from './source-project.js';
 import type { CliTelemetry } from './telemetry.js';
 import { markRecoveryReady, matchingStaged } from './recovery-state.js';
 import { detectLocalAdapters } from './workshop.js';
@@ -175,6 +176,11 @@ async function performRecovery(input: {
       throw error;
     }
   };
+  if (slug !== checkout.slug && sourceProject(checkout.root))
+    throw new CliError(
+      'To recover this source repository under another slug, update SPEC.md and its setup scripts in a separate copy first.',
+      EXIT_REFUSED,
+    );
   const dest = slug === checkout.slug ? checkout.root : join(dirname(checkout.root), `${slug}-recovered`);
   if (dest !== checkout.root && existsSync(dest)) {
     const marker = join(dest, '.gamedev-import-key');
@@ -252,7 +258,7 @@ async function performRecovery(input: {
       });
       renameSync(join(output, 'games', checkout.slug), join(output, 'games', slug));
       for (const file of imported.filter((f) => f.path === 'SPEC.md' || f.path === 'GAME.json'))
-        writeFileSync(join(output, 'games', slug, file.path), file.content);
+        writeFileSync(join(gameSourceRoot(output, slug), file.path), file.content);
       const lockPath = join(output, 'gamedev.lock');
       if (existsSync(lockPath)) {
         const lock = parseJsonObject(readFileSync(lockPath, 'utf8'), 'gamedev.lock');

@@ -1,3 +1,4 @@
+import { gameSourcePath } from './source-project.js';
 import type { IncomingMessage } from 'node:http';
 import { z } from 'zod';
 import { isJsonContentType } from './workbench-http.js';
@@ -125,7 +126,7 @@ export function codeRoutes(options: CodeOptions) {
           request.prefix,
           request.suffix,
           abort.signal,
-          request.path.slice(`games/${checkout.slug}/`.length),
+          request.path.slice(`${gameSourcePath(checkout.root, checkout.slug)}/`.length),
         );
         reply(current() ? 200 : 409, current() ? { text } : { error: 'Project changed' });
       } catch (error) {

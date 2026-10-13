@@ -1,3 +1,4 @@
+import { gameSourceRoot } from './source-project.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
@@ -261,7 +262,7 @@ export async function connectGame(input: {
     const local = checkout?.slug === input.slug;
     const cwd = local
       ? spec.cwd === 'game-dir'
-        ? join(checkout.root, 'games', input.slug)
+        ? gameSourceRoot(checkout.root, input.slug)
         : checkout.root
       : mkdtempSync(join(tmpdir(), 'gamedev-mcp-work-'));
     if (!local) {

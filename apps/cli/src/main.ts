@@ -416,7 +416,7 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
-      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      const slug = args[0] ?? findCheckout(process.cwd())?.slug;
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
       if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');

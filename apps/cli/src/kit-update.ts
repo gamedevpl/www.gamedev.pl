@@ -1,3 +1,4 @@
+import { sourceProject } from './source-project.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import {
   copyFileSync,
@@ -64,6 +65,11 @@ export async function checkKit(
   const checkout = findCheckout(input.cwd);
   if (!checkout) throw new CliError('Open a game checkout to update its Creator Kit.', EXIT_INPUT);
   const root = realpathSync(checkout.root);
+  if (sourceProject(root))
+    throw new CliError(
+      'This repository pins its Kit in gamedev-kit.json. Update that pin and run npm run setup.',
+      EXIT_REFUSED,
+    );
   const lock = await releaseRequest(input, checkout.slug);
   if (
     !lock ||
@@ -155,6 +161,11 @@ async function updateKitUnlocked(input: Input & { release?: Awaited<ReturnType<t
 }
 
 export async function offerKitUpdate(input: Input): Promise<void> {
+  const checkout = findCheckout(input.cwd);
+  if (checkout && sourceProject(checkout.root)) {
+    input.write('This repository uses the Creator Kit pinned in gamedev-kit.json.');
+    return;
+  }
   const release = await checkKit(input);
   if (release.current) {
     input.write('Creator Kit is up to date.');

@@ -1,3 +1,4 @@
+import { sourceProject, gameSourcePath, gameSourceRoot } from './source-project.js';
 import { isDeliverablePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
@@ -36,7 +37,7 @@ export type VersionRow = {
 
 export function readCheckoutSlug(cwd: string): string | null {
   const path = join(cwd, '.gamedev-slug');
-  return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : null;
+  return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : (sourceProject(cwd)?.slug ?? null);
 }
 
 // Walk up, so any subdirectory of a checkout finds it.
@@ -75,7 +76,7 @@ function coversTracked(path: string, tracked: Set<string>): boolean {
 }
 
 function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: IgnoredHit[] } {
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
   const files: TreeFile[] = [];
   const ignored: IgnoredHit[] = [];
   if (!existsSync(root)) return { files, ignored };
@@ -83,7 +84,7 @@ function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: Ign
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return { files, ignored };
   const matcher = createIgnoreMatcher(dest);
   const tracked = trackedPaths(dest);
-  const prefix = `games/${slug}`;
+  const prefix = gameSourcePath(dest, slug);
   const visit = (rel: string): void => {
     const dir = rel ? join(root, rel) : root;
     const dirStat = lstatSync(dir);
@@ -139,7 +140,7 @@ function ignoredUntracked(
   if (rel.split('/').includes('.git')) return true;
   // Mirrors scanGame's not-game skip on the platform side.
   if (!isDirectory && !isDeliverablePath(rel)) return true;
-  const match = matcher.ignored(`games/${slug}/${rel}`, isDirectory);
+  const match = matcher.ignored(`${gameSourcePath(dest, slug)}/${rel}`, isDirectory);
   return match !== null && !coversTracked(rel, tracked);
 }
 
@@ -155,7 +156,7 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
   const blocked: string[] = [];
   const absent: string[] = [];
   const git: string[] = [];
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
   for (const file of files) {
     if (file.path.split('/').includes('.git')) {
       git.push(file.path);
@@ -224,7 +225,7 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
 
 export function writeGameFiles(dest: string, slug: string, files: TreeFile[], options?: { force?: boolean }): void {
   const keep = new Set(files.map((file) => file.path));
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
   for (const stale of localGameFiles(dest, slug)) {
     if (!keep.has(stale.path)) rmSync(pathInside(root, stale.path));
   }

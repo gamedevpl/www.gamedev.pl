@@ -1,3 +1,4 @@
+import { gameSourceRoot } from './source-project.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import {
   isRecoveryReady,
@@ -11,7 +12,7 @@ import {
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, fetchLatestTree } from './checkout.js';
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
@@ -307,7 +308,7 @@ async function submitGameUnlocked(input: {
 }
 
 function mergeDeliveredFiles(dest: string, slug: string, snapshot: Record<string, string>, fetched: TreeFile[]): void {
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
   const keep = new Set(trackedTree(dest, slug, fetched).map((file) => file.path));
   for (const file of fetched) {
     if (!keep.has(file.path) && !(file.path in snapshot)) continue;

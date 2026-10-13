@@ -398,6 +398,24 @@ still run on your game. No sources are pulled or published by a Kit update.
 
 ### Open an existing game
 
+A source repository with a pinned `gamedev-kit.json` and a `slug` in the
+frontmatter of `src/SPEC.md` is recognized directly. Run `gamedevpl connect`
+from its root or a source subdirectory; `connect <slug>` also reuses this repository
+in preference to a nested checkout. Agents, Code, diff, pull and push use `src/`;
+Git history, remotes, scripts and documentation stay in the repository. No
+workspace download or second checkout is needed.
+
+Local play and verification run the repository's `npm run setup` to prepare the
+pinned Kit in `.gamedev/local/`. The CLI mirrors current game sources into that
+build directory, including deletions; edit `src/`, not the generated runtime.
+Kit changes remain controlled by `gamedev-kit.json` and the repository's setup.
+If the first connection finds local differences without `.gamedev-base.json`,
+local editing is available, but delivery and pull still require reconciliation.
+Review `gamedevpl diff`: `push --force` explicitly delivers your local sources;
+`pull --force` explicitly replaces them with platform sources. Neither happens
+automatically on connect. Recovery under a different slug requires a separate
+repository copy with its spec and setup scripts updated.
+
 Run `gamedevpl connect <slug>` in a terminal to enter an interactive session. Choose
 **Open a local checkout** to download the game (or reuse its checkout in the current
 directory), **Continue chatting** to work without local files, or an installed MCP
