@@ -50,8 +50,14 @@ function treeStamp(dir) {
   }
 }
 function sourceStamp() {
+  let sources;
+  try {
+    sources = gameSourceRoot(root, slug);
+  } catch (failure) {
+    return 'invalid-source:' + failure.message;
+  }
   return [
-    gameSourceRoot(root, slug),
+    sources,
     join(kitRoot, 'shared'),
     join(kitRoot, 'starters'),
     join(root, 'templates'),

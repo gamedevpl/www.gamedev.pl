@@ -247,6 +247,21 @@ it('previews repository edits and refreshes the build copy without changing sess
       async () => expect(await fetch(session!.url + 'game').then((r) => r.text())).toContain('score = 22'),
       { timeout: 10_000 },
     );
+    put('src/SPEC.md', '---\ntitle: Airtime\n---\n');
+    await vi.waitFor(
+      async () =>
+        expect(await fetch(session!.url + 'status').then((r) => r.json())).toMatchObject({
+          error: expect.stringContaining('Invalid source repository metadata'),
+          stale: true,
+        }),
+      { timeout: 5_000 },
+    );
+    put('src/SPEC.md', '---\nslug: airtime\n---\n');
+    put('src/game.ts', 'export const score = 33;');
+    await vi.waitFor(
+      async () => expect(await fetch(session!.url + 'game').then((r) => r.text())).toContain('score = 33'),
+      { timeout: 10_000 },
+    );
   } finally {
     await startLocalPlay({ root, slug: 'airtime', env: process.env, write: () => {}, stop: true });
   }
