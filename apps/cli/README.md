@@ -329,19 +329,19 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 
 ### Terminal workspace sidebar
 
-`gamedevpl --terminal` runs as a sequential streaming REPL by default (similar to Claude Code):
-native terminal text selection and native scrollback work out of the box without any key combinations
-or mouse capture.
+`gamedevpl --terminal` runs in full-screen interactive mode when in a checkout at 120 columns and 16 rows or larger:
+the conversation view is pinned to the terminal height without scrolling the outer terminal window.
+The workspace sidebar is hidden by default to keep the full screen focused on conversation.
 
-When in a checkout at 120 columns and 16 rows or larger, pressing **Ctrl+B** (or setting `GAMEDEV_SIDEBAR=1`)
-opens the two-column workspace split. The right sidebar shows the current task, queued follow-ups, preview
-availability, Studio round updates, and local game file modifications.
+Pressing **Ctrl+B** (or setting `GAMEDEV_SIDEBAR=1`) toggles the two-column workspace sidebar. The right
+sidebar shows the current task, queued follow-ups, preview availability, Studio round updates, and local game file
+modifications. Toggling Ctrl+B expands or hides the sidebar without dropping full-screen mode or resetting
+the conversation scroll position.
 
-While the split workspace is open, the mouse wheel or trackpad scrolls the conversation smoothly under
-the pointer; PgUp/PgDn scroll the chat (or active choice question). In this split mode, mouse reporting is
-active so the panes can be scrolled; press **Ctrl+T** to pause display updates and release mouse capture for
-native selection (on macOS, holding Option/Fn also selects text at any time). Pressing Ctrl+B again returns
-to the clean sequential view. Existing `/diff`, Ctrl+D and `/logs` keep their scrollable detail views.
+The mouse wheel or trackpad scrolls the conversation smoothly under the pointer; PgUp/PgDn scroll the chat
+(or active choice question). Press **Ctrl+T** to pause display updates and release mouse capture for native text
+selection (on macOS, holding Option/Fn also selects text at any time without pressing Ctrl+T). Existing `/diff`,
+Ctrl+D and `/logs` keep their scrollable detail views.
 
 Changes are compared with `.gamedev-base.json`, not Git, using the same game-file
 reader and ignore rules as submission. Shared Kit files stay out of the list. The

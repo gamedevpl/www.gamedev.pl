@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Interactive terminal stays in full-screen mode when toggling the workspace sidebar with Ctrl+B, preventing terminal scrolling and keeping conversation scrolling smooth (#1821).
+
 ## 0.45.0 — 2026-10-13
 
 ### Added
