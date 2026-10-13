@@ -106,11 +106,13 @@ describe('OAuth device authorization (CL-08)', () => {
 
     const page = await app!.inject({
       method: 'GET',
-      url: '/device',
+      url: `/device?user_code=${body.user_code}`,
       headers: { cookie: sessionCookie('g:boss') },
     });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain('name="consent_token"');
+    expect(page.body).toContain(`value="${body.user_code}"`);
+    expect(page.body).toContain('headless-box');
 
     const approve = await app!.inject({
       method: 'POST',
@@ -125,6 +127,12 @@ describe('OAuth device authorization (CL-08)', () => {
     });
     expect(approve.statusCode).toBe(200);
     expect(approve.body).toMatch(/Approved/i);
+    expect(approve.body).toContain('<h1>gamedevpl CLI approved</h1>');
+    expect(approve.body).toContain('Approved. Return to your terminal.');
+    expect(approve.body).toContain('You can close this page.');
+    expect(approve.body).not.toMatch(/<form|<input|<button/);
+    expect(approve.body).not.toContain(body.user_code);
+    expect(approve.body).not.toContain('is asking to');
 
     clock += 15_000;
     const tokens = await poll();
@@ -146,6 +154,36 @@ describe('OAuth device authorization (CL-08)', () => {
       headers: { cookie: sessionCookie('g:boss') },
     });
     expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedevpl CLI on headless-box' })]);
+  });
+
+  it('shows a finished page after denial and returns access_denied to the CLI', async () => {
+    const store = await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+    const denied = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss') },
+      payload: { user_code: body.user_code, action: 'deny', consent_token: deviceConsent() },
+    });
+    expect(denied.statusCode).toBe(200);
+    expect(denied.body).toContain('<h1>gamedevpl CLI denied</h1>');
+    expect(denied.body).toContain('Denied. You can close this page.');
+    expect(denied.body).not.toMatch(/<form|<input|<button/);
+    expect(denied.body).not.toContain(body.user_code);
+    expect(denied.body).not.toContain('is asking to');
+    const poll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      payload: { grant_type: DEVICE_GRANT_TYPE, device_code: body.device_code, client_id: GAMEDEV_CLI_CLIENT_ID },
+    });
+    expect(poll.statusCode).toBe(400);
+    expect(poll.json()).toEqual({ error: 'access_denied' });
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toEqual([]);
   });
 
   it('shows ownership permissions on the device page before approve', async () => {
@@ -194,6 +232,8 @@ describe('OAuth device authorization (CL-08)', () => {
     expect(hidden.body).toMatch(/Review the permissions/i);
     expect(hidden.body).toContain('Prepare a transfer proposal');
     expect(hidden.body).not.toMatch(/Approved/i);
+    expect(hidden.body).toContain('<form method="post" action="/device">');
+    expect(hidden.body).toContain(`value="${body.user_code}"`);
 
     const pendingPoll = await app!.inject({
       method: 'POST',
