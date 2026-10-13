@@ -292,7 +292,7 @@ export async function runCli(
       }
       requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);
       await runLogin({
-        loopback: flags.loopback === true,
+        flow: flags.loopback === true ? 'loopback' : flags['device-flow'] === true ? 'device' : undefined,
         noBrowser: flags['no-browser'] === true,
         origin,
         store: persist,

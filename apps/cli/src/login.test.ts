@@ -208,7 +208,7 @@ describe('loopback login', () => {
       origin: 'https://www.gamedev.pl',
       store,
       stdout: io.stdout,
-      loopback: true,
+      flow: 'loopback',
       noBrowser: true,
       openUrl,
       timeoutMs: 4000,

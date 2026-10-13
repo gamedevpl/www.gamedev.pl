@@ -110,12 +110,12 @@ is involved.
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
-`gamedevpl login` uses OAuth Device Flow. Locally it opens the approval page; in
-Codespaces, SSH and environments without a display it prints a link and code.
-Approve on gamedev.pl and the CLI receives the token automatically, without a
-localhost callback or pasting credentials. Keep the terminal open; Ctrl+C cancels.
-Use `gamedevpl login --no-browser` to open the link yourself, or
-`gamedevpl login --loopback` for local browser OAuth + PKCE. The token stays on
+`gamedevpl login` opens the browser and receives the token on a local callback
+(OAuth + PKCE). In Codespaces, SSH and environments without a display it uses
+OAuth Device Flow instead: it prints a link and code, you approve on gamedev.pl
+and the CLI receives the token without a localhost callback. Keep the terminal
+open; Ctrl+C cancels. Use `--no-browser` to open the link yourself, and
+`--loopback` or `--device-flow` to pick the flow explicitly. The token stays on
 this machine. CI still uses `GAMEDEV_TOKEN` from secrets.
 Never pass the creator OAuth token to a sub-agent.
 `git push` / `git pull` against a checkout use `git-remote-gamedevpl` (same script).
