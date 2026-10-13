@@ -56,7 +56,10 @@ describe('status watch', () => {
     expect(statusWatchDelayMs({ status: 'building' }, 20)).toBe(6000);
     expect(statusWatchDelayMs({ status: 'building' }, 39)).toBe(6000);
     expect(statusWatchDelayMs({ status: 'building' }, 40)).toBe(12_000);
-    expect(statusWatchDelayMs({ status: 'building' }, 1000)).toBe(30_000);
+    expect(statusWatchDelayMs({ status: 'building' }, 80)).toBe(30_000);
+    expect(statusWatchDelayMs({ status: 'building' }, 100)).toBe(60_000);
+    expect(statusWatchDelayMs({ status: 'building' }, 120)).toBe(120_000);
+    expect(statusWatchDelayMs({ status: 'building' }, 1000)).toBe(300_000);
     // Idle statuses already use the slow cadence.
     expect(statusWatchDelayMs({ status: 'needs_changes' }, 1000)).toBe(10_000);
   });
@@ -65,7 +68,8 @@ describe('status watch', () => {
     expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 })).toBe(10_000);
     // A floor under the client cadence changes nothing.
     expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 2000 })).toBe(3000);
-    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 }, 1000)).toBe(30_000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 }, 80)).toBe(30_000);
+    expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 10_000 }, 1000)).toBe(300_000);
     expect(statusWatchDelayMs({ status: 'building', pollAfterMs: 86_400_000 })).toBe(300_000);
     expect(statusWatchDelayMs({ status: 'building', pollAfterMs: -1 })).toBe(3000);
     expect(statusWatchDelayMs({ status: 'building', pollAfterMs: Number.NaN })).toBe(3000);

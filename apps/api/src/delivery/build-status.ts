@@ -264,8 +264,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     });
   }
 
-  // Siblings rarely change; outlast the CLI's 30s backoff.
-  const priorRoundsCacheTtlMs = 2 * 60_000;
+  // Siblings rarely change; outlast long interactive sessions and orphaned polling.
+  const priorRoundsCacheTtlMs = 15 * 60_000;
   const maxPriorRounds = 6;
   const maxPriorEntriesPerRound = 10;
   const maxCachedPriorRounds = 100;

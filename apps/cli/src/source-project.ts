@@ -18,9 +18,17 @@ export function sourceProject(root: string): { slug: string } | null {
       kitSha256?: unknown;
     };
     if (!/^[a-f0-9]{40}$/.test(String(pin.engineRef)) || !/^[a-f0-9]{64}$/.test(String(pin.kitSha256))) return null;
-    const header = readFileSync(spec, 'utf8').match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1];
-    const slug = header?.match(/^slug:[ \t]*([a-z0-9]+(?:-[a-z0-9]+)*)[ \t]*\r?$/m)?.[1];
-    return slug ? { slug } : null;
+    const header = readFileSync(spec, 'utf8').match(/^---\s*\n([\s\S]*?)\n---/)?.[1];
+    let slug = '';
+    for (const line of header?.split(/\r?\n/) ?? []) {
+      const colon = line.indexOf(':');
+      if (colon !== -1 && line.slice(0, colon).trim() === 'slug')
+        slug = line
+          .slice(colon + 1)
+          .trim()
+          .replace(/^["']|["']$/g, '');
+    }
+    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? { slug } : null;
   } catch {
     return null;
   }

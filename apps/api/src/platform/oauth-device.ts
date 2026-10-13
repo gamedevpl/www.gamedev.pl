@@ -69,6 +69,7 @@ function devicePage(input: {
   error?: string;
   scope?: string;
   deviceName?: string;
+  result?: 'approved' | 'denied';
 }): string {
   const error = input.error ? `<p class="hint">${escapeHtml(input.error)}</p>` : '';
   const copy = input.scope ? copyForScope('en', 'gamedevpl CLI', input.scope) : null;
@@ -94,8 +95,12 @@ function devicePage(input: {
 <body>
   <main>
     <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
-    <h1>Approve gamedevpl CLI</h1>
-    ${input.deviceName ? `<p class="lead">Device: <strong>${escapeHtml(input.deviceName)}</strong></p><p class="hint">Check that this code matches your terminal and this is the device you want to connect.</p>` : ''}
+    <h1>${input.result ? `gamedevpl CLI ${input.result}` : 'Approve gamedevpl CLI'}</h1>
+    ${
+      input.result
+        ? `<p class="lead" role="status">${input.result === 'approved' ? 'Approved. Return to your terminal.' : 'Denied. You can close this page.'}</p>
+    <p class="hint">${input.result === 'approved' ? 'You can close this page. Your terminal will finish signing in.' : 'Return to your terminal. To try again, start a new login there.'}</p>`
+        : `${input.deviceName ? `<p class="lead">Device: <strong>${escapeHtml(input.deviceName)}</strong></p><p class="hint">Check that this code matches your terminal and this is the device you want to connect.</p>` : ''}
     ${permissions}
     ${error}
     <form method="post" action="/device">
@@ -106,7 +111,8 @@ function devicePage(input: {
         <button type="submit" name="action" value="approve" class="approve">Approve</button>
         <button type="submit" name="action" value="deny">Deny</button>
       </div>
-    </form>
+    </form>`
+    }
   </main>
 </body>
 </html>`;
@@ -216,7 +222,7 @@ export function registerOAuthDeviceRoutes(
     if (body.action === 'deny') {
       if (!(await store.decideOAuthDeviceAuthorization(userCode, { denied: true }, now())))
         return page('That code is already decided or expired.');
-      return page('Denied. You can close this page.', '', row.scope);
+      return reply.type('text/html').send(devicePage({ userCode: '', consentToken: '', result: 'denied' }));
     }
     if (body.action !== 'approve') {
       return page('Choose Approve or Deny to continue.', userCode, row.scope, row.deviceName);
@@ -238,7 +244,7 @@ export function registerOAuthDeviceRoutes(
     }
     if (!(await store.decideOAuthDeviceAuthorization(userCode, { ownerUid: uid, ...bindingFields(identity) }, now())))
       return page('That code is already decided or expired.');
-    return page('Approved. Return to your terminal.', '', row.scope);
+    return reply.type('text/html').send(devicePage({ userCode: '', consentToken: '', result: 'approved' }));
   });
 }
 

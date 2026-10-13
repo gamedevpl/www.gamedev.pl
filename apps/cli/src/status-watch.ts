@@ -9,6 +9,10 @@ import type { CliTelemetry } from './telemetry.js';
 const ACTIVE_BACKOFF_AFTER_POLLS = 20;
 const ACTIVE_BACKOFF_CAP_MS = 30_000;
 
+// Wedged or orphaned watches back off past 30s to the floor cap.
+const DEEP_BACKOFF_AFTER_POLLS = 100;
+const DEEP_BACKOFF_CAP_MS = 5 * 60_000;
+
 // A floor above this is a server bug, not a cadence.
 const SERVER_FLOOR_CAP_MS = 5 * 60_000;
 
@@ -28,8 +32,12 @@ function clientDelayMs(status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>, 
     status.stall === 'quiet';
   if (!active) return 10_000;
   if (unchangedPolls < ACTIVE_BACKOFF_AFTER_POLLS) return 3000;
-  const doublings = Math.floor((unchangedPolls - ACTIVE_BACKOFF_AFTER_POLLS) / ACTIVE_BACKOFF_AFTER_POLLS) + 1;
-  return Math.min(3000 * 2 ** doublings, ACTIVE_BACKOFF_CAP_MS);
+  if (unchangedPolls < DEEP_BACKOFF_AFTER_POLLS) {
+    const doublings = Math.floor((unchangedPolls - ACTIVE_BACKOFF_AFTER_POLLS) / ACTIVE_BACKOFF_AFTER_POLLS) + 1;
+    return Math.min(3000 * 2 ** doublings, ACTIVE_BACKOFF_CAP_MS);
+  }
+  const deepDoublings = Math.floor((unchangedPolls - DEEP_BACKOFF_AFTER_POLLS) / ACTIVE_BACKOFF_AFTER_POLLS) + 1;
+  return Math.min(ACTIVE_BACKOFF_CAP_MS * 2 ** deepDoublings, DEEP_BACKOFF_CAP_MS);
 }
 
 // The server knows when an answer could change; never poll under it.

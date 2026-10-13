@@ -265,3 +265,27 @@ it('allows local edits in an unbased source repository while delivery still requ
   expect(messages.join('\n')).toContain('review /diff');
   await expect(submitGame({ api, slug: 'airtime', dest: root })).rejects.toThrow('no base version');
 });
+
+it.each(['"airtime"', "'airtime'", '  "airtime"  '])('recognizes a quoted SPEC slug: %s', (slug) => {
+  const { root, put } = fixture();
+  put('src/SPEC.md', `---\r\n  slug: ${slug}\r\n---\r\n`);
+  expect(findCheckout(root)).toEqual({ root, slug: 'airtime' });
+  expect(findCheckout(join(root, 'src'))).toEqual({ root, slug: 'airtime' });
+});
+
+it.each(['"../airtime"', "'air time'", '"AIRTIME"', '""'])('rejects an invalid quoted SPEC slug: %s', (slug) => {
+  const { root, put } = fixture();
+  put('src/SPEC.md', `---\nslug: ${slug}\n---\n`);
+  expect(sourceProject(root)).toBeNull();
+});
+
+it('removes deleted mirror files even when runtime ignore rules hide them', () => {
+  const { root, runtime, put } = fixture();
+  put('src/game/old.ts', 'old game logic');
+  syncSourceRuntime(root);
+  put('.gamedev/local/.gitignore', 'games/airtime/game/old.ts\n');
+  rmSync(join(root, 'src/game/old.ts'));
+  syncSourceRuntime(root);
+  expect(existsSync(join(runtime, 'games/airtime/game/old.ts'))).toBe(false);
+  expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('export const score = 1;');
+});

@@ -13,7 +13,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- `gamedevpl connect` recognizes existing source repositories such as Airtime and edits their `src/` files instead of downloading a second checkout. Local preview, verification and delivery use those same sources (#1824).
+- `gamedevpl connect` recognizes existing source repositories such as Airtime and edits their `src/` files instead of downloading a second checkout. Quoted slugs are supported; local preview, verification and delivery use those same sources, including deletions hidden by runtime ignore rules (#1824).
+
+- Back off build status watches beyond 30s up to 5 minutes when progress is unchanged.
 
 ## 0.45.1 — 2026-10-13
 
