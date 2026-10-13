@@ -1,4 +1,4 @@
-import { gameSourceRoot, gameSourcePath, sourceProject } from './source-project.js';
+import { bindSourceProject, gameSourceRoot, gameSourcePath, sourceProject } from './source-project.js';
 import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
 
 import { withCheckoutWriter } from './workbench-lock.js';
@@ -82,6 +82,7 @@ export async function openWorkshop(input: {
   which?: (cmd: string) => string | null;
   write: (line: string) => void;
 }): Promise<{ adapters: AdapterSpec[]; builder: string; status: string; activityApi: ApiClient }> {
+  bindSourceProject(input.root, input.slug);
   const adapters = detectLocalAdapters(input.env, input.which);
   input.write(`◆ ${input.slug} — the checkout at ${input.root}`);
   try {

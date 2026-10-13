@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { kitPath } from './kit-install.js';
 
 function regular(path: string): boolean {
   return existsSync(path) && lstatSync(path).isFile();
@@ -16,11 +17,32 @@ function present(path: string): boolean {
   }
 }
 
+function assertSourceIdentity(root: string, slug: string): void {
+  for (const rel of ['.gamedev-base.json', '.gamedev/source-slug', '.gamedev/local/.gamedev-slug']) {
+    const path = kitPath(root, rel);
+    if (!present(path)) continue;
+    if (!regular(path)) throw new Error(`Source identity must be a regular file: ${rel}.`);
+    const stored = readFileSync(path, 'utf8');
+    const bound: unknown = rel === '.gamedev-base.json' ? JSON.parse(stored)?.slug : stored.trim();
+    if (bound === undefined) continue;
+    if (typeof bound !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bound))
+      throw new Error(`Invalid source identity in ${rel}.`);
+    if (bound !== slug)
+      throw new Error(`This repository is bound to ${bound}, but SPEC.md selects ${slug}. Restore its original slug.`);
+  }
+}
+
 export function sourceProject(root: string): { slug: string } | null {
   const pinPath = join(root, 'gamedev-kit.json');
   const src = join(root, 'src');
   const spec = join(src, 'SPEC.md');
-  if (!present(pinPath) && !present(spec) && !present(join(root, '.gamedev/local/.gamedev-slug'))) return null;
+  if (
+    !present(pinPath) &&
+    !present(spec) &&
+    !present(join(root, '.gamedev/local/.gamedev-slug')) &&
+    !present(join(root, '.gamedev/source-slug'))
+  )
+    return null;
   try {
     if (!regular(pinPath) || !existsSync(src) || !lstatSync(src).isDirectory() || !regular(spec))
       throw new Error('Source repository paths are missing or not regular files and directories.');
@@ -41,6 +63,7 @@ export function sourceProject(root: string): { slug: string } | null {
           .replace(/^["']|["']$/g, '');
     }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('SPEC.md needs a valid slug.');
+    assertSourceIdentity(root, slug);
     return { slug };
   } catch (error) {
     throw new CliError(
@@ -49,6 +72,22 @@ export function sourceProject(root: string): { slug: string } | null {
       'Repair gamedev-kit.json and src/SPEC.md, then retry.',
     );
   }
+}
+
+export function bindSourceProject(root: string, expectedSlug?: string): { slug: string } | null {
+  const project = sourceProject(root);
+  if (!project) return null;
+  if (expectedSlug && expectedSlug !== project.slug)
+    throw new CliError(`This repository contains ${project.slug}, not ${expectedSlug}.`, EXIT_REFUSED);
+  const marker = kitPath(root, '.gamedev/source-slug');
+  mkdirSync(dirname(marker), { recursive: true });
+  try {
+    writeFileSync(marker, `${project.slug}\n`, { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    sourceProject(root);
+  }
+  return project;
 }
 
 export function gameSourcePath(root: string, slug: string): string {

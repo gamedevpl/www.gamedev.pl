@@ -423,6 +423,9 @@ Review `gamedevpl diff`: `push --force` explicitly delivers your local sources;
 `pull --force` explicitly replaces them with platform sources. Neither happens
 automatically on connect. Recovery under a different slug requires a separate
 repository copy with its spec and setup scripts updated.
+Once opened, a source repository keeps its game identity in local metadata and
+its base record. Editing the SPEC slug cannot retarget that checkout to another
+game; restore its original slug or start from a fresh repository copy.
 
 Run `gamedevpl connect <slug>` in a terminal to enter an interactive session. Choose
 **Open a local checkout** to download the game (or reuse its checkout in the current

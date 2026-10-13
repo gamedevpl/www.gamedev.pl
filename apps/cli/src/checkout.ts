@@ -1,4 +1,4 @@
-import { sourceProject, gameSourcePath, gameSourceRoot } from './source-project.js';
+import { bindSourceProject, sourceProject, gameSourcePath, gameSourceRoot } from './source-project.js';
 import { isDeliverablePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
@@ -327,6 +327,7 @@ export async function inspectGame(input: { api: ApiClient; slug: string; dest: s
   tree: { version: string; files: TreeFile[] };
   ignored: IgnoredHit[];
 }> {
+  bindSourceProject(input.dest, input.slug);
   const tree = await fetchLatestTree(input.api, input.slug);
   const base = readBase(input.dest);
   const ignored = ignoredGameFiles(input.dest, input.slug);

@@ -333,6 +333,65 @@ it('removes deleted mirror files even when runtime ignore rules hide them', () =
   expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('export const score = 1;');
 });
 
+it.each(['base', 'unbased connect', 'legacy runtime'])(
+  'refuses a changed source identity established by %s',
+  async (binding) => {
+    const { root, runtime, put } = fixture();
+    const before = localGameFiles(root, 'airtime');
+    const { api, fetch } = backend(before);
+    if (binding === 'unbased connect') {
+      rmSync(runtime, { recursive: true });
+      put('src/game.ts', 'unbased local edits');
+      await connectSession({
+        api,
+        slug: 'airtime',
+        cwd: root,
+        env: { PATH: '' },
+        pick: async (choices) => choices[0]!,
+        abort: { current: null },
+        write: () => {},
+      });
+      expect(existsSync(join(root, '.gamedev-base.json'))).toBe(false);
+    } else {
+      writeBase(root, 'v1', before);
+      if (binding === 'base') {
+        expect(JSON.parse(readFileSync(join(root, '.gamedev-base.json'), 'utf8'))).toMatchObject({ slug: 'airtime' });
+        rmSync(runtime, { recursive: true });
+        rmSync(join(root, '.gamedev/source-slug'), { force: true });
+      } else {
+        const base = JSON.parse(readFileSync(join(root, '.gamedev-base.json'), 'utf8'));
+        delete base.slug;
+        put('.gamedev-base.json', JSON.stringify(base));
+        rmSync(join(root, '.gamedev/source-slug'), { force: true });
+      }
+    }
+    put('src/SPEC.md', '---\nslug: sky\n---\n');
+    const game = readFileSync(join(root, 'src/game.ts'), 'utf8');
+    fetch.mockClear();
+    expect(() => findCheckout(root)).toThrow('Invalid source repository metadata');
+    expect(() => localGameFiles(root, 'sky')).toThrow('Invalid source repository metadata');
+    const request = { api, slug: 'sky', dest: root };
+    await expect(diffGame(request)).rejects.toThrow('Invalid source repository metadata');
+    await expect(pullGame({ ...request, force: true })).rejects.toThrow('Invalid source repository metadata');
+    await expect(submitGame({ ...request, force: true, run: () => ({ status: 0, stderr: '' }) })).rejects.toThrow(
+      'Invalid source repository metadata',
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe(game);
+    expect(readFileSync(join(root, 'src/SPEC.md'), 'utf8')).toContain('slug: sky');
+  },
+);
+
+it.each(['.gamedev-base.json', '.gamedev/source-slug'])('refuses symbolic identity files: %s', (path) => {
+  const { root } = fixture();
+  const files = localGameFiles(root, 'airtime');
+  const original = readFileSync(join(root, '.git/config'), 'utf8');
+  symlinkSync(join(root, '.git/config'), join(root, path));
+  expect(() => sourceProject(root)).toThrow('symbolic link');
+  expect(() => writeBase(root, 'v1', files)).toThrow('symbolic link');
+  expect(readFileSync(join(root, '.git/config'), 'utf8')).toBe(original);
+});
+
 it.each([
   'missing slug',
   'malformed pin',
