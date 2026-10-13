@@ -40,12 +40,14 @@ function TranscriptViewport({
     let measured: Map<string, number> | undefined;
     for (const [index, node] of rowNodes.current) {
       const row = geometry.rows[index - offset];
-      if (!row) continue;
+      if (!row || heights.has(row.key)) continue;
       const value = measureElement(node).height;
-      if (heights.get(row.key) !== value) (measured ??= new Map(heights)).set(row.key, value);
+      (measured ??= new Map(heights)).set(row.key, value);
     }
     if (measured) setHeights(measured);
   }, [geometry, heights, layout, scroll, size, offset]);
+  const pendingDelta = useRef(0);
+  const scheduled = useRef(false);
   const max = Math.max(0, geometry.total - size.height);
   const start = scroll === null ? max : Math.min(scroll, max);
   const distance = max - start;
@@ -58,10 +60,21 @@ function TranscriptViewport({
     },
     (wheel) => {
       if (paused || !wheelInside(panel.current, wheel, stdout.rows || 24)) return;
-      setScroll((value) => {
-        const next = Math.max(0, Math.min(max, (value === null ? max : Math.min(value, max)) + wheel.direction * 3));
-        return next >= max ? null : next;
-      });
+      pendingDelta.current += wheel.direction * 3;
+      if (!scheduled.current) {
+        scheduled.current = true;
+        queueMicrotask(() => {
+          scheduled.current = false;
+          const delta = pendingDelta.current;
+          pendingDelta.current = 0;
+          if (delta === 0) return;
+          setScroll((value) => {
+            const current = value === null ? max : Math.min(value, max);
+            const next = Math.max(0, Math.min(max, current + delta));
+            return next >= max ? null : next;
+          });
+        });
+      }
     },
   );
   const messages = useMemo(
