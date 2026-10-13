@@ -25,7 +25,7 @@ afterEach(() => {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'source-project-'));
   roots.push(root);
-  const put = (path: string, content: string) => {
+  const put = (path: string, content: string | Uint8Array) => {
     mkdirSync(join(root, path, '..'), { recursive: true });
     writeFileSync(join(root, path), content);
   };
@@ -72,8 +72,11 @@ function backend(files: ReturnType<typeof localGameFiles>) {
       const file = JSON.parse(String(init.body)) as { path: string; content: string };
       staged.set(file.path, file.content);
     }
-    if (url.endsWith('/sources/deliver'))
-      current = files.map((file) => ({ ...file, content: staged.get(file.path) ?? file.content }));
+    if (url.endsWith('/sources/deliver')) {
+      const delivered = new Map(current.map((file) => [file.path, file]));
+      for (const [path, content] of staged) delivered.set(path, { path, content });
+      current = [...delivered.values()];
+    }
     const body = url.includes('/api/me/studio?')
       ? { games: [{ slug: 'airtime', token: 'tok' }] }
       : url.endsWith('/versions')
@@ -331,6 +334,42 @@ it('removes deleted mirror files even when runtime ignore rules hide them', () =
   syncSourceRuntime(root);
   expect(existsSync(join(runtime, 'games/airtime/game/old.ts'))).toBe(false);
   expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('export const score = 1;');
+});
+
+it.each([
+  ['images/hero.png', 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jC8sAAAAASUVORK5CYII='],
+  ['cast/hero.webp', 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA'],
+])('preserves binary raster bytes across mirror, delivery and pull: %s', async (path, content) => {
+  const { root, runtime, put } = fixture();
+  put('src/game.ts', 'export const score = 2;');
+  const before = localGameFiles(root, 'airtime');
+  writeBase(root, 'v1', before);
+  const raw = Buffer.from(content!, 'base64');
+  put(`src/${path}`, raw);
+  expect(localGameFiles(root, 'airtime')).toContainEqual({ path, content });
+  syncSourceRuntime(root);
+  expect(readFileSync(join(runtime, 'games/airtime', path!))).toEqual(raw);
+  const { api, fetch } = backend(before);
+  const result = await submitGame({ api, slug: 'airtime', dest: root });
+  expect(result.kind).toBe('delivered');
+  const stage = fetch.mock.calls.filter(([url]) => url.endsWith('/sources/stage'));
+  expect(stage).toHaveLength(1);
+  expect(JSON.parse(String(stage[0]![1]?.body))).toEqual({ path, content });
+  put(`src/${path}`, Buffer.from([0, 255, 254]));
+  await pullGame({ api, slug: 'airtime', dest: root, force: true });
+  expect(readFileSync(join(root, 'src', path!))).toEqual(raw);
+  syncSourceRuntime(root);
+  expect(readFileSync(join(runtime, 'games/airtime', path!))).toEqual(raw);
+});
+
+it.each(['YWJj!!!', 'YWJj='])('refuses damaged raster transport before deleting sources: %s', (content) => {
+  const { root } = fixture();
+  const before = localGameFiles(root, 'airtime');
+  expect(() => writeGameFiles(root, 'airtime', [{ path: 'images/hero.png', content }], { force: true })).toThrow(
+    'Invalid base64 raster content',
+  );
+  expect(localGameFiles(root, 'airtime')).toEqual(before);
+  expect(existsSync(join(root, 'src/images/hero.png'))).toBe(false);
 });
 
 it.each(['base', 'unbased connect', 'legacy runtime'])(

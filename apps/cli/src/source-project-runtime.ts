@@ -44,7 +44,7 @@ export function syncSourceRuntime(root: string): string {
   for (const file of files) kitPath(runtime, `games/${project.slug}/${file.path}`);
   const keep = new Set(files.map((file) => file.path));
   for (const path of previous) if (!keep.has(path)) rmSync(kitPath(runtime, `games/${project.slug}/${path}`));
-  writeGameFiles(runtime, project.slug, files);
+  writeGameFiles(runtime, project.slug, files, { binaryRasters: true });
   return runtime;
 }
 

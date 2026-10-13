@@ -383,6 +383,9 @@ Two concrete instances of that (observed 2026-07-23):
   Change SPEC to a different valid owned slug after saving a base, then remove the
   runtime: the base must still bind the original game. Also connect an unbased
   repository and change its slug; its local identity must block cross-game writes.
+  Use a real PNG/WebP to test source mirroring and pull, plus the exact staged
+  base64 payload. Text fixtures cannot reveal binary corruption. Reject damaged
+  base64 before deleting stale sources, preserving the source tree on refusal.
 - **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
   treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
   is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new

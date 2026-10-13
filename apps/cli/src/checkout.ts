@@ -1,5 +1,5 @@
 import { bindSourceProject, sourceProject, gameSourcePath, gameSourceRoot } from './source-project.js';
-import { isDeliverablePath } from '@gamedevpl/contract';
+import { isDeliverablePath, isRasterSourcePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -78,6 +78,20 @@ function coversTracked(path: string, tracked: Set<string>): boolean {
   return false;
 }
 
+function readGameContent(path: string, relativePath: string, binaryRasters: boolean): string {
+  return binaryRasters && isRasterSourcePath(relativePath)
+    ? readFileSync(path).toString('base64')
+    : readFileSync(path, 'utf8');
+}
+
+function rasterBytes(file: TreeFile): Buffer {
+  const compact = file.content.replace(/\s+/g, '');
+  const bytes = Buffer.from(compact, 'base64');
+  if (!compact || bytes.toString('base64') !== compact)
+    throw new CliError(`Invalid base64 raster content: ${file.path}.`, EXIT_REFUSED);
+  return bytes;
+}
+
 function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: IgnoredHit[] } {
   const root = gameSourceRoot(dest, slug);
   const files: TreeFile[] = [];
@@ -117,7 +131,7 @@ function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: Ign
         continue;
       }
       if (directory) visit(nextRel);
-      else if (stat.isFile()) files.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
+      else if (stat.isFile()) files.push({ path: nextRel, content: readGameContent(abs, nextRel, prefix === 'src') });
     }
   };
   visit('');
@@ -160,6 +174,7 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
   const absent: string[] = [];
   const git: string[] = [];
   const root = gameSourceRoot(dest, slug);
+  const binaryRasters = gameSourcePath(dest, slug) === 'src';
   for (const file of files) {
     if (file.path.split('/').includes('.git')) {
       git.push(file.path);
@@ -199,7 +214,8 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
       absent.push(file.path);
       continue;
     }
-    if (stat.isSymbolicLink() || !stat.isFile() || readFileSync(abs, 'utf8') !== file.content) blocked.push(file.path);
+    if (stat.isSymbolicLink() || !stat.isFile() || readGameContent(abs, file.path, binaryRasters) !== file.content)
+      blocked.push(file.path);
   }
   return {
     blocked: [...new Set(blocked)].sort(),
@@ -226,13 +242,22 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
   return { version: tree.version, files: tree.files };
 }
 
-export function writeGameFiles(dest: string, slug: string, files: TreeFile[], options?: { force?: boolean }): void {
+export function writeGameFiles(
+  dest: string,
+  slug: string,
+  files: TreeFile[],
+  options?: { force?: boolean; binaryRasters?: boolean },
+): void {
   const keep = new Set(files.map((file) => file.path));
   const root = gameSourceRoot(dest, slug);
+  const binaryRasters = options?.binaryRasters || gameSourcePath(dest, slug) === 'src';
+  const contents = files.map((file) =>
+    binaryRasters && isRasterSourcePath(file.path) ? rasterBytes(file) : file.content,
+  );
   for (const stale of localGameFiles(dest, slug)) {
     if (!keep.has(stale.path)) rmSync(pathInside(root, stale.path));
   }
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     if (file.path.split('/').includes('.git')) continue;
     const abs = pathInside(root, file.path);
     if (options?.force) {
@@ -254,7 +279,7 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[], op
         rmSync(abs, { recursive: true, force: true });
       }
     }
-    writeFileSync(abs, file.content);
+    writeFileSync(abs, contents[index]!);
   }
 }
 
