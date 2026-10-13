@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Connect offers a standard checkout alongside an existing project, with a choice of a new directory or the current directory (`.`). An explicit checkout destination must be empty (#1824).
+
 ### Fixed
 
 - `gamedevpl connect` recognizes existing source repositories such as Airtime and edits their `src/` files instead of downloading a second checkout. Local preview, verification and delivery use those same sources (#1824).

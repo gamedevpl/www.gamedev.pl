@@ -260,6 +260,19 @@ export function initializeCheckoutGit(dest: string, slug: string, run = defaultR
   run('git', ['remote', 'add', 'origin', gitRemoteUrl(slug)], dest);
 }
 
+export function assertCheckoutDestination(dest: string, slug: string): void {
+  if (
+    existsSync(dest) &&
+    (lstatSync(dest).isSymbolicLink() || !lstatSync(dest).isDirectory() || readdirSync(dest).length > 0)
+  ) {
+    throw new CliError(
+      'Checkout destination is not empty; your files were left untouched.',
+      EXIT_REFUSED,
+      `Choose another directory: ${cliUsage('checkout', `${slug} <new-directory>`)}`,
+    );
+  }
+}
+
 export async function checkoutGame(input: {
   api: ApiClient;
   slug: string;
@@ -269,18 +282,7 @@ export async function checkoutGame(input: {
   allowUndelivered?: boolean;
 }): Promise<{ dest: string; remote: string; notices: string[] }> {
   const run = input.run ?? defaultRun;
-  if (
-    existsSync(input.dest) &&
-    (lstatSync(input.dest).isSymbolicLink() ||
-      !lstatSync(input.dest).isDirectory() ||
-      readdirSync(input.dest).length > 0)
-  ) {
-    throw new CliError(
-      'Checkout destination is not empty; your files were left untouched.',
-      EXIT_REFUSED,
-      `Choose another directory: ${cliUsage('checkout', `${input.slug} <new-directory>`)}`,
-    );
-  }
+  assertCheckoutDestination(input.dest, input.slug);
   mkdirSync(input.dest, { recursive: true });
   const archive = input.fetchBuffer
     ? await input.fetchBuffer(`${input.api.origin}/api/me/studio/games/${input.slug}/workspace`)

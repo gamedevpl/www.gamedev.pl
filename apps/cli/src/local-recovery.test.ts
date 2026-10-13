@@ -50,7 +50,7 @@ function fixture(kind = 'missing') {
     write: vi.fn(),
     env: { PATH: '' },
     abort: { current: null },
-    pick: vi.fn(async () => 'Recover and continue'),
+    pick: vi.fn(async (_choices: string[]) => 'Recover and continue'),
   };
 }
 it.each(['missing', 'canceled', 'archived'])(
@@ -145,8 +145,10 @@ it('does not recover when lifecycle lookup fails despite an existing shelf token
   f.fetch.mockImplementation(async (url, init) =>
     url.endsWith('/recovery') ? new Response('{"error":"unavailable"}', { status: 503 }) : normal(url, init),
   );
+  f.pick.mockImplementationOnce(async (choices) => choices[0]!);
   await handleReplLine({ ...f, token: null, cwd: f.root, line: '/connect' });
-  expect(f.pick).not.toHaveBeenCalled();
+  expect(f.pick).toHaveBeenCalledTimes(1);
+  expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/recovery'))).toBe(true);
   expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
 });
 
@@ -161,4 +163,14 @@ it('opens owned published games even though recovery reports occupied', async ()
   expect(result).toMatchObject({ token: 'round', workshop: { root: f.root, selectedAgent: 'codex' } });
   expect(f.pick).not.toHaveBeenCalled();
   expect(f.fetch.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+});
+
+it('checks recovery only after choosing to reuse the detected checkout', async () => {
+  const f = fixture();
+  f.pick.mockImplementationOnce(async (choices) => choices[0]!);
+  const result = await connectSession({ ...f, cwd: f.parent, slug: 'sky' });
+  expect(result).toMatchObject({ token: 'round', workshop: { root: f.root } });
+  expect(f.pick).toHaveBeenCalledTimes(2);
+  expect(f.fetch.mock.calls.filter(([url]) => url.endsWith('/recover'))).toHaveLength(1);
+  expect(readFileSync(join(f.root, 'games/sky/game.ts'), 'utf8')).toBe('unsent local edits');
 });

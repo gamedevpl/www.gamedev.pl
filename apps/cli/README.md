@@ -405,6 +405,14 @@ in preference to a nested checkout. Agents, Code, diff, pull and push use `src/`
 Git history, remotes, scripts and documentation stay in the repository. No
 workspace download or second checkout is needed.
 
+To use a standard workspace instead, choose **Create a standard checkout** in
+Connect. The destination picker offers a new directory or the current directory
+(`.`), and shows the resolved path. A fresh checkout always requires an empty
+destination, even when it contains a recognized game. For another path, run
+`gamedevpl checkout airtime ../airtime-standard` or `/checkout airtime <directory>`.
+`gamedevpl checkout airtime .` and `/checkout airtime .` download into the current
+directory. Plain `/checkout` continues to reuse the current game's checkout.
+
 Local play and verification run the repository's `npm run setup` to prepare the
 pinned Kit in `.gamedev/local/`. The CLI mirrors current game sources into that
 build directory, including deletions; edit `src/`, not the generated runtime.

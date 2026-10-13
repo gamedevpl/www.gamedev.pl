@@ -1,9 +1,9 @@
 import { matchingCheckout, resolveLocalGame } from './local-recovery.js';
 import type { InteractiveRun } from './agy-interactive.js';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import type { ApiClient } from './api.js';
 import { discoverAgents } from './agents.js';
-import { checkoutGame, findCheckout, localGameFiles } from './checkout.js';
+import { assertCheckoutDestination, checkoutGame, findCheckout, localGameFiles } from './checkout.js';
 import { connectGame } from './connect.js';
 import { studioToken } from './studio.js';
 import { openWorkshop, type Workshop, type PickChoice } from './workshop.js';
@@ -16,6 +16,7 @@ type Input = {
   dest?: string;
   cwd?: string;
   sessionToken?: string;
+  fresh?: boolean;
   env: NodeJS.ProcessEnv;
   pick?: PickChoice;
   abort: Workshop['abort'];
@@ -29,10 +30,12 @@ type Input = {
 export async function checkoutSession(input: Input): Promise<GameSession | null> {
   const current = input.workshop ?? findCheckout(input.cwd ?? process.cwd());
   const root = resolve(
+    input.cwd ?? process.cwd(),
     input.dest ??
       (current ? (current.slug === input.slug ? current.root : join(dirname(current.root), input.slug)) : input.slug),
   );
-  const existing = findCheckout(root);
+  if (input.fresh) assertCheckoutDestination(root, input.slug);
+  const existing = input.fresh ? null : findCheckout(root);
   const session = input.sessionToken
     ? { token: input.sessionToken }
     : existing?.root === root && existing.slug === input.slug
@@ -68,11 +71,11 @@ export async function connectSession(
   input: Input & { agent?: string; handoff?: boolean; manual?: boolean },
 ): Promise<GameSession | null> {
   let agent = input.agent;
-  const base = resolve(input.dest ?? input.workshop?.root ?? input.cwd ?? process.cwd());
+  const cwd = resolve(input.workshop?.root ?? input.cwd ?? process.cwd());
+  const base = resolve(cwd, input.dest ?? '.');
   const existing = matchingCheckout(base, input.slug);
-  let sessionToken: string | undefined;
   const openLocal = async (selected?: string) => {
-    const opened = await checkoutSession({ ...input, sessionToken, dest: existing?.root ?? input.dest });
+    const opened = await checkoutSession({ ...input, cwd, dest: existing?.root ?? input.dest });
     if (opened?.workshop && selected) {
       opened.workshop.selectedAgent = selected;
       input.write(`${selected} will edit your existing local files. Say what to change; /play previews locally.`);
@@ -81,10 +84,7 @@ export async function connectSession(
   };
   if (existing && !input.manual) {
     input.write(`Found local checkout: ${existing.root} — local files are preserved.`);
-    const resolved = await resolveLocalGame({ ...input, root: existing.root });
-    if (!resolved) return null;
-    sessionToken = resolved.token;
-    if (resolved.recovered || agent) return openLocal(agent);
+    if (agent) return openLocal(agent);
   }
   input.telemetry?.record('connect_opened');
   if (!agent && !input.manual && input.pick) {
@@ -93,11 +93,38 @@ export async function connectSession(
     const checkout = existing
       ? 'Continue in existing checkout — keep local changes'
       : 'Open a local checkout — edit and play here';
+    const standard = 'Create a standard checkout — choose a directory';
     const chat = 'Continue chatting about this game';
     const manual = 'Show manual MCP setup';
     const labels = agents.map((row) => `${row.name} — ${existing ? 'edit local files' : 'MCP; platform sources'}`);
-    const choice = await input.pick([checkout, chat, ...labels, manual], `${input.slug} — how would you like to work?`);
-    if (choice === checkout) return openLocal();
+    const choice = await input.pick(
+      [...(existing ? [checkout, standard] : [checkout]), chat, ...labels, manual],
+      `${input.slug} — how would you like to work?`,
+    );
+    if (choice === checkout && existing) return openLocal();
+    if (choice === standard || choice === checkout) {
+      const current = existing ?? findCheckout(cwd);
+      const suggested = current
+        ? join(dirname(current.root), `${input.slug}${existing ? '-checkout' : ''}`)
+        : join(cwd, input.slug);
+      const directory = `New directory (${relative(cwd, suggested)}) — ${suggested}`;
+      const here = `Current directory (.) — ${cwd}`;
+      const custom = 'Choose another path with /checkout';
+      const destination = await input.pick(
+        [directory, here, custom, 'Cancel'],
+        `Where should ${input.slug} be checked out? The destination must be empty.`,
+      );
+      if (destination === custom)
+        input.write(`Use /checkout ${input.slug} <directory>; . means the current directory.`);
+      if (destination !== directory && destination !== here) return null;
+      return checkoutSession({
+        ...input,
+        cwd,
+        workshop: undefined,
+        dest: destination === here ? '.' : suggested,
+        fresh: true,
+      });
+    }
     if (choice === chat) {
       input.write(`Talking about ${input.slug}. Say what you want to change, or /checkout to work locally.`);
       return { token: await studioToken(input.api, input.slug), slug: input.slug, conversationId: '' };
