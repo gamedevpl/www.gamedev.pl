@@ -178,6 +178,7 @@ describe('atomic device token issuance', () => {
           userCode: string,
           hash: string,
           grantId: string,
+          deviceName: string,
         ): Promise<DeviceTokenIssuanceInput> => {
           await first.createOAuthDeviceAuthorization(
             {
@@ -185,7 +186,7 @@ describe('atomic device token issuance', () => {
               deviceCodeHash: hash,
               clientId: GAMEDEV_CLI_CLIENT_ID,
               scope: 'creator',
-              deviceName: 'box',
+              deviceName,
               expiresAtMs: clock + 600_000,
               intervalSec: 5,
             },
@@ -203,6 +204,7 @@ describe('atomic device token issuance', () => {
             currentRefreshTokenId: `${grantId}-refresh`,
             currentRefreshHash: 'refresh-hash',
             refreshExpiresAt: new Date(clock + 600_000).toISOString(),
+            deviceName,
           };
           return {
             deviceCodeHash: hash,
@@ -219,8 +221,9 @@ describe('atomic device token issuance', () => {
             },
           };
         };
-        const input = await candidate('BCDF-GHJK', 'first-hash', 'first-grant');
-        const other = race === 'same-code' ? input : await candidate('LMNP-QRST', 'second-hash', 'second-grant');
+        const input = await candidate('BCDF-GHJK', 'first-hash', 'first-grant', 'box');
+        const other =
+          race === 'same-code' ? input : await candidate('LMNP-QRST', 'second-hash', 'second-grant', 'other-box');
         const issued = await Promise.all([
           first.completeOAuthDeviceAuthorization(input),
           second.completeOAuthDeviceAuthorization(other),
@@ -231,4 +234,79 @@ describe('atomic device token issuance', () => {
       },
     );
   }
+
+  async function holdGrants(store: InMemoryStore | FirestoreStore, count: number) {
+    for (let i = 0; i < count; i++) {
+      await store.createOAuthGrant({
+        grantId: `held-${i}`,
+        clientId: GAMEDEV_CLI_CLIENT_ID,
+        ownerUid: 'g:boss',
+        scope: 'creator',
+        createdAt: new Date(clock).toISOString(),
+        refreshFamilyId: `held-${i}`,
+        currentRefreshTokenId: `held-${i}-refresh`,
+        currentRefreshHash: 'hash',
+        refreshExpiresAt: new Date(clock + 600_000).toISOString(),
+        deviceName: `box-${i}`,
+      });
+    }
+  }
+
+  for (const implementation of ['memory', 'firestore'] as const) {
+    it(`replaces the same device's grant on repeated ${implementation} sign-ins`, async () => {
+      const store = implementation === 'memory' ? new InMemoryStore() : new FirestoreStore(atomicFirestore().db);
+      const app = await buildOAuthApp(store, { now: () => clock });
+      apps.push(app);
+      await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
+      await holdGrants(store, 9);
+      let previous: string | undefined;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        clock += 10_000;
+        const { deviceCode } = await approve(app);
+        clock += 5_000;
+        const exchanged = await poll(app, deviceCode);
+        expect(exchanged.statusCode).toBe(200);
+        const { access_token: accessToken } = exchanged.json();
+        const me = (token: string) =>
+          app.inject({ method: 'GET', url: '/api/me/profile', headers: { authorization: `Bearer ${token}` } });
+        expect((await me(accessToken)).statusCode).toBe(200);
+        if (previous) expect((await me(previous)).statusCode).toBe(401);
+        previous = accessToken;
+      }
+      expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(10);
+    });
+  }
+
+  it('keeps the code pending when the owner already holds the grant cap', async () => {
+    const store = new InMemoryStore();
+    const app = await buildOAuthApp(store, { now: () => clock });
+    apps.push(app);
+    await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
+    await holdGrants(store, 10);
+    await expect(approve(app)).rejects.toThrow();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID },
+    });
+    const { user_code: userCode } = created.json();
+    const approved = await app.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss') },
+      payload: {
+        user_code: userCode,
+        action: 'approve',
+        disclosed_scope: 'creator',
+        consent_token: consentToken({
+          uid: 'g:boss',
+          clientId: GAMEDEV_CLI_CLIENT_ID,
+          codeChallenge: 'device',
+          secret: SESSION_SECRET,
+        }),
+      },
+    });
+    expect(approved.body).toContain('Too many connected clients');
+    expect(await store.getOAuthDeviceAuthorization(userCode, clock)).not.toMatchObject({ ownerUid: 'g:boss' });
+  });
 });

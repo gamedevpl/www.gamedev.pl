@@ -7,7 +7,12 @@ import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.j
 import { consentToken, consentTokenValid, copyForScope } from './oauth-consent.js';
 import { bindingFields, consentIdentity, tokenBindingLive } from './pat-grant-binding.js';
 import type { OAuthDeviceAuthorization } from '../store/records/oauth-device.js';
-import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
+import {
+  isGamedevCliClient,
+  sameCliDeviceGrant,
+  sanitizeDeviceName,
+  GAMEDEV_CLI_CLIENT_ID,
+} from './oauth-first-party.js';
 import { CREATOR_SCOPE, formatOAuthScope, MAX_OAUTH_GRANTS_PER_UID, parseOAuthScopes } from './oauth-scopes.js';
 import {
   AS_REFRESH_TOKEN_TTL_MS,
@@ -211,6 +216,18 @@ export function registerOAuthDeviceRoutes(
     }
     if (body.disclosed_scope !== row.scope) {
       return page('Review the permissions below, then approve.', userCode, row.scope, row.deviceName);
+    }
+    const held = await store.listOAuthGrantsByOwner(uid);
+    const replaces = held.some(
+      (grant) => sameCliDeviceGrant(grant, row.clientId, row.deviceName) && grant.viaTokenId === identity.viaTokenId,
+    );
+    if (!replaces && held.length >= MAX_OAUTH_GRANTS_PER_UID) {
+      return page(
+        'Too many connected clients. Revoke one in Studio, then approve again.',
+        userCode,
+        row.scope,
+        row.deviceName,
+      );
     }
     if (!(await store.decideOAuthDeviceAuthorization(userCode, { ownerUid: uid, ...bindingFields(identity) }, now())))
       return page('That code is already decided or expired.');

@@ -50,6 +50,17 @@ export function deviceTokenIssuanceError(
     return { ok: false, error: 'access_denied' };
 }
 
+// A new device sign-in replaces the same device's earlier CLI grant instead of counting against the cap.
+export function replacedByDeviceGrant(held: OAuthGrantRecord, grant: OAuthGrantRecord): boolean {
+  return (
+    !held.revokedAt &&
+    held.ownerUid === grant.ownerUid &&
+    held.clientId === grant.clientId &&
+    (held.deviceName ?? 'this device') === (grant.deviceName ?? 'this device') &&
+    held.viaTokenId === grant.viaTokenId
+  );
+}
+
 export function deviceAuthorizationPoll(row: OAuthDeviceAuthorization, nowMs: number): DeviceAuthorizationPoll {
   if (row.expiresAtMs <= nowMs) return { ok: false, error: 'expired_token' };
   if (row.lastPollAt !== undefined && nowMs - row.lastPollAt < row.intervalSec * 1000) {
