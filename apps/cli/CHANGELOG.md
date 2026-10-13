@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Raw local preview reports failed or unexpected forwarded-port responses, keeps the last working game and retries instead of embedding an access-denied or sign-in page.
+- Raw local preview reports failed or unexpected forwarded-port responses, keeps the last working game and retries instead of embedding an access-denied or sign-in page (#1830).
 
 ## 0.46.0 — 2026-10-13
 
