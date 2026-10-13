@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.45.0 — 2026-10-13
+
 ### Added
 
 - `gamedevpl login --device-flow` selects the link-and-code sign-in explicitly (#1818).
