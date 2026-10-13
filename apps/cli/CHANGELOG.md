@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Back off build status watches beyond 30s up to 5 minutes when progress is unchanged.
+
 ## 0.45.1 — 2026-10-13
 
 ### Fixed
