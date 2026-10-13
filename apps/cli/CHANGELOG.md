@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- `gamedevpl connect` recognizes existing source repositories such as Airtime and edits their `src/` files instead of downloading a second checkout. Local preview, verification and delivery use those same sources.
+- `gamedevpl connect` recognizes existing source repositories such as Airtime and edits their `src/` files instead of downloading a second checkout. Local preview, verification and delivery use those same sources (#1824).
 
 ## 0.45.1 — 2026-10-13
 
