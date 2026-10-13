@@ -1,3 +1,4 @@
+import { isBuildLive } from './buildLive.js';
 import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
 export type BuildBarState = 'running' | 'green' | 'red' | 'starting';
@@ -53,7 +54,7 @@ export function buildBarModel(
     liveTag: formatBuildTag(liveVersion),
   };
 
-  if (priorRound) {
+  if (priorRound && status && isBuildLive(status)) {
     return {
       state: 'starting',
       fraction: null,
