@@ -200,7 +200,11 @@ in the checkout, stays unwritten and is named. `checkout` says when a platform f
 an ignored path. Paths already in `.gamedev-base.json` stay tracked.
 
 A checkout without `.gamedev-base.json` is **legacy**: matching trees are adopted; anything
-else is refused so pull cannot guess.
+else is refused so pull cannot guess. `status`, `diff` and the refusal explain how to
+choose a source copy: review `gamedevpl diff`, then back up the local game sources
+(`src/` in a source repository, `games/<slug>/` in a standard checkout).
+`gamedevpl pull --force` replaces those sources with the platform copy and records a
+base version for later pulls. To deliver the local copy instead, use `gamedevpl push --force`.
 
 ## Round trip
 

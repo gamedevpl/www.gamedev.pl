@@ -52,6 +52,12 @@ describe('checkout presentation', () => {
     expect(formatCheckoutStatus(report(), 'example').join('\n')).toContain('Working tree clean');
     const legacy = report({ kind: 'legacy', incoming: { blocked: ['scratch.ts'], absent: [], git: [] } });
     expect(formatCheckoutStatus(legacy, 'example').join('\n')).toContain('Checkout has no base version');
+    for (const output of [formatCheckoutStatus(legacy, 'example'), formatCheckoutDiff(legacy)]) {
+      expect(output.join('\n')).toContain('back up your local game sources');
+      expect(output.join('\n')).toContain('gamedevpl pull --force');
+      expect(output.join('\n')).toContain('replaces local game sources and records a base version');
+      expect(output.join('\n')).toContain('gamedevpl push --force');
+    }
     expect(formatCheckoutStatus(legacy, 'example')).toContain('  blocked: scratch.ts');
   });
 

@@ -141,11 +141,15 @@ export function formatSyncLines(sync: SyncResult): string[] {
   return lines;
 }
 
+export function missingBaseRecovery(): string {
+  return `Review ${cliUsage('diff')} before choosing which sources to keep. To use platform sources, back up your local game sources, then run ${cliUsage('pull', '--force')}; this replaces local game sources and records a base version. To deliver local sources instead, use ${cliUsage('push', '--force')}.`;
+}
+
 export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: string; next: string } {
   if (sync.kind === 'legacy') {
     return {
-      message: `this checkout has no base version — ${cliUsage('diff')} shows what differs; copy games/<slug> aside, then check the game out again so pull cannot guess`,
-      next: cliUsage('checkout', '<slug>'),
+      message: `this checkout has no base version — ${missingBaseRecovery()}`,
+      next: cliUsage('diff'),
     };
   }
   if (sync.kind === 'conflict') {
