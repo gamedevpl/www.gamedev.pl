@@ -65,8 +65,7 @@ export function ReplApp({
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
   const [sidebar, setSidebar] = useState(initialSidebar);
   const [nativeSelection, setNativeSelection] = useState(false);
-  const wide = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
-  const split = wide && sidebar;
+  const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
   const selecting = nativeSelection;
   useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
@@ -106,7 +105,7 @@ export function ReplApp({
       return;
     }
     if (viewDiff) return;
-    if (key.ctrl && input === 'b' && (wide || sidebar)) {
+    if (key.ctrl && input === 'b' && (split || sidebar)) {
       setSidebar((visible) => !visible);
       return;
     }
@@ -419,10 +418,8 @@ export function ReplApp({
               selecting
                 ? `Text selection · display paused · Ctrl+T resume · ${footer}`
                 : split
-                  ? `Ctrl+T select text · wheel / PgUp/PgDn chat · Ctrl+B sidebar · ${footer}`
-                  : wide
-                    ? `Ctrl+B workspace sidebar · ${footer}`
-                    : footer
+                  ? `Ctrl+T select text (or hold ⌥) · wheel / PgUp/PgDn chat · Ctrl+B ${sidebar ? 'hide' : 'show'} sidebar · ${footer}`
+                  : footer
             }
             color={color}
           />

@@ -23,9 +23,6 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   expect(view.session.get().draft).toBe('unfinished request');
   await view.press('\u0002');
   expect(view.frame()).not.toContain('WORKSPACE');
-  expect(
-    view.terminalOutput().endsWith('\u001b[?1000l\u001b[?1006l') || view.terminalOutput().includes('\u001b[?1000l'),
-  ).toBe(true);
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
   view.takeOutput();
@@ -337,4 +334,24 @@ it('refreshes local edits only while visible, and refreshes again when restored'
     vi.useRealTimers();
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+it('keeps full-screen layout active when sidebar is hidden by default and toggled with Ctrl+B', async () => {
+  const view = screen(150, 28, 0, () => null, undefined, false);
+  void view.session.prompt();
+  for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
+  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('Message 29');
+  expect(view.frame().trimEnd().split('\n').length).toBeLessThan(28);
+  expect(view.frame()).toContain('Ctrl+B show sidebar');
+
+  await view.press('\u0002');
+  expect(view.frame()).toContain('WORKSPACE');
+  expect(view.frame()).toContain('Message 29');
+  expect(view.frame()).toContain('Ctrl+B hide sidebar');
+
+  await view.press('\u0002');
+  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('Message 29');
+  expect(view.frame()).toContain('Ctrl+B show sidebar');
 });
