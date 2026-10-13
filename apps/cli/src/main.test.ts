@@ -150,6 +150,20 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedevpl', 'whoami'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_AUTH);
   });
 
+  it('rejects login with both --loopback and --device-flow', async () => {
+    const streams = io();
+    streams.stdin.isTTY = true;
+    Object.assign(streams.stdout, { isTTY: true });
+    expect(
+      await runCli(
+        ['node', 'gamedevpl', 'login', '--loopback', '--device-flow'],
+        { HOME: '/tmp/gamedev-cli-empty' },
+        streams,
+      ),
+    ).toBe(EXIT_INPUT);
+    expect(streams.read().err).toMatch(/not both/);
+  });
+
   it('diff --force still needs a slug', async () => {
     const streams = io();
     expect(await runCli(['node', 'gamedevpl', 'diff', '--force'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(

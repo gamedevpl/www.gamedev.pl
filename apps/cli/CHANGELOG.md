@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl login --device-flow` selects the link-and-code sign-in explicitly (#1818).
+
+### Fixed
+
+- `gamedevpl login` and Play sign-in use the local browser callback again on your own machine; the link-and-code flow is kept for Codespaces, SSH and headless shells (#1818).
+
 ## 0.44.3 — 2026-10-13
 
 ### Fixed
