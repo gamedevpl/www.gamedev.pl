@@ -64,7 +64,7 @@ function fixture() {
   );
   return { root, runtime, put };
 }
-function backend(files: ReturnType<typeof localGameFiles>) {
+function backend(files: ReturnType<typeof localGameFiles>, deliveredExtra: ReturnType<typeof localGameFiles> = []) {
   let current = files;
   const staged = new Map<string, string>();
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
@@ -75,6 +75,7 @@ function backend(files: ReturnType<typeof localGameFiles>) {
     if (url.endsWith('/sources/deliver')) {
       const delivered = new Map(current.map((file) => [file.path, file]));
       for (const [path, content] of staged) delivered.set(path, { path, content });
+      for (const file of deliveredExtra) delivered.set(file.path, file);
       current = [...delivered.values()];
     }
     const body = url.includes('/api/me/studio?')
@@ -349,12 +350,14 @@ it.each([
   expect(localGameFiles(root, 'airtime')).toContainEqual({ path, content });
   syncSourceRuntime(root);
   expect(readFileSync(join(runtime, 'games/airtime', path!))).toEqual(raw);
-  const { api, fetch } = backend(before);
+  const returnedPath = path!.replace('hero', 'server');
+  const { api, fetch } = backend(before, [{ path: returnedPath, content: content! }]);
   const result = await submitGame({ api, slug: 'airtime', dest: root });
   expect(result.kind).toBe('delivered');
   const stage = fetch.mock.calls.filter(([url]) => url.endsWith('/sources/stage'));
   expect(stage).toHaveLength(1);
   expect(JSON.parse(String(stage[0]![1]?.body))).toEqual({ path, content });
+  expect(readFileSync(join(root, 'src', returnedPath))).toEqual(raw);
   put(`src/${path}`, Buffer.from([0, 255, 254]));
   await pullGame({ api, slug: 'airtime', dest: root, force: true });
   expect(readFileSync(join(root, 'src', path!))).toEqual(raw);

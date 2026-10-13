@@ -13,7 +13,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- `gamedevpl connect` recognizes existing source repositories such as Airtime, including calls from their generated runtime, and edits their `src/` files instead of downloading a second checkout. Quoted slugs are supported; local preview, verification and delivery use those same sources, preserving PNG/WebP bytes and deletions hidden by runtime ignore rules. Invalid metadata stops delivery; a changed SPEC slug cannot redirect an established repository to another game (#1824).
+- Existing source repositories such as Airtime are detected from their root, source and generated runtime directories, including quoted SPEC slugs. Editing, preview, verification and delivery use src/ and preserve PNG/WebP bytes, including images returned after delivery, and ignored mirror deletions. Invalid metadata and changed game identity are refused; direct agents bind the original slug before launch (#1824).
+
+## 0.45.2 — 2026-10-13
+
+### Fixed
 
 - Back off build status watches beyond 30s up to 5 minutes when progress is unchanged.
 

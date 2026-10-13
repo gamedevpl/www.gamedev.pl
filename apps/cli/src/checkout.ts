@@ -78,13 +78,13 @@ function coversTracked(path: string, tracked: Set<string>): boolean {
   return false;
 }
 
-function readGameContent(path: string, relativePath: string, binaryRasters: boolean): string {
+export function readGameContent(path: string, relativePath: string, binaryRasters: boolean): string {
   return binaryRasters && isRasterSourcePath(relativePath)
     ? readFileSync(path).toString('base64')
     : readFileSync(path, 'utf8');
 }
 
-function rasterBytes(file: TreeFile): Buffer {
+export function rasterBytes(file: TreeFile): Buffer {
   const compact = file.content.replace(/\s+/g, '');
   const bytes = Buffer.from(compact, 'base64');
   if (!compact || bytes.toString('base64') !== compact)

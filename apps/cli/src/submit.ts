@@ -1,4 +1,6 @@
-import { gameSourceRoot } from './source-project.js';
+import { gameSourcePath } from './source-project.js';
+import { kitPath } from './kit-install.js';
+import { isRasterSourcePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import {
   isRecoveryReady,
@@ -11,10 +13,19 @@ import {
 } from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, lstatSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { inspectGame, ignoredGameFiles, localGameFiles, trackedTree, writeBase, fetchLatestTree } from './checkout.js';
-import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
+import {
+  inspectGame,
+  ignoredGameFiles,
+  localGameFiles,
+  trackedTree,
+  writeBase,
+  fetchLatestTree,
+  readGameContent,
+  rasterBytes,
+} from './checkout.js';
+import { hashesOf, hashContent, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
@@ -308,15 +319,18 @@ async function submitGameUnlocked(input: {
 }
 
 function mergeDeliveredFiles(dest: string, slug: string, snapshot: Record<string, string>, fetched: TreeFile[]): void {
-  const root = gameSourceRoot(dest, slug);
+  const root = kitPath(dest, gameSourcePath(dest, slug));
+  const binaryRasters = gameSourcePath(dest, slug) === 'src';
   const keep = new Set(trackedTree(dest, slug, fetched).map((file) => file.path));
   for (const file of fetched) {
     if (!keep.has(file.path) && !(file.path in snapshot)) continue;
-    const abs = pathInside(root, file.path);
-    const now = existsSync(abs) ? hashContent(readFileSync(abs, 'utf8')) : undefined;
+    const abs = kitPath(root, file.path);
+    const stat = existsSync(abs) ? lstatSync(abs) : undefined;
+    if (stat && !stat.isFile()) continue;
+    const now = stat ? hashContent(readGameContent(abs, file.path, binaryRasters)) : undefined;
     if (now !== snapshot[file.path]) continue;
     mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, file.content);
+    writeFileSync(abs, binaryRasters && isRasterSourcePath(file.path) ? rasterBytes(file) : file.content);
   }
 }
 
