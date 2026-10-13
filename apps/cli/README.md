@@ -400,7 +400,7 @@ still run on your game. No sources are pulled or published by a Kit update.
 
 A source repository with a pinned `gamedev-kit.json` and a `slug` in the
 frontmatter of `src/SPEC.md` is recognized directly. Run `gamedevpl connect`
-from its root or a source subdirectory; `connect <slug>` also reuses this repository
+from its root, a source subdirectory or `.gamedev/local/`; `connect <slug>` also reuses this repository
 in preference to a nested checkout. Agents, Code, diff, pull and push use `src/`;
 Git history, remotes, scripts and documentation stay in the repository. No
 workspace download or second checkout is needed.

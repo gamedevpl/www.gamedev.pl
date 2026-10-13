@@ -44,6 +44,9 @@ export function readCheckoutSlug(cwd: string): string | null {
 export function findCheckout(cwd: string): { slug: string; root: string } | null {
   let dir = resolve(cwd);
   for (let depth = 0; depth < 40; depth += 1) {
+    const sourceRoot = dirname(dirname(dir));
+    const project = dir === join(sourceRoot, '.gamedev/local') ? sourceProject(sourceRoot) : null;
+    if (project) return { slug: project.slug, root: sourceRoot };
     const slug = readCheckoutSlug(dir);
     if (slug) return { slug, root: dir };
     const parent = dirname(dir);

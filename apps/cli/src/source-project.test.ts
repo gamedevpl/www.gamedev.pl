@@ -109,6 +109,34 @@ it('recognizes the SPEC slug at the repository root and inside src, preserving G
   expect(findCheckout(root)?.slug).toBe('airtime');
 });
 
+it.each(['.gamedev/local', '.gamedev/local/games/airtime'])(
+  'opens canonical sources from generated runtime %s',
+  async (cwd) => {
+    const { root, runtime, put } = fixture();
+    syncSourceRuntime(root);
+    put('.gamedev/local/games/airtime/game.ts', 'temporary generated runtime edits');
+    const here = join(root, cwd);
+    expect(findCheckout(here)).toEqual({ root, slug: 'airtime' });
+    const { api, fetch } = backend(localGameFiles(root, 'airtime'));
+    const result = await connectSession({
+      api,
+      slug: 'airtime',
+      cwd: here,
+      env: { PATH: '' },
+      pick: async (choices) => choices[0]!,
+      abort: { current: null },
+      write: () => {},
+    });
+    expect(result?.workshop?.root).toBe(root);
+    const index = await readCodeIndex(result!.workshop!);
+    expect(index.files.map((file) => file.path)).toContain('src/game.ts');
+    const diff = await diffGame({ api, slug: 'airtime', dest: result!.workshop!.root });
+    expect(diff.kind).toBe('clean');
+    expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('temporary generated runtime edits');
+    expect(fetch.mock.calls.some(([url]) => url.includes('/workspace'))).toBe(false);
+  },
+);
+
 it.each(['src', 'src/SPEC.md', 'gamedev-kit.json'])('does not recognize symbolic project paths: %s', (path) => {
   const { root } = fixture();
   const moved = join(root, 'saved');
@@ -326,6 +354,7 @@ it.each([
   if (damage === 'missing SPEC' || damage === 'missing metadata') rmSync(join(root, 'src/SPEC.md'));
   if (damage === 'missing src') rmSync(join(root, 'src'), { recursive: true });
   const request = { api, slug: 'airtime', dest: root };
+  expect(() => findCheckout(runtime)).toThrow('Invalid source repository metadata');
   expect(() => localGameFiles(root, 'airtime')).toThrow('Invalid source repository metadata');
   await expect(diffGame(request)).rejects.toThrow('Invalid source repository metadata');
   await expect(pullGame({ ...request, force: true })).rejects.toThrow('Invalid source repository metadata');

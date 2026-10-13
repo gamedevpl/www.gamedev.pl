@@ -378,6 +378,8 @@ Two concrete instances of that (observed 2026-07-23):
   without source-repository markers. Exercise an already-running preview too: a
   refusal thrown by its fingerprint watcher must reach the error display rather
   than terminate the server. Repair the metadata and require the preview to resume.
+  Launch detection and Connect from the generated runtime and a deeper directory;
+  its own slug marker must resolve back to canonical sources, never to the mirror.
 - **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
   treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
   is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new
