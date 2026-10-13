@@ -6,6 +6,7 @@ import type { User } from '../records/identity.js';
 import type { OAuthAccessTokenRecord, OAuthGrantRecord } from '../records/oauth.js';
 import {
   deviceTokenIssuanceError,
+  replacedByDeviceGrant,
   type DeviceTokenIssuanceInput,
   type DeviceTokenIssuanceResult,
   type OAuthDeviceAuthorization,
@@ -28,13 +29,16 @@ export function completeMemoryDeviceTokens(
   const held = [...state.grants.values()].filter(
     (grant) => grant.ownerUid === input.grant.ownerUid && !grant.revokedAt,
   );
-  if (held.length >= input.maxPerOwner) return { ok: false, error: 'access_denied' };
+  const replaced = held.filter((grant) => replacedByDeviceGrant(grant, input.grant));
+  if (held.length - replaced.length >= input.maxPerOwner) return { ok: false, error: 'access_denied' };
+  const revokedAt = new Date(input.nowMs).toISOString();
+  for (const grant of replaced) state.grants.set(grant.grantId, { ...grant, revokedAt });
   state.grants.set(input.grant.grantId, { ...input.grant });
   state.accessTokens.set(input.accessToken.tokenId, { ...input.accessToken });
   state.refreshIndex.set(input.grant.currentRefreshTokenId, input.grant.grantId);
   state.authorizations.delete(row!.userCode);
   state.codes.delete(input.deviceCodeHash);
-  return { ok: true };
+  return replaced.length ? { ok: true, replacedScopes: replaced.map((grant) => grant.scope) } : { ok: true };
 }
 
 export async function completeFirestoreDeviceTokens(
@@ -60,9 +64,13 @@ export async function completeFirestoreDeviceTokens(
         return { ok: false, error: 'access_denied' };
     }
     const grants = db.collection('oauthGrants');
-    const held = await tx.get(grants.where('ownerUid', '==', input.grant.ownerUid));
-    if (held.docs.filter((doc) => !(doc.data() as OAuthGrantRecord).revokedAt).length >= input.maxPerOwner)
-      return { ok: false, error: 'access_denied' };
+    const held = (await tx.get(grants.where('ownerUid', '==', input.grant.ownerUid))).docs.filter(
+      (doc) => !(doc.data() as OAuthGrantRecord).revokedAt,
+    );
+    const replaced = held.filter((doc) => replacedByDeviceGrant(doc.data() as OAuthGrantRecord, input.grant));
+    if (held.length - replaced.length >= input.maxPerOwner) return { ok: false, error: 'access_denied' };
+    const revokedAt = new Date(input.nowMs).toISOString();
+    for (const doc of replaced) tx.update(doc.ref, { revokedAt });
     tx.create(grants.doc(input.grant.grantId), stripUndefined(input.grant));
     tx.create(db.collection('oauthRefreshTokens').doc(input.grant.currentRefreshTokenId), {
       grantId: input.grant.grantId,
@@ -70,6 +78,7 @@ export async function completeFirestoreDeviceTokens(
     tx.create(db.collection('oauthAccessTokens').doc(input.accessToken.tokenId), stripUndefined(input.accessToken));
     tx.delete(rowRef);
     tx.delete(codeRef);
-    return { ok: true };
+    if (!replaced.length) return { ok: true };
+    return { ok: true, replacedScopes: replaced.map((doc) => (doc.data() as OAuthGrantRecord).scope) };
   });
 }

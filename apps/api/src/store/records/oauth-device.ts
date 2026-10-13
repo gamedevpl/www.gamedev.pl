@@ -31,7 +31,7 @@ export interface DeviceTokenIssuanceInput {
 }
 
 export type DeviceTokenIssuanceResult =
-  { ok: true } | { ok: false; error: 'invalid_grant' | 'expired_token' | 'access_denied' };
+  { ok: true; replacedScopes?: string[] } | { ok: false; error: 'invalid_grant' | 'expired_token' | 'access_denied' };
 
 export function deviceTokenIssuanceError(
   row: OAuthDeviceAuthorization | undefined,
@@ -48,6 +48,16 @@ export function deviceTokenIssuanceError(
     row.viaTokenId !== input.grant.viaTokenId
   )
     return { ok: false, error: 'access_denied' };
+}
+
+export function replacedByDeviceGrant(held: OAuthGrantRecord, grant: OAuthGrantRecord): boolean {
+  return (
+    !held.revokedAt &&
+    held.ownerUid === grant.ownerUid &&
+    held.clientId === grant.clientId &&
+    (held.deviceName ?? 'this device') === (grant.deviceName ?? 'this device') &&
+    held.viaTokenId === grant.viaTokenId
+  );
 }
 
 export function deviceAuthorizationPoll(row: OAuthDeviceAuthorization, nowMs: number): DeviceAuthorizationPoll {
