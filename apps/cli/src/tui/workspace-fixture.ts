@@ -16,6 +16,7 @@ export function screen(
   historyOffset = 0,
   checkout: () => WorkspaceCheckout | null = () => null,
   readLogs?: () => string[],
+  sidebar = true,
 ) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
@@ -32,7 +33,8 @@ export function screen(
     }),
     { columns, rows, isTTY: true },
   );
-  const element = () => createElement(ReplApp, { session, color: false, checkout, historyOffset, readLogs });
+  const element = () =>
+    createElement(ReplApp, { session, color: false, checkout, historyOffset, readLogs, initialSidebar: sidebar });
   const app = render(element(), {
     stdin: buffered.stdin,
     stdout: output as unknown as NodeJS.WriteStream,
