@@ -193,13 +193,14 @@ export async function handleReplLine(input: {
           const options = {
             ...input,
             slug,
+            cwd,
             dest: parsed.args[1],
             env: input.env ?? process.env,
             abort: input.abort ?? { current: null },
           };
           const opened =
             cmd === 'checkout'
-              ? await checkoutSession(options)
+              ? await checkoutSession({ ...options, fresh: parsed.args[1] !== undefined })
               : await connectSession({
                   ...options,
                   agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,

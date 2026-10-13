@@ -55,7 +55,7 @@ describe('connect entry points', () => {
         initialLine: '/connect sky',
       }),
     );
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.some(([url]) => !url.includes('/telemetry/'))).toBe(false);
     expect(await vi.mocked(runInkRepl).mock.calls[0]![0].resolveToken!()).toBe('tok');
   });
   it('keeps explicit agents in the checkout-aware interactive flow', async () => {
@@ -120,6 +120,36 @@ it.each([{ args: ['--terminal'] }, { args: ['repl', 'sky'] }, { args: ['connect'
       );
     } finally {
       rmSync(parent, { recursive: true, force: true });
+    }
+  },
+);
+
+it.each(['root', 'src', '.gamedev/local', '.gamedev/local/games/airtime'])(
+  'connect without a slug detects a source repository from %s',
+  async (where) => {
+    const root = mkdtempSync(join(tmpdir(), 'source-entry-'));
+    mkdirSync(join(root, 'src'));
+    writeFileSync(
+      join(root, 'gamedev-kit.json'),
+      JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64) }),
+    );
+    writeFileSync(join(root, 'src/SPEC.md'), '---\nslug: airtime\n---\n');
+    mkdirSync(join(root, '.gamedev/local/games/airtime'), { recursive: true });
+    writeFileSync(join(root, '.gamedev/local/.gamedev-slug'), 'airtime');
+    vi.spyOn(process, 'cwd').mockReturnValue(where === 'root' ? root : join(root, where));
+    const fetch = backend();
+    try {
+      expect(await runCli(['node', 'cli', 'connect'], env, streams())).toBe(0);
+      expect(runInkRepl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkout: { root, slug: 'airtime' },
+          slug: 'airtime',
+          initialLine: '/connect airtime',
+        }),
+      );
+      expect(fetch.mock.calls.some(([url]) => !url.includes('/telemetry/'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   },
 );

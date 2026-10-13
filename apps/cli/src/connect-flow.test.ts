@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, chmodSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, chmodSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { memoryStore } from './keychain.js';
 import { connectSession } from './connect-flow.js';
 import { handleReplLine } from './repl.js';
 import { checkoutGame } from './checkout.js';
+import { runCli } from './main.js';
 
 const dirs: string[] = [];
 const directory = () => {
@@ -17,7 +19,162 @@ const directory = () => {
 };
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+it('offers a fresh standard checkout alongside a detected source repository', async () => {
+  const { api, fetch } = fixture();
+  const parent = directory();
+  const root = join(parent, 'sky');
+  mkdirSync(join(root, 'src'), { recursive: true });
+  writeFileSync(
+    join(root, 'gamedev-kit.json'),
+    JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64) }),
+  );
+  writeFileSync(join(root, 'src/SPEC.md'), '---\nslug: sky\n---\n');
+  writeFileSync(join(root, 'src/game.ts'), 'my repository edits');
+  const questions: string[][] = [];
+  const result = await connectSession({
+    api,
+    slug: 'sky',
+    cwd: root,
+    env: { PATH: '' },
+    pick: async (choices) => {
+      questions.push(choices);
+      return choices.find((choice) =>
+        choice.startsWith(questions.length === 1 ? 'Create a standard checkout' : 'New directory'),
+      )!;
+    },
+    abort: { current: null },
+    write: () => {},
+  });
+  const dest = join(parent, 'sky-checkout');
+  expect(questions[0]![0]).toContain('Continue in existing checkout');
+  expect(result?.workshop?.root).toBe(dest);
+  expect(readFileSync(join(dest, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+  expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('my repository edits');
+  expect(existsSync(join(root, '.git'))).toBe(false);
+  expect(fetch.mock.calls.filter(([url]) => url.includes('/workspace'))).toHaveLength(1);
+});
+
+it('creates a standard checkout in cwd when the destination picker chooses dot', async () => {
+  const { api } = fixture();
+  const root = directory();
+  let count = 0;
+  const result = await connectSession({
+    api,
+    slug: 'sky',
+    cwd: root,
+    env: { PATH: '' },
+    pick: async (choices) => {
+      count++;
+      return count === 1 ? choices[0]! : choices.find((choice) => choice.startsWith('Current directory (.)'))!;
+    },
+    abort: { current: null },
+    write: () => {},
+  });
+  expect(result?.workshop?.root).toBe(root);
+  expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+  expect(existsSync(join(root, 'sky'))).toBe(false);
+  expect(execFileSync('git', ['-C', root, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim()).toBe(
+    'gamedevpl://sky',
+  );
+});
+
+it('cancels destination selection without downloading or writing files', async () => {
+  const { api, fetch } = fixture();
+  const root = directory();
+  let count = 0;
+  const result = await connectSession({
+    api,
+    slug: 'sky',
+    cwd: root,
+    env: { PATH: '' },
+    pick: async (choices) => (++count === 1 ? choices[0]! : 'Cancel'),
+    abort: { current: null },
+    write: () => {},
+  });
+  expect(result).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(existsSync(join(root, '.git'))).toBe(false);
+  expect(existsSync(join(root, 'sky'))).toBe(false);
+});
+
+it('suggests a sibling checkout when connecting from another game project', async () => {
+  const { api } = fixture();
+  const parent = directory();
+  const root = join(parent, 'other');
+  mkdirSync(root);
+  writeFileSync(join(root, '.gamedev-slug'), 'other');
+  const result = await connectSession({
+    api,
+    slug: 'sky',
+    cwd: root,
+    env: { PATH: '' },
+    pick: async (choices) => choices[0]!,
+    abort: { current: null },
+    write: () => {},
+  });
+  expect(result?.workshop?.root).toBe(join(parent, 'sky'));
+  expect(readFileSync(join(root, '.gamedev-slug'), 'utf8')).toBe('other');
+  expect(existsSync(join(root, 'sky'))).toBe(false);
+});
+
+it('refuses a fresh dot checkout into a detected project without accessing or replacing platform sources', async () => {
+  const { api, fetch } = fixture();
+  const root = directory();
+  writeFileSync(join(root, '.gamedev-slug'), 'sky');
+  writeFileSync(join(root, 'mine.ts'), 'local edits');
+  let count = 0;
+  await expect(
+    connectSession({
+      api,
+      slug: 'sky',
+      cwd: root,
+      env: { PATH: '' },
+      pick: async (choices) => {
+        count++;
+        return choices.find((choice) =>
+          choice.startsWith(count === 1 ? 'Create a standard checkout' : 'Current directory (.)'),
+        )!;
+      },
+      abort: { current: null },
+      write: () => {},
+    }),
+  ).rejects.toThrow('not empty');
+  expect(fetch).not.toHaveBeenCalled();
+  expect(readFileSync(join(root, 'mine.ts'), 'utf8')).toBe('local edits');
+});
+
+it('honors dot in the standalone checkout command', async () => {
+  const { fetch } = fixture();
+  const root = directory();
+  vi.spyOn(process, 'cwd').mockReturnValue(root);
+  vi.stubGlobal('fetch', fetch);
+  const io = {
+    stdin: new PassThrough() as unknown as NodeJS.ReadStream,
+    stdout: new PassThrough() as unknown as NodeJS.WriteStream,
+    stderr: new PassThrough() as unknown as NodeJS.WriteStream,
+  };
+  expect(await runCli(['node', 'cli', 'checkout', 'sky', '.'], { GAMEDEV_TOKEN: 't' }, io)).toBe(0);
+  expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+  expect(existsSync(join(root, 'sky'))).toBe(false);
+});
+
+it('honors dot in the REPL checkout command and refuses an occupied dot destination', async () => {
+  const { api, fetch } = fixture();
+  const root = directory();
+  const input = { line: '/checkout sky .', api, token: null, cwd: root, env: { PATH: '' }, write: () => {} };
+  const opened = await handleReplLine(input);
+  expect(opened.workshop?.root).toBe(root);
+  expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+  fetch.mockClear();
+  const messages: string[] = [];
+  const refused = await handleReplLine({ ...input, workshop: opened.workshop, write: (line) => messages.push(line) });
+  expect(refused.workshop).toBeUndefined();
+  expect(messages.join('\n')).toContain('not empty');
+  expect(fetch).not.toHaveBeenCalled();
 });
 function fixture() {
   const source = directory();

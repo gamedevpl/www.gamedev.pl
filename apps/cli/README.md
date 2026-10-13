@@ -398,6 +398,36 @@ still run on your game. No sources are pulled or published by a Kit update.
 
 ### Open an existing game
 
+A source repository with a pinned `gamedev-kit.json` and a `slug` in the
+frontmatter of `src/SPEC.md` is recognized directly. Run `gamedevpl connect`
+from its root, a source subdirectory or `.gamedev/local/`; `connect <slug>` also reuses this repository
+in preference to a nested checkout. Agents, Code, diff, pull and push use `src/`;
+Git history, remotes, scripts and documentation stay in the repository. No
+workspace download or second checkout is needed.
+
+To use a standard workspace instead, choose **Create a standard checkout** in
+Connect. The destination picker offers a new directory or the current directory
+(`.`), and shows the resolved path. A fresh checkout always requires an empty
+destination, even when it contains a recognized game. For another path, run
+`gamedevpl checkout airtime ../airtime-standard` or `/checkout airtime <directory>`.
+`gamedevpl checkout airtime .` and `/checkout airtime .` download into the current
+directory. Plain `/checkout` continues to reuse the current game's checkout.
+
+Local play and verification run the repository's `npm run setup` to prepare the
+pinned Kit in `.gamedev/local/`. The CLI mirrors current game sources into that
+build directory, including deletions; edit `src/`, not the generated runtime.
+PNG/WebP assets remain binary files in `src/` and the runtime; delivery uses base64.
+Kit changes remain controlled by `gamedev-kit.json` and the repository's setup.
+If the first connection finds local differences without `.gamedev-base.json`,
+local editing is available, but delivery and pull still require reconciliation.
+Review `gamedevpl diff`: `push --force` explicitly delivers your local sources;
+`pull --force` explicitly replaces them with platform sources. Neither happens
+automatically on connect. Recovery under a different slug requires a separate
+repository copy with its spec and setup scripts updated.
+Once opened, a source repository keeps its game identity in local metadata and
+its base record. Editing the SPEC slug cannot retarget that checkout to another
+game; restore its original slug or start from a fresh repository copy.
+
 Run `gamedevpl connect <slug>` in a terminal to enter an interactive session. Choose
 **Open a local checkout** to download the game (or reuse its checkout in the current
 directory), **Continue chatting** to work without local files, or an installed MCP

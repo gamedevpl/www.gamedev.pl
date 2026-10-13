@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Connect offers a standard checkout alongside an existing project, with a choice of a new directory or the current directory (`.`). An explicit checkout destination must be empty (#1824).
+
+### Fixed
+
+- Existing source repositories such as Airtime are detected from their root, source and generated runtime directories, including quoted SPEC slugs. Editing, preview, verification and delivery use src/ and preserve PNG/WebP bytes, including images returned after delivery, and ignored mirror deletions. Invalid metadata and changed game identity are refused; direct agents bind the original slug before launch (#1824).
+
 ## 0.45.2 — 2026-10-13
 
 ### Fixed

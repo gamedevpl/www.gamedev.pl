@@ -1,3 +1,4 @@
+import { gameSourceRoot } from './source-project.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync, lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs';
@@ -20,7 +21,7 @@ async function localActionUnlocked(
 ): Promise<boolean> {
   if (!['/verify', '/checkpoint', '/restore-checkpoint'].includes(line)) return false;
   if (!ws) throw Error('Open a local checkout first');
-  const game = pathInside(join(ws.root, 'games'), ws.slug);
+  const game = gameSourceRoot(ws.root, ws.slug);
   if (line === '/verify') {
     const hash = verificationSourceHash(ws.root, ws.slug);
     const abort = new AbortController();

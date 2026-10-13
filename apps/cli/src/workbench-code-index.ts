@@ -1,3 +1,4 @@
+import { gameSourcePath } from './source-project.js';
 import { lstat, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathInside } from './checkout-sync.js';
@@ -52,7 +53,7 @@ export async function readCodeIndex(checkout: CodeCheckout) {
     }
   };
   codeProjectId(checkout);
-  await walk(`games/${checkout.slug}`);
+  await walk(gameSourcePath(checkout.root, checkout.slug));
   await walk('shared');
   return { projectId: codeProjectId(checkout), files };
 }

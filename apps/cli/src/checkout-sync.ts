@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { sanitizePath } from './ansi.js';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { bindSourceProject } from './source-project.js';
 
 export type TreeFile = { path: string; content: string };
 
@@ -17,7 +18,7 @@ export type SyncResult = {
   conflict: string[];
 };
 
-export type BaseRecord = { version: string; files: Record<string, string> };
+export type BaseRecord = { version: string; files: Record<string, string>; slug?: string };
 
 export const BASE_FILE = '.gamedev-base.json';
 
@@ -58,8 +59,9 @@ export function readBase(dest: string): BaseRecord | null {
 }
 
 export function writeBase(dest: string, version: string, files: TreeFile[]): void {
+  const project = bindSourceProject(dest);
   const tracked = files.filter((file) => !file.path.split('/').includes('.git'));
-  const record: BaseRecord = { version, files: hashesOf(tracked) };
+  const record: BaseRecord = { version, files: hashesOf(tracked), ...(project ? { slug: project.slug } : {}) };
   writeFileSync(join(dest, BASE_FILE), `${JSON.stringify(record, null, 2)}\n`);
 }
 

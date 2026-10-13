@@ -1,3 +1,4 @@
+import { sourceSetupArgs, syncSourceRuntime } from './source-project-runtime.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -27,6 +28,13 @@ export async function prepareWorkspace(input: {
     if (input.abort?.aborted || code !== 0)
       throw new CliError('checkout setup did not complete', EXIT_REFUSED, `check the output in ${input.cwd}`);
   };
+  const setup = sourceSetupArgs(input.cwd);
+  if (setup) {
+    input.write('preparing the repository runtime');
+    await run('npm', setup);
+    syncSourceRuntime(input.cwd);
+    return;
+  }
   if (existsSync(join(input.cwd, 'setup.mjs')) && existsSync(join(input.cwd, 'gamedev.lock'))) {
     input.write('preparing the pinned Creator Kit');
     await run(process.execPath, ['setup.mjs']);

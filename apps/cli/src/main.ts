@@ -343,7 +343,7 @@ export async function runCli(
     if (verb === 'checkout') {
       const slug = args[0];
       if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
-      const dest = args[1] ?? slug;
+      const dest = resolvePath(args[1] ?? slug);
       const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
       for (const notice of result.notices) io.stdout.write(`${notice}\n`);
@@ -416,7 +416,7 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
-      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      const slug = args[0] ?? findCheckout(process.cwd())?.slug;
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
       if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');

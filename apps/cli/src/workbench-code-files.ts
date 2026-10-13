@@ -1,3 +1,4 @@
+import { gameSourcePath, projectRuntimeRoot } from './source-project.js';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   constants,
@@ -28,7 +29,7 @@ export function codeProjectId(checkout: CodeCheckout): string {
 
 export function codeFileAllowed(checkout: CodeCheckout, path: string): boolean {
   if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(checkout.slug)) throw Error('Invalid project');
-  const projectPrefix = `games/${checkout.slug}/`;
+  const projectPrefix = `${gameSourcePath(checkout.root, checkout.slug)}/`;
   const own =
     path.startsWith(projectPrefix) &&
     isDeliverablePath(path.slice(projectPrefix.length)) &&
@@ -51,10 +52,13 @@ function safePath(checkout: CodeCheckout, path: string): string {
 }
 
 export function codeStoragePath(root: string, path: string): string {
-  const kit = 'node_modules/@gamedevpl/gamekit';
+  const runtime = projectRuntimeRoot(root);
+  const kit = runtime === root ? 'node_modules/@gamedevpl/gamekit' : '.gamedev/local/node_modules/@gamedevpl/gamekit';
   return (path === 'shared' || path.startsWith('shared/')) && existsSync(join(root, kit, 'shared'))
     ? `${kit}/${path}`
-    : path;
+    : runtime !== root && (path === 'shared' || path.startsWith('shared/'))
+      ? `.gamedev/local/${path}`
+      : path;
 }
 
 export function readCodeFile(checkout: CodeCheckout, path: string): CodeFile {

@@ -1,3 +1,5 @@
+import { projectRuntimeRoot } from './source-project.js';
+import { sourceSetupArgs, syncSourceRuntime } from './source-project-runtime.js';
 import { childEnv, spawnCommand } from './delegate.js';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,7 +22,10 @@ function verificationScripts(cwd: string): VerificationScripts {
   if (!existsSync(marker)) return LEGACY_SCRIPTS;
   const kit = JSON.parse(readFileSync(marker, 'utf8')) as { cliVerification?: Partial<VerificationScripts> };
   if (!kit.cliVerification) return LEGACY_SCRIPTS;
-  const scripts = kit.cliVerification;
+  return checkedScripts(kit.cliVerification);
+}
+
+function checkedScripts(scripts: Partial<VerificationScripts>): VerificationScripts {
   for (const value of [scripts.typecheck, scripts.checkStatic, scripts.checkGame]) {
     if (typeof value !== 'string' || !/^[a-z][a-z0-9:-]*$/.test(value))
       throw new CliError('Invalid Creator Kit verification scripts.', EXIT_RED);
@@ -52,7 +57,7 @@ export class VerificationError extends CliError {
     readonly sourceHash?: string,
     slug?: string,
   ) {
-    const scripts = verificationScripts(cwd);
+    const scripts = verificationScripts(projectRuntimeRoot(cwd));
     const script = { typecheck: scripts.typecheck, check_static: scripts.checkStatic, check_game: scripts.checkGame }[
       result.stage
     ];
@@ -61,7 +66,7 @@ export class VerificationError extends CliError {
     super(
       `verify failed at ${result.stage}${detail ? '\n' + detail : '\nThe check returned no diagnostics.'}`,
       EXIT_RED,
-      `Fix the reported errors, then retry delivery. To inspect this check, run npm run ${script}${gameSlug ? ` -- ${gameSlug}` : ''} in the checkout.`,
+      `Fix the reported errors, then retry delivery. To inspect this check, run npm run ${script}${gameSlug ? ` -- ${gameSlug}` : ''} in ${projectRuntimeRoot(cwd)}.`,
     );
     this.stage = result.stage;
     this.detail = detail;
@@ -98,10 +103,18 @@ export function runLadder(input: {
 }): { ok: true } | { ok: false; stage: VerifyStage; detail: string } {
   const run: VerifyRun = input.run ?? ((cmd, args, cwd, env) => spawnSync(cmd, args, { cwd, env, encoding: 'utf8' }));
   const env = childEnv(process.env, '');
-  const steps = verificationSteps(input.cwd, input.publish, input.slug);
+  const setup = sourceSetupArgs(input.cwd);
+  if (setup) {
+    input.onStage?.('Preparing repository sources for verification');
+    const prepared = run('npm', setup, input.cwd, env);
+    if (prepared.status !== 0)
+      return { ok: false, stage: 'typecheck', detail: [prepared.stderr, prepared.stdout].filter(Boolean).join('\n') };
+  }
+  const cwd = setup ? syncSourceRuntime(input.cwd) : input.cwd;
+  const steps = verificationSteps(cwd, input.publish, input.slug);
   for (const [index, step] of steps.entries()) {
     input.onStage?.(`Checking local game ${index + 1}/${steps.length}: npm ${step.args.join(' ')}`);
-    const result = run('npm', step.args, input.cwd, env);
+    const result = run('npm', step.args, cwd, env);
     if ((result.status ?? 1) !== 0) {
       return {
         ok: false,
@@ -133,8 +146,13 @@ export async function runLadderAsync(input: {
   onStage?: (message: string) => void;
 }): Promise<ReturnType<typeof runLadder>> {
   if (input.run) return runLadder({ ...input, publish: input.publish === true });
+  if (sourceSetupArgs(input.cwd)) {
+    const { prepareWorkspace } = await import('./prepare-workspace.js');
+    await prepareWorkspace({ ...input, env: process.env, write: input.onStage ?? (() => {}) });
+  }
+  const cwd = syncSourceRuntime(input.cwd);
   const env = childEnv(process.env, '');
-  const steps = verificationSteps(input.cwd, input.publish === true, input.slug);
+  const steps = verificationSteps(cwd, input.publish === true, input.slug);
   for (const [index, { stage, args }] of steps.entries()) {
     if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
     input.onStage?.(`Checking local game ${index + 1}/${steps.length}: npm ${args.join(' ')}`);
@@ -143,7 +161,7 @@ export async function runLadderAsync(input: {
     const child = spawnCommand({
       command: 'npm',
       args,
-      cwd: input.cwd,
+      cwd,
       env,
       timeoutMs,
       onTimeout: () => {

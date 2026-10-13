@@ -1,3 +1,4 @@
+import { bindSourceProject, gameSourceRoot, gameSourcePath, sourceProject } from './source-project.js';
 import { PROGRESS_INSTRUCTIONS } from './local-progress.js';
 
 import { withCheckoutWriter } from './workbench-lock.js';
@@ -17,7 +18,6 @@ import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
-import { join } from 'node:path';
 import type { ApiClient } from './api.js';
 import { preflightAdapter, type AdapterSpec } from './adapters.js';
 import { chooseAdapter, describeAdapters, detectLocalAdapters } from './workshop-adapters.js';
@@ -82,12 +82,13 @@ export async function openWorkshop(input: {
   which?: (cmd: string) => string | null;
   write: (line: string) => void;
 }): Promise<{ adapters: AdapterSpec[]; builder: string; status: string; activityApi: ApiClient }> {
+  bindSourceProject(input.root, input.slug);
   const adapters = detectLocalAdapters(input.env, input.which);
   input.write(`◆ ${input.slug} — the checkout at ${input.root}`);
   try {
     const { sync, ignored } = await inspectGame({ api: input.api, slug: input.slug, dest: input.root });
     input.write(formatWorkingCopy({ sync, ignored }).join('\n'));
-    const warning = syncWarning(sync);
+    const warning = syncWarning(sync, sourceProject(input.root) !== null);
     if (warning) input.write(`! ${warning}`);
   } catch (error) {
     input.write(formatError(error));
@@ -185,7 +186,7 @@ export async function runLocalBuild(input: {
   input.write(ws.unattended ? `Full transcript: ${output.path}` : 'Settings: /model · full transcript: /logs');
   ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
-  const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
+  const cwd = spec.cwd === 'game-dir' ? gameSourceRoot(ws.root, ws.slug) : ws.root;
   const controller = new AbortController();
   const permitted = applyPermissionMode(spec, mode);
   ws.abort.current = controller;
@@ -208,7 +209,7 @@ export async function runLocalBuild(input: {
     }
     presence = localActivity(ws.activityApi, ws.token, spec.name);
     ws.onLocalTask?.(spec.name);
-    input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
+    input.write(`▸ Preparing ${spec.name} in ${gameSourcePath(ws.root, ws.slug)} — Ctrl+C stops it`);
     if (!ws.runAdapter) {
       input.write('Preparing Creator Kit and dependencies…');
       output.preparing(true);
@@ -399,7 +400,7 @@ export async function offerSubmit(input: {
   }
 }
 
-// Only a self-owned, synchronized checkout may be edited locally.
+// Unsynchronized repositories can edit locally; delivery still requires review.
 export async function readyToEdit(input: {
   api: ApiClient;
   ws: Workshop;
@@ -412,10 +413,11 @@ export async function readyToEdit(input: {
   }
   try {
     const { sync } = await inspectGame({ api: input.api, slug: ws.slug, dest: ws.root });
-    const warning = syncWarning(sync);
+    const sourceRepository = sourceProject(ws.root) !== null;
+    const warning = syncWarning(sync, sourceRepository);
     if (warning) {
       input.write(`! ${warning}`);
-      return false;
+      if (!(sourceRepository && sync.kind === 'legacy')) return false;
     }
     return true;
   } catch (error) {
@@ -448,7 +450,7 @@ async function workshopTurnUnlocked(input: {
     ok = await runLocalBuild({
       ws: input.ws,
       spec,
-      brief: workshopBrief(input.ws.slug, input.request, input.ack),
+      brief: workshopBrief(input.ws.slug, input.request, input.ack, input.ws.root),
       baseline: before,
       write: input.write,
     });

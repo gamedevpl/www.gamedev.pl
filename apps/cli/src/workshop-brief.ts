@@ -1,10 +1,13 @@
-export function workshopBrief(slug: string, request: string, ack?: string): string {
+import { sourceProject, gameSourcePath } from './source-project.js';
+export function workshopBrief(slug: string, request: string, ack?: string, root?: string): string {
   return [
-    `You are editing the gamedev.pl game "${slug}". This directory is its source tree (games/${slug} in the checkout).`,
+    `You are editing the gamedev.pl game "${slug}". This directory is its source tree (${root ? gameSourcePath(root, slug) : `games/${slug}`} in the checkout).`,
     `Creator request: ${request}`,
     ack ? `Studio understood it as: ${ack}` : '',
     'Change game files only in this directory. Do not run git or publish — the creator delivers with `gamedevpl push`. Do not change project dependencies or lockfiles.',
-    'The checkout root (../.. from here) holds the Creator Kit — README.md, CREATOR-KIT.md and the pinned node_modules/@gamedevpl/gamekit package (SKILL.md, shared/, tools/). Legacy checkouts keep the Kit at the root. It is read-only here: read it for reference, never edit it.',
+    root && sourceProject(root)
+      ? 'The repository root is .. from src/. Its pinned Creator Kit and dependencies live in .gamedev/local/. Read the repository README.md and Kit docs there for reference; never edit the generated runtime. Edit src/ only; the CLI copies sources into the runtime for verification and preview.'
+      : 'The checkout root (../.. from here) holds the Creator Kit — README.md, CREATOR-KIT.md and the pinned node_modules/@gamedevpl/gamekit package (SKILL.md, shared/, tools/). Legacy checkouts keep the Kit at the root. It is read-only here: read it for reference, never edit it.',
     'This is a local task: never call gamedev.pl platform MCP tools (start, get_kit, submit_sources, end) or open a round. The CLI verifies and delivers.',
     'For visual checks, use an available browser tool or launch and control a local browser through shell commands or scripts, when permitted by the applicable tool instructions. A disconnected browser plugin does not by itself mean shell-based browser automation is unavailable. Use suitable installed tooling; Playwright, Puppeteer, or a browser headless CLI are examples, not requirements.',
     'If needed and permitted, install suitable browser automation tooling and its browser into an isolated temporary directory/cache, outside the game project. Do not install global packages, change sandbox permissions, or bypass a denied operation. If setup fails, report it once and continue the work that does not need a browser.',

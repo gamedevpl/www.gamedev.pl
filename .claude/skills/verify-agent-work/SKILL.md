@@ -369,6 +369,27 @@ Two concrete instances of that (observed 2026-07-23):
   inside the checkout; a not-game file symlink is not read and survives pull). The renamed
   test does not lock that in. The follow-up commit added those probes; the lesson is the
   renamed test.
+- **Invalid identity metadata must not silently select another source layout.** Observed
+  (#1824 review, 2026-10-13): removing the SPEC slug or corrupting the Kit pin made
+  source-repository detection return null. Delivery then scanned an absent `games/<slug>`
+  directory and treated existing `src/` files as deleted. After establishing a base,
+  damage each identity file and probe diff, forced push, pull, and runtime sync. Refuse
+  invalid metadata before writes or staging; reserve the alternate layout for roots
+  without source-repository markers. Exercise an already-running preview too: a
+  refusal thrown by its fingerprint watcher must reach the error display rather
+  than terminate the server. Repair the metadata and require the preview to resume.
+  Launch detection and Connect from the generated runtime and a deeper directory;
+  its own slug marker must resolve back to canonical sources, never to the mirror.
+  Change SPEC to a different valid owned slug after saving a base, then remove the
+  runtime: the base must still bind the original game. Also connect an unbased
+  repository and change its slug; its local identity must block cross-game writes.
+  Exercise direct `connect --agent` with no base or runtime, including headless
+  and interactive adapters. Every launch route must bind identity before delegation.
+  Use a real PNG/WebP to test source mirroring and pull, plus the exact staged
+  base64 payload. Text fixtures cannot reveal binary corruption. Reject damaged
+  base64 before deleting stale sources, preserving the source tree on refusal.
+  Return a new raster from the post-delivery tree; that merge must use the same
+  binary conversion as pull and mirroring, and refuse paths through symlinks.
 - **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
   treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
   is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new

@@ -1,3 +1,5 @@
+import { gameSourceRoot, projectRuntimeRoot } from '../src/source-project.ts';
+import { sourceKitRoot, syncSourceRuntime } from '../src/source-project-runtime.ts';
 import { PLAY_PAGE } from '../src/play-page.ts';
 import { playPresence, attachPlayPresence } from '../src/play-presence.ts';
 
@@ -8,9 +10,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 const [root, slug, statePath, key] = process.argv.slice(2);
-const kitRoot = existsSync(join(root, 'node_modules/@gamedevpl/gamekit/package.json'))
-  ? join(root, 'node_modules/@gamedevpl/gamekit')
-  : root;
+const workspaceRoot = projectRuntimeRoot(root);
+const kitRoot = sourceKitRoot(root);
 const cliVersion = process.env.GAMEDEVPL_PREVIEW_VERSION;
 const token = randomBytes(24).toString('hex');
 let html = '',
@@ -49,8 +50,14 @@ function treeStamp(dir) {
   }
 }
 function sourceStamp() {
+  let sources;
+  try {
+    sources = gameSourceRoot(root, slug);
+  } catch (failure) {
+    return 'invalid-source:' + failure.message;
+  }
   return [
-    join(root, 'games', slug),
+    sources,
     join(kitRoot, 'shared'),
     join(kitRoot, 'starters'),
     join(root, 'templates'),
@@ -61,6 +68,13 @@ function sourceStamp() {
     .join('|');
 }
 function assemble() {
+  try {
+    syncSourceRuntime(root);
+  } catch (failure) {
+    error = failure.message;
+    attemptedFingerprint = fingerprint;
+    return;
+  }
   busy = true;
   const buildingFingerprint = fingerprint;
   const source =
@@ -80,12 +94,17 @@ function assemble() {
     process.execPath,
     [
       '--import',
-      pathToFileURL(join(root, 'node_modules/tsx/dist/loader.mjs')).href,
+      pathToFileURL(join(workspaceRoot, 'node_modules/tsx/dist/loader.mjs')).href,
       '--input-type=module',
       '-e',
       source,
     ],
-    { cwd: root, env: { ...process.env, GAMEDEV_REPO_ROOT: root }, timeout: 30000, maxBuffer: 32 * 1024 * 1024 },
+    {
+      cwd: workspaceRoot,
+      env: { ...process.env, GAMEDEV_REPO_ROOT: workspaceRoot },
+      timeout: 30000,
+      maxBuffer: 32 * 1024 * 1024,
+    },
     (failure, stdout, stderr) => {
       busy = false;
       attemptedFingerprint = buildingFingerprint;

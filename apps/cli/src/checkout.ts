@@ -1,4 +1,5 @@
-import { isDeliverablePath } from '@gamedevpl/contract';
+import { bindSourceProject, sourceProject, gameSourcePath, gameSourceRoot } from './source-project.js';
+import { isDeliverablePath, isRasterSourcePath } from '@gamedevpl/contract';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -36,13 +37,16 @@ export type VersionRow = {
 
 export function readCheckoutSlug(cwd: string): string | null {
   const path = join(cwd, '.gamedev-slug');
-  return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : null;
+  return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : (sourceProject(cwd)?.slug ?? null);
 }
 
 // Walk up, so any subdirectory of a checkout finds it.
 export function findCheckout(cwd: string): { slug: string; root: string } | null {
   let dir = resolve(cwd);
   for (let depth = 0; depth < 40; depth += 1) {
+    const sourceRoot = dirname(dirname(dir));
+    const project = dir === join(sourceRoot, '.gamedev/local') ? sourceProject(sourceRoot) : null;
+    if (project) return { slug: project.slug, root: sourceRoot };
     const slug = readCheckoutSlug(dir);
     if (slug) return { slug, root: dir };
     const parent = dirname(dir);
@@ -74,8 +78,22 @@ function coversTracked(path: string, tracked: Set<string>): boolean {
   return false;
 }
 
+export function readGameContent(path: string, relativePath: string, binaryRasters: boolean): string {
+  return binaryRasters && isRasterSourcePath(relativePath)
+    ? readFileSync(path).toString('base64')
+    : readFileSync(path, 'utf8');
+}
+
+export function rasterBytes(file: TreeFile): Buffer {
+  const compact = file.content.replace(/\s+/g, '');
+  const bytes = Buffer.from(compact, 'base64');
+  if (!compact || bytes.toString('base64') !== compact)
+    throw new CliError(`Invalid base64 raster content: ${file.path}.`, EXIT_REFUSED);
+  return bytes;
+}
+
 function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: IgnoredHit[] } {
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
   const files: TreeFile[] = [];
   const ignored: IgnoredHit[] = [];
   if (!existsSync(root)) return { files, ignored };
@@ -83,7 +101,7 @@ function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: Ign
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) return { files, ignored };
   const matcher = createIgnoreMatcher(dest);
   const tracked = trackedPaths(dest);
-  const prefix = `games/${slug}`;
+  const prefix = gameSourcePath(dest, slug);
   const visit = (rel: string): void => {
     const dir = rel ? join(root, rel) : root;
     const dirStat = lstatSync(dir);
@@ -113,7 +131,7 @@ function scanGame(dest: string, slug: string): { files: TreeFile[]; ignored: Ign
         continue;
       }
       if (directory) visit(nextRel);
-      else if (stat.isFile()) files.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
+      else if (stat.isFile()) files.push({ path: nextRel, content: readGameContent(abs, nextRel, prefix === 'src') });
     }
   };
   visit('');
@@ -139,7 +157,7 @@ function ignoredUntracked(
   if (rel.split('/').includes('.git')) return true;
   // Mirrors scanGame's not-game skip on the platform side.
   if (!isDirectory && !isDeliverablePath(rel)) return true;
-  const match = matcher.ignored(`games/${slug}/${rel}`, isDirectory);
+  const match = matcher.ignored(`${gameSourcePath(dest, slug)}/${rel}`, isDirectory);
   return match !== null && !coversTracked(rel, tracked);
 }
 
@@ -155,7 +173,8 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
   const blocked: string[] = [];
   const absent: string[] = [];
   const git: string[] = [];
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
+  const binaryRasters = gameSourcePath(dest, slug) === 'src';
   for (const file of files) {
     if (file.path.split('/').includes('.git')) {
       git.push(file.path);
@@ -195,7 +214,8 @@ export function classifyIncoming(dest: string, slug: string, files: TreeFile[]):
       absent.push(file.path);
       continue;
     }
-    if (stat.isSymbolicLink() || !stat.isFile() || readFileSync(abs, 'utf8') !== file.content) blocked.push(file.path);
+    if (stat.isSymbolicLink() || !stat.isFile() || readGameContent(abs, file.path, binaryRasters) !== file.content)
+      blocked.push(file.path);
   }
   return {
     blocked: [...new Set(blocked)].sort(),
@@ -222,13 +242,22 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
   return { version: tree.version, files: tree.files };
 }
 
-export function writeGameFiles(dest: string, slug: string, files: TreeFile[], options?: { force?: boolean }): void {
+export function writeGameFiles(
+  dest: string,
+  slug: string,
+  files: TreeFile[],
+  options?: { force?: boolean; binaryRasters?: boolean },
+): void {
   const keep = new Set(files.map((file) => file.path));
-  const root = join(dest, 'games', slug);
+  const root = gameSourceRoot(dest, slug);
+  const binaryRasters = options?.binaryRasters || gameSourcePath(dest, slug) === 'src';
+  const contents = files.map((file) =>
+    binaryRasters && isRasterSourcePath(file.path) ? rasterBytes(file) : file.content,
+  );
   for (const stale of localGameFiles(dest, slug)) {
     if (!keep.has(stale.path)) rmSync(pathInside(root, stale.path));
   }
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     if (file.path.split('/').includes('.git')) continue;
     const abs = pathInside(root, file.path);
     if (options?.force) {
@@ -250,13 +279,26 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[], op
         rmSync(abs, { recursive: true, force: true });
       }
     }
-    writeFileSync(abs, file.content);
+    writeFileSync(abs, contents[index]!);
   }
 }
 
 export function initializeCheckoutGit(dest: string, slug: string, run = defaultRun): void {
   run('git', ['init'], dest);
   run('git', ['remote', 'add', 'origin', gitRemoteUrl(slug)], dest);
+}
+
+export function assertCheckoutDestination(dest: string, slug: string): void {
+  if (
+    existsSync(dest) &&
+    (lstatSync(dest).isSymbolicLink() || !lstatSync(dest).isDirectory() || readdirSync(dest).length > 0)
+  ) {
+    throw new CliError(
+      'Checkout destination is not empty; your files were left untouched.',
+      EXIT_REFUSED,
+      `Choose another directory: ${cliUsage('checkout', `${slug} <new-directory>`)}`,
+    );
+  }
 }
 
 export async function checkoutGame(input: {
@@ -268,18 +310,7 @@ export async function checkoutGame(input: {
   allowUndelivered?: boolean;
 }): Promise<{ dest: string; remote: string; notices: string[] }> {
   const run = input.run ?? defaultRun;
-  if (
-    existsSync(input.dest) &&
-    (lstatSync(input.dest).isSymbolicLink() ||
-      !lstatSync(input.dest).isDirectory() ||
-      readdirSync(input.dest).length > 0)
-  ) {
-    throw new CliError(
-      'Checkout destination is not empty; your files were left untouched.',
-      EXIT_REFUSED,
-      `Choose another directory: ${cliUsage('checkout', `${input.slug} <new-directory>`)}`,
-    );
-  }
+  assertCheckoutDestination(input.dest, input.slug);
   mkdirSync(input.dest, { recursive: true });
   const archive = input.fetchBuffer
     ? await input.fetchBuffer(`${input.api.origin}/api/me/studio/games/${input.slug}/workspace`)
@@ -321,6 +352,7 @@ export async function inspectGame(input: { api: ApiClient; slug: string; dest: s
   tree: { version: string; files: TreeFile[] };
   ignored: IgnoredHit[];
 }> {
+  bindSourceProject(input.dest, input.slug);
   const tree = await fetchLatestTree(input.api, input.slug);
   const base = readBase(input.dest);
   const ignored = ignoredGameFiles(input.dest, input.slug);
