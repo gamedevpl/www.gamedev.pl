@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.44.3 — 2026-10-13
+
 ### Fixed
 
 - Interactive terminal defaults to sequential streaming (like Claude Code) so native text selection and terminal scrollback work out of the box, activating mouse reporting and the split layout only when the workspace sidebar is opened with Ctrl+B (#1817).
