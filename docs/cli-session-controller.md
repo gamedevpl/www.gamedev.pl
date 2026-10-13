@@ -50,17 +50,13 @@ The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns
 retain the static transcript. The scrollable view measures message heights, then replaces
 offscreen messages with spacers; typing reuses the visible transcript. Width changes
 remeasure wrapping, and appended messages retain earlier heights. Both use `TranscriptLine`, the existing composer,
-choice handling, diagnostics and diff viewer. Ctrl+B hides the sidebar, and PgUp/PgDn
+choice handling, diagnostics and diff viewer. Ctrl+B toggles the sidebar (hidden by default), and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
-Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling.
-Reports route to the conversation, question, diff or diagnostics under the pointer;
-they never become composer text or choice answers. Delivery choices retain the
-conversation above their question. Compact layouts keep native terminal scrollback.
-Ctrl+T disables reporting for native selection and freezes the displayed session,
-sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
-subscribes to the latest controller state. Ctrl+C stays available while copying. Resizing below the split threshold keeps
-the selection pause and its Ctrl+T resume hint active.
+Native text selection and standard terminal scrollback remain enabled by default without capturing mouse events.
+Ctrl+T (or `GAMEDEV_MOUSE=1`) toggles in-terminal SGR mouse reporting for wheel/trackpad scrolling across split
+panes, routing to the conversation, question, diff or diagnostics under the pointer without leaking into
+composer text or choice answers. Compact layouts always keep native terminal scrollback.
 Unmounting, including native agent handoffs, disables reporting; remounting restores it.
 This scrolling correction adds no telemetry event or creator-funnel dimension.
 

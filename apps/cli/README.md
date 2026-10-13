@@ -329,23 +329,18 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 
 ### Terminal workspace sidebar
 
-`gamedevpl --terminal` shows a conversation/status split at 120 columns and 16 rows
+`gamedevpl --terminal` supports a conversation/status split at 120 columns and 16 rows
 or larger. The right sidebar shows the current task, queued follow-ups, preview
 availability, existing Studio round updates, and added/modified/deleted game files.
-Ctrl+B hides or restores it without clearing the input. The mouse wheel or trackpad
-scrolls the conversation under the pointer; PgUp/PgDn scroll the chat;
-while answering a choice, they scroll that question instead. Check output stays visible
-above choices. The wheel scrolls long questions, diffs and diagnostics under the pointer.
-Ctrl+T temporarily restores native text selection and pauses display updates so
-you can drag to select and copy. Press Ctrl+T again to resume TUI scrolling and
-show updates received meanwhile. Tasks continue while the display is paused;
-Ctrl+C still stops or exits. Compact terminals retain native terminal scrolling, and mouse reporting is restored
-when the workspace closes or hands the terminal to an agent. Existing `/diff`, Ctrl+D
-and `/logs` keep their scrollable detail views.
+It is hidden by default; press Ctrl+B (or set `GAMEDEV_SIDEBAR=1`) to show or hide
+it without clearing the input.
 
-In macOS Terminal.app, leave **View → Allow Mouse Reporting** selected. The CLI
-enables reporting while the workspace is active. Without it, use PgUp/PgDn
-(Fn+↑ / Fn+↓ on Mac keyboards) to scroll inside the TUI.
+Native text selection and standard terminal scrolling remain enabled by default with no mouse
+capture, so you can drag to select and copy text anywhere in the session. Use PgUp/PgDn
+(Fn+↑ / Fn+↓ on Mac keyboards) to scroll the chat; while answering a choice, they scroll that
+question instead. Check output stays visible above choices. Press Ctrl+T (or set `GAMEDEV_MOUSE=1`)
+to toggle in-terminal mouse wheel reporting on and off if you prefer mouse wheel scrolling across
+split panes. Existing `/diff`, Ctrl+D and `/logs` keep their scrollable detail views.
 
 Changes are compared with `.gamedev-base.json`, not Git, using the same game-file
 reader and ignore rules as submission. Shared Kit files stay out of the list. The
