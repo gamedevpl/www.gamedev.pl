@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Missing-base warnings in `status`, `diff` and refused pulls explain `pull --force`, its overwrite and backup requirement, and `push --force` for delivering local sources, instead of sending existing repositories to another checkout.
+
 ## 0.46.0 — 2026-10-13
 
 ### Added

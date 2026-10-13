@@ -1,6 +1,7 @@
 import type { DiffReport } from './checkout.js';
 import { sanitizePath, stripTerminalControls } from './ansi.js';
 import { formatIgnoredNotice } from './working-copy.js';
+import { missingBaseRecovery } from './checkout-sync.js';
 
 function fileLabels(patches: string[]): Map<string, string> {
   const labels = new Map<string, string>();
@@ -19,6 +20,7 @@ function notices(report: DiffReport): string[] {
   const lines: string[] = [];
   if (report.kind === 'legacy') {
     lines.push('Checkout has no base version; local and platform changes cannot be separated safely.');
+    lines.push(missingBaseRecovery());
   }
   if (report.incoming.blocked.length) {
     lines.push('', 'Ignored paths blocking pull:');

@@ -193,10 +193,16 @@ describe('what a refused sync tells you to do next', () => {
     expect(refused.next).toBe('gamedevpl pull');
   });
 
-  it('points a checkout with no base at diff before it re-checks out', () => {
-    const refused = syncRefuse(refusal('legacy'), 'pull');
+  it.each(['pull', 'submit'] as const)('explains both recovery choices when %s has no base', (op) => {
+    const refused = syncRefuse(refusal('legacy'), op);
     expect(refused.message).toContain('gamedevpl diff');
-    expect(refused.next).toBe('gamedevpl checkout <slug>');
+    expect(refused.message).toContain('back up your local game sources');
+    expect(refused.message).toContain('gamedevpl pull --force');
+    expect(refused.message).toContain('replaces local game sources and records a base version');
+    expect(refused.message).toContain('gamedevpl push --force');
+    expect(refused.message).not.toContain('games/<slug>');
+    expect(refused.message).not.toContain('checkout <slug>');
+    expect(refused.next).toBe('gamedevpl diff');
   });
 
   it('still explains the fallback case instead of naming a state', () => {

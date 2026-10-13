@@ -311,6 +311,21 @@ it('allows local edits in an unbased source repository while delivery still requ
   ).toBe(true);
   expect(messages.join('\n')).toContain('review /diff');
   await expect(submitGame({ api, slug: 'airtime', dest: root })).rejects.toThrow('no base version');
+  await expect(pullGame({ api, slug: 'airtime', dest: root })).rejects.toMatchObject({
+    message: expect.stringContaining('gamedevpl pull --force'),
+    next: 'gamedevpl diff',
+  });
+  expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('export const score = 2;');
+  expect(existsSync(join(root, '.gamedev-base.json'))).toBe(false);
+  await pullGame({ api, slug: 'airtime', dest: root, force: true });
+  expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('export const score = 1;');
+  expect(JSON.parse(readFileSync(join(root, '.gamedev-base.json'), 'utf8'))).toMatchObject({
+    version: 'v1',
+    slug: 'airtime',
+  });
+  expect((await diffGame({ api, slug: 'airtime', dest: root })).kind).toBe('clean');
+  expect(readFileSync(join(root, '.git/config'), 'utf8')).toContain('gtanczyk/airtime.git');
+  expect(existsSync(join(root, 'games'))).toBe(false);
 });
 
 it.each(['"airtime"', "'airtime'", '  "airtime"  '])('recognizes a quoted SPEC slug: %s', (slug) => {
