@@ -6,8 +6,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { connectSession } from './connect-flow.js';
-import { findCheckout, localGameFiles, writeBase, diffGame, pullGame } from './checkout.js';
-import { sourceProject } from './source-project.js';
+import { findCheckout, localGameFiles, writeGameFiles, writeBase, diffGame, pullGame } from './checkout.js';
+import { projectRuntimeRoot, sourceProject } from './source-project.js';
 import { syncSourceRuntime } from './source-project-runtime.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 import { runLadder, runLadderAsync } from './verify.js';
@@ -118,7 +118,7 @@ it.each(['src', 'src/SPEC.md', 'gamedev-kit.json'])('does not recognize symbolic
   if (content) writeFileSync(moved, content);
   else mkdirSync(moved);
   symlinkSync(moved, target);
-  expect(sourceProject(root)).toBeNull();
+  expect(() => sourceProject(root)).toThrow('Invalid source repository metadata');
 });
 
 it('reuses repository sources when connecting, even when a nested checkout already exists', async () => {
@@ -276,7 +276,7 @@ it.each(['"airtime"', "'airtime'", '  "airtime"  '])('recognizes a quoted SPEC s
 it.each(['"../airtime"', "'air time'", '"AIRTIME"', '""'])('rejects an invalid quoted SPEC slug: %s', (slug) => {
   const { root, put } = fixture();
   put('src/SPEC.md', `---\nslug: ${slug}\n---\n`);
-  expect(sourceProject(root)).toBeNull();
+  expect(() => sourceProject(root)).toThrow('Invalid source repository metadata');
 });
 
 it('removes deleted mirror files even when runtime ignore rules hide them', () => {
@@ -288,4 +288,40 @@ it('removes deleted mirror files even when runtime ignore rules hide them', () =
   syncSourceRuntime(root);
   expect(existsSync(join(runtime, 'games/airtime/game/old.ts'))).toBe(false);
   expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('export const score = 1;');
+});
+
+it.each([
+  'missing slug',
+  'malformed pin',
+  'invalid pin',
+  'missing pin',
+  'missing SPEC',
+  'missing src',
+  'missing metadata',
+])('refuses damaged source metadata before diff, writes or delivery: %s', async (damage) => {
+  const { root, runtime, put } = fixture();
+  const before = localGameFiles(root, 'airtime');
+  const { api, fetch } = backend(before);
+  writeBase(root, 'v1', before);
+  syncSourceRuntime(root);
+  if (damage === 'missing slug') put('src/SPEC.md', '---\ntitle: Airtime\n---\n');
+  if (damage === 'malformed pin') put('gamedev-kit.json', '{');
+  if (damage === 'invalid pin') put('gamedev-kit.json', '{"engineRef":"invalid"}');
+  if (damage === 'missing pin' || damage === 'missing metadata') rmSync(join(root, 'gamedev-kit.json'));
+  if (damage === 'missing SPEC' || damage === 'missing metadata') rmSync(join(root, 'src/SPEC.md'));
+  if (damage === 'missing src') rmSync(join(root, 'src'), { recursive: true });
+  const request = { api, slug: 'airtime', dest: root };
+  expect(() => localGameFiles(root, 'airtime')).toThrow('Invalid source repository metadata');
+  await expect(diffGame(request)).rejects.toThrow('Invalid source repository metadata');
+  await expect(pullGame({ ...request, force: true })).rejects.toThrow('Invalid source repository metadata');
+  await expect(submitGame({ ...request, force: true, run: () => ({ status: 0, stderr: '' }) })).rejects.toThrow(
+    'Invalid source repository metadata',
+  );
+  expect(() => writeGameFiles(root, 'airtime', before, { force: true })).toThrow('Invalid source repository metadata');
+  expect(() => projectRuntimeRoot(root)).toThrow('Invalid source repository metadata');
+  expect(() => syncSourceRuntime(root)).toThrow('Invalid source repository metadata');
+  expect(fetch.mock.calls.every(([, init]) => !init || init.method === 'GET')).toBe(true);
+  expect(existsSync(join(root, 'games'))).toBe(false);
+  expect(readFileSync(join(runtime, 'games/airtime/game.ts'), 'utf8')).toBe('export const score = 1;');
+  if (damage !== 'missing src') expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('export const score = 1;');
 });

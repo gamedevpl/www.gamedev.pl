@@ -6,18 +6,30 @@ function regular(path: string): boolean {
   return existsSync(path) && lstatSync(path).isFile();
 }
 
-export function sourceProject(root: string): { slug: string } | null {
-  if (!regular(join(root, 'gamedev-kit.json'))) return null;
-  const src = join(root, 'src');
-  if (!existsSync(src) || !lstatSync(src).isDirectory()) return null;
-  const spec = join(src, 'SPEC.md');
-  if (!regular(spec)) return null;
+function present(path: string): boolean {
   try {
-    const pin = JSON.parse(readFileSync(join(root, 'gamedev-kit.json'), 'utf8')) as {
+    lstatSync(path);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+export function sourceProject(root: string): { slug: string } | null {
+  const pinPath = join(root, 'gamedev-kit.json');
+  const src = join(root, 'src');
+  const spec = join(src, 'SPEC.md');
+  if (!present(pinPath) && !present(spec) && !present(join(root, '.gamedev/local/.gamedev-slug'))) return null;
+  try {
+    if (!regular(pinPath) || !existsSync(src) || !lstatSync(src).isDirectory() || !regular(spec))
+      throw new Error('Source repository paths are missing or not regular files and directories.');
+    const pin = JSON.parse(readFileSync(pinPath, 'utf8')) as {
       engineRef?: unknown;
       kitSha256?: unknown;
     };
-    if (!/^[a-f0-9]{40}$/.test(String(pin.engineRef)) || !/^[a-f0-9]{64}$/.test(String(pin.kitSha256))) return null;
+    if (!/^[a-f0-9]{40}$/.test(String(pin.engineRef)) || !/^[a-f0-9]{64}$/.test(String(pin.kitSha256)))
+      throw new Error('The Creator Kit pin is invalid.');
     const header = readFileSync(spec, 'utf8').match(/^---\s*\n([\s\S]*?)\n---/)?.[1];
     let slug = '';
     for (const line of header?.split(/\r?\n/) ?? []) {
@@ -28,9 +40,14 @@ export function sourceProject(root: string): { slug: string } | null {
           .trim()
           .replace(/^["']|["']$/g, '');
     }
-    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? { slug } : null;
-  } catch {
-    return null;
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('SPEC.md needs a valid slug.');
+    return { slug };
+  } catch (error) {
+    throw new CliError(
+      `Invalid source repository metadata: ${error instanceof Error ? error.message : String(error)}`,
+      EXIT_REFUSED,
+      'Repair gamedev-kit.json and src/SPEC.md, then retry.',
+    );
   }
 }
 

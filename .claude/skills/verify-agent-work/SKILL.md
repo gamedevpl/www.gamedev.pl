@@ -369,6 +369,13 @@ Two concrete instances of that (observed 2026-07-23):
   inside the checkout; a not-game file symlink is not read and survives pull). The renamed
   test does not lock that in. The follow-up commit added those probes; the lesson is the
   renamed test.
+- **Invalid identity metadata must not silently select another source layout.** Observed
+  (#1824 review, 2026-10-13): removing the SPEC slug or corrupting the Kit pin made
+  source-repository detection return null. Delivery then scanned an absent `games/<slug>`
+  directory and treated existing `src/` files as deleted. After establishing a base,
+  damage each identity file and probe diff, forced push, pull, and runtime sync. Refuse
+  invalid metadata before writes or staging; reserve the alternate layout for roots
+  without source-repository markers.
 - **Hand-editing the comment-prose baseline grandfathers a new file.** `baselineWordsFor`
   treats a missing key as 0. Adding the key, with `--write --force` or a manual JSON edit,
   is how the debt gets in. Observed (#1469 review): moving `/** */` blocks into a new
