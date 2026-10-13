@@ -10,7 +10,7 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   void view.session.prompt();
   for (let i = 0; i < 40; i++) view.session.writeLine(`codex ▸ Message ${i} · ${'długa odpowiedź '.repeat(8)}`);
   view.session.setDraft('unfinished request');
-  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 39');
   expect(view.frame()).not.toContain('Message 0 ·');
   expect(view.frame().trimEnd().split('\n').length).toBeLessThan(28);
@@ -19,12 +19,13 @@ it('shows a bounded split, preserves the draft while toggling, and pages wrapped
   expect(view.frame()).not.toContain('Message 39');
   await view.press('\u001b[6~');
   expect(view.frame()).toContain('Message 39');
-  await view.press('\u0002');
-  expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('unfinished request');
   expect(view.session.get().draft).toBe('unfinished request');
   await view.press('\u0002');
   expect(view.frame()).not.toContain('WORKSPACE');
+  expect(
+    view.terminalOutput().endsWith('\u001b[?1000l\u001b[?1006l') || view.terminalOutput().includes('\u001b[?1000l'),
+  ).toBe(true);
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
   view.takeOutput();
@@ -65,7 +66,6 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
   expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
-  await view.press('\u0002');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
   expect(view.frame()).not.toContain('Message 59');
@@ -291,7 +291,7 @@ it('keeps all VT100 and application-keypad SS3 codes out of the composer', async
 });
 
 it('keeps local ownership and queued messages visible without claiming a delivery', async () => {
-  const view = screen();
+  const view = screen(150, 28, 0, undefined, undefined, false);
   view.session.setLive(['Studio: queued (no_agent_yet)']);
   view.session.setLocalTask('muse');
   await view.press('follow-up');
@@ -319,7 +319,7 @@ it('refreshes local edits only while visible, and refreshes again when restored'
     mkdirSync(game, { recursive: true });
     writeBase(root, 'v1', [{ path: 'game.ts', content: 'before' }]);
     writeFileSync(join(game, 'game.ts'), 'before');
-    const view = screen(150, 28, 0, () => ({ root, slug: 'sky' }));
+    const view = screen(150, 28, 0, () => ({ root, slug: 'sky' }), undefined, false);
     void view.session.prompt();
     await view.press('\u0002');
     expect(view.frame()).toContain('No local changes');

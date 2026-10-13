@@ -50,15 +50,16 @@ The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns
 retain the static transcript. The scrollable view measures message heights, then replaces
 offscreen messages with spacers; typing reuses the visible transcript. Width changes
 remeasure wrapping, and appended messages retain earlier heights. Both use `TranscriptLine`, the existing composer,
-choice handling, diagnostics and diff viewer. Ctrl+B toggles the sidebar (hidden by default), and PgUp/PgDn
-scroll the conversation unless an active choice owns those keys.
+choice handling, diagnostics and diff viewer. By default, wide sessions run as a sequential
+streaming REPL (preserving native text selection and native terminal scrollback); Ctrl+B toggles the
+workspace sidebar split.
 
-Wide terminal workspaces enable SGR mouse reporting for smooth wheel/trackpad scrolling.
-Reports route to the conversation, question, diff or diagnostics under the pointer;
-they never become composer text or choice answers, and row heights are cached so trackpad
-bursts remain responsive without layout lag. Delivery choices retain the conversation above their question.
-Compact layouts keep native terminal scrollback.
-Ctrl+T disables reporting for native selection and freezes the displayed session,
+When the sidebar split is open, SGR mouse reporting is enabled for smooth wheel/trackpad scrolling across
+panes. Reports route to the conversation, question, diff or diagnostics under the pointer; they never become
+composer text or choice answers, and row heights are cached so trackpad bursts remain responsive without
+layout lag. Delivery choices retain the conversation above their question.
+Compact layouts always keep native terminal scrollback.
+In split mode, Ctrl+T disables reporting for native selection and freezes the displayed session,
 sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
 subscribes to the latest controller state. Ctrl+C stays available while copying. Resizing below the split threshold keeps
 the selection pause and its Ctrl+T resume hint active.

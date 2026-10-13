@@ -38,6 +38,7 @@ export function ReplApp({
   openPreview,
   readLogs,
   checkout,
+  initialSidebar = process.env.GAMEDEV_SIDEBAR === '1',
 }: {
   session: TuiSession;
   color: boolean;
@@ -45,6 +46,7 @@ export function ReplApp({
   openPreview?: (url: string) => void;
   readLogs?: () => string[];
   checkout?: () => WorkspaceCheckout | null;
+  initialSidebar?: boolean;
 }) {
   const [state, setState] = useState<TuiState>(session.get);
   const [debug, setDebug] = useState(false);
@@ -61,9 +63,10 @@ export function ReplApp({
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
-  const [sidebar, setSidebar] = useState(process.env.GAMEDEV_SIDEBAR === '1');
+  const [sidebar, setSidebar] = useState(initialSidebar);
   const [nativeSelection, setNativeSelection] = useState(false);
-  const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  const wide = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  const split = wide && sidebar;
   const selecting = nativeSelection;
   useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
@@ -103,7 +106,7 @@ export function ReplApp({
       return;
     }
     if (viewDiff) return;
-    if (key.ctrl && input === 'b' && (split || sidebar)) {
+    if (key.ctrl && input === 'b' && (wide || sidebar)) {
       setSidebar((visible) => !visible);
       return;
     }
@@ -417,7 +420,9 @@ export function ReplApp({
                 ? `Text selection · display paused · Ctrl+T resume · ${footer}`
                 : split
                   ? `Ctrl+T select text · wheel / PgUp/PgDn chat · Ctrl+B sidebar · ${footer}`
-                  : footer
+                  : wide
+                    ? `Ctrl+B workspace sidebar · ${footer}`
+                    : footer
             }
             color={color}
           />

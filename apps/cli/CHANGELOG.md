@@ -15,6 +15,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - `gamedevpl login` and Play sign-in use the local browser callback again on your own machine; the link-and-code flow is kept for Codespaces, SSH and headless shells (#1818).
 
+## 0.44.3 — 2026-10-13
+
+### Fixed
+
+- Interactive terminal defaults to sequential streaming (like Claude Code) so native text selection and terminal scrollback work out of the box, activating mouse reporting and the split layout only when the workspace sidebar is opened with Ctrl+B (#1817).
+
 ## 0.44.2 — 2026-10-13
 
 ### Fixed
