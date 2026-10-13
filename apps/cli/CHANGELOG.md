@@ -11,7 +11,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Interactive workspace disables mouse reporting by default to preserve native text selection and normal scrolling, and keeps the sidebar hidden until opened with Ctrl+B (#1810).
+- Interactive terminal workspace keeps full-screen conversation scrolling pinned with cached row measurements and microtask batching, restores Ctrl+T native text selection pause, and keeps the sidebar hidden by default until opened with Ctrl+B.
 
 ## 0.44.0 — 2026-10-12
 

@@ -64,10 +64,8 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   void view.session.prompt();
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
-  expect(view.terminalOutput()).not.toContain('\u001b[?1006h\u001b[?1000h');
-  await view.press('\u0014');
-  await view.press('\u0002');
   expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
+  await view.press('\u0002');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
   expect(view.frame()).not.toContain('Message 59');

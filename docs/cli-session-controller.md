@@ -53,10 +53,15 @@ remeasure wrapping, and appended messages retain earlier heights. Both use `Tran
 choice handling, diagnostics and diff viewer. Ctrl+B toggles the sidebar (hidden by default), and PgUp/PgDn
 scroll the conversation unless an active choice owns those keys.
 
-Native text selection and standard terminal scrollback remain enabled by default without capturing mouse events.
-Ctrl+T (or `GAMEDEV_MOUSE=1`) toggles in-terminal SGR mouse reporting for wheel/trackpad scrolling across split
-panes, routing to the conversation, question, diff or diagnostics under the pointer without leaking into
-composer text or choice answers. Compact layouts always keep native terminal scrollback.
+Wide terminal workspaces enable SGR mouse reporting for smooth wheel/trackpad scrolling.
+Reports route to the conversation, question, diff or diagnostics under the pointer;
+they never become composer text or choice answers, and row heights are cached so trackpad
+bursts remain responsive without layout lag. Delivery choices retain the conversation above their question.
+Compact layouts keep native terminal scrollback.
+Ctrl+T disables reporting for native selection and freezes the displayed session,
+sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
+subscribes to the latest controller state. Ctrl+C stays available while copying. Resizing below the split threshold keeps
+the selection pause and its Ctrl+T resume hint active.
 Unmounting, including native agent handoffs, disables reporting; remounting restores it.
 This scrolling correction adds no telemetry event or creator-funnel dimension.
 

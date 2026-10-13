@@ -335,12 +335,19 @@ availability, existing Studio round updates, and added/modified/deleted game fil
 It is hidden by default; press Ctrl+B (or set `GAMEDEV_SIDEBAR=1`) to show or hide
 it without clearing the input.
 
-Native text selection and standard terminal scrolling remain enabled by default with no mouse
-capture, so you can drag to select and copy text anywhere in the session. Use PgUp/PgDn
-(Fn+↑ / Fn+↓ on Mac keyboards) to scroll the chat; while answering a choice, they scroll that
-question instead. Check output stays visible above choices. Press Ctrl+T (or set `GAMEDEV_MOUSE=1`)
-to toggle in-terminal mouse wheel reporting on and off if you prefer mouse wheel scrolling across
-split panes. Existing `/diff`, Ctrl+D and `/logs` keep their scrollable detail views.
+The mouse wheel or trackpad scrolls the conversation smoothly under the pointer; PgUp/PgDn
+scroll the chat; while answering a choice, they scroll that question instead. Check output stays visible
+above choices. The wheel scrolls long questions, diffs and diagnostics under the pointer.
+Ctrl+T temporarily pauses display updates and releases mouse capture for native text selection so
+you can drag to select and copy (on macOS, holding Option/Fn also selects text anytime).
+Press Ctrl+T again to resume live display and wheel scrolling. Tasks continue while the display is paused;
+Ctrl+C still stops or exits. Compact terminals retain native terminal scrolling, and mouse reporting is restored
+when the workspace closes or hands the terminal to an agent. Existing `/diff`, Ctrl+D
+and `/logs` keep their scrollable detail views.
+
+In macOS Terminal.app, leave **View → Allow Mouse Reporting** selected. The CLI
+enables reporting while the workspace is active. Without it, use PgUp/PgDn
+(Fn+↑ / Fn+↓ on Mac keyboards) to scroll inside the TUI.
 
 Changes are compared with `.gamedev-base.json`, not Git, using the same game-file
 reader and ignore rules as submission. Shared Kit files stay out of the list. The
