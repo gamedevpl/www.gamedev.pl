@@ -45,19 +45,27 @@ document.querySelector('#pause').onclick = event => {
   paused = !paused;
   event.target.textContent = paused ? 'Resume reload' : 'Pause reload';
 };
+async function previewResponse(name, type) {
+  const response = await fetch(location.pathname + name, {cache:'no-store', redirect:'error'});
+  if (!response.ok) throw new Error('Preview ' + name + ' request failed (HTTP ' + response.status + ').');
+  if (response.headers.get('content-type')?.split(';')[0].trim() !== type) throw new Error('Preview ' + name + ' returned an unexpected response.');
+  return response;
+}
 async function tick() {
   try {
-    const state = await fetch(location.pathname + 'status', {cache:'no-store'}).then(r => r.json());
-    errorBox.textContent = state.error;
-    errorBox.hidden = !state.error;
+    const state = await previewResponse('status', 'application/json').then(r => r.json());
     status.textContent = state.busy ? ' · rebuilding…' : paused ? ' · paused' : ' · watching files';
     if (!paused && state.revision && state.revision !== revision) {
-      const html = await fetch(location.pathname + 'game', {cache:'no-store'}).then(r => r.text());
+      const html = await previewResponse('game', 'text/plain').then(r => r.text());
       frame.srcdoc = GAME_EMBED.embedGameHtml(html);
       revision = state.revision;
     }
-  } catch {
+    errorBox.textContent = state.error;
+    errorBox.hidden = !state.error;
+  } catch (error) {
     status.textContent = ' · preview disconnected';
+    errorBox.textContent = (error instanceof Error ? error.message + ' ' : 'Preview disconnected. ') + 'Check access to the forwarded port and reload this page.';
+    errorBox.hidden = false;
   }
   setTimeout(tick, 750);
 }
