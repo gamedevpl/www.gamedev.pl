@@ -68,7 +68,7 @@ it('pauses diagnostics polling while selecting text', async () => {
   vi.useFakeTimers();
   try {
     const read = vi.fn(() => ['Diagnostic output']);
-    const view = screen(150, 28, 0, () => null, read);
+    const view = screen(150, 28, 0, undefined, read);
     view.session.setLocalTask('codex');
     await view.press('\u000c');
     expect(view.frame()).toContain('Task diagnostics');

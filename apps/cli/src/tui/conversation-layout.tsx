@@ -27,11 +27,20 @@ function TranscriptViewport({
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
   const geometry = useMemo(() => transcriptRows(lines, offset, heights), [lines, offset, heights]);
   const [scroll, setScroll] = useState<number | null>(null);
+  const anchor = useRef<{ index: number; within: number } | null>(null);
   const { stdout } = useStdout();
   useLayoutEffect(() => {
     if (!viewport.current || !content.current) return;
     const { height, width } = measureElement(viewport.current);
     if (width !== size.width) {
+      if (scroll !== null) {
+        const currentMax = Math.max(0, geometry.total - size.height);
+        const currentStart = Math.min(scroll, currentMax);
+        const row = geometry.rows.find((r) => r.top + (r.height ?? 1) > currentStart);
+        if (row) {
+          anchor.current = { index: row.index, within: Math.max(0, currentStart - row.top) };
+        }
+      }
       setSize({ height, width });
       setHeights(new Map());
       return;
@@ -45,6 +54,15 @@ function TranscriptViewport({
       (measured ??= new Map(heights)).set(row.key, value);
     }
     if (measured) setHeights(measured);
+    if (anchor.current && heights.size > 0) {
+      const row = geometry.rows.find((r) => r.index === anchor.current!.index);
+      if (row) {
+        const nextMax = Math.max(0, geometry.total - height);
+        const nextStart = Math.min(nextMax, Math.max(0, row.top + anchor.current.within));
+        anchor.current = null;
+        setScroll(nextStart >= nextMax ? null : nextStart);
+      }
+    }
   }, [geometry, heights, layout, scroll, size, offset]);
   const pendingDelta = useRef(0);
   const scheduled = useRef(false);

@@ -14,7 +14,7 @@ export function screen(
   columns = 150,
   rows = 28,
   historyOffset = 0,
-  checkout: () => WorkspaceCheckout | null = () => null,
+  checkout: () => WorkspaceCheckout | null = () => ({ root: '/workspace', slug: 'demo' }),
   readLogs?: () => string[],
   sidebar = true,
 ) {

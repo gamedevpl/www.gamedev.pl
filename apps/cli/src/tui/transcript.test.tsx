@@ -107,12 +107,19 @@ it('preserves wide messages in scrollback on shrink without replaying earlier st
   stdout.on('data', (chunk) => {
     output += String(chunk);
   });
-  const app = render(createElement(ReplApp, { session, color: false, checkout: () => null, initialSidebar: true }), {
-    stdin: stdin as unknown as NodeJS.ReadStream,
-    stdout: stdout as unknown as NodeJS.WriteStream,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
+  const app = render(
+    createElement(ReplApp, {
+      session,
+      color: false,
+      checkout: () => ({ root: '/workspace', slug: 'demo' }),
+    }),
+    {
+      stdin: stdin as unknown as NodeJS.ReadStream,
+      stdout: stdout as unknown as NodeJS.WriteStream,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    },
+  );
   const resize = async (columns: number) => {
     stdout.columns = columns;
     stdout.emit('resize');

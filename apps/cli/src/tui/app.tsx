@@ -65,14 +65,15 @@ export function ReplApp({
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
   const [sidebar, setSidebar] = useState(initialSidebar);
   const [nativeSelection, setNativeSelection] = useState(false);
-  const split = Boolean(checkout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  const activeCheckout = checkout?.() ?? null;
+  const split = Boolean(activeCheckout) && dimensions.columns >= 120 && dimensions.rows >= 16;
   const selecting = nativeSelection;
   useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
   const rows = dimensions.rows - Number(split);
-  const changes = useWorkspaceChanges(checkout?.() ?? null, split && sidebar && !selecting);
+  const changes = useWorkspaceChanges(activeCheckout, split && sidebar && !selecting);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
   useEffect(
     () =>

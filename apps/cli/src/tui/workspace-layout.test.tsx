@@ -202,14 +202,13 @@ it('leaves native terminal scrolling enabled for compact terminals', () => {
   expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
 });
 
+it('leaves native terminal scrolling enabled outside a checkout', () => {
+  const view = screen(150, 28, 0, () => null);
+  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+});
+
 it('scrolls diagnostics under the pointer and returns to the unchanged draft', async () => {
-  const view = screen(
-    150,
-    28,
-    0,
-    () => null,
-    () => Array.from({ length: 60 }, (_, i) => `Diagnostic line ${i}`),
-  );
+  const view = screen(150, 28, 0, undefined, () => Array.from({ length: 60 }, (_, i) => `Diagnostic line ${i}`));
   void view.session.prompt();
   view.session.setDraft('my draft');
   await view.press('\u000c');
@@ -337,7 +336,7 @@ it('refreshes local edits only while visible, and refreshes again when restored'
 });
 
 it('keeps full-screen layout active when sidebar is hidden by default and toggled with Ctrl+B', async () => {
-  const view = screen(150, 28, 0, () => null, undefined, false);
+  const view = screen(150, 28, 0, undefined, undefined, false);
   void view.session.prompt();
   for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
   expect(view.frame()).not.toContain('WORKSPACE');
@@ -354,4 +353,26 @@ it('keeps full-screen layout active when sidebar is hidden by default and toggle
   expect(view.frame()).not.toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 29');
   expect(view.frame()).toContain('Ctrl+B show sidebar');
+});
+
+it('preserves visible conversation position across sidebar toggle while scrolled up in wrapped messages', async () => {
+  const view = screen(150, 28, 0, undefined, undefined, false);
+  void view.session.prompt();
+  for (let i = 0; i < 40; i++) view.session.writeLine(`codex ▸ Message ${i} · ${'długa odpowiedź '.repeat(10)}`);
+  await view.press('\u001b[5~');
+  expect(view.frame()).toContain('Earlier messages');
+  const visibleBefore = view.frame();
+  const matched = visibleBefore.match(/Message (\d+)/);
+  expect(matched).not.toBeNull();
+  const messageNum = matched![1];
+
+  await view.press('\u0002');
+  expect(view.frame()).toContain('WORKSPACE');
+  expect(view.frame()).toContain('Earlier messages');
+  expect(view.frame()).toContain(`Message ${messageNum}`);
+
+  await view.press('\u0002');
+  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('Earlier messages');
+  expect(view.frame()).toContain(`Message ${messageNum}`);
 });
