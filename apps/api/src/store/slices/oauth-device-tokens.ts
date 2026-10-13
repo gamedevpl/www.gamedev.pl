@@ -38,7 +38,7 @@ export function completeMemoryDeviceTokens(
   state.refreshIndex.set(input.grant.currentRefreshTokenId, input.grant.grantId);
   state.authorizations.delete(row!.userCode);
   state.codes.delete(input.deviceCodeHash);
-  return { ok: true };
+  return replaced.length ? { ok: true, replacedScopes: replaced.map((grant) => grant.scope) } : { ok: true };
 }
 
 export async function completeFirestoreDeviceTokens(
@@ -78,6 +78,7 @@ export async function completeFirestoreDeviceTokens(
     tx.create(db.collection('oauthAccessTokens').doc(input.accessToken.tokenId), stripUndefined(input.accessToken));
     tx.delete(rowRef);
     tx.delete(codeRef);
-    return { ok: true };
+    if (!replaced.length) return { ok: true };
+    return { ok: true, replacedScopes: replaced.map((doc) => (doc.data() as OAuthGrantRecord).scope) };
   });
 }

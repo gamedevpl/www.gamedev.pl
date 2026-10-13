@@ -31,7 +31,7 @@ export interface DeviceTokenIssuanceInput {
 }
 
 export type DeviceTokenIssuanceResult =
-  { ok: true } | { ok: false; error: 'invalid_grant' | 'expired_token' | 'access_denied' };
+  { ok: true; replacedScopes?: string[] } | { ok: false; error: 'invalid_grant' | 'expired_token' | 'access_denied' };
 
 export function deviceTokenIssuanceError(
   row: OAuthDeviceAuthorization | undefined,

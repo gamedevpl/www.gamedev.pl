@@ -13,7 +13,14 @@ import {
   sanitizeDeviceName,
   GAMEDEV_CLI_CLIENT_ID,
 } from './oauth-first-party.js';
-import { CREATOR_SCOPE, formatOAuthScope, MAX_OAUTH_GRANTS_PER_UID, parseOAuthScopes } from './oauth-scopes.js';
+import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
+import {
+  CREATOR_SCOPE,
+  formatOAuthScope,
+  MAX_OAUTH_GRANTS_PER_UID,
+  parseOAuthScopes,
+  scopeHasMcp,
+} from './oauth-scopes.js';
 import {
   AS_REFRESH_TOKEN_TTL_MS,
   buildAsAccessTokenRecord,
@@ -277,5 +284,8 @@ export async function exchangeDeviceCode(
     nowMs: input.nowMs,
   });
   if (!issued.ok) return { ...issued, status: 400 };
+  if (!scopeHasMcp(row.scope) && issued.replacedScopes?.some(scopeHasMcp)) {
+    await endOpenAgentSessions(store, row.ownerUid!);
+  }
   return { ok: true, accessToken: access.token, refreshToken: refresh.token, scope: row.scope };
 }

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFirestore } from '../store/fake-firestore.js';
 import { FirestoreStore, InMemoryStore } from './store.js';
 import type { DeviceTokenIssuanceInput } from '../store/records/oauth-device.js';
@@ -69,11 +69,11 @@ describe('atomic device token issuance', () => {
     return { app, store };
   }
 
-  async function approve(app: FastifyInstance) {
+  async function approve(app: FastifyInstance, scope = 'creator') {
     const created = await app.inject({
       method: 'POST',
       url: '/oauth/device',
-      payload: { client_id: GAMEDEV_CLI_CLIENT_ID },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope },
     });
     expect(created.statusCode).toBe(200);
     const { user_code: userCode, device_code: deviceCode } = created.json();
@@ -84,7 +84,7 @@ describe('atomic device token issuance', () => {
       payload: {
         user_code: userCode,
         action: 'approve',
-        disclosed_scope: 'creator',
+        disclosed_scope: scope,
         consent_token: consentToken({
           uid: 'g:boss',
           clientId: GAMEDEV_CLI_CLIENT_ID,
@@ -308,5 +308,24 @@ describe('atomic device token issuance', () => {
     });
     expect(approved.body).toContain('Too many connected clients');
     expect(await store.getOAuthDeviceAuthorization(userCode, clock)).not.toMatchObject({ ownerUid: 'g:boss' });
+  });
+
+  it('ends open agent sessions when a creator sign-in replaces an mcp grant', async () => {
+    const store = new InMemoryStore();
+    const app = await buildOAuthApp(store, { now: () => clock });
+    apps.push(app);
+    await store.upsertUser({ uid: 'g:boss', email: 'boss@example.com' });
+    const ended = vi.spyOn(store, 'listSubmissionsByOwner');
+    const signIn = async (scope: string) => {
+      clock += 10_000;
+      const { deviceCode } = await approve(app, scope);
+      clock += 5_000;
+      expect((await poll(app, deviceCode)).statusCode).toBe(200);
+    };
+    await signIn('mcp creator');
+    await signIn('mcp creator');
+    expect(ended).not.toHaveBeenCalled();
+    await signIn('creator');
+    expect(ended).toHaveBeenCalledWith('g:boss');
   });
 });
