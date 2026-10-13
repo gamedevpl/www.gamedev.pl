@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.46.0 — 2026-10-13
+
 ### Added
 
 - Connect offers a standard checkout alongside an existing project, with a choice of a new directory or the current directory (`.`). An explicit checkout destination must be empty (#1824).
