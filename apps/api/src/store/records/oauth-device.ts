@@ -50,7 +50,6 @@ export function deviceTokenIssuanceError(
     return { ok: false, error: 'access_denied' };
 }
 
-// A new device sign-in replaces the same device's earlier CLI grant instead of counting against the cap.
 export function replacedByDeviceGrant(held: OAuthGrantRecord, grant: OAuthGrantRecord): boolean {
   return (
     !held.revokedAt &&
