@@ -62,7 +62,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   void view.session.prompt();
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
-  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
+  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1002h');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
   expect(view.frame()).not.toContain('Message 59');
@@ -75,7 +75,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   expect(view.frame()).toContain('Message 59');
   expect(view.frame()).not.toContain('Earlier messages');
   view.resize(80, 24);
-  expect(view.terminalOutput()).toContain('\u001b[?1000l\u001b[?1006l');
+  expect(view.terminalOutput()).toContain('\u001b[?1002l\u001b[?1006l');
   view.resize(150, 28);
   const resets = view.terminalOutput().split('\u001b[?1006l').length;
   view.close();
@@ -199,12 +199,12 @@ it('scrolls a diff under the pointer without inserting reports into the composer
 
 it('leaves native terminal scrolling enabled for compact terminals', () => {
   const view = screen(80, 24);
-  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 });
 
 it('leaves native terminal scrolling enabled outside a checkout', () => {
   const view = screen(150, 28, 0, () => null);
-  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 });
 
 it('scrolls diagnostics under the pointer and returns to the unchanged draft', async () => {
@@ -350,7 +350,7 @@ it('leaves mouse selection and scrollback native by default, including during lo
     view.resize(80, 24);
     view.resize(150, 28);
     expect(view.session.get().draft).toBe('follow-up');
-    expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+    expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
     expect(view.terminalOutput()).not.toContain('\u001b[?1006h');
   } finally {
     vi.unstubAllEnvs();
@@ -366,13 +366,13 @@ it('enables mouse reporting only in the sidebar and releases it when returning t
   expect(view.frame()).toContain('Message 29');
   expect(view.frame().trimEnd().split('\n').length).toBeGreaterThan(28);
   expect(view.frame()).toContain('Ctrl+B show sidebar');
-  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 29');
   expect(view.frame()).toContain('Ctrl+B hide sidebar');
-  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
+  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1002h');
   view.session.writeLine('Arrived in workspace');
   const beforeClose = view.terminalOutput().length;
 
@@ -380,9 +380,9 @@ it('enables mouse reporting only in the sidebar and releases it when returning t
   expect(view.frame()).not.toContain('WORKSPACE');
   expect(view.frame()).toContain('Ctrl+B show sidebar');
   expect(view.takeOutput()).toContain('Arrived in workspace');
-  expect(view.terminalOutput().slice(beforeClose)).toContain('\u001b[?1000l\u001b[?1006l');
+  expect(view.terminalOutput().slice(beforeClose)).toContain('\u001b[?1002l\u001b[?1006l');
   view.resize(130, 20);
-  expect(view.terminalOutput().slice(beforeClose)).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput().slice(beforeClose)).not.toContain('\u001b[?1002h');
   expect(view.session.get().draft).toBe('keep this draft');
 });
 
@@ -398,6 +398,6 @@ it('returns from scrolled workspace output to native history without losing wrap
   const history = view.takeOutput();
   expect(history).toContain('Message 0');
   expect(history).toContain('Message 39');
-  expect(view.terminalOutput()).toContain('\u001b[?1000l\u001b[?1006l');
+  expect(view.terminalOutput()).toContain('\u001b[?1002l\u001b[?1006l');
   expect(view.session.get().draft).toBe('keep draft');
 });

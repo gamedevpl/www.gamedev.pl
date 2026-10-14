@@ -3,16 +3,32 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useInput, useStdin, useStdout, type DOMElement, type Key } from 'ink';
 
 export type Wheel = { x: number; y: number; direction: -1 | 1 };
+export type Pointer = { kind: 'press' | 'drag' | 'release'; x: number; y: number };
+export type Rect = { left: number; top: number; width: number; height: number };
+const MODIFIERS = 4 | 8 | 16;
 const readers = new WeakMap<NodeJS.ReadStream, number>();
 
 export function mouseDecoder() {
   let pending = '';
-  return (input: string): { text: string; wheels: Wheel[]; mouse: boolean } => {
+  return (input: string): { text: string; wheels: Wheel[]; pointers: Pointer[]; mouse: boolean } => {
     let rest = pending + input;
     pending = '';
     let text = '';
     let mouse = false;
     const wheels: Wheel[] = [];
+    const pointers: Pointer[] = [];
+    const report = (button: number, x: number, y: number, released: boolean) => {
+      if (x < 1 || y < 1) return;
+      const code = button & 0b1100011;
+      if (code === 64 || code === 65) {
+        if (!released) wheels.push({ x, y, direction: code === 64 ? -1 : 1 });
+        return;
+      }
+      // Modified drags belong to the terminal's own selection.
+      if (button & (64 | MODIFIERS)) return;
+      if (released || (button & 3) === 3) pointers.push({ kind: 'release', x, y });
+      else if ((button & 3) === 0) pointers.push({ kind: button & 32 ? 'drag' : 'press', x, y });
+    };
     while (rest) {
       // eslint-disable-next-line no-control-regex
       const index = rest.search(/\u001b\[<|\u001b\[M/);
@@ -28,11 +44,7 @@ export function mouseDecoder() {
           pending = rest;
           break;
         }
-        const button = rest.charCodeAt(3) - 32;
-        const x = rest.charCodeAt(4) - 32;
-        const y = rest.charCodeAt(5) - 32;
-        if ((button & 0b1100011) === 64 && x > 0 && y > 0) wheels.push({ x, y, direction: -1 });
-        else if ((button & 0b1100011) === 65 && x > 0 && y > 0) wheels.push({ x, y, direction: 1 });
+        report(rest.charCodeAt(3) - 32, rest.charCodeAt(4) - 32, rest.charCodeAt(5) - 32, false);
         rest = rest.slice(6);
         continue;
       }
@@ -43,27 +55,24 @@ export function mouseDecoder() {
         if (/^\u001b\[<[\d;]*$/.test(rest) && rest.length < 64) pending = rest;
         break;
       }
-      const button = Number(match[1]);
-      const x = Number(match[2]);
-      const y = Number(match[3]);
-      if (match[4] === 'M' && (button & 0b1100011) === 64 && x > 0 && y > 0) {
-        wheels.push({ x, y, direction: -1 });
-      } else if (match[4] === 'M' && (button & 0b1100011) === 65 && x > 0 && y > 0) {
-        wheels.push({ x, y, direction: 1 });
-      }
+      report(Number(match[1]), Number(match[2]), Number(match[3]), match[4] === 'm');
       rest = rest.slice(match[0].length);
     }
-    return { text, wheels, mouse };
+    return { text, wheels, pointers, mouse };
   };
 }
 
-export function useTerminalInput(onKey: (input: string, key: Key) => void, onWheel?: (wheel: Wheel) => void) {
+export function useTerminalInput(
+  onKey: (input: string, key: Key) => void,
+  onWheel?: (wheel: Wheel) => void,
+  onPointer?: (pointer: Pointer) => void,
+) {
   const decode = useRef(mouseDecoder());
   const keyboard = useRef(new StringDecoder('utf8'));
   const rawInput = useRef('');
   const { stdin, internal_eventEmitter: emitter } = useStdin();
-  const handlers = useRef({ onKey, onWheel });
-  handlers.current = { onKey, onWheel };
+  const handlers = useRef({ onKey, onWheel, onPointer });
+  handlers.current = { onKey, onWheel, onPointer };
   useLayoutEffect(() => {
     // Ink strips Escape before callbacks; retain it to distinguish pasted text.
     const capture = (data: string) => {
@@ -78,6 +87,7 @@ export function useTerminalInput(onKey: (input: string, key: Key) => void, onWhe
     useCallback((input, key) => {
       const event = decode.current(rawInput.current);
       for (const wheel of event.wheels) handlers.current.onWheel?.(wheel);
+      for (const pointer of event.pointers) handlers.current.onPointer?.(pointer);
       const control = rawInput.current.replaceAll('\u001b', '');
       if (!event.mouse && rawInput.current.startsWith('\u001b') && control.length >= 2 && control[0] === 'O' && input)
         return;
@@ -99,32 +109,44 @@ export function useTerminalInput(onKey: (input: string, key: Key) => void, onWhe
   }, [stdin]);
 }
 
+export const MOUSE_ON = '\u001b[?1006h\u001b[?1002h';
+export const MOUSE_OFF = '\u001b[?1002l\u001b[?1006l';
+
 export function useMouseReporting(enabled: boolean) {
   const { stdout } = useStdout();
   const { stdin } = useStdin();
   useLayoutEffect(() => {
     if (!enabled || !stdout.isTTY || !stdin.isTTY) return;
-    stdout.write('\u001b[?1006h\u001b[?1000h');
+    stdout.write(MOUSE_ON);
+    const release = () => {
+      if (!stdout.writableEnded && !stdout.destroyed) stdout.write(MOUSE_OFF);
+    };
+    process.once('exit', release);
     return () => {
-      if (!stdout.writableEnded && !stdout.destroyed) stdout.write('\u001b[?1000l\u001b[?1006l');
+      process.off('exit', release);
+      release();
     };
   }, [enabled, stdin, stdout]);
 }
 
-export function wheelInside(element: DOMElement | null, wheel: Wheel, terminalRows: number): boolean {
-  if (!element?.yogaNode) return false;
+// The workspace draws from the top row of the alternate screen.
+export function elementRect(element: DOMElement | null): Rect | null {
+  if (!element?.yogaNode) return null;
   const { width, height } = element.yogaNode.getComputedLayout();
-  let left = 0;
-  let top = 0;
-  let node: DOMElement | undefined = element;
-  let rootHeight = 0;
-  while (node) {
+  let left = 1;
+  let top = 1;
+  for (let node: DOMElement | undefined = element; node; node = node.parentNode) {
     const layout = node.yogaNode?.getComputedLayout();
     left += layout?.left ?? 0;
     top += layout?.top ?? 0;
-    rootHeight = layout?.height ?? rootHeight;
-    node = node.parentNode;
   }
-  top += Math.max(0, terminalRows - rootHeight);
-  return wheel.x > left && wheel.x <= left + width && wheel.y > top && wheel.y <= top + height;
+  return { left, top, width, height };
+}
+
+export function inside(rect: Rect | null, x: number, y: number): boolean {
+  return Boolean(rect && x >= rect.left && x < rect.left + rect.width && y >= rect.top && y < rect.top + rect.height);
+}
+
+export function wheelInside(element: DOMElement | null, wheel: Wheel): boolean {
+  return inside(elementRect(element), wheel.x, wheel.y);
 }

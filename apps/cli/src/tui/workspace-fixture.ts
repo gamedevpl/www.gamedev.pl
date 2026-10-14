@@ -5,6 +5,7 @@ import { createElement } from 'react';
 import { render } from 'ink';
 import { afterEach, expect, vi } from 'vitest';
 import { ReplApp } from './app.js';
+import type { Clipboard } from './selection.js';
 import { createTuiSession } from './session.js';
 import { bufferTerminalInput } from './input-frame.js';
 
@@ -17,6 +18,7 @@ export function screen(
   checkout: () => WorkspaceCheckout | null = () => ({ root: '/workspace', slug: 'demo' }),
   readLogs?: () => string[],
   sidebar: boolean | null = true,
+  options: { clipboard?: Clipboard; mouse?: boolean } = {},
 ) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
@@ -27,7 +29,9 @@ export function screen(
     new Writable({
       write(chunk, _encoding, done) {
         terminal.push(String(chunk));
-        frames.push(stripVTControlCharacters(String(chunk)));
+        // Selection overlays repaint cells; they are not Ink frames.
+        const [frame = ''] = String(chunk).split('\u001b7');
+        if (frame) frames.push(stripVTControlCharacters(frame));
         done();
       },
     }),
@@ -41,6 +45,8 @@ export function screen(
       historyOffset,
       readLogs,
       initialSidebar: sidebar ?? undefined,
+      clipboard: options.clipboard ?? (() => true),
+      mouse: options.mouse ?? true,
     });
   const app = render(element(), {
     stdin: buffered.stdin,
