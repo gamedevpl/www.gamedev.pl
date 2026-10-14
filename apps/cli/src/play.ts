@@ -31,6 +31,8 @@ import type { CliTelemetry } from './telemetry.js';
 import { CLI_VERSION, compareSemver } from './update.js';
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const reusablePreview = (session: Session | null) =>
+  session?.cliVersion === CLI_VERSION && new URL(session.url).pathname === '/';
 
 export async function startLocalPlay(input: {
   root: string;
@@ -66,7 +68,7 @@ export async function startLocalPlay(input: {
     input.write(existing ? 'local preview stopped' : 'no local preview is running');
     return null;
   }
-  if (existing?.cliVersion === CLI_VERSION) return existing;
+  if (reusablePreview(existing)) return existing;
   for (let attempt = 0; ; attempt++) {
     checkAbort();
     try {
@@ -76,7 +78,7 @@ export async function startLocalPlay(input: {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const running = await alive(statePath, key);
-      if (running?.cliVersion === CLI_VERSION) return running;
+      if (reusablePreview(running)) return running;
       const age = lockAge(lock);
       if (age === null) continue;
       let abandoned = false;
@@ -101,7 +103,7 @@ export async function startLocalPlay(input: {
   }
   try {
     const raced = await alive(statePath, key);
-    if (raced?.cliVersion === CLI_VERSION) return raced;
+    if (reusablePreview(raced)) return raced;
     if (raced) {
       if (raced.cliVersion && compareSemver(raced.cliVersion, CLI_VERSION) > 0)
         throw new CliError('The preview uses a newer CLI.', EXIT_REFUSED, 'Run gamedevpl update, then retry play.');

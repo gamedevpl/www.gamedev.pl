@@ -26,7 +26,7 @@ async function fixture() {
     server.closeAllConnections();
     server.close();
   });
-  const previewUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/${'a'.repeat(48)}/`;
+  const previewUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
   return { state, revision, controller, previewUrl };
 }
 async function bridge(captureBudget?: { used: number }) {

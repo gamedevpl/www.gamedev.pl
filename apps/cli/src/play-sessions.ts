@@ -31,11 +31,12 @@ export async function alivePreview(path: string, key: string): Promise<PreviewSe
       state.key !== key ||
       url.protocol !== 'http:' ||
       url.hostname !== '127.0.0.1' ||
+      !url.port ||
       url.username ||
       url.password ||
       url.search ||
       url.hash ||
-      !/^\/[a-f0-9]{48}\/$/.test(url.pathname)
+      (url.pathname !== '/' && !/^\/[a-f0-9]{48}\/$/.test(url.pathname))
     )
       return null;
     const res = await fetch(`${state.url}status`, { signal: AbortSignal.timeout(600), redirect: 'error' });

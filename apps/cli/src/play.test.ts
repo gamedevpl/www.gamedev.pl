@@ -57,6 +57,7 @@ describe('play', () => {
     const input = { root, slug: 'robot', env: process.env, write: () => undefined };
     try {
       const [first, second] = await Promise.all([startLocalPlay(input), startLocalPlay(input)]);
+      expect(new URL(first!.url).pathname).toBe('/');
       expect(first!.url).toBe(second!.url);
       const a = await eventually(first!.url, (state) => Boolean(state.revision));
       const shell = await fetch(first!.url).then((r) => r.text());

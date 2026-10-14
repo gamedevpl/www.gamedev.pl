@@ -25,7 +25,7 @@ it('replaces a legacy preview under its startup lock and reuses the current serv
       stops++;
       rmSync(statePath, { force: true });
       res.end('stopped');
-    } else res.end(JSON.stringify({ key }));
+    } else res.end(JSON.stringify({ key, cliVersion: CLI_VERSION }));
   });
   await new Promise<void>((resolve) => legacy.listen(0, '127.0.0.1', resolve));
   const oldUrl = `http://127.0.0.1:${(legacy.address() as { port: number }).port}/${'a'.repeat(48)}/`;
@@ -38,7 +38,8 @@ it('replaces a legacy preview under its startup lock and reuses the current serv
     expect(first!.url).toBe(second!.url);
     expect(first!.url).not.toBe(oldUrl);
     expect(first!.cliVersion).toBe(CLI_VERSION);
-    expect(write).toHaveBeenCalledWith(expect.stringContaining('Restarting preview from an older CLI'));
+    expect(new URL(first!.url).pathname).toBe('/');
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Restarting preview from'));
     expect((await startLocalPlay(input))!.url).toBe(first!.url);
   } finally {
     await startLocalPlay({ ...input, stop: true });
