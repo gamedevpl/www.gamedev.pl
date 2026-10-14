@@ -11,6 +11,16 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Raw local preview opens at the port's root without a token in the link, supports the current Codespaces host, and retains host/origin checks for reload and stop. Existing token-path previews are restarted; additional tunnel hosts use `GAMEDEVPL_PREVIEW_ALLOWED_HOSTS` (#1835).
 
+## 0.47.0 — 2026-10-14
+
+### Added
+
+- The workspace sidebar opens on the terminal's alternate screen with its own text selection: drag to select (double-click a word, triple-click a line), and the selection is copied on release (pbcopy on macOS, OSC 52 elsewhere, including over SSH and tmux). Dragging past the top or bottom edge scrolls the conversation. Ctrl+T is gone; hold Option/Fn/Shift for the terminal's native selection or set `GAMEDEV_DISABLE_MOUSE=1` to turn mouse capture off (#1833).
+
+### Fixed
+
+- Interactive terminal restores native mouse text selection and terminal scrollback by default; mouse capture is enabled only while the workspace sidebar is open and is released when it closes (#1833).
+
 ## 0.46.1 — 2026-10-13
 
 ### Fixed

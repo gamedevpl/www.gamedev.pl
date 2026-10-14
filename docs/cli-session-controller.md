@@ -45,25 +45,28 @@ shows the connection activity and game slug. Commands and local history still wa
 for those results, and account verification remains required before restoring history.
 This startup change adds no telemetry event or creator-funnel dimension.
 
-The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns /
-16 rows it renders a full-height conversation with a right sidebar; smaller terminals
-retain the static transcript. The scrollable view measures message heights, then replaces
-offscreen messages with spacers; typing reuses the visible transcript. Width changes
-remeasure wrapping, and appended messages retain earlier heights. Both use `TranscriptLine`, the existing composer,
-choice handling, diagnostics and diff viewer. Wide sessions run in full-screen interactive mode
-with the sidebar hidden by default; Ctrl+B toggles the workspace sidebar without leaving full-screen.
+The Ink host supplies the current checkout to the same `ReplApp`. By default every session streams
+the static transcript into terminal history with no mouse reporting, so native selection, scrollback
+and terminal search work unchanged. Ctrl+B opens the workspace sidebar; at 120 columns / 16 rows in a
+checkout this renders a full-height conversation with a right sidebar on the terminal's alternate screen.
+The scrollable view measures message heights, then replaces offscreen messages with spacers; typing reuses
+the visible transcript. Width changes remeasure wrapping, and appended messages retain earlier heights.
+Both layouts use `TranscriptLine`, the existing composer, choice handling, diagnostics and diff viewer.
 
-Wide terminal workspaces enable SGR mouse reporting for wheel/trackpad scrolling.
-Reports route to the conversation, question, diff or diagnostics under the pointer; they never become
-composer text or choice answers, and row heights are cached so trackpad bursts remain responsive without
-layout lag. Delivery choices retain the conversation above their question.
-Compact layouts always keep native terminal scrollback.
-Ctrl+T disables reporting for native selection and freezes the displayed session,
-sidebar sampling and animated diagnostics. Tasks and session events continue; resuming
-subscribes to the latest controller state. Ctrl+C stays available while copying. Resizing below the split threshold keeps
-the selection pause and its Ctrl+T resume hint active.
-Unmounting, including native agent handoffs, disables reporting; remounting restores it.
-This scrolling correction adds no telemetry event or creator-funnel dimension.
+Buffers switch between Ink frames. Entering draws the split layout only after the switch; leaving holds
+`<Static>` until the main buffer is back, so output that arrived in the workspace reaches terminal history
+exactly once and no workspace frame enters scrollback. Resizing below the split threshold leaves the same way.
+
+The workspace enables SGR button-event mouse reporting (`?1002h`). Wheel reports route to the conversation,
+question, diff or diagnostics under the pointer; they never become composer text or choice answers, and row
+heights are cached so trackpad bursts remain responsive. Delivery choices retain the conversation above their
+question. Left-button drags select text inside the TUI: the selection is clamped to the column it started in,
+chat selections are anchored to message rows so streaming output does not move them, and dragging past the
+conversation edge scrolls it. Release copies the text (box borders dropped) through `pbcopy` on a local macOS
+terminal and OSC 52 elsewhere, wrapped for tmux. Modified drags stay with the terminal's native selection, and
+`GAMEDEV_DISABLE_MOUSE=1` keeps reporting off. The display is never paused. Unmounting, including native agent
+handoffs, and process exit disable reporting and leave the alternate screen; remounting restores them.
+This terminal behavior adds no telemetry event or creator-funnel dimension.
 
 Input retains Ink's raw Escape byte before its keyboard normalization, so pasted
 `[<...` and `[M...` strings remain ordinary text. The decoder consumes SGR and

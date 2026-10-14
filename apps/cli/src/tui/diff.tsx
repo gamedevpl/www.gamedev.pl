@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Box, Text, useStdout, type DOMElement } from 'ink';
+import { Box, Text, type DOMElement } from 'ink';
 import wrapAnsi from 'wrap-ansi';
 import type { SessionDiff } from '../session-diff.js';
 import { checkoutLineStyle } from '../checkout-style.js';
@@ -11,18 +11,15 @@ export function DiffViewer({
   columns,
   color,
   close,
-  paused = false,
 }: {
   diff: SessionDiff;
   rows: number;
   columns: number;
   color: boolean;
   close: () => void;
-  paused?: boolean;
 }) {
   const [offset, setOffset] = useState(0);
   const panel = useRef<DOMElement>(null);
-  const { stdout } = useStdout();
   const count = Math.max(1, rows - 4);
   const width = Math.max(1, columns - 2);
   const lines = diff.lines.flatMap((line) =>
@@ -34,7 +31,6 @@ export function DiffViewer({
   const start = Math.min(offset, max);
   useTerminalInput(
     (input, key) => {
-      if (paused) return;
       if (key.escape || input === 'q' || (key.ctrl && (input === 'd' || input === 'c'))) close();
       else if (key.upArrow || input === 'k') setOffset(Math.max(0, start - 1));
       else if (key.downArrow || input === 'j') setOffset(Math.min(max, start + 1));
@@ -44,7 +40,7 @@ export function DiffViewer({
       else if (input === 'G') setOffset(max);
     },
     (wheel) => {
-      if (!paused && wheelInside(panel.current, wheel, stdout.rows || 24)) {
+      if (wheelInside(panel.current, wheel)) {
         setOffset((value) => Math.max(0, Math.min(max, value + wheel.direction * 3)));
       }
     },
@@ -62,9 +58,7 @@ export function DiffViewer({
         ))}
       </Box>
       <Text dimColor wrap="truncate-end">
-        {paused
-          ? 'Text selection · display paused · Ctrl+T resume'
-          : `↑↓ / PgUp/PgDn · ${start + 1}–${Math.min(lines.length, start + count)}/${lines.length} · q / Esc close`}
+        {`↑↓ / PgUp/PgDn · ${start + 1}–${Math.min(lines.length, start + count)}/${lines.length} · q / Esc close`}
       </Text>
     </Box>
   );
