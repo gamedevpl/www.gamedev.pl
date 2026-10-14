@@ -177,6 +177,42 @@ describe('owner version history (CL-29a)', () => {
     await app.close();
   });
 
+  it('caps concurrent source requests and waits for sibling reads after failure', async () => {
+    const gamesStore = stubGamesStore();
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    gamesStore.getSourceFile = vi.fn(async (_slug, _version, path) => {
+      if (path === 'SPEC.md') throw new Error('storage unavailable');
+      await blocked;
+      return SOURCES[path]!;
+    });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret: 'secret', agentChannel: { gamesStore } },
+    });
+    const request = (path = '') =>
+      app.inject({
+        method: 'GET',
+        url: `/api/me/studio/games/${SLUG}/versions/${VERSION}/tree${path}`,
+        headers: sessionHeaders('g:creator'),
+      });
+    const first = request().then((result) => result);
+    const second = request('?path=game.ts').then((result) => result);
+    await vi.waitFor(() => expect(gamesStore.getSourceFile).toHaveBeenCalledTimes(3));
+    const busy = await request();
+    expect(busy.statusCode).toBe(429);
+    expect(busy.headers['retry-after']).toBe('1');
+    expect(gamesStore.getSourceFile).toHaveBeenCalledTimes(3);
+    release();
+    expect((await first).statusCode).toBe(500);
+    expect((await second).statusCode).toBe(200);
+    expect((await request('?path=game.ts')).statusCode).toBe(200);
+    await app.close();
+  });
+
   it('a later submission naming the same slug does not silently move ownership', async () => {
     // A stray same-slug submission must not read as a transfer.
     await store.upsertUser({ uid: 'g:other' });

@@ -367,6 +367,7 @@ const FILE_BUCKET = {
   'creator-studio': 'creation',
   'creator-versions': 'creation',
   'version-history-metadata': 'creation',
+  'version-history-reader': 'creation',
   'creator-profile-routes': 'creation',
   'seed-context': 'creation',
   'seed-budget': 'creation',

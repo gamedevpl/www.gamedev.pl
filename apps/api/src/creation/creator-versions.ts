@@ -4,6 +4,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { historyMetadata } from './version-history-metadata.js';
+import { createHistoryReadBudget, readHistoryFiles } from './version-history-reader.js';
 import { deliveryPathRefusal, isRasterSourcePath } from '@gamedevpl/contract';
 
 const SlugParams = z.object({
@@ -40,6 +41,7 @@ export async function registerCreatorVersionRoutes(
   options: CreatorVersionRoutesOptions,
 ): Promise<void> {
   const { store, gamesStore } = options;
+  const acquireRead = createHistoryReadBudget();
 
   app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/versions', async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
@@ -80,28 +82,34 @@ export async function registerCreatorVersionRoutes(
       if (owned !== 'ok') return reply.status(404).send({ error: 'no such game' });
       const manifest = await gamesStore.getManifest(parsed.data.slug, parsed.data.version);
       if (!manifest) return reply.status(404).send({ error: 'no such version' });
-      const files = await Promise.all(
-        manifest.sourceFiles
-          .filter((path) => !query.data.path || path === query.data.path)
-          .map(async (path) => ({
-            path,
-            content: await gamesStore.getSourceFile(parsed.data.slug, parsed.data.version, path),
-          })),
-      );
-      const missing = files.filter((file) => file.content === null).map((file) => file.path);
-      if (missing.length > 0) {
-        request.log.error(
-          { slug: parsed.data.slug, version: parsed.data.version, missing },
-          'version tree missing files',
-        );
-        return reply.status(502).send({ error: 'the delivered version could not be read back' });
+      const readsDone = acquireRead(reply);
+      if (!readsDone) {
+        return reply.header('Retry-After', '1').status(429).send({ error: 'version reads are busy; retry shortly' });
       }
-      return reply.send({
-        slug: parsed.data.slug,
-        version: parsed.data.version,
-        metadata: historyMetadata(manifest),
-        files: files.map((file) => ({ ...file, ...(isRasterSourcePath(file.path) ? { encoding: 'base64' } : {}) })),
-      });
+      try {
+        const files = await readHistoryFiles(
+          gamesStore,
+          parsed.data.slug,
+          parsed.data.version,
+          manifest.sourceFiles.filter((path) => !query.data.path || path === query.data.path),
+        );
+        const missing = files.filter((file) => file.content === null).map((file) => file.path);
+        if (missing.length > 0) {
+          request.log.error(
+            { slug: parsed.data.slug, version: parsed.data.version, missing },
+            'version tree missing files',
+          );
+          return reply.status(502).send({ error: 'the delivered version could not be read back' });
+        }
+        return reply.send({
+          slug: parsed.data.slug,
+          version: parsed.data.version,
+          metadata: historyMetadata(manifest),
+          files: files.map((file) => ({ ...file, ...(isRasterSourcePath(file.path) ? { encoding: 'base64' } : {}) })),
+        });
+      } finally {
+        readsDone();
+      }
     },
   );
 }

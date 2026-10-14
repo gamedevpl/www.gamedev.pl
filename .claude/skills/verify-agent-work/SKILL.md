@@ -110,6 +110,12 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+**A rate limit does not bound in-flight source buffers.** Full history imports need many
+sequential requests, but raising their per-minute limit also permits concurrent trees.
+Check an instance-wide concurrency budget, bounded storage fan-out, and slot lifetime:
+a disconnect or one rejected read must not free the slot while sibling reads continue,
+and a completed read must hold its slot until the buffered response finishes.
+
 **Remote-helper stream assertions do not verify Git history behavior.** Exercise the
 actual helper with real `git fetch`, `git log` and `git blame` in an isolated repository,
 using deterministic version/tree fixtures. Repeat the fetch after a local commit on
