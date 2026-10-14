@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Raw local preview opens at the port's root without a token in the link, supports the current Codespaces host, and retains host/origin checks for reload and stop. Existing token-path previews are restarted; additional tunnel hosts use `GAMEDEVPL_PREVIEW_ALLOWED_HOSTS`.
+- Raw local preview opens at the port's root without a token in the link, supports the current Codespaces host, and retains host/origin checks for reload and stop. Existing token-path previews are restarted; additional tunnel hosts use `GAMEDEVPL_PREVIEW_ALLOWED_HOSTS` (#1835).
 
 ## 0.46.1 — 2026-10-13
 
