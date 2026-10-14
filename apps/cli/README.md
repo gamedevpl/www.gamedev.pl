@@ -333,17 +333,17 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 
 ### Terminal workspace sidebar
 
-`gamedevpl --terminal` streams conversation output into the terminal history by default.
-Mouse text selection and wheel or trackpad scrolling work normally, without modifier keys.
-The workspace sidebar is hidden by default.
+In a checkout at 120 columns and 16 rows or larger, `gamedevpl --terminal` runs full screen on the terminal's
+alternate screen, so the wheel scrolls the conversation rather than the terminal's history. The workspace sidebar
+is hidden by default; **Ctrl+B** (or `GAMEDEV_SIDEBAR=1`) toggles it without leaving full screen. The right sidebar
+shows the current task, queued follow-ups, preview availability, Studio round updates, and local game file
+modifications. Smaller terminals and sessions outside a checkout stream into terminal history.
 
-Pressing **Ctrl+B** (or setting `GAMEDEV_SIDEBAR=1`) toggles the two-column workspace sidebar. The right
-sidebar shows the current task, queued follow-ups, preview availability, Studio round updates, and local game file
-modifications. In a checkout at 120 columns and 16 rows or larger, opening it switches to a full-screen workspace on
-the terminal's alternate screen. Closing it returns to the normal terminal and adds the conversation that arrived
-meanwhile to its history, so no workspace frames end up in scrollback.
+Set `GAMEDEV_TUI=inline` to keep conversation output in terminal history with native selection, scrollback and
+terminal search; Ctrl+B then opens the full-screen workspace with the sidebar, and closing it returns to the normal
+terminal and adds the conversation that arrived meanwhile to its history, so no workspace frames end up in scrollback.
 
-In the workspace the wheel or trackpad scrolls the conversation under the pointer, and PgUp/PgDn scroll the chat
+Full screen, the wheel or trackpad scrolls the conversation under the pointer, and PgUp/PgDn scroll the chat
 (or active choice question). Drag to select text; the selection is copied when you release the button
 (double-click selects a word, triple-click a line). A selection stays inside the column it started in, and dragging
 past the top or bottom edge scrolls the conversation. Copying uses `pbcopy` on a local macOS terminal and OSC 52

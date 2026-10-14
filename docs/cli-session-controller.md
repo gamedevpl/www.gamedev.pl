@@ -45,19 +45,20 @@ shows the connection activity and game slug. Commands and local history still wa
 for those results, and account verification remains required before restoring history.
 This startup change adds no telemetry event or creator-funnel dimension.
 
-The Ink host supplies the current checkout to the same `ReplApp`. By default every session streams
-the static transcript into terminal history with no mouse reporting, so native selection, scrollback
-and terminal search work unchanged. Ctrl+B opens the workspace sidebar; at 120 columns / 16 rows in a
-checkout this renders a full-height conversation with a right sidebar on the terminal's alternate screen.
+The Ink host supplies the current checkout to the same `ReplApp`. At 120 columns / 16 rows in a checkout
+it renders a full-height conversation on the terminal's alternate screen; the workspace sidebar is hidden
+by default and Ctrl+B toggles it without leaving full screen. Smaller terminals and sessions outside a
+checkout stream the static transcript into terminal history with no mouse reporting. `GAMEDEV_TUI=inline`
+keeps that streaming mode in wide checkouts too, with Ctrl+B opening the full-screen workspace and sidebar.
 The scrollable view measures message heights, then replaces offscreen messages with spacers; typing reuses
 the visible transcript. Width changes remeasure wrapping, and appended messages retain earlier heights.
 Both layouts use `TranscriptLine`, the existing composer, choice handling, diagnostics and diff viewer.
 
-Buffers switch between Ink frames. Entering draws the split layout only after the switch; leaving holds
+Buffers switch between Ink frames. Entering draws the full-screen layout only after the switch; leaving holds
 `<Static>` until the main buffer is back, so output that arrived in the workspace reaches terminal history
 exactly once and no workspace frame enters scrollback. Resizing below the split threshold leaves the same way.
 
-The workspace enables SGR button-event mouse reporting (`?1002h`). Wheel reports route to the conversation,
+Full screen enables SGR button-event mouse reporting (`?1002h`). Wheel reports route to the conversation,
 question, diff or diagnostics under the pointer; they never become composer text or choice answers, and row
 heights are cached so trackpad bursts remain responsive. Delivery choices retain the conversation above their
 question. Left-button drags select text inside the TUI: the selection is clamped to the column it started in,

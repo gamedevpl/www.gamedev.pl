@@ -43,6 +43,7 @@ export function ReplApp({
   checkout,
   initialSidebar = process.env.GAMEDEV_SIDEBAR === '1',
   mouse = process.env.GAMEDEV_DISABLE_MOUSE !== '1',
+  inline = process.env.GAMEDEV_TUI === 'inline',
   clipboard = systemClipboard,
 }: {
   session: TuiSession;
@@ -53,6 +54,7 @@ export function ReplApp({
   checkout?: () => WorkspaceCheckout | null;
   initialSidebar?: boolean;
   mouse?: boolean;
+  inline?: boolean;
   clipboard?: Clipboard;
 }) {
   const [state, setState] = useState<TuiState>(session.get);
@@ -73,18 +75,19 @@ export function ReplApp({
   const [sidebar, setSidebar] = useState(initialSidebar);
   const activeCheckout = checkout?.() ?? null;
   const canSplit = Boolean(activeCheckout) && dimensions.columns >= 120 && dimensions.rows >= 16;
-  const alt = useAltScreen(canSplit && sidebar);
-  const split = canSplit && sidebar && alt;
+  // Inline mode keeps terminal scrollback until the sidebar is opened.
+  const alt = useAltScreen(canSplit && (sidebar || !inline));
+  const split = canSplit && (sidebar || !inline) && alt;
   const altRef = useRef(alt);
   altRef.current = alt;
   useMouseReporting(split && mouse);
   const regions = useRef<Regions>({ chat: null, column: null, panel: null });
   const choicePanel = useRef<DOMElement>(null);
-  const panelWidth = split ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
+  const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
   const rows = dimensions.rows - Number(split);
   const selection = useSelection({ enabled: split && mouse, rows, regions, clipboard });
-  const changes = useWorkspaceChanges(activeCheckout, split);
+  const changes = useWorkspaceChanges(activeCheckout, split && sidebar);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
@@ -415,7 +418,7 @@ export function ReplApp({
           <RichText
             text={
               split
-                ? `${selection.notice || (mouse ? 'Drag to copy · wheel / PgUp/PgDn chat' : 'PgUp/PgDn chat')} · Ctrl+B hide sidebar · ${footer}`
+                ? `${selection.notice || (mouse ? 'Drag to copy · wheel / PgUp/PgDn chat' : 'PgUp/PgDn chat')} · Ctrl+B ${sidebar ? 'hide' : 'show'} sidebar · ${footer}`
                 : `${canSplit ? 'Ctrl+B show sidebar · ' : ''}${footer}`
             }
             color={color}

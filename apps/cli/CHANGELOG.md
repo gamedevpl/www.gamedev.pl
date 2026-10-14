@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- In a checkout at 120×16 or larger the interactive terminal runs full screen even with the sidebar hidden, so the wheel scrolls the conversation instead of the whole terminal history, and drag-to-copy works without opening the sidebar; Ctrl+B only shows or hides the sidebar. Set `GAMEDEV_TUI=inline` to keep the conversation in terminal scrollback instead.
+
 ## 0.47.0 — 2026-10-14
 
 ### Added
