@@ -12,7 +12,12 @@ export type PreviewSource = {
 
 export function previewSource(url: string, signal: AbortSignal): PreviewSource {
   const parsed = new URL(url);
-  if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1' || !/^\/[a-f0-9]{48}\/$/.test(parsed.pathname)) {
+  if (
+    parsed.protocol !== 'http:' ||
+    parsed.hostname !== '127.0.0.1' ||
+    !parsed.port ||
+    (parsed.pathname !== '/' && !/^\/[a-f0-9]{48}\/$/.test(parsed.pathname))
+  ) {
     throw new Error('Local tools require a CLI-owned loopback preview.');
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('Invalid preview URL.');
@@ -57,6 +62,7 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
     if (!(await status()).canRetry) throw new Error('Restart /play to enable build retries.');
     const response = await fetch(`${url}retry`, {
       method: 'POST',
+      headers: { Origin: parsed.origin },
       redirect: 'error',
       signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
     });
