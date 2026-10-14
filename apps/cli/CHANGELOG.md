@@ -13,7 +13,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Git fetch imports platform versions into private refs, preserves local branches and edits, keeps image bytes intact, and downloads only versions not already imported (#1838).
+- Git fetch imports platform versions into private refs, supports SHA-1 and SHA-256 repositories, preserves local branches and edits, keeps image bytes intact, and downloads only versions not already imported (#1838).
 
 ## 0.47.0 — 2026-10-14
 

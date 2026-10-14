@@ -11,7 +11,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-function fixture(scope?: string) {
+function fixture(scope?: string, objectFormat = 'sha1') {
   const dir = mkdtempSync(join(tmpdir(), 'gamedev-history-test-'));
   dirs.push(dir);
   const bin = join(dir, 'bin');
@@ -81,7 +81,7 @@ runRemoteHelper('probe', {
   };
   const save = () => writeFileSync(data, JSON.stringify({ versions, trees }));
   save();
-  git('init', '-b', 'main');
+  git('init', '-b', 'main', `--object-format=${objectFormat}`);
   git('config', 'user.name', 'local creator');
   git('config', 'user.email', 'local@example.invalid');
   git('remote', 'add', 'origin', 'gamedevpl://probe');
@@ -89,8 +89,8 @@ runRemoteHelper('probe', {
 }
 
 describe('real Git history through the remote helper', () => {
-  it('fetches platform history without changing local commits, index or working files; imports incrementally', () => {
-    const f = fixture('abcd1234abcd1234');
+  it.each(['sha1', 'sha256'])('preserves local work and imports incrementally in a %s repository', (format) => {
+    const f = fixture('abcd1234abcd1234', format);
     writeFileSync(join(f.repo, 'local.txt'), 'local committed file');
     f.git('add', '.');
     f.git('-c', 'commit.gpgsign=false', 'commit', '-m', 'local history');
@@ -102,6 +102,7 @@ describe('real Git history through the remote helper', () => {
     expect(f.git('status', '--porcelain')).toBe(status);
     expect(readFileSync(join(f.repo, 'local.txt'), 'utf8')).toBe('unsent edit');
     expect(f.git('log', 'origin/main', '--format=%s')).toBe('v2\nv1');
+    expect(f.git('rev-list', '--parents', 'origin/main~1')).not.toContain(' ');
     const before = f.git('rev-parse', 'origin/main');
     const blame = f.git('blame', '--line-porcelain', 'origin/main', '--', 'games/probe/game.ts');
     expect(blame).toContain('summary v1');
@@ -119,6 +120,18 @@ describe('real Git history through the remote helper', () => {
     expect(readFileSync(f.reads, 'utf8').trim().split('\n')).toHaveLength(3);
     const imported = spawnSync('git', ['show', 'origin/main^:games/probe/media/image.png'], { cwd: f.repo });
     expect(imported.stdout).toEqual(f.image);
+    const latest = f.git('rev-parse', 'origin/main');
+    for (const row of f.versions) {
+      f.git(
+        'update-ref',
+        '-d',
+        `refs/gamedevpl/abcd1234abcd1234/probe/versions/${Buffer.from(row.version).toString('hex')}`,
+      );
+    }
+    f.git('fetch', 'origin');
+    expect(f.git('rev-parse', 'origin/main')).toBe(latest);
+    expect(f.git('log', 'origin/main', '--format=%s')).toBe('v3\nv2\nv1');
+    expect(f.git('rev-parse', 'HEAD')).toBe(head);
   });
 
   it('accepts an empty history', () => {

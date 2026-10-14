@@ -117,7 +117,12 @@ a disconnect or one rejected read must not free the slot while sibling reads con
 and a completed read must hold its slot until the buffered response finishes.
 
 **Remote-helper stream assertions do not verify Git history behavior.** Exercise the
-actual helper with real `git fetch`, `git log` and `git blame` in an isolated repository,
+actual import in both SHA-1 and SHA-256 repositories. A hard-coded 40-character null
+parent breaks SHA-256 fast-import; clear the private ref with a parentless reset and
+omit `from` for a root commit. Remove version-cache refs after a successful fetch,
+then reimport: the previous private tip must not become the new root's parent.
+
+Exercise the actual helper with real `git fetch`, `git log` and `git blame` in an isolated repository,
 using deterministic version/tree fixtures. Repeat the fetch after a local commit on
 `main` and assert that local refs and working files stay intact. The gamedevpl helper
 advertised `import` without `refspec` and emitted commits into `refs/heads/main`:

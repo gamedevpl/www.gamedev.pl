@@ -30,7 +30,7 @@ export function fastImportScript(input: {
   );
   const chunks: Buffer[] = [];
   const emit = (text: string) => chunks.push(Buffer.from(text + '\n'));
-  let parent = input.parent ?? '0000000000000000000000000000000000000000';
+  let parent = input.parent;
   let mark = input.markOffset ?? 0;
   for (const row of chronological) {
     const known = input.knownCommits?.get(row.version);
@@ -42,12 +42,16 @@ export function fastImportScript(input: {
     if (!files) throw new Error(`missing source tree for ${row.version}`);
     const date = Math.floor(Date.parse(row.createdAt) / 1000);
     if (!Number.isFinite(date)) throw new Error(`invalid version date for ${row.version}`);
+    if (!parent) {
+      emit(`reset ${ref}`);
+      emit('');
+    }
     emit(`commit ${ref}`);
     emit(`mark :${++mark}`);
     emit(`committer gamedevpl <cli@gamedev.pl> ${date} +0000`);
     emit(`data ${Buffer.byteLength(row.version)}`);
     emit(row.version);
-    emit(`from ${parent}`);
+    if (parent) emit(`from ${parent}`);
     emit('deleteall');
     for (const file of files) {
       if (
