@@ -1,4 +1,11 @@
 import type { IncomingMessage } from 'node:http';
+import { createHash } from 'node:crypto';
+
+export function previewHostConfig(hosts: Set<string>): string {
+  return createHash('sha256')
+    .update(JSON.stringify([...hosts].sort()))
+    .digest('hex');
+}
 
 export function previewAllowedHosts(origin: string, env: NodeJS.ProcessEnv): Set<string> {
   const port = new URL(origin).port;

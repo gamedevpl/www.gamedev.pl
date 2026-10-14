@@ -7,7 +7,14 @@ import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { privatePlayDirectory, readPlayState } from './play-state.js';
 import { savePlayJournal, type PlayJournal } from './workbench-launch.js';
 
-export type PreviewSession = { url: string; key: string; root?: string; slug?: string; cliVersion?: string };
+export type PreviewSession = {
+  url: string;
+  key: string;
+  root?: string;
+  slug?: string;
+  cliVersion?: string;
+  hostConfig?: string;
+};
 export type PlaySession = {
   id: string;
   kind: 'workbench' | 'preview';
@@ -42,7 +49,7 @@ export async function alivePreview(path: string, key: string): Promise<PreviewSe
     const res = await fetch(`${state.url}status`, { signal: AbortSignal.timeout(600), redirect: 'error' });
     if (!res.ok) return null;
     const live = (await res.json()) as PreviewSession;
-    return live.key === key ? { ...state, cliVersion: live.cliVersion } : null;
+    return live.key === key ? { ...state, cliVersion: live.cliVersion, hostConfig: live.hostConfig } : null;
   } catch {
     return null;
   }

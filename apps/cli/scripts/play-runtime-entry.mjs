@@ -2,7 +2,7 @@ import { gameSourceRoot, projectRuntimeRoot } from '../src/source-project.ts';
 import { sourceKitRoot, syncSourceRuntime } from '../src/source-project-runtime.ts';
 import { PLAY_PAGE } from '../src/play-page.ts';
 import { playPresence, attachPlayPresence } from '../src/play-presence.ts';
-import { previewAllowedHosts, trustedPreviewRequest } from '../src/preview-request.ts';
+import { previewAllowedHosts, previewHostConfig, trustedPreviewRequest } from '../src/preview-request.ts';
 
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
@@ -24,7 +24,7 @@ let attemptedFingerprint = '',
   dirtyAt = 0,
   busy = false,
   lastVisit = Date.now();
-let origin, currentBuild;
+let origin, currentBuild, hostConfig;
 let allowedHosts = new Set();
 const presence = playPresence(shutdown, () => !busy);
 function treeStamp(dir) {
@@ -155,6 +155,7 @@ const server = createServer((req, res) => {
       JSON.stringify({
         key,
         cliVersion,
+        hostConfig,
         revision,
         error: attemptedFingerprint === stamp ? error : '',
         busy,
@@ -199,12 +200,17 @@ function shutdown() {
 server.listen(0, '127.0.0.1', () => {
   origin = 'http://127.0.0.1:' + server.address().port;
   allowedHosts = previewAllowedHosts(origin, process.env);
+  hostConfig = previewHostConfig(allowedHosts);
   attachPlayPresence(server, presence, (req) => trustedPreviewRequest(req, allowedHosts) && req.url === '/presence');
   const pendingState = statePath + '.' + instanceId;
-  writeFileSync(pendingState, JSON.stringify({ url: origin + '/', instanceId, key, root, slug, cliVersion }), {
-    mode: 0o600,
-    flag: 'wx',
-  });
+  writeFileSync(
+    pendingState,
+    JSON.stringify({ url: origin + '/', instanceId, hostConfig, key, root, slug, cliVersion }),
+    {
+      mode: 0o600,
+      flag: 'wx',
+    },
+  );
   renameSync(pendingState, statePath);
 });
 server.on('error', () => process.exit(1));

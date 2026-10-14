@@ -297,6 +297,7 @@ including the port when the browser URL has one). This is a development server:
 keep forwarded ports private. Cross-origin requests are refused, and stop/retry
 require a matching HTTP Origin. Older token-path sessions remain discoverable
 and are restarted when opening raw preview with the new CLI.
+Changing the effective allowed hosts restarts a reused preview automatically.
 
 - `gamedevpl play --preview [slug]` reuses the running preview for the matching checkout.
 - `--no-open` prints the URL without launching a browser.

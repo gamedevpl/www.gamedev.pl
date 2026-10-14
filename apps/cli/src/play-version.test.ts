@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -45,6 +45,50 @@ it('replaces a legacy preview under its startup lock and reuses the current serv
     await startLocalPlay({ ...input, stop: true });
     legacy.closeAllConnections();
     await new Promise<void>((resolve) => legacy.close(() => resolve()));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('applies added and removed tunnel hosts while reusing equivalent configuration', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-preview-hosts-'));
+  mkdirSync(join(root, 'tools/lib'), { recursive: true });
+  writeFileSync(join(root, 'tools/lib/assemble.ts'), 'export const assembleGame=()=>({html:"<h1>Game</h1>"});');
+  symlinkSync(resolve('../../node_modules'), join(root, 'node_modules'), 'dir');
+  writeFileSync(join(root, 'package.json'), '{"type":"module"}');
+  const input = {
+    root,
+    slug: 'robot',
+    env: { ...process.env, GAMEDEVPL_PREVIEW_ALLOWED_HOSTS: '' },
+    prepared: true,
+    write: vi.fn(),
+  };
+  const host = 'preview.example.test';
+  const status = (url: string) =>
+    new Promise<number>((resolve, reject) => {
+      request(url, { headers: { Host: host } }, (response) => {
+        response.resume();
+        resolve(response.statusCode!);
+      })
+        .on('error', reject)
+        .end();
+    });
+  try {
+    const first = await startLocalPlay(input);
+    expect(await status(first!.url)).toBe(403);
+    const configured = { ...input, env: { ...input.env, GAMEDEVPL_PREVIEW_ALLOWED_HOSTS: host } };
+    const next = await startLocalPlay(configured);
+    expect(await status(next!.url)).toBe(200);
+    expect(
+      (await startLocalPlay({
+        ...configured,
+        env: { ...configured.env, GAMEDEVPL_PREVIEW_ALLOWED_HOSTS: ' PREVIEW.EXAMPLE.TEST,preview.example.test ' },
+      }))!.url,
+    ).toBe(next!.url);
+    const removed = await startLocalPlay(input);
+    expect(await status(removed!.url)).toBe(403);
+    expect(input.write).toHaveBeenCalledWith('Restarting preview to apply allowed hosts…');
+  } finally {
+    await startLocalPlay({ ...input, stop: true });
     rmSync(root, { recursive: true, force: true });
   }
 });
