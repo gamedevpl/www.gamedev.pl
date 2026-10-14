@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.47.0 — 2026-10-14
+
 ### Added
 
 - The workspace sidebar opens on the terminal's alternate screen with its own text selection: drag to select (double-click a word, triple-click a line), and the selection is copied on release (pbcopy on macOS, OSC 52 elsewhere, including over SSH and tmux). Dragging past the top or bottom edge scrolls the conversation. Ctrl+T is gone; hold Option/Fn/Shift for the terminal's native selection or set `GAMEDEV_DISABLE_MOUSE=1` to turn mouse capture off (#1833).
