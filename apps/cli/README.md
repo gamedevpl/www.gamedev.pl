@@ -333,18 +333,23 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 
 ### Terminal workspace sidebar
 
-`gamedevpl --terminal` runs in full-screen interactive mode when in a checkout at 120 columns and 16 rows or larger:
-the conversation view is pinned to the terminal height without scrolling the outer terminal window.
-The workspace sidebar is hidden by default to keep the full screen focused on conversation.
+`gamedevpl --terminal` streams conversation output into the terminal history by default.
+Mouse text selection and wheel or trackpad scrolling work normally, without modifier keys.
+The workspace sidebar is hidden by default.
 
 Pressing **Ctrl+B** (or setting `GAMEDEV_SIDEBAR=1`) toggles the two-column workspace sidebar. The right
 sidebar shows the current task, queued follow-ups, preview availability, Studio round updates, and local game file
-modifications. Toggling Ctrl+B expands or hides the sidebar without dropping full-screen mode or resetting
-the conversation scroll position.
+modifications. In a checkout at 120 columns and 16 rows or larger, opening it switches to a full-screen workspace on
+the terminal's alternate screen. Closing it returns to the normal terminal and adds the conversation that arrived
+meanwhile to its history, so no workspace frames end up in scrollback.
 
-The mouse wheel or trackpad scrolls the conversation smoothly under the pointer; PgUp/PgDn scroll the chat
-(or active choice question). Press **Ctrl+T** to pause display updates and release mouse capture for native text
-selection (on macOS, holding Option/Fn also selects text at any time without pressing Ctrl+T). Existing `/diff`,
+In the workspace the wheel or trackpad scrolls the conversation under the pointer, and PgUp/PgDn scroll the chat
+(or active choice question). Drag to select text; the selection is copied when you release the button
+(double-click selects a word, triple-click a line). A selection stays inside the column it started in, and dragging
+past the top or bottom edge scrolls the conversation. Copying uses `pbcopy` on a local macOS terminal and OSC 52
+everywhere else, which also works over SSH and inside tmux (`set -g set-clipboard on`). Escape or a click clears
+the selection. Hold Option (iTerm2), Fn (Terminal.app) or Shift (most other terminals) to use the terminal's own
+selection instead, or set `GAMEDEV_DISABLE_MOUSE=1` to keep mouse capture off in the workspace. Existing `/diff`,
 Ctrl+D and `/logs` keep their scrollable detail views.
 
 Changes are compared with `.gamedev-base.json`, not Git, using the same game-file

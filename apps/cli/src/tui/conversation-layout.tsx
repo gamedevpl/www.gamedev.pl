@@ -1,8 +1,9 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Box, Static, Text, measureElement, useStdout, type DOMElement } from 'ink';
+import { useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
+import { Box, Static, Text, measureElement, type DOMElement } from 'ink';
 import { TranscriptLine } from './transcript.js';
-import { useTerminalInput, wheelInside } from './mouse.js';
+import { elementRect, useTerminalInput, wheelInside } from './mouse.js';
 import { transcriptRows, transcriptWindow } from './transcript-window.js';
+import type { Regions } from './selection.js';
 
 function TranscriptViewport({
   lines,
@@ -10,14 +11,14 @@ function TranscriptViewport({
   color,
   blocked,
   layout,
-  paused,
+  regions,
 }: {
   lines: string[];
   offset: number;
   color: boolean;
   blocked: boolean;
   layout: ReactNode;
-  paused: boolean;
+  regions?: MutableRefObject<Regions>;
 }) {
   const viewport = useRef<DOMElement>(null);
   const panel = useRef<DOMElement>(null);
@@ -28,7 +29,6 @@ function TranscriptViewport({
   const geometry = useMemo(() => transcriptRows(lines, offset, heights), [lines, offset, heights]);
   const [scroll, setScroll] = useState<number | null>(null);
   const anchor = useRef<{ index: number; within: number } | null>(null);
-  const { stdout } = useStdout();
   useLayoutEffect(() => {
     if (!viewport.current || !content.current) return;
     const { height, width } = measureElement(viewport.current);
@@ -72,12 +72,12 @@ function TranscriptViewport({
   const page = Math.max(1, size.height + Number(distance > 0) - 1);
   useTerminalInput(
     (_input, key) => {
-      if (blocked || paused) return;
+      if (blocked) return;
       if (key.pageUp) setScroll(Math.max(0, start - page));
       if (key.pageDown) setScroll(start + page >= max ? null : start + page);
     },
     (wheel) => {
-      if (paused || !wheelInside(panel.current, wheel, stdout.rows || 24)) return;
+      if (!wheelInside(panel.current, wheel)) return;
       pendingDelta.current += wheel.direction * 3;
       if (!scheduled.current) {
         scheduled.current = true;
@@ -95,6 +95,30 @@ function TranscriptViewport({
       }
     },
   );
+  useLayoutEffect(() => {
+    if (!regions) return;
+    const current = regions.current;
+    return () => {
+      current.chat = null;
+    };
+  }, [regions]);
+  if (regions) {
+    regions.current.chat = {
+      rect: () => elementRect(viewport.current),
+      at: (y) => {
+        const rect = elementRect(viewport.current);
+        if (!rect) return null;
+        const target = start + y - rect.top;
+        const row = geometry.rows.find((r) => r.height !== undefined && target >= r.top && target < r.top + r.height);
+        return row ? [row.index, target - row.top] : null;
+      },
+      scroll: (delta) =>
+        setScroll((value) => {
+          const next = Math.max(0, Math.min(max, (value === null ? max : Math.min(value, max)) + delta));
+          return next >= max ? null : next;
+        }),
+    };
+  }
   const messages = useMemo(
     () =>
       transcriptWindow(geometry.rows, start, size.height).map((segment) =>
@@ -139,7 +163,8 @@ export function ConversationLayout({
   hidden,
   panel,
   children,
-  paused = false,
+  hold = false,
+  regions,
 }: {
   lines: string[];
   offset: number;
@@ -151,32 +176,49 @@ export function ConversationLayout({
   hidden: boolean;
   panel?: ReactNode;
   children: ReactNode;
-  paused?: boolean;
+  hold?: boolean;
+  regions?: MutableRefObject<Regions>;
 }) {
   // Keep Ink's static node mounted while split output waits for scrollback.
   const printed = useRef(offset);
-  if (!split) printed.current = lines.length;
+  if (!split && !hold) printed.current = lines.length;
   return (
     <Box width={width} height={split ? rows : undefined} flexDirection={split ? 'row' : 'column'}>
       <Static items={lines.slice(offset, printed.current)} style={{ width }}>
         {(line, index) => <TranscriptLine key={index} line={line} previous={lines[offset + index - 1]} color={color} />}
       </Static>
-      <Box flexGrow={1} minWidth={0} flexDirection="column">
+      <Box
+        ref={(node) => {
+          if (regions) regions.current.column = node;
+        }}
+        flexGrow={1}
+        minWidth={0}
+        flexDirection="column"
+      >
         {split && !hidden && (
           <TranscriptViewport
             lines={lines}
             offset={offset}
             color={color}
             blocked={blocked}
-            paused={paused}
             layout={children}
+            regions={regions}
           />
         )}
         <Box flexDirection="column" flexShrink={0}>
           {children}
         </Box>
       </Box>
-      {split && panel}
+      {split && panel && (
+        <Box
+          ref={(node) => {
+            if (regions) regions.current.panel = node;
+          }}
+          flexShrink={0}
+        >
+          {panel}
+        </Box>
+      )}
     </Box>
   );
 }

@@ -62,7 +62,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   void view.session.prompt();
   for (let i = 0; i < 60; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
-  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1000h');
+  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1002h');
   await view.press('\u001b[<64;10;5M'.repeat(3));
   expect(view.frame()).toContain('Earlier messages');
   expect(view.frame()).not.toContain('Message 59');
@@ -75,7 +75,7 @@ it('captures the wheel in the conversation, ignores sidebar clicks, and restores
   expect(view.frame()).toContain('Message 59');
   expect(view.frame()).not.toContain('Earlier messages');
   view.resize(80, 24);
-  expect(view.terminalOutput()).toContain('\u001b[?1000l\u001b[?1006l');
+  expect(view.terminalOutput()).toContain('\u001b[?1002l\u001b[?1006l');
   view.resize(150, 28);
   const resets = view.terminalOutput().split('\u001b[?1006l').length;
   view.close();
@@ -199,12 +199,12 @@ it('scrolls a diff under the pointer without inserting reports into the composer
 
 it('leaves native terminal scrolling enabled for compact terminals', () => {
   const view = screen(80, 24);
-  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 });
 
 it('leaves native terminal scrolling enabled outside a checkout', () => {
   const view = screen(150, 28, 0, () => null);
-  expect(view.terminalOutput()).not.toContain('\u001b[?1000h');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 });
 
 it('scrolls diagnostics under the pointer and returns to the unchanged draft', async () => {
@@ -335,44 +335,69 @@ it('refreshes local edits only while visible, and refreshes again when restored'
   }
 });
 
-it('keeps full-screen layout active when sidebar is hidden by default and toggled with Ctrl+B', async () => {
+it('leaves mouse selection and scrollback native by default, including during local work and resizes', async () => {
+  vi.stubEnv('GAMEDEV_SIDEBAR', '');
+  try {
+    const view = screen(150, 28, 0, undefined, undefined, null);
+    void view.session.prompt();
+    for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
+    expect(view.frame()).not.toContain('WORKSPACE');
+    expect(view.takeOutput()).toContain('Message 0');
+    view.session.setLocalTask('claude');
+    view.session.writeLine('Agent output');
+    await view.press('follow-up');
+    expect(view.takeOutput()).toContain('Agent output');
+    view.resize(80, 24);
+    view.resize(150, 28);
+    expect(view.session.get().draft).toBe('follow-up');
+    expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
+    expect(view.terminalOutput()).not.toContain('\u001b[?1006h');
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
+it('enables mouse reporting only in the sidebar and releases it when returning to terminal history', async () => {
   const view = screen(150, 28, 0, undefined, undefined, false);
   void view.session.prompt();
   for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
+  view.session.setDraft('keep this draft');
   expect(view.frame()).not.toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 29');
-  expect(view.frame().trimEnd().split('\n').length).toBeLessThan(28);
+  expect(view.frame().trimEnd().split('\n').length).toBeGreaterThan(28);
   expect(view.frame()).toContain('Ctrl+B show sidebar');
+  expect(view.terminalOutput()).not.toContain('\u001b[?1002h');
 
   await view.press('\u0002');
   expect(view.frame()).toContain('WORKSPACE');
   expect(view.frame()).toContain('Message 29');
   expect(view.frame()).toContain('Ctrl+B hide sidebar');
+  expect(view.terminalOutput()).toContain('\u001b[?1006h\u001b[?1002h');
+  view.session.writeLine('Arrived in workspace');
+  const beforeClose = view.terminalOutput().length;
 
   await view.press('\u0002');
   expect(view.frame()).not.toContain('WORKSPACE');
-  expect(view.frame()).toContain('Message 29');
   expect(view.frame()).toContain('Ctrl+B show sidebar');
+  expect(view.takeOutput()).toContain('Arrived in workspace');
+  expect(view.terminalOutput().slice(beforeClose)).toContain('\u001b[?1002l\u001b[?1006l');
+  view.resize(130, 20);
+  expect(view.terminalOutput().slice(beforeClose)).not.toContain('\u001b[?1002h');
+  expect(view.session.get().draft).toBe('keep this draft');
 });
 
-it('preserves visible conversation position across sidebar toggle while scrolled up in wrapped messages', async () => {
-  const view = screen(150, 28, 0, undefined, undefined, false);
+it('returns from scrolled workspace output to native history without losing wrapped messages or the draft', async () => {
+  const view = screen();
   void view.session.prompt();
   for (let i = 0; i < 40; i++) view.session.writeLine(`codex ▸ Message ${i} · ${'długa odpowiedź '.repeat(10)}`);
+  view.session.setDraft('keep draft');
   await view.press('\u001b[5~');
   expect(view.frame()).toContain('Earlier messages');
-  const visibleBefore = view.frame();
-  const matched = visibleBefore.match(/Message (\d+)/);
-  expect(matched).not.toBeNull();
-  const messageNum = matched![1];
-
-  await view.press('\u0002');
-  expect(view.frame()).toContain('WORKSPACE');
-  expect(view.frame()).toContain('Earlier messages');
-  expect(view.frame()).toContain(`Message ${messageNum}`);
-
   await view.press('\u0002');
   expect(view.frame()).not.toContain('WORKSPACE');
-  expect(view.frame()).toContain('Earlier messages');
-  expect(view.frame()).toContain(`Message ${messageNum}`);
+  const history = view.takeOutput();
+  expect(history).toContain('Message 0');
+  expect(history).toContain('Message 39');
+  expect(view.terminalOutput()).toContain('\u001b[?1002l\u001b[?1006l');
+  expect(view.session.get().draft).toBe('keep draft');
 });
