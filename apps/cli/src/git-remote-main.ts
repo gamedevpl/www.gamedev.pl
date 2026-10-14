@@ -14,6 +14,9 @@ import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
 import { localGameFiles, trackedTree, writeBase } from './checkout.js';
 import { formatIgnoredNotice } from './working-copy.js';
+import { readHistory, readHistoryTree, historySlug } from './history-api.js';
+import { knownHistoryCommits } from './git-history-cache.js';
+import { createHash } from 'node:crypto';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -77,6 +80,8 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
     return 1;
   }
   const api = createApi({ origin: originFromEnv(env), store: storeFromEnv(env), env });
+  historySlug(slug);
+  const scope = createHash('sha256').update(api.origin).digest('hex').slice(0, 16);
   const rl = createInterface({ input: stdin, crlfDelay: Infinity });
   try {
     const iter = rl[Symbol.asyncIterator]();
@@ -86,22 +91,14 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
         return next.done ? null : String(next.value);
       },
       write: (line) => stdout.write(line.endsWith('\n') ? line : `${line}\n`),
-      fetchVersions: async (game) => {
-        const body = await api.request<{ versions: Array<{ version: string; createdAt: string }> }>(
-          'GET',
-          `/api/me/studio/games/${game}/versions`,
-        );
-        return body.versions;
-      },
-      fetchTree: async (game, version) => {
-        const body = await api.request<{ files: Array<{ path: string; content: string }> }>(
-          'GET',
-          `/api/me/studio/games/${game}/versions/${version}/tree`,
-        );
-        return body.files;
-      },
+      fetchVersions: (game) => readHistory(api, game),
+      fetchTree: async (game, version) => (await readHistoryTree(api, game, version)).files,
+      knownCommits: () => knownHistoryCommits(slug, process.cwd(), scope),
+      scope,
       importScript: async (script) => {
-        stdout.write(script.endsWith('\n') ? script : `${script}\n`);
+        await new Promise<void>((resolve, reject) =>
+          stdout.write(script, (error) => (error ? reject(error) : resolve())),
+        );
       },
       pushReconcile: async (src) => reconcilePush({ api, slug, cwd: process.cwd(), srcRef: src }),
     });

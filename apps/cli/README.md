@@ -206,6 +206,54 @@ choose a source copy: review `gamedevpl diff`, then back up the local game sourc
 `gamedevpl pull --force` replaces those sources with the platform copy and records a
 base version for later pulls. To deliver the local copy instead, use `gamedevpl push --force`.
 
+## Delivered source history
+
+History reads work without a local Git repository. Inside a checkout the CLI finds
+the game, including from subdirectories. Elsewhere, supply `--slug <slug>`; `log`
+also accepts the slug as its argument. All commands support `--json` and their
+interactive `/log`, `/show`, `/diff` and `/blame` forms.
+
+```sh
+gamedevpl log                     # latest 20 delivered versions
+gamedevpl log --all               # all pages, newest first
+gamedevpl log tabletop-turbos --limit 50
+gamedevpl show <version>          # metadata and patch against the preceding delivery
+gamedevpl diff <version1> <version2>
+gamedevpl diff --from <version1> --to <version2> --slug tabletop-turbos
+gamedevpl blame game/ai.ts        # version that last changed each line
+gamedevpl blame game/ai.ts --version <version>
+```
+
+`log` shows delivery dates, preview/publication mode, gate outcome, stored change
+summary and backend/model when available. It lists delivered source versions;
+rounds that never delivered sources are not versions. `blame` reports version and
+date, not a person or agent identity that the platform cannot establish. Paths
+are relative to the game's source root; a full `games/<slug>/...` path also works,
+and source repositories accept `src/...`. `show`, version diffs and `blame` require
+Git on `PATH` and use a private temporary repository removed after the read.
+They leave the current checkout, index and local history untouched.
+
+Plain `gamedevpl diff` still compares platform sources with local edits. Two
+timestamp version IDs (`v...`) select the version comparison; use `--from` and
+`--to` for other version ID formats or to avoid ambiguous positional arguments.
+
+A standard checkout initializes Git and configures `origin`; it does not populate
+the current branch's commit history. With `git-remote-gamedevpl` on `PATH`:
+
+```sh
+git fetch origin
+git log origin/main --oneline
+git blame origin/main -- games/tabletop-turbos/game/ai.ts
+```
+
+The helper imports a deterministic commit per version into `refs/gamedevpl/`,
+which Git maps to `origin/main`. It never updates a local branch. Repeated fetches
+reuse imported commits and fetch only new source trees; PNG/WebP files retain
+their bytes. Cold imports stream one version at a time. Private refs are separated
+by platform origin and game. These commits use `gamedevpl` as author and the version ID as their
+message. API pagination includes history beyond 100 versions; rate-limited reads
+retry with the server's retry interval, up to three retries per request.
+
 ## Round trip
 
 ```bash

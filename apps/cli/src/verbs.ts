@@ -8,6 +8,7 @@ import { updateProgress } from './update-progress.js';
 import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 import { npmCliProject, updateProjectCli } from './update-project.js';
+import { historyCommand, isHistoryVerb } from './history-command.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
@@ -37,6 +38,11 @@ export async function dispatchReadVerb(input: {
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
+  if (
+    isHistoryVerb(verb, args, flags) &&
+    (await historyCommand({ ...input, write: (text) => io.stdout.write(`${text}\n`) }))
+  )
+    return EXIT_GREEN;
 
   if (verb === 'agents') {
     const agents = discoverAgents(input.env);
