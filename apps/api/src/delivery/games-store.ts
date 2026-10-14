@@ -53,16 +53,8 @@ export const MAX_UPLOAD_BYTES = DELIVERY_MAX_UPLOAD_BYTES;
  * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
 export const MAX_UPLOAD_FILES = DELIVERY_MAX_FILES;
 
-/**
- * TypeScript bytes one delivery may have scanned for `any`, across all its files.
- *
- * The scanner caps a single source, which bounds one parse but not one request: four
- * files just under that cap spend the whole upload allowance on synchronous parsing, on
- * the event loop, for untrusted input. This is the budget that actually bounds it, and it
- * sits above the games repo's author budget (936 KiB) so nothing the gate would accept is
- * refused here for size.
- */
-const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
+// Bound synchronous parsing while covering the 1404 KiB author budget.
+const MAX_SCANNED_DELIVERY_BYTES = 1536 * 1024;
 
 export interface SourceFile {
   path: string;
@@ -262,11 +254,7 @@ export function validateSourceUpload(
   const listedFindings: string[] = [];
   for (const file of normalized) {
     if (!file.path.endsWith('.ts')) continue;
-    // The per-file cap inside the scanner does not bound a delivery: four files just
-    // under it spend the whole 2 MiB upload allowance on synchronous parsing, on the API
-    // event loop. This budget is what actually bounds the work, and it sits above the
-    // games repo's own author budget (936 KiB), so every delivery the gate would accept
-    // is one this still scans in full.
+    // Per-file caps cannot bound aggregate parsing on the event loop.
     scannedBytes += Buffer.byteLength(file.content, 'utf8');
     if (scannedBytes > MAX_SCANNED_DELIVERY_BYTES) {
       throw new InvalidUploadError(

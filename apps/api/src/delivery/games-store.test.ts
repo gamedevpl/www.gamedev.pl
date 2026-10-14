@@ -259,8 +259,8 @@ describe('validateSourceUpload — the delivery contract', () => {
       };
       const delivery = [...MINIMAL, ...[0, 1, 2, 3].map((i) => ({ path: `game/m${i}.ts`, content: big(i) }))];
       expect(() => validateSourceUpload(delivery)).toThrow(/more than \d+ bytes of TypeScript/);
-      // A delivery the gate would accept (author budget is 936 KiB) still scans in full.
-      const withinBudget = [...MINIMAL, { path: 'game/one.ts', content: big(9) }];
+      // Three modules exceed 1 MiB but fit the new scanning ceiling.
+      const withinBudget = [...MINIMAL, ...[6, 7, 8].map((i) => ({ path: `game/m${i}.ts`, content: big(i) }))];
       expect(() => validateSourceUpload(withinBudget)).not.toThrow();
     });
 

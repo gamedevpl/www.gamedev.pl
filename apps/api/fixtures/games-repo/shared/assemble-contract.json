@@ -35,10 +35,10 @@
     "settings",
     "inspect"
   ],
-  "authorBudgetBytes": 958464,
+  "authorBudgetBytes": 1437696,
   "platformCeilingBytes": 410000,
   "rasterBudgetBytes": 25165824,
-  "maxProjectBytes": 26534288,
+  "maxProjectBytes": 27013520,
   "audio": {
     "musicField": "string",
     "musicTracksField": "string[]",

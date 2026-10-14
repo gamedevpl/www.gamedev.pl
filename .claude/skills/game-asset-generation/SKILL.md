@@ -37,7 +37,7 @@ not left to taste.
    `npm run check:gfx`.
 3. **Never hand-roll `new AudioContext()` or oscillators in game code.** All audio goes
    through the `audio` module (`GameKit.createAudio`). Enforced by validate Checks 9 and 17.
-4. **Byte budget is real.** ~936 KiB author budget per game (`authorBudgetBytes` in
+4. **Byte budget is real.** ~1404 KiB author budget per game (`authorBudgetBytes` in
    `shared/assemble-contract.json`, mirrored in `tools/validate.ts`'s `GAME_BUDGET_BYTES`),
    plus a 410 KB platform/GameKit reserve not billed to the author (`GAMEKIT_PLATFORM_BYTES`)
    — contract-locked across two repos. Assets are not free, but the ceiling is far higher
@@ -56,7 +56,7 @@ Practical guidance that survives the rules:
 - **Harmonious palettes.** Cohesive schemes (PICO-8 16-colour, a tailored HSL ramp), never
   raw primary red/green/blue.
 - **Fixed virtual resolution**, letterboxed via `object-fit: contain`; `image-rendering:
-  pixelated` for pixel-art looks.
+pixelated` for pixel-art looks.
 - **Screen juice.** Camera shake on impact, particle bursts on destruction, floating score
   popups. This is where perceived asset quality actually comes from.
 - Study `references/visual-lineage.md` and keep `games/<slug>/VISUAL.md` current when
@@ -94,7 +94,7 @@ audio.play('coin');
 ```
 
 ⚠️ **Adding a synth patch: append it at the end of `sounds.json`.** The renderer seeds its
-noise generator from each sound's *positional index*, so inserting an entry mid-catalog
+noise generator from each sound's _positional index_, so inserting an entry mid-catalog
 silently restales every later noise-using WAV.
 
 See `develop-game-audio` in the games repo for sound-design guidance, the mood table, mute
