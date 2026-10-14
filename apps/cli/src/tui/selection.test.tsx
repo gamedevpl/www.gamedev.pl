@@ -86,6 +86,20 @@ it('scrolls while dragging past the top edge and copies rows that were off scree
   expect(lines).toEqual(Array.from({ length: 45 - first + 1 }, (_, i) => `Message ${first + i}`));
 });
 
+it('reverses edge scrolling when the drag crosses from above the chat to below it', async () => {
+  const { view, copied, find } = workspace(messages);
+  const from = find('Message 45');
+  const composer = find('What would you like to do?');
+  await view.press(press(from.x, from.y) + drag(from.x, 1));
+  await vi.waitFor(() => expect(view.frame()).toContain('Earlier messages'), { timeout: 3000 });
+  await view.press(drag(from.x, composer.y));
+  await vi.waitFor(() => expect(view.frame()).not.toContain('Earlier messages'), { timeout: 3000 });
+  await view.press(release(from.x, composer.y));
+  const lines = copied[0]!.split('\n').map((line) => line.trim());
+  expect(lines[0]).toBe('Message 45');
+  expect(lines.at(-1)).toBe('Message 59');
+});
+
 it('selects a word on double click and a row on triple click', async () => {
   const { view, copied, find } = workspace(messages);
   const at = find('Message 50');

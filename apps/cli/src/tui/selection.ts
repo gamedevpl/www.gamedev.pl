@@ -54,7 +54,7 @@ export function useSelection({
   const selection = useRef<Selection | null>(null);
   const painted = useRef(new Map<number, string>());
   const lastPress = useRef({ kind: '', x: 0, y: 0, at: 0, clicks: 0 });
-  const edge = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const edge = useRef<{ timer: ReturnType<typeof setInterval>; direction: number } | undefined>(undefined);
   const write = useRef<(data: string) => void>(() => {});
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -128,7 +128,7 @@ export function useSelection({
   };
 
   const stopEdge = () => {
-    clearInterval(edge.current);
+    clearInterval(edge.current?.timer);
     edge.current = undefined;
   };
 
@@ -199,7 +199,8 @@ export function useSelection({
     // The first terminal row has nothing above it, so it scrolls up.
     const direction = y < rect.top || y === 1 ? -1 : y > bottom(rect) ? 1 : 0;
     if (!direction || !area.scroll) return stopEdge();
-    if (edge.current) return;
+    if (edge.current?.direction === direction) return;
+    stopEdge();
     // Reveal one row per step so every copied row gets drawn.
     const step = () => {
       const live = selection.current && region(current.kind);
@@ -210,7 +211,7 @@ export function useSelection({
       live.scroll(direction);
     };
     step();
-    edge.current = setInterval(step, 60);
+    edge.current = { timer: setInterval(step, 60), direction };
   };
 
   const onPointer = (pointer: Pointer) => {
