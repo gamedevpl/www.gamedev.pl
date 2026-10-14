@@ -129,27 +129,12 @@ export function extractGameKitModuleRequires(assembleSource: string): Record<str
   );
 }
 
-/**
- * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
- *
- * 252 → 624 KiB: transport-tycoon-remake assembled to 694_419 bytes, ~26 KiB
- * over the prior 668_048 cap.
- */
-export const GAME_BUDGET_BYTES = 936 * 1024;
+// 936 → 1404 KiB: ink-and-fury needs Act I headroom.
+export const GAME_BUDGET_BYTES = 1404 * 1024;
 
-/**
- * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
- * (`MAX_SOURCE_GRAPH_BYTES` in `github-client.ts`, `MAX_GAME_SOURCE_BYTES` in
- * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
- *
- * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
- * under the author budget while comments and types push the `.ts` tree higher. Moved
- * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
- * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
- * mission-ladder work. 336 → 708 KiB to stay above the 624 KiB author budget.
- * 1062 → 1593 KiB (+50%) when ink-and-fury's acts reached the old ceiling.
- */
-export const SOURCE_GRAPH_BUDGET_BYTES = 1593 * 1024;
+// Raw source ceilings cover bake/play/seed; comments and types assemble away.
+// 1593 → 2390 KiB: stay above ink-and-fury's expanded author budget.
+export const SOURCE_GRAPH_BUDGET_BYTES = 2390 * 1024;
 
 // Raw TypeScript source-graph module ceiling (github-client, seed-bundle).
 export const MAX_SOURCE_GRAPH_MODULES = 256;
@@ -157,11 +142,11 @@ export const MAX_SOURCE_GRAPH_MODULES = 256;
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
- * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (1_368_464, matching `maxProjectBytes`). Not a round KiB.
+ * {@link GAME_BUDGET_BYTES} and the raster budget, this equals
+ * games-repo `MAX_BUNDLE_BYTES` (27_013_520, matching `maxProjectBytes`).
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
- * bills each author for measured `assembled − platformBytes` against the 624 KiB
+ * bills each author for measured `assembled − platformBytes` against the 1404 KiB
  * author budget; this number is serve-compat only so a game that clears that gate
  * is not refused here. Archaeology lives in the games repo's
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game

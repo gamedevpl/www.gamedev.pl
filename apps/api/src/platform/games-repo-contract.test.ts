@@ -53,16 +53,15 @@ function validContract(): Record<string, unknown> {
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(26_534_288);
+    expect(MAX_PROJECT_BYTES).toBe(27_013_520);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
   });
 
   it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
-    // Raw `.ts` can exceed assembled author bytes (comments/types). Carjack-city
-    // at ~334 KiB source is why this is 336 KiB rather than matching GAME_BUDGET_BYTES.
-    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(1593 * 1024);
+    // Comments and types can exceed assembled author bytes.
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(2390 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
     expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(256);
   });
