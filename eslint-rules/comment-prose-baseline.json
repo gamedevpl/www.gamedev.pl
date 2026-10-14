@@ -167,7 +167,7 @@
     "apps/api/src/creation/type-check.ts": 606,
     "apps/api/src/creation/typecheck-preflight.ts": 102,
     "apps/api/src/creator-studio-workspace.test.ts": 167,
-    "apps/api/src/delivery/games-store.test.ts": 919,
+    "apps/api/src/delivery/games-store.test.ts": 876,
     "apps/api/src/delivery/games-store.ts": 2488,
     "apps/api/src/delivery/gate-build-spec.ts": 445,
     "apps/api/src/delivery/gate-progress.ts": 21,

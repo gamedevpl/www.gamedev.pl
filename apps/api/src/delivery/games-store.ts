@@ -8,6 +8,7 @@ import {
   DELIVERY_FIXED_FILES,
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
+  SOURCE_GRAPH_BUDGET_BYTES,
   missingModuleDependency,
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
@@ -53,8 +54,8 @@ export const MAX_UPLOAD_BYTES = DELIVERY_MAX_UPLOAD_BYTES;
  * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
 export const MAX_UPLOAD_FILES = DELIVERY_MAX_FILES;
 
-// Bound synchronous parsing while covering the 1404 KiB author budget.
-const MAX_SCANNED_DELIVERY_BYTES = 1536 * 1024;
+// Scan every source tree the bake/play/seed bundlers can accept.
+const MAX_SCANNED_DELIVERY_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 
 export interface SourceFile {
   path: string;
