@@ -44,13 +44,13 @@ describe('git-remote-gamedevpl', () => {
         ['v-2', [{ path: 'game.ts', content: 'b' }]],
       ]),
     });
-    expect(script).toContain('commit refs/heads/main');
-    expect(script).toContain('games/ghost-roads/game.ts');
-    expect(script.match(/mark :\d+/g)?.length).toBe(2);
+    expect(script.toString()).toContain('commit refs/gamedevpl/ghost-roads/main');
+    expect(script.toString()).toContain('games/ghost-roads/game.ts');
+    expect(script.toString().match(/mark :\d+/g)?.length).toBe(2);
   });
 
-  it('lists an unborn main ref when the remote has no versions', () => {
-    expect(listRefs([])).toEqual(['@refs/heads/main HEAD', '? refs/heads/main', '']);
+  it('lists no importable ref when the remote has no versions', () => {
+    expect(listRefs([])).toEqual(['']);
   });
 
   it('marks a successful push as delivered, not as a fake helper ok', async () => {

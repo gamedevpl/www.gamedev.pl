@@ -14,6 +14,9 @@ export const BLURB: Record<SlashVerb, string> = {
   stop: 'stop local Play — stop [slug] [--session <id>|--all]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
+  log: 'delivered version history — log [slug] [--limit N|--all]',
+  show: 'version metadata and patch — show <version> [--slug <slug>]',
+  blame: 'last version changing each line — blame <file> [--version <version>] [--slug <slug>]',
   model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
   permissions: 'agent approvals — permissions [ask|auto|yolo]; default Auto with a sandbox, Ask for other agents',
@@ -36,7 +39,7 @@ export const BLURB: Record<SlashVerb, string> = {
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
   publish: 'alias for push --publish — submit for operator publication',
   pull: 'update a checkout from the platform',
-  diff: 'show a colored patch from the platform version to local files, skipping ignored files',
+  diff: 'working-copy patch; diff <v1> <v2> [--slug <slug>] compares delivered versions',
   update: 'update the CLI and this project’s npm CLI dependency',
 };
 

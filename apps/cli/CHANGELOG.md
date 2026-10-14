@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `log`, `show`, version-to-version `diff` and `blame` read the game's delivered source history, including older versions, from a checkout or with `--slug`; the same commands work in interactive sessions and support `--json`.
+
+### Fixed
+
+- Git fetch imports platform versions into private refs, preserves local branches and edits, keeps image bytes intact, and downloads only versions not already imported.
+
 ## 0.47.0 — 2026-10-14
 
 ### Added

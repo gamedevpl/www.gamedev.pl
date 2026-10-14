@@ -1,4 +1,5 @@
 import { splitEvidence, withEvidence } from './workbench-evidence.js';
+import { historyCommand, isHistoryVerb } from './history-command.js';
 import { runReplShell } from './repl-shell.js';
 import { workbenchPlatformAction } from './workbench-platform-actions.js';
 import { workbenchLocalAction } from './workbench-checkpoints.js';
@@ -173,6 +174,27 @@ export async function handleReplLine(input: {
     }
     if (cmd === 'submit' || cmd === 'push' || cmd === 'publish') {
       await submitRepl(input, cmd === 'publish' ? 'push' : cmd, cmd === 'publish' ? [...rest, '--publish'] : rest);
+      return { next: 'continue', conversationId: input.conversationId };
+    }
+    const historyArgs = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
+    if (cmd && isHistoryVerb(cmd, historyArgs.args, historyArgs.flags)) {
+      try {
+        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+        await historyCommand({
+          ...parsed,
+          api: input.api,
+          cwd: input.workshop?.root ?? input.cwd,
+          slug:
+            input.workshop?.slug ??
+            findCheckout(input.workshop?.root ?? input.cwd ?? process.cwd())?.slug ??
+            (input.token && typeof parsed.flags.slug !== 'string' && !(cmd === 'log' && parsed.args[0])
+              ? (await getStatus(input.api, input.token)).slug
+              : undefined),
+          write: input.write,
+        });
+      } catch (error) {
+        input.write(formatError(error));
+      }
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {

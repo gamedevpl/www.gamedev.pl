@@ -3,13 +3,26 @@ import { z } from 'zod';
 import type { GamesStore } from '../delivery/games-store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
+import { historyMetadata } from './version-history-metadata.js';
+import { deliveryPathRefusal, isRasterSourcePath } from '@gamedevpl/contract';
 
 const SlugParams = z.object({
   slug: z.string().regex(/^[a-z0-9][a-z0-9-]{0,60}$/),
 });
 
 const VersionParams = SlugParams.extend({
-  version: z.string().regex(/^[a-zA-Z0-9._-]{1,80}$/),
+  version: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/),
+});
+const HistoryQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+  cursor: VersionParams.shape.version.optional(),
+});
+const TreeQuery = z.object({
+  path: z
+    .string()
+    .max(512)
+    .refine((path) => !deliveryPathRefusal(path))
+    .optional(),
 });
 
 export interface CreatorVersionRoutesOptions {
@@ -33,40 +46,47 @@ export async function registerCreatorVersionRoutes(
     if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
     const parsed = SlugParams.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'invalid slug' });
+    const query = HistoryQuery.safeParse(request.query);
+    if (!query.success) return reply.status(400).send({ error: 'invalid history limit or cursor' });
     if (!gamesStore?.listVersions) return reply.status(503).send({ error: 'games store is not configured' });
     const owned = await requireOwner(store, request.user.uid, parsed.data.slug);
     if (owned !== 'ok') return reply.status(404).send({ error: 'no such game' });
-    const versions = await gamesStore.listVersions(parsed.data.slug, { limit: 100 });
+    const rows = await gamesStore.listVersions(parsed.data.slug, {
+      limit: query.data.limit + 1,
+      before: query.data.cursor,
+    });
+    const versions = rows.slice(0, query.data.limit);
+    const hasMore = rows.length > query.data.limit;
     return reply.send({
       slug: parsed.data.slug,
-      versions: versions.map((row) => ({
-        version: row.version,
-        createdAt: row.createdAt,
-        jobId: row.jobId,
-        sourceFiles: row.sourceFiles,
-        ...(row.deliveryMode ? { deliveryMode: row.deliveryMode } : {}),
-      })),
+      versions: versions.map(historyMetadata),
+      hasMore,
+      nextCursor: hasMore ? versions.at(-1)!.version : null,
     });
   });
 
   app.get<{ Params: { slug: string; version: string } }>(
     '/api/me/studio/games/:slug/versions/:version/tree',
-    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!request.user) return reply.status(401).send({ error: 'authentication required' });
       if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
       const parsed = VersionParams.safeParse(request.params);
       if (!parsed.success) return reply.status(400).send({ error: 'invalid slug or version' });
+      const query = TreeQuery.safeParse(request.query);
+      if (!query.success) return reply.status(400).send({ error: 'invalid source path' });
       if (!gamesStore) return reply.status(503).send({ error: 'games store is not configured' });
       const owned = await requireOwner(store, request.user.uid, parsed.data.slug);
       if (owned !== 'ok') return reply.status(404).send({ error: 'no such game' });
       const manifest = await gamesStore.getManifest(parsed.data.slug, parsed.data.version);
       if (!manifest) return reply.status(404).send({ error: 'no such version' });
       const files = await Promise.all(
-        manifest.sourceFiles.map(async (path) => ({
-          path,
-          content: await gamesStore.getSourceFile(parsed.data.slug, parsed.data.version, path),
-        })),
+        manifest.sourceFiles
+          .filter((path) => !query.data.path || path === query.data.path)
+          .map(async (path) => ({
+            path,
+            content: await gamesStore.getSourceFile(parsed.data.slug, parsed.data.version, path),
+          })),
       );
       const missing = files.filter((file) => file.content === null).map((file) => file.path);
       if (missing.length > 0) {
@@ -79,7 +99,8 @@ export async function registerCreatorVersionRoutes(
       return reply.send({
         slug: parsed.data.slug,
         version: parsed.data.version,
-        files: files as Array<{ path: string; content: string }>,
+        metadata: historyMetadata(manifest),
+        files: files.map((file) => ({ ...file, ...(isRasterSourcePath(file.path) ? { encoding: 'base64' } : {}) })),
       });
     },
   );

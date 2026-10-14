@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import { enableCliSurface, mintCreatorTokens } from '../platform/oauth-cli-test-app.js';
 import { buildApp } from '../platform/app.js';
@@ -90,6 +90,91 @@ describe('owner version history (CL-29a)', () => {
       headers: sessionHeaders('g:other'),
     });
     expect(stolen.statusCode).toBe(404);
+  });
+
+  it('pages version metadata with a cursor and never returns gated authorship markings', async () => {
+    const gamesStore = stubGamesStore();
+    const versions = Array.from({ length: 125 }, (_, i) => ({
+      version: `v${String(125 - i).padStart(4, '0')}`,
+      createdAt: '2026-10-01T00:00:00Z',
+      jobId: 42,
+      slug: SLUG,
+      sourceFiles: ['game.ts'],
+      summary: 'Improved controls',
+      backend: 'self',
+      model: 'test-model',
+      authorship: 'agent',
+      deliveryMode: 'preview',
+      previewGate: { green: false, ranAt: '2026-10-01T00:00:01Z' },
+    })) as VersionManifest[];
+    gamesStore.listVersions = async (_slug, options) =>
+      versions.filter((row) => !options?.before || row.version < options.before).slice(0, options?.limit);
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret: 'secret', agentChannel: { gamesStore } },
+    });
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/versions`,
+      headers: sessionHeaders('g:creator'),
+    });
+    expect(first.json().versions).toHaveLength(100);
+    expect(first.json()).toMatchObject({ hasMore: true, nextCursor: 'v0026' });
+    expect(first.json().versions[0]).toMatchObject({
+      summary: 'Improved controls',
+      verdict: 'failed',
+      model: 'test-model',
+    });
+    expect(first.json().versions[0]).not.toHaveProperty('authorship');
+    const next = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/versions?cursor=v0026`,
+      headers: sessionHeaders('g:creator'),
+    });
+    expect(next.json().versions).toHaveLength(25);
+    expect(next.json()).toMatchObject({ hasMore: false, nextCursor: null });
+    for (const query of ['limit=0', 'limit=101', 'cursor=../evil']) {
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: `/api/me/studio/games/${SLUG}/versions?${query}`,
+            headers: sessionHeaders('g:creator'),
+          })
+        ).statusCode,
+      ).toBe(400);
+    }
+    await app.close();
+  });
+
+  it('serves binary bytes with their encoding, supports single-file history and refuses incomplete trees', async () => {
+    const gamesStore = stubGamesStore();
+    const original = (await gamesStore.getManifest(SLUG, VERSION))!;
+    gamesStore.getManifest = async () => ({ ...original, sourceFiles: ['game.ts', 'images/test.png'] });
+    gamesStore.getSourceFile = vi.fn(async (_slug, _version, path) =>
+      path.endsWith('.png') ? Buffer.from([0, 255, 10]).toString('base64') : SOURCES[path]!,
+    );
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret: 'secret', agentChannel: { gamesStore } },
+    });
+    const url = `/api/me/studio/games/${SLUG}/versions/${VERSION}/tree`;
+    const tree = await app.inject({ method: 'GET', url, headers: sessionHeaders('g:creator') });
+    expect(tree.json().files[1]).toMatchObject({ path: 'images/test.png', encoding: 'base64', content: 'AP8K' });
+    expect(tree.json().metadata).toMatchObject({ version: VERSION, verdict: 'pending' });
+    vi.mocked(gamesStore.getSourceFile).mockClear();
+    const file = await app.inject({ method: 'GET', url: `${url}?path=game.ts`, headers: sessionHeaders('g:creator') });
+    expect(file.json().files).toHaveLength(1);
+    expect(gamesStore.getSourceFile).toHaveBeenCalledTimes(1);
+    expect(
+      (await app.inject({ method: 'GET', url: `${url}?path=../secret`, headers: sessionHeaders('g:creator') }))
+        .statusCode,
+    ).toBe(400);
+    gamesStore.getSourceFile = async () => null;
+    expect((await app.inject({ method: 'GET', url, headers: sessionHeaders('g:creator') })).statusCode).toBe(502);
+    await app.close();
   });
 
   it('a later submission naming the same slug does not silently move ownership', async () => {
