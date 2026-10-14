@@ -14,6 +14,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Git fetch imports platform versions into private refs, supports SHA-1 and SHA-256 repositories, preserves local branches and edits, keeps image bytes intact, and downloads only versions not already imported (#1838).
+- Raw local preview opens at the port's root without a token in the link, supports the current Codespaces host, and retains host/origin checks for reload and stop. Existing token-path previews are restarted; additional tunnel hosts use `GAMEDEVPL_PREVIEW_ALLOWED_HOSTS` (#1835).
 
 ## 0.47.0 — 2026-10-14
 

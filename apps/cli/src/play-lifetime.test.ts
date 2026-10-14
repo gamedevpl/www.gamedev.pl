@@ -160,7 +160,7 @@ it.each([false, true, 'json'])(
     try {
       await vi.waitFor(
         () => {
-          url = /local live preview: (http:\/\/127\.0\.0\.1:\d+\/[a-f0-9]+\/)/.exec(read())?.[1] ?? '';
+          url = /local live preview: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(read())?.[1] ?? '';
           expect(url, read()).toBeTruthy();
         },
         { timeout: 8000 },
@@ -168,7 +168,7 @@ it.each([false, true, 'json'])(
       if (detach) {
         await stopped(child, read);
         expect((await fetch(`${url}status`)).ok).toBe(true);
-        await fetch(`${url}stop`, { method: 'POST' });
+        await fetch(`${url}stop`, { method: 'POST', headers: { Origin: new URL(url).origin } });
       } else {
         expect(child.exitCode).toBeNull();
         child.kill('SIGINT');
@@ -176,7 +176,8 @@ it.each([false, true, 'json'])(
       await stopped(child, read);
       await expect(fetch(`${url}status`)).rejects.toThrow();
     } finally {
-      if (url) await fetch(`${url}stop`, { method: 'POST' }).catch(() => undefined);
+      if (url)
+        await fetch(`${url}stop`, { method: 'POST', headers: { Origin: new URL(url).origin } }).catch(() => undefined);
       child.kill();
       rmSync(root, { recursive: true, force: true });
     }
