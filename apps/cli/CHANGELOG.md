@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Interactive terminal restores native mouse text selection and terminal scrollback by default; mouse capture is enabled only while the workspace sidebar is open and is released when it closes.
+- Interactive terminal restores native mouse text selection and terminal scrollback by default; mouse capture is enabled only while the workspace sidebar is open and is released when it closes (#1833).
 
 ## 0.46.1 — 2026-10-13
 
