@@ -64,10 +64,10 @@ export function ReplApp({
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({ rows: stdout.rows || 24, columns: stdout.columns || 80 });
   const [sidebar, setSidebar] = useState(initialSidebar);
-  const [nativeSelection, setNativeSelection] = useState(false);
+  const [selecting, setNativeSelection] = useState(false);
   const activeCheckout = checkout?.() ?? null;
-  const split = Boolean(activeCheckout) && dimensions.columns >= 120 && dimensions.rows >= 16;
-  const selecting = nativeSelection;
+  const canSplit = Boolean(activeCheckout) && dimensions.columns >= 120 && dimensions.rows >= 16;
+  const split = canSplit && sidebar;
   useMouseReporting(split && !selecting);
   const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
@@ -97,7 +97,7 @@ export function ReplApp({
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
   const onInput = (input: string, key: Key): void => {
-    if (key.ctrl && input === 't' && (split || selecting)) {
+    if (key.ctrl && input === 't' && (canSplit || selecting)) {
       setNativeSelection((value) => !value);
       return;
     }
@@ -106,7 +106,7 @@ export function ReplApp({
       return;
     }
     if (viewDiff) return;
-    if (key.ctrl && input === 'b' && (split || sidebar)) {
+    if (key.ctrl && input === 'b' && (canSplit || sidebar)) {
       setSidebar((visible) => !visible);
       return;
     }
@@ -420,7 +420,7 @@ export function ReplApp({
                 ? `Text selection · display paused · Ctrl+T resume · ${footer}`
                 : split
                   ? `Ctrl+T select text (or hold ⌥) · wheel / PgUp/PgDn chat · Ctrl+B ${sidebar ? 'hide' : 'show'} sidebar · ${footer}`
-                  : footer
+                  : `${canSplit ? 'Ctrl+B show sidebar · ' : ''}${footer}`
             }
             color={color}
           />

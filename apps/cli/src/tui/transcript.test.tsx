@@ -111,6 +111,7 @@ it('preserves wide messages in scrollback on shrink without replaying earlier st
     createElement(ReplApp, {
       session,
       color: false,
+      initialSidebar: true,
       checkout: () => ({ root: '/workspace', slug: 'demo' }),
     }),
     {

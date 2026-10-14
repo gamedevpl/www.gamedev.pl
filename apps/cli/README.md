@@ -333,16 +333,16 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 
 ### Terminal workspace sidebar
 
-`gamedevpl --terminal` runs in full-screen interactive mode when in a checkout at 120 columns and 16 rows or larger:
-the conversation view is pinned to the terminal height without scrolling the outer terminal window.
-The workspace sidebar is hidden by default to keep the full screen focused on conversation.
+`gamedevpl --terminal` streams conversation output into the terminal history by default.
+Mouse text selection and wheel or trackpad scrolling work normally, without Ctrl+T or modifier keys.
+The workspace sidebar is hidden by default.
 
 Pressing **Ctrl+B** (or setting `GAMEDEV_SIDEBAR=1`) toggles the two-column workspace sidebar. The right
 sidebar shows the current task, queued follow-ups, preview availability, Studio round updates, and local game file
-modifications. Toggling Ctrl+B expands or hides the sidebar without dropping full-screen mode or resetting
-the conversation scroll position.
+modifications. In a checkout at 120 columns and 16 rows or larger, opening it enables the full-screen workspace.
+Closing it returns to native terminal selection and scrolling, adding any new workspace output to terminal history.
 
-The mouse wheel or trackpad scrolls the conversation smoothly under the pointer; PgUp/PgDn scroll the chat
+While the sidebar is open, the mouse wheel or trackpad scrolls the conversation under the pointer; PgUp/PgDn scroll the chat
 (or active choice question). Press **Ctrl+T** to pause display updates and release mouse capture for native text
 selection (on macOS, holding Option/Fn also selects text at any time without pressing Ctrl+T). Existing `/diff`,
 Ctrl+D and `/logs` keep their scrollable detail views.
