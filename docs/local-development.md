@@ -60,6 +60,70 @@ against the in-memory store and repo fixtures, so it touches nothing real. Testi
 **deployed** site is a different problem with a different answer — see
 [`agent-access-tokens.md`](./agent-access-tokens.md).
 
+## Testing WebMCP and the agent console
+
+The Studio Code surface (`/studio/<slug>/code`) ships three ways for an agent to edit a
+game's sources — see `apps/web/src/surfaces/studio/webmcp.ts` and
+`CodeSurfaceAgentMode.tsx`. Only one needs a browser that speaks WebMCP; the other two work
+in any browser today.
+
+1. Sign in (above), then create a game owned by that session so it has a Code surface to
+   open:
+
+   ```bash
+   curl -X POST http://localhost:5173/api/submissions -b cookies.txt \
+     -H 'content-type: application/json' \
+     -d '{"title":"WebMCP test","concept":"A tiny game for exercising the agent console.","builder":"self"}'
+   ```
+
+   The response's `slug` is the game you just created.
+
+2. Open `http://localhost:5173/studio/<slug>/code` and click **Agent mode** in the header.
+3. The modal's three sections map to the three paths:
+   - **WebMCP toggle** — registers `document.modelContext` tools for a browser agent that
+     reads them directly. No browser shipped a consumer as of this writing; the toggle is
+     inert without one, which is also how to tell whether your browser has adopted it.
+   - **Coding-agent key** — the existing creator-agent-key connector, for Claude Desktop/Code,
+     Cursor or any other full MCP client: same tool names as the WebMCP path, over a real MCP
+     connection instead of the page.
+   - **Agent console** — a textarea + Run button, for a browser agent that can read the page
+     and type but cannot call tools (e.g. a vision/DOM-driven agent). Works with zero setup.
+
+### Driving the WebMCP path with webmcp-extension
+
+[`webmcp-extension`](https://github.com/GoogleChromeLabs/webmcp-extension) is Google's
+reference agent for WebMCP: a Chrome side-panel extension that reads a page's registered
+tools (`document.modelContext.getTools()`), runs a prompt against them through an LLM (or
+Chrome's on-device Prompt API, no key needed), and shows each call's schema and response.
+It's the only way to exercise the WebMCP toggle end-to-end locally, since nothing else
+consumes `document.modelContext` yet.
+
+Needs **Chrome 155+** with `chrome://flags/#enable-webmcp-testing` turned on, and Node.js
+22.18+ for the extension's own build/server.
+
+```bash
+git clone https://github.com/GoogleChromeLabs/webmcp-extension
+cd webmcp-extension
+npm install
+cp .env.example .env   # set an API key for MODEL, or skip and use the on-device model
+npm run server         # keep running in its own terminal — the model backend
+npm run build          # in a second terminal — writes the extension to dist/
+```
+
+Load `dist/` unpacked (`chrome://extensions` → Developer mode → **Load unpacked**), open the
+Code surface tab with the WebMCP toggle on, open the extension's side panel on that tab, and
+give it a prompt such as "add a double jump to this game". Watch it call `get_sources`, then
+`patch_source_file` or `stage_source_file`, then `submit_sources` — the same contract
+`apps/api/src/agent-surface/mcp-server.ts` exposes over real MCP, so a bug here is a bug
+there too. `submit_sources` is hard-pinned to a preview build; nothing the extension does
+can publish.
+
+[`webmcp-types`](https://github.com/webmachinelearning/webmcp-types) is the TypeScript
+package `webmcp.ts` itself imports (via `apps/web/src/vite-env.d.ts`) for the
+`document.modelContext` / `WebMCP.*` types, and
+[`webmcp-skills`](https://github.com/GoogleChromeLabs/webmcp-tools/tree/main/webmcp-skills)
+has patterns worth skimming before adding a new tool to `buildCodeSurfaceTools`.
+
 ## Running the checks
 
 ```bash
