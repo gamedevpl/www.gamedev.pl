@@ -72,6 +72,15 @@ Unlike everything else on this page, the Code surface's own routes need a real
 (`apps/api/src/platform/app.ts`'s `gamesStore` is `undefined` without it), so every route
 below 503s ("the Code surface is not configured on this deployment") until one is set.
 
+`get_sources`, `stage_source_file` and `patch_source_file` work against any bucket, even an
+empty one. `submit_sources` needs more: `record.builder === 'self'` (this walkthrough's game)
+makes `kitEngineRef` mandatory (`source-delivery.ts`, `kit_engine_ref_required`), which
+`creator-code.ts` only fills in by reading `kits/current.json` from that same bucket — so
+the bucket also needs a Creator Kit already published to it, which this page does not set
+up. A freshly created, empty bucket is enough to exercise the first two tools end-to-end;
+reaching a working `submit_sources` needs a bucket that already has one (e.g. a shared
+staging project's), not a bucket you just created for this walkthrough.
+
 1. Sign in (above), then create a game owned by that session so it has a Code surface to
    open:
 
