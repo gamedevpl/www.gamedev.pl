@@ -556,8 +556,9 @@ jobs:
           SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
+          # Bound Scene3D memory on hosted runners.
           if [ "$MODE" = full ]; then
-            "$QUIET" npm run check:webkit
+            "$QUIET" npm run check:webkit -- -j 1
           else
-            "$QUIET" npm run check:webkit -- $SLUGS
+            "$QUIET" npm run check:webkit -- -j 1 $SLUGS
           fi
