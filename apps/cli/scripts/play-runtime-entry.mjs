@@ -1,6 +1,6 @@
 import { gameSourceRoot, projectRuntimeRoot } from '../src/source-project.ts';
 import { sourceKitRoot, syncSourceRuntime } from '../src/source-project-runtime.ts';
-import { PLAY_PAGE } from '../src/play-page.ts';
+import { renderPlayPage } from '../src/play-page.ts';
 import { playPresence, attachPlayPresence } from '../src/play-presence.ts';
 import { previewAllowedHosts, previewHostConfig, trustedPreviewRequest } from '../src/preview-request.ts';
 
@@ -110,7 +110,6 @@ function assemble() {
     },
   );
 }
-const shell = PLAY_PAGE;
 const server = createServer((req, res) => {
   res.setHeader('cache-control', 'no-store');
   res.setHeader('x-content-type-options', 'nosniff');
@@ -181,9 +180,9 @@ const server = createServer((req, res) => {
     'content-security-policy',
     "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; connect-src 'self' " +
       origin.replace('http:', 'ws:') +
-      "; frame-src 'self' about:; frame-ancestors 'none'",
+      "; font-src data:; frame-src 'self' about:; frame-ancestors 'none'",
   );
-  res.end(shell);
+  res.end(renderPlayPage({ revision, html, error: attemptedFingerprint === sourceStamp() ? error : '', busy }));
 });
 function shutdown() {
   try {
@@ -212,6 +211,8 @@ server.listen(0, '127.0.0.1', () => {
     },
   );
   renameSync(pendingState, statePath);
+  fingerprint = sourceStamp();
+  assemble();
 });
 server.on('error', () => process.exit(1));
 const timer = setInterval(() => {

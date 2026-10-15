@@ -109,6 +109,15 @@ const embedding = await build({
   globalName: 'GAME_EMBED',
   write: false,
 });
+const preview = await build({
+  ...shared,
+  entryPoints: [join(root, 'browser/preview.ts')],
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2022',
+  outfile: 'preview.js',
+  write: false,
+});
 await writeFile(
   join(generated, 'play-ui.ts'),
   'export const PLAY_MARKUP = ' +
@@ -122,6 +131,12 @@ await writeFile(
     ';\n' +
     'export const PLAY_EMBED_SCRIPT = ' +
     JSON.stringify(embedding.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')) +
+    ';\n' +
+    'export const PREVIEW_SCRIPT = ' +
+    JSON.stringify(preview.outputFiles.find((f) => f.path.endsWith('.js')).text.replace(/<\/script/gi, '<\\/script')) +
+    ';\n' +
+    'export const PREVIEW_STYLE = ' +
+    JSON.stringify(preview.outputFiles.find((f) => f.path.endsWith('.css')).text) +
     ';\n',
 );
 await rm(serverFile);
