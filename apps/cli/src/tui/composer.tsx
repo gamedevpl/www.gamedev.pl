@@ -3,6 +3,11 @@ import { cells } from './screen-grid.js';
 
 export const MAX_DRAFT_ROWS = 6;
 
+// Highlights the cell under the cursor instead of inserting a glyph.
+export function cursorCell(ch: string, color: boolean): string {
+  return color ? `\u001b[48;5;245;38;5;231m${ch}\u001b[39;49m` : `\u001b[7m${ch}\u001b[27m`;
+}
+
 // Wraps the draft into rows of `room` cells and marks the cursor.
 export function draftLayout(draft: string, cursor: number, room: number, maxRows = MAX_DRAFT_ROWS) {
   const width = Math.max(1, room);
@@ -44,12 +49,14 @@ export function DraftLines({
   room,
   prompt,
   accent,
+  color,
 }: {
   draft: string;
   cursor: number;
   room: number;
   prompt: string;
   accent?: string;
+  color: boolean;
 }) {
   const layout = draftLayout(draft, cursor, room);
   return (
@@ -65,7 +72,9 @@ export function DraftLines({
               {lead}
             </Text>
             {marker}
-            {at === undefined ? row.text : `${chars.slice(0, at).join('')}█${chars.slice(at).join('')}`}
+            {at === undefined
+              ? row.text
+              : `${chars.slice(0, at).join('')}${cursorCell(chars[at] ?? ' ', color)}${chars.slice(at + 1).join('')}`}
             {index === layout.rows.length - 1 && layout.hiddenAfter ? '…' : ''}
           </Text>
         );

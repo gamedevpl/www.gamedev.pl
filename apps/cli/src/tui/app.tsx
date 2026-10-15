@@ -366,6 +366,7 @@ export function ReplApp({
                 ) : shellDraft ? (
                   <DraftLines
                     draft={shellDraft}
+                    color={color}
                     cursor={draftCursor}
                     room={width - 7}
                     prompt={prompt}
@@ -394,7 +395,7 @@ export function ReplApp({
               · {state.queued.length} queued
             </Text>
             {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
-            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} />
+            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} color={color} />
           </Box>
         )}
         {suggestionRows > 0 && (

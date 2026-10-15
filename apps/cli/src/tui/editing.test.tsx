@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { screen } from './workspace-fixture.js';
 import { PASTE_END, PASTE_ON, PASTE_START } from './keys.js';
+import { cursorCell } from './composer.js';
 
 function composer(text = '') {
   const view = screen(100, 28, 0, () => null, undefined, false);
@@ -78,7 +79,7 @@ it('writes multi-line prompts with Option+Enter, Ctrl+J or a trailing backslash 
   await view.press('fourth');
   expect(state()).toBe('first\nsecond\nthird\nfourth|');
   expect(view.frame()).toContain('first');
-  expect(view.frame()).toContain('  fourth█');
+  expect(view.terminalOutput()).toContain(`  fourth${cursorCell(' ', false)}`);
   await view.press('\u001b[A');
   expect(state()).toBe('first\nsecond\nthird|\nfourth');
   await view.press('\r');
@@ -179,4 +180,21 @@ it('clears a typed follow-up with Ctrl+C before stopping the local task', async 
   expect(stop).not.toHaveBeenCalled();
   await view.press('\u0003');
   expect(stop).toHaveBeenCalledOnce();
+});
+
+it('highlights the character under the cursor without shifting the text', async () => {
+  const { view } = composer('fix the build');
+  const row = () =>
+    view
+      .frame()
+      .split('\n')
+      .find((line) => line.includes('fix the'))!;
+  const end = row();
+  expect(end).toContain('fix the build ');
+  await view.press('\u001b[1;3D');
+  expect(row()).toBe(end);
+  expect(view.terminalOutput()).toContain(`fix the ${cursorCell('b', false)}uild`);
+  await view.press('\u0001');
+  expect(row()).toBe(end);
+  expect(view.terminalOutput()).toContain(`${cursorCell('f', false)}ix the build`);
 });

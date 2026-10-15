@@ -2,6 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { screen } from './workspace-fixture.js';
 import { ALT_OFF, ALT_ON } from './alt-screen.js';
 import { MOUSE_OFF, MOUSE_ON } from './mouse.js';
+import { SELECTED } from './screen-grid.js';
 
 const ROWS = 27;
 const press = (x: number, y: number) => `\u001b[<0;${x};${y}M`;
@@ -51,7 +52,7 @@ it('copies a dragged range across wrapped Polish rows and highlights it until th
   ]);
   expect(copied[0]).toContain('zażółć gęślą jaźń');
   expect(copied[0]).not.toContain('│');
-  expect(view.terminalOutput()).toContain('\u001b[0;7mMessage 54\u001b[0m');
+  expect(view.terminalOutput()).toContain(`${SELECTED}Message 54\u001b[0m`);
   expect(view.frame()).toContain(`Copied ${[...copied[0]!].length} characters`);
   expect(view.session.get().draft).toBe('draft stays');
   const before = view.terminalOutput().length;

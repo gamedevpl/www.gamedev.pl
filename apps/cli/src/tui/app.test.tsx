@@ -5,6 +5,7 @@ import { render } from 'ink';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connectSession } from '../connect-flow.js';
 import type { ApiClient } from '../api.js';
+import { cursorCell } from './composer.js';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
 import { approvalPrompt, AUTO_NEXT } from '../agent-approval.js';
@@ -20,10 +21,12 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   const frames: string[] = [];
+  const raw: string[] = [];
   // Debug-mode Ink writes each commit synchronously; record frames without buffering.
   const output = Object.assign(
     new Writable({
       write(chunk, _encoding, done) {
+        raw.push(String(chunk));
         frames.push(stripVTControlCharacters(String(chunk)));
         done();
       },
@@ -59,6 +62,7 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
     },
     frame: () =>
       frames.filter((frame) => frame.includes('gamedevpl') || frame.includes('Task diagnostics')).at(-1) ?? '',
+    raw: () => raw.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '',
   };
 }
 
@@ -80,7 +84,7 @@ describe('TUI feedback', () => {
     const pending = view.session.prompt();
     await view.press('!pwd');
     expect(view.frame()).toContain('Shell · local terminal');
-    expect(view.frame()).toContain('! pwd█');
+    expect(view.raw()).toContain(`! pwd${cursorCell(' ', false)}`);
     await view.press('\r');
     expect(await pending).toBe('!pwd');
   });
@@ -123,7 +127,7 @@ describe('TUI feedback', () => {
     void view.session.prompt();
     await view.press('\u001b[A');
     expect(view.frame()).toContain('Shell · local terminal');
-    expect(view.frame()).toContain('! pwd é█');
+    expect(view.raw()).toContain(`! pwd é${cursorCell(' ', false)}`);
   });
 
   it('exits queued shell input without stopping the active agent', async () => {
@@ -148,7 +152,7 @@ describe('TUI feedback', () => {
     const answer = view.session.prompt([], 'Enter a title');
     await view.press('!title');
     expect(view.frame()).not.toContain('Shell · local terminal');
-    expect(view.frame()).toContain('> !title█');
+    expect(view.raw()).toContain(`!title${cursorCell(' ', false)}`);
     await view.press('\r');
     expect(await answer).toBe('!title');
     void view.session.prompt();
@@ -226,11 +230,12 @@ describe('TUI feedback', () => {
     const view = screen(40, 12);
     void view.session.prompt();
     view.session.setDraft('0123456789'.repeat(5));
-    expect(view.frame()).toContain('█');
+    expect(view.raw()).toContain('\u001b[7m');
     await view.press('\u001b[D');
     await view.press('X');
     expect(view.session.get()).toMatchObject({ draft: `${'0123456789'.repeat(4)}012345678X9`, draftCursor: 50 });
-    expect(view.frame()).toContain('█9');
+    expect(view.raw()).toContain(`012345678X${cursorCell('9', false)}`);
+    expect(view.frame()).toContain('012345678X9');
     expect(view.frame()).toContain('⌥Enter newline');
   });
 
