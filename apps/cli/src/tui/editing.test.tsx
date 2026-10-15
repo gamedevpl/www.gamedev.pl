@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { screen } from './workspace-fixture.js';
 import { PASTE_END, PASTE_ON, PASTE_START } from './keys.js';
 
@@ -144,4 +144,39 @@ it('applies the same editing keys in the follow-up composer during local work', 
   await view.press('\u0017');
   await view.press('\u001b[1;3D\u001b\r');
   expect(view.session.get()).toMatchObject({ draft: 'then run \nthe ', draftCursor: 10 });
+});
+
+it('keeps the shell prefix when deleting or jumping back to the line start', async () => {
+  const { view, state } = composer('!echo value');
+  await view.press('\u0015');
+  expect(state()).toBe('!|');
+  view.session.setDraft('!git status');
+  await view.press('\u001b\u007f');
+  await view.press('\u001b\u007f');
+  expect(state()).toBe('!|');
+  view.session.setDraft('!ls -la');
+  await view.press('\u0001');
+  expect(state()).toBe('!|ls -la');
+});
+
+it('does not undo into a prompt that was already sent', async () => {
+  const { view, state } = composer();
+  await view.press('hello');
+  await view.press(' world');
+  await view.press('\r');
+  void view.session.prompt();
+  await view.press('\u001f');
+  expect(state()).toBe('|');
+});
+
+it('clears a typed follow-up with Ctrl+C before stopping the local task', async () => {
+  const view = screen(100, 28, 0, () => null, undefined, false);
+  view.session.setLocalTask('claude');
+  view.session.setDraft('wait, also check');
+  const stop = vi.spyOn(view.session, 'cancel').mockImplementation(() => {});
+  await view.press('\u0003');
+  expect(view.session.get().draft).toBe('');
+  expect(stop).not.toHaveBeenCalled();
+  await view.press('\u0003');
+  expect(stop).toHaveBeenCalledOnce();
 });

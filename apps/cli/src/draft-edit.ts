@@ -51,13 +51,18 @@ export function cleanDraftText(text: string): string {
   return clean;
 }
 
-// Returns null when the action changes neither text nor cursor.
-export function editDraft(draft: string, cursor: number, action: DraftAction, yank = ''): DraftEdit | null {
+// Null means no change; `floor` protects a prefix like the shell `!`.
+export function editDraft(draft: string, cursor: number, action: DraftAction, yank = '', floor = 0): DraftEdit | null {
   const chars = [...draft];
   const at = Math.max(0, Math.min(chars.length, cursor));
-  const move = (to: number): DraftEdit | null => (to === at ? null : { draft, cursor: to });
-  const cut = (from: number, to: number): DraftEdit | null => {
-    if (from === to) return null;
+  const low = at >= floor ? floor : 0;
+  const move = (to: number): DraftEdit | null => {
+    const next = Math.max(low, to);
+    return next === at ? null : { draft, cursor: next };
+  };
+  const cut = (start: number, to: number): DraftEdit | null => {
+    const from = Math.max(low, start);
+    if (from >= to) return null;
     const killed = chars.slice(from, to).join('');
     chars.splice(from, to - from);
     return { draft: chars.join(''), cursor: from, killed };

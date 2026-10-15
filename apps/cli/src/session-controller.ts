@@ -45,7 +45,7 @@ export type SessionController = {
   insertDraft: (text: string) => void;
   moveDraftCursor: (delta: number) => void;
   deleteLast: () => void;
-  editDraft: (action: DraftAction) => boolean;
+  editDraft: (action: DraftAction, floor?: number) => boolean;
   undoDraft: () => void;
   findHistory: (query: string, skip: number) => string | undefined;
   movePick: (delta: number) => void;
@@ -132,6 +132,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     }
     histIndex = history.length;
     stash = '';
+    undo = [];
     state = {
       ...state,
       lines: spoken,
@@ -151,8 +152,8 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     return true;
   };
 
-  const applyEdit = (action: DraftAction): boolean => {
-    const edit = editDraft(state.draft, state.draftCursor, action, killed);
+  const applyEdit = (action: DraftAction, floor = 0): boolean => {
+    const edit = editDraft(state.draft, state.draftCursor, action, killed, floor);
     if (!edit) return false;
     if (edit.killed) killed = edit.killed;
     if (edit.draft !== state.draft) {
@@ -190,6 +191,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
           sendStatus: 'Accepted by the agent',
           ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
         };
+        if (!state.draft) undo = [];
       } catch (error) {
         const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
         const shown = `› [delivery not confirmed] ${text}`;
@@ -247,6 +249,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
         state.queued.length >= 50
       )
         return;
+      undo = [];
       state = { ...state, queued: [...state.queued, text], draft: '', draftCursor: 0 };
       emit();
     },

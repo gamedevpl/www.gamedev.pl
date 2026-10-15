@@ -45,3 +45,16 @@ it('moves within and between lines, keeping the column', () => {
 it('keeps pasted line breaks and drops other control bytes', () => {
   expect(cleanDraftText('a\r\nb\rc\td\u0007\u009b')).toBe('a\nb\nc  d');
 });
+
+it('never moves or deletes across the protected prefix', () => {
+  const floor = (text: string, action: Parameters<typeof editDraft>[2]) => {
+    const { draft, cursor } = at(text);
+    const edit = editDraft(draft, cursor, action, '', 1);
+    return edit && `${[...edit.draft].slice(0, edit.cursor).join('')}|${[...edit.draft].slice(edit.cursor).join('')}`;
+  };
+  expect(floor('!echo value|', 'killToStart')).toBe('!|');
+  expect(floor('!ls|', 'deleteWordBack')).toBe('!|');
+  expect(floor('!ls -la|', 'home')).toBe('!|ls -la');
+  expect(floor('!|ls', 'backspace')).toBeNull();
+  expect(floor('!|ls', 'wordLeft')).toBeNull();
+});

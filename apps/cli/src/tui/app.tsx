@@ -107,11 +107,8 @@ export function ReplApp({
     }
     const action = editKey(raw, key);
     if (!action) return false;
-    const backward = ['left', 'wordLeft', 'home', 'backspace', 'deleteWordBack', 'killToStart'].includes(action);
-    if (shellMode && backward && state.draftCursor <= shellPrefix) return true;
-    if (shellMode && action === 'home') session.moveDraftCursor(shellPrefix - state.draftCursor);
-    else if (action === 'undo') session.undoDraft();
-    else session.editDraft(action);
+    if (action === 'undo') session.undoDraft();
+    else session.editDraft(action, shellPrefix);
     return true;
   };
   const onInput = (input: string, key: Key, raw: string): void => {
@@ -157,7 +154,9 @@ export function ReplApp({
     }
     if (state.mode === 'busy') {
       if (key.ctrl && input === 'c') {
-        session.cancel();
+        // Clear a typed follow-up first; another Ctrl+C stops the task.
+        if (state.localTask && state.draft) session.setDraft('');
+        else session.cancel();
         return;
       }
       if (state.localTask) {
@@ -184,10 +183,6 @@ export function ReplApp({
     if (state.mode === 'prompt' && search.handle(input, key, raw)) return;
     if ((key.escape || (!key.ctrl && !key.meta)) && completion.handleKey(key)) return;
     if (key.tab) return;
-    if (key.ctrl && input === 'c' && state.mode === 'prompt' && state.draft) {
-      session.setDraft('');
-      return;
-    }
     if (key.escape || (key.ctrl && input === 'c')) {
       session.cancel();
       return;
