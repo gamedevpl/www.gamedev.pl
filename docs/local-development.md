@@ -83,14 +83,35 @@ below 503s ("the Code surface is not configured on this deployment") until one i
 
    The response's `slug` is the game you just created. Without `GAMES_REPO_TOKEN` /
    `GITHUB_TOKEN` set (the no-key local setup this page assumes), a new game starts from an
-   **empty** source tree — `createGameSeederFromEnv` skips round-0 generation entirely. Stage
-   one file so there is something for `get_sources` to return and an agent to edit:
+   **empty** source tree — `createGameSeederFromEnv` skips round-0 generation entirely, and
+   `get_sources` would return no files. Stage the minimum `submit_sources` (mode `preview`)
+   actually needs — `validateSourceUpload` requires `SPEC.md`, `game.ts`, `GAME.json` (with
+   `howToPlay` and `engine.modules`), and `EDITOR.json` for any game with no prior
+   publication:
 
    ```bash
-   curl -X PUT "http://localhost:5173/api/me/studio/games/<slug>/sources/stage" -b cookies.txt \
+   SLUG=<slug>
+
+   curl -X PUT "http://localhost:5173/api/me/studio/games/$SLUG/sources/stage" -b cookies.txt \
+     -H 'content-type: application/json' \
+     -d '{"path":"SPEC.md","content":"---\ntitle: WebMCP test\n---\n"}'
+
+   curl -X PUT "http://localhost:5173/api/me/studio/games/$SLUG/sources/stage" -b cookies.txt \
      -H 'content-type: application/json' \
      -d '{"path":"game.ts","content":"export function boot() {\n  // TODO: double jump\n}\n"}'
+
+   curl -X PUT "http://localhost:5173/api/me/studio/games/$SLUG/sources/stage" -b cookies.txt \
+     -H 'content-type: application/json' \
+     -d '{"path":"GAME.json","content":"{\"engine\":{\"modules\":[]},\"howToPlay\":{\"goal\":{\"en\":\"Win\",\"pl\":\"Wygraj\"},\"hint\":{\"en\":\"Move\",\"pl\":\"Ruszaj się\"}}}"}'
+
+   curl -X PUT "http://localhost:5173/api/me/studio/games/$SLUG/sources/stage" -b cookies.txt \
+     -H 'content-type: application/json' \
+     -d '{"path":"EDITOR.json","content":"{\"version\":1,\"params\":{\"speed\":{\"type\":\"int\",\"min\":1,\"max\":10,\"default\":3,\"label\":{\"en\":\"Speed\",\"pl\":\"Tempo\"}}}}"}'
    ```
+
+   This exact combination is checked directly against `validateSourceUpload` in
+   `apps/api/src/delivery/editor-delivery-contract.test.ts`; `TRACE.json`/`PLAYTEST.json` are
+   only required for `mode: "publish"`, which no tool here can reach.
 
 2. Open `http://localhost:5173/studio/<slug>/code` and click **Agent mode** in the header.
 3. The modal's three sections map to the three paths:
