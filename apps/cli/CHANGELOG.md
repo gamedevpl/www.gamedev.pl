@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Raw preview starts its first build immediately, shows a loading state, and opens ready builds without extra fetches. Preview settings use the shared design system instead of the old controls overlay.
+- Raw preview starts its first build immediately, shows a loading state, and displays ready games with the first page response. Preview settings use the shared design system instead of the old controls overlay (#1841).
 
 ## 0.48.0 — 2026-10-15
 
