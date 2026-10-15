@@ -17,22 +17,9 @@ import { useMouseReporting, useTerminalInput, wheelInside } from './mouse.js';
 import { ALT_CLEAR, useAltScreen } from './alt-screen.js';
 import { useSelection, type Clipboard, type Regions } from './selection.js';
 import { systemClipboard } from './screen-grid.js';
-
-export function draftViewport(draft: string, cursor: number, width: number) {
-  const chars = [...draft];
-  const room = Math.max(1, width - 3);
-  const leftRoom = Math.floor(room / 2);
-  let start = Math.max(0, cursor - leftRoom);
-  let end = Math.min(chars.length, start + room);
-  if (end === chars.length) start = Math.max(0, end - room);
-  if (start === 0) end = Math.min(chars.length, room);
-  return {
-    before: chars.slice(start, cursor).join(''),
-    after: chars.slice(cursor, end).join(''),
-    hiddenBefore: start > 0,
-    hiddenAfter: end < chars.length,
-  };
-}
+import { DraftLines, draftLayout } from './composer.js';
+import { PASTE_END, PASTE_START, editKey, useBracketedPaste } from './keys.js';
+import { useHistorySearch } from './history-search.js';
 
 export function ReplApp({
   session,
@@ -89,6 +76,9 @@ export function ReplApp({
   const selection = useSelection({ enabled: split && mouse, rows, regions, clipboard });
   const changes = useWorkspaceChanges(activeCheckout, split && sidebar);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
+  useBracketedPaste();
+  const pasting = useRef(false);
+  const search = useHistorySearch(session);
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
     const onResize = (): void => {
@@ -108,7 +98,31 @@ export function ReplApp({
     state.draft.trimStart().startsWith('!');
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
-  const onInput = (input: string, key: Key): void => {
+  const editable = state.mode === 'prompt' || Boolean(state.localTask && state.mode === 'busy');
+  // Editing keys shared by the prompt and the follow-up composer.
+  const edit = (key: Key, raw: string): boolean => {
+    if (key.return && [...state.draft][state.draftCursor - 1] === '\\') {
+      session.editDraft('backspace');
+      return session.editDraft('newline');
+    }
+    const action = editKey(raw, key);
+    if (!action) return false;
+    const backward = ['left', 'wordLeft', 'home', 'backspace', 'deleteWordBack', 'killToStart'].includes(action);
+    if (shellMode && backward && state.draftCursor <= shellPrefix) return true;
+    if (shellMode && action === 'home') session.moveDraftCursor(shellPrefix - state.draftCursor);
+    else if (action === 'undo') session.undoDraft();
+    else session.editDraft(action);
+    return true;
+  };
+  const onInput = (input: string, key: Key, raw: string): void => {
+    if (raw === PASTE_START || raw === PASTE_END) {
+      pasting.current = raw === PASTE_START;
+      return;
+    }
+    if (pasting.current) {
+      if (editable) session.insertDraft(key.return ? '\n' : key.tab ? '\t' : input);
+      return;
+    }
     if (selection.clear() && key.escape) return;
     if (viewDiff) return;
     if (key.ctrl && input === 'b' && (canSplit || sidebar)) {
@@ -147,6 +161,7 @@ export function ReplApp({
         return;
       }
       if (state.localTask) {
+        if (edit(key, raw)) return;
         if (key.ctrl && input === 'o' && state.previewUrl) openPreview?.(state.previewUrl);
         else if (key.ctrl && input === 'q') session.queueDraft();
         else if (key.return) {
@@ -157,10 +172,7 @@ export function ReplApp({
           }
           if (state.canSteer && !state.draft.trimStart().startsWith('!')) void session.sendDraft();
           else session.queueDraft();
-        } else if (key.leftArrow) session.moveDraftCursor(-1);
-        else if (key.rightArrow) session.moveDraftCursor(1);
-        else if (key.backspace || key.delete) session.deleteLast();
-        else if (!key.ctrl && !key.meta && input) session.insertDraft(input);
+        } else if (!key.ctrl && !key.meta && input) session.insertDraft(input);
         return;
       }
       if (!key.ctrl && !key.meta && input.toLowerCase() === 'o' && state.previewUrl) {
@@ -169,8 +181,13 @@ export function ReplApp({
       }
       return;
     }
+    if (state.mode === 'prompt' && search.handle(input, key, raw)) return;
     if ((key.escape || (!key.ctrl && !key.meta)) && completion.handleKey(key)) return;
     if (key.tab) return;
+    if (key.ctrl && input === 'c' && state.mode === 'prompt' && state.draft) {
+      session.setDraft('');
+      return;
+    }
     if (key.escape || (key.ctrl && input === 'c')) {
       session.cancel();
       return;
@@ -193,28 +210,17 @@ export function ReplApp({
       }
       return;
     }
-    if (key.leftArrow) {
-      session.moveDraftCursor(-1);
-      return;
-    }
-    if (key.rightArrow) {
-      session.moveDraftCursor(1);
-      return;
-    }
     if (key.upArrow) {
-      session.historyPrev();
+      if (!session.editDraft('lineUp')) session.historyPrev();
       return;
     }
     if (key.downArrow) {
-      session.historyNext();
+      if (!session.editDraft('lineDown')) session.historyNext();
       return;
     }
+    if (edit(key, raw)) return;
     if (key.return) {
       session.submit();
-      return;
-    }
-    if (key.backspace || key.delete) {
-      session.deleteLast();
       return;
     }
     if (!key.ctrl && !key.meta && input) session.insertDraft(input);
@@ -252,8 +258,11 @@ export function ReplApp({
   const maxOffset = Math.max(0, questionLines.length - questionRows);
   const questionOffset = Math.min(detailScroll.promptId === state.promptId ? detailScroll.offset : 0, maxOffset);
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
+  const draftCursor = Math.max(0, state.draftCursor - shellPrefix);
+  const draftRows = editable ? draftLayout(shellDraft, draftCursor, width - 7).rows.length - 1 : 0;
   const panelRows =
     suggestionRows +
+    draftRows +
     (state.mode === 'pick'
       ? choiceRows + questionRows + 2 + Number(maxOffset > 0)
       : state.mode === 'busy'
@@ -266,7 +275,6 @@ export function ReplApp({
     : state.live;
   const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
-  const draft = draftViewport(shellDraft, Math.max(0, state.draftCursor - shellPrefix), width - 5);
   return (
     <ConversationLayout
       lines={state.lines}
@@ -353,22 +361,29 @@ export function ReplApp({
                     Shell · local terminal
                   </Text>
                 )}
-                <Text wrap="truncate-start">
-                  <Text color={accent} bold>
-                    {prompt}
-                  </Text>{' '}
-                  {shellMode && !shellDraft ? (
-                    <Text dimColor>█Enter a shell command</Text>
-                  ) : state.draft ? (
-                    <>
-                      {draft.hiddenBefore ? '…' : ''}
-                      {draft.before}█{draft.after}
-                      {draft.hiddenAfter ? '…' : ''}
-                    </>
-                  ) : (
-                    <Text dimColor>What would you like to do? /help</Text>
-                  )}
-                </Text>
+                {search.view ? (
+                  <Text wrap="truncate-end">
+                    <Text color={accent} bold>
+                      ↺
+                    </Text>{' '}
+                    {search.view}
+                  </Text>
+                ) : shellDraft ? (
+                  <DraftLines
+                    draft={shellDraft}
+                    cursor={draftCursor}
+                    room={width - 7}
+                    prompt={prompt}
+                    accent={accent}
+                  />
+                ) : (
+                  <Text wrap="truncate-start">
+                    <Text color={accent} bold>
+                      {prompt}
+                    </Text>{' '}
+                    <Text dimColor>{shellMode ? '█Enter a shell command' : 'What would you like to do? /help'}</Text>
+                  </Text>
+                )}
               </>
             )}
           </Box>
@@ -384,9 +399,7 @@ export function ReplApp({
               · {state.queued.length} queued
             </Text>
             {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
-            <Text wrap="truncate-start">
-              {prompt} {draft.before}█{draft.after}
-            </Text>
+            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} />
           </Box>
         )}
         {suggestionRows > 0 && (
@@ -405,7 +418,7 @@ export function ReplApp({
                 ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
                 : shellMode
                   ? 'Enter run · Esc exit · ←→ edit'
-                  : `Enter · ←→ edit · / commands · ! shell · ↑↓ history · Tab fill${newestDiff ? ' · Ctrl+D diff' : ''}`
+                  : `Enter · ⌥Enter newline · / commands · ! shell · ↑↓ history · Ctrl+R search${newestDiff ? ' · Ctrl+D diff' : ''}`
               : state.localTask
                 ? shellMode
                   ? 'Enter queue · Esc exit · Ctrl+C stop'

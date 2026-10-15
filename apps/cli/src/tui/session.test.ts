@@ -93,11 +93,11 @@ describe('tui session', () => {
     expect(session.get().mode).toBe('busy');
   });
 
-  it('strips control characters from the draft', () => {
+  it('strips control characters from the draft but keeps line breaks', () => {
     const session = createTuiSession('');
     void session.prompt();
     session.setDraft('hello\r\n\u0007\u0085\u009bworld');
-    expect(session.get().draft).toBe('helloworld');
+    expect(session.get().draft).toBe('hello\nworld');
   });
 
   it('resolves a superseded prompt so it cannot hang', async () => {

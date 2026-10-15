@@ -389,6 +389,26 @@ current step and elapsed time. Background round updates stay separate from foreg
 work. Ctrl+C interrupts an active agent or exits when no cancellable agent is running.
 The editor returns when work completes; arrow keys recall prompts or navigate choices.
 
+The prompt and the follow-up composer use the usual terminal editing keys:
+
+| Keys                                                                            | Action                                                 |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Option/Alt+← →, Ctrl+← →                                                        | Move by word                                           |
+| Ctrl+A / Ctrl+E, Home / End                                                     | Start / end of the line                                |
+| Option+Backspace, Ctrl+W                                                        | Delete the previous word                               |
+| Option+D, Fn+Delete                                                             | Delete the next word / character                       |
+| Ctrl+U / Ctrl+K                                                                 | Delete to the start / end of the line                  |
+| Ctrl+Y                                                                          | Paste the last deleted text                            |
+| Ctrl+_                                                                          | Undo                                                   |
+| Option+Enter, Shift+Enter (where the terminal sends it), Ctrl+J, `\` then Enter | New line                                               |
+| ↑ ↓                                                                             | Move between draft lines, then through history         |
+| Ctrl+R                                                                          | Search sent prompts; Enter or Tab accepts, Esc cancels |
+| Ctrl+C                                                                          | Clear the draft; on an empty draft, cancel             |
+
+Pasted text keeps its line breaks and is never sent until you press Enter. On macOS, Option sends these keys
+when the terminal treats it as Meta/Esc+ (Terminal.app: "Use Option as Meta key"; iTerm2: Option as Esc+), or
+natively in terminals that report modified arrows.
+
 ### Terminal workspace sidebar
 
 In a checkout at 120 columns and 16 rows or larger, `gamedevpl --terminal` runs full screen on the terminal's

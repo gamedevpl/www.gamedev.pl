@@ -63,7 +63,7 @@ export function mouseDecoder() {
 }
 
 export function useTerminalInput(
-  onKey: (input: string, key: Key) => void,
+  onKey: (input: string, key: Key, raw: string) => void,
   onWheel?: (wheel: Wheel) => void,
   onPointer?: (pointer: Pointer) => void,
 ) {
@@ -92,7 +92,7 @@ export function useTerminalInput(
       if (!event.mouse && rawInput.current.startsWith('\u001b') && control.length >= 2 && control[0] === 'O' && input)
         return;
       const text = keyboard.current.write(Buffer.from(event.mouse ? event.text : input, 'latin1'));
-      if (!event.mouse || text) handlers.current.onKey(text, key);
+      if (!event.mouse || text) handlers.current.onKey(text, key, event.mouse ? event.text : rawInput.current);
     }, []),
   );
   useEffect(() => {

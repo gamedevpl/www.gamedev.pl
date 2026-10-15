@@ -1,6 +1,7 @@
 import { shownPrompt, splitEvidence } from './workbench-evidence.js';
 import { sessionDiff, type SessionDiff } from './session-diff.js';
 import type { Steer } from './live-agent.js';
+import { cleanDraftText, editDraft, type DraftAction } from './draft-edit.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
 
@@ -44,6 +45,9 @@ export type SessionController = {
   insertDraft: (text: string) => void;
   moveDraftCursor: (delta: number) => void;
   deleteLast: () => void;
+  editDraft: (action: DraftAction) => boolean;
+  undoDraft: () => void;
+  findHistory: (query: string, skip: number) => string | undefined;
   movePick: (delta: number) => void;
   historyPrev: () => void;
   historyNext: () => void;
@@ -97,6 +101,8 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
   let savedLines: string[] = [];
   let histIndex = 0;
   let stash = '';
+  let killed = '';
+  let undo: Array<{ draft: string; cursor: number; typing: boolean }> = [];
   let followupDraft = '';
   let steer: Steer | undefined;
   let closed = false;
@@ -142,6 +148,20 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     };
     emit();
     resolve(line);
+    return true;
+  };
+
+  const applyEdit = (action: DraftAction): boolean => {
+    const edit = editDraft(state.draft, state.draftCursor, action, killed);
+    if (!edit) return false;
+    if (edit.killed) killed = edit.killed;
+    if (edit.draft !== state.draft) {
+      undo = [...undo, { draft: state.draft, cursor: state.draftCursor, typing: false }].slice(-100);
+      histIndex = history.length;
+    }
+    const draftFromHistory = state.draftFromHistory && edit.draft === state.draft;
+    state = { ...state, draft: edit.draft, draftCursor: edit.cursor, draftFromHistory };
+    emit();
     return true;
   };
 
@@ -298,25 +318,20 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       emit();
     },
     setDraft(draft) {
-      let next = '';
-      for (const ch of draft) {
-        const code = ch.charCodeAt(0);
-        if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) next += ch;
-      }
+      const next = cleanDraftText(draft);
       histIndex = history.length;
       state = { ...state, draft: next, draftCursor: [...next].length, draftFromHistory: false };
       emit();
     },
     insertDraft(text) {
-      let insert = '';
-      for (const ch of text) {
-        const code = ch.charCodeAt(0);
-        if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) insert += ch;
-      }
+      const insert = cleanDraftText(text);
       if (!insert) return;
       const chars = [...state.draft];
       const added = [...insert];
       chars.splice(state.draftCursor, 0, ...added);
+      // Consecutive typing undoes as one step.
+      if (!undo.at(-1)?.typing || /\s/.test(insert))
+        undo = [...undo, { draft: state.draft, cursor: state.draftCursor, typing: true }].slice(-100);
       histIndex = history.length;
       state = {
         ...state,
@@ -333,17 +348,19 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       emit();
     },
     deleteLast() {
-      if (state.draftCursor === 0) return;
-      const chars = [...state.draft];
-      chars.splice(state.draftCursor - 1, 1);
-      histIndex = history.length;
-      state = {
-        ...state,
-        draft: chars.join(''),
-        draftCursor: state.draftCursor - 1,
-        draftFromHistory: false,
-      };
+      applyEdit('backspace');
+    },
+    editDraft: applyEdit,
+    undoDraft() {
+      const last = undo.at(-1);
+      if (!last) return;
+      undo = undo.slice(0, -1);
+      state = { ...state, draft: last.draft, draftCursor: last.cursor, draftFromHistory: false };
       emit();
+    },
+    findHistory(query, skip) {
+      const needle = query.toLowerCase();
+      return [...history].reverse().filter((text) => text.toLowerCase().includes(needle))[skip];
     },
     movePick(delta) {
       const n = state.choices.length;
