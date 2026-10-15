@@ -2,6 +2,8 @@ import { Text } from 'ink';
 import { cells } from './screen-grid.js';
 
 export const MAX_DRAFT_ROWS = 6;
+// Variation selectors are marks too, so \p{M} covers them.
+const ZERO_WIDTH = /^(?:\p{M}|[\u200b-\u200d])$/u;
 
 // Highlights the cell under the cursor instead of inserting a glyph.
 export function cursorCell(ch: string, color: boolean): string {
@@ -63,7 +65,14 @@ export function DraftLines({
     <>
       {layout.rows.map((row, index) => {
         const chars = [...row.text];
-        const at = row.cursorAt;
+        // A zero-width mark paints nothing; highlight it with its base character.
+        const mark = row.cursorAt !== undefined && row.cursorAt > 0 && ZERO_WIDTH.test(chars[row.cursorAt] ?? '');
+        const at = row.cursorAt === undefined ? undefined : row.cursorAt - Number(mark);
+        const end = (at ?? 0) + 1 + Number(mark);
+        const text =
+          at === undefined
+            ? row.text
+            : `${chars.slice(0, at).join('')}${cursorCell(chars.slice(at, end).join('') || ' ', color)}${chars.slice(end).join('')}`;
         const lead = index === 0 ? `${prompt} ` : '  ';
         const marker = index === 0 && layout.hiddenBefore ? '…' : '';
         return (
@@ -72,9 +81,7 @@ export function DraftLines({
               {lead}
             </Text>
             {marker}
-            {at === undefined
-              ? row.text
-              : `${chars.slice(0, at).join('')}${cursorCell(chars[at] ?? ' ', color)}${chars.slice(at + 1).join('')}`}
+            {text}
             {index === layout.rows.length - 1 && layout.hiddenAfter ? '…' : ''}
           </Text>
         );

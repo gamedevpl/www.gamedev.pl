@@ -41,11 +41,13 @@ export function useSelection({
   rows,
   regions,
   clipboard,
+  color = true,
 }: {
   enabled: boolean;
   rows: number;
   regions: MutableRefObject<Regions>;
   clipboard: Clipboard;
+  color?: boolean;
 }) {
   const { stdout } = useStdout();
   const [notice, setNotice] = useState('');
@@ -99,7 +101,7 @@ export function useSelection({
         if (!line || compare(line, start.line) < 0 || compare(line, end.line) > 0) continue;
         const from = same(line, start.line) ? start.col : area.rect.left;
         const to = same(line, end.line) ? end.col : right(area.rect);
-        if (from <= to) next.set(y, highlight(screen, y, from, to));
+        if (from <= to) next.set(y, highlight(screen, y, from, to, color));
       }
     }
     let output = '';

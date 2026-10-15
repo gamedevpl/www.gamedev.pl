@@ -198,3 +198,11 @@ it('highlights the character under the cursor without shifting the text', async 
   expect(row()).toBe(end);
   expect(view.terminalOutput()).toContain(`${cursorCell('f', false)}ix the build`);
 });
+
+it('keeps the cursor visible on a zero-width mark by highlighting it with its base character', async () => {
+  const { view } = composer('cafe\u0301 ok');
+  await view.press('\u0001');
+  for (let i = 0; i < 4; i++) await view.press('\u001b[C');
+  expect(view.session.get().draftCursor).toBe(4);
+  expect(view.terminalOutput()).toContain(`caf${cursorCell('e\u0301', false)} ok`);
+});
