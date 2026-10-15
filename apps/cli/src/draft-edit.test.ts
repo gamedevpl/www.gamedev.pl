@@ -1,7 +1,10 @@
 import { expect, it } from 'vitest';
 import { cleanDraftText, editDraft } from './draft-edit.js';
 
-const at = (text: string) => ({ draft: text.replace('|', ''), cursor: text.indexOf('|') });
+const at = (text: string) => {
+  const [before = '', after = ''] = text.split('|');
+  return { draft: before + after, cursor: [...before].length };
+};
 const apply = (text: string, action: Parameters<typeof editDraft>[2], yank?: string) => {
   const { draft, cursor } = at(text);
   const edit = editDraft(draft, cursor, action, yank);
