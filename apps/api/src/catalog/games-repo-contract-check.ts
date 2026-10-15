@@ -333,9 +333,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     };
   }
 
-  // Website-first exceptions must expire. A permanent allowlist would turn a later
-  // games-repo rollback into an apparently intentional rollout state. Remove an entry
-  // as soon as its paired games change lands; the deadline is the fail-closed backstop.
+  // Expiring rollout exceptions prevent silently accepting later module rollbacks.
   const WEBSITE_AHEAD_EXPIRY: ReadonlyMap<string, number> = new Map([
     ['football', Date.parse('2026-08-10T00:00:00.000Z')],
     ['vehicles', Date.parse('2026-09-01T00:00:00.000Z')],
@@ -343,6 +341,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     ['cards', Date.parse('2026-08-15T00:00:00.000Z')],
     ['platformer', Date.parse('2026-08-29T00:00:00.000Z')],
     ['settings', Date.parse('2026-10-31T00:00:00.000Z')],
+    ['gamepad', Date.parse('2026-10-30T00:00:00.000Z')],
   ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
   const now = options.now?.() ?? Date.now();

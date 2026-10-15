@@ -4,6 +4,7 @@ import { prepareGameFrameDocument, useHostLoadTracking } from './frameMessage.js
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 import { usePreparedFrameDocument } from './frameAdapter.js';
 import { ImageExportPrompt } from './ImageExportPrompt.js';
+import { useGamepadBridge } from './gamepad.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
 
@@ -20,7 +21,6 @@ type GameFrameProps = GameFrameSource & {
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
   const iframeRef = props.frameRef ?? localRef;
-  // Locale applies to every game; hosts re-render on language change.
   let srcDoc = props.html ?? undefined;
   if (srcDoc != null) {
     srcDoc = withGameLocale(srcDoc, i18n.language);
@@ -34,7 +34,8 @@ export function GameFrame(props: GameFrameProps) {
   }, [iframeRef, prepared]);
 
   const autoFocus = props.autoFocus ?? true;
-  // Hand keyboard focus to the game so arrow keys / WASD work without a click first.
+  useGamepadBridge(iframeRef, autoFocus);
+  // Hand focus to the game’s opaque window.
   const focusGame = useCallback(() => {
     if (!autoFocus) return;
     const frame = iframeRef.current;
@@ -46,7 +47,6 @@ export function GameFrame(props: GameFrameProps) {
   const { onLoad, frameKey } = useHostLoadTracking(iframeRef, shownSource ?? props.src, focusGame);
 
   useEffect(() => {
-    // Backstop: document loaded before this effect, or srcDoc swapped.
     const timer = setTimeout(focusGame, 100);
     return () => clearTimeout(timer);
   }, [shownSource, props.src, focusGame]);

@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import { GameFrame } from './GameFrame.js';
+import { preloadInlineFrameAdapter } from './frameAdapter.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -30,7 +31,8 @@ describe('Sandbox Invariant Security Guard', () => {
     document.body.removeChild(container);
   });
 
-  it('prevents the context menu on the iframe element (iOS callout backstop)', () => {
+  it('prevents the context menu on the iframe element (iOS callout backstop)', async () => {
+    await preloadInlineFrameAdapter();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const container = document.createElement('div');
     document.body.appendChild(container);

@@ -3,6 +3,7 @@
   "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes + rasterBudgetBytes. The author gate is measured (assembled minus platformBytes minus rasterBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md.",
   "gameKitModules": [
     "input",
+    "gamepad",
     "collision",
     "world",
     "grid",

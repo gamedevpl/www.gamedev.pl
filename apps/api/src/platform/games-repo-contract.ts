@@ -39,9 +39,10 @@
 
 import { RASTER_ASSET_BUDGET_BYTES } from './raster-contract.js';
 
-/** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
+// Keep canonical module order aligned with the games repo.
 export const GAME_KIT_MODULES = [
   'input',
+  'gamepad',
   'collision',
   'world',
   // Tile/cell grid helpers (games-repo tip). Genre-agnostic, like path/collision.

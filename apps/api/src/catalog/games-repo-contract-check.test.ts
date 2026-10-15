@@ -148,9 +148,8 @@ describe('runGamesRepoContractCheck', () => {
   });
 
   it('allows a short-lived website-first module rollout', async () => {
-    // Website-first adds: GAME_KIT_MODULES here already includes these modules, but
-    // main's assemble.ts may still list the older order. That window must stay green.
-    const aheadModules = new Set(['football', 'urban']);
+    // The website must accept modules before the games repo publishes them.
+    const aheadModules = new Set(['football', 'urban', 'gamepad']);
     const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => !aheadModules.has(name));
     const olderAssemble = `
       const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
@@ -184,9 +183,9 @@ describe('runGamesRepoContractCheck', () => {
   });
 
   it('fails closed when a website-first module rollout expires', async () => {
-    const remoteWithoutFootball = GAME_KIT_MODULES.filter((name) => name !== 'football');
+    const remoteWithoutGamepad = GAME_KIT_MODULES.filter((name) => name !== 'gamepad');
     const olderAssemble = `
-      const GAME_KIT_MODULES = [${remoteWithoutFootball.map((name) => `'${name}'`).join(', ')}];
+      const GAME_KIT_MODULES = [${remoteWithoutGamepad.map((name) => `'${name}'`).join(', ')}];
       const catalog = readMusicCatalog();
       const track = catalog.tracks[name];
       out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
@@ -196,10 +195,10 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({
       ...BASE,
       fetchImpl,
-      now: () => Date.parse('2026-08-10T00:00:00.000Z'),
+      now: () => Date.parse('2026-10-30T00:00:00.000Z'),
     });
     expect(outcome.kind).toBe('drift');
-    expect(outcome.kind === 'drift' && outcome.reason).toContain('expired website-ahead modules: football');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('expired website-ahead modules: gamepad');
   });
 
   it('reports drift when a local-only module is not in the declared-ahead list', async () => {
