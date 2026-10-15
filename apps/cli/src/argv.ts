@@ -3,6 +3,9 @@ export const SLASH_VERBS = [
   'agents',
   'model',
   'logs',
+  'log',
+  'show',
+  'blame',
   'kit',
   'play',
   'stop',
@@ -113,7 +116,8 @@ export function parseArgv(argv: string[]): { verb: string; args: string[]; flags
           value = body.slice(eq + 1);
         flags[name] = BOOLEAN_FLAGS.has(name) && (value === 'true' || value === 'false') ? value === 'true' : value;
       } else {
-        if (BOOLEAN_FLAGS.has(body)) {
+        const versionValue = body === 'version' && verb === 'blame' && tokens[i + 1] && !tokens[i + 1]!.startsWith('-');
+        if (BOOLEAN_FLAGS.has(body) && !versionValue) {
           flags[body] = true;
           continue;
         }

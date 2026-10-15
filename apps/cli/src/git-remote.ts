@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { unreconciledMessage } from './checkout.js';
+import { fastImportScript, remoteImportRef, type VersionRef, type TreeFile } from './git-history-import.js';
+import { versionImportRef } from './git-history-import.js';
+export { fastImportScript, remoteImportRef } from './git-history-import.js';
+export type { VersionRef, TreeFile } from './git-history-import.js';
 
-export const GIT_REMOTE_CAPS = ['import', 'push', 'option'] as const;
-
-export type VersionRef = { version: string; createdAt: string };
-export type TreeFile = { path: string; content: string };
+export const GIT_REMOTE_CAPS = ['import', 'push', 'option', 'refspec'] as const;
 
 export function shaForVersion(version: string): string {
   return createHash('sha1').update(`gamedevpl:${version}`).digest('hex');
@@ -14,48 +15,18 @@ export function refuseNonFastForward(): string {
   return `error ${unreconciledMessage()}`;
 }
 
-export function handleHelperLine(line: string, slug: string): string[] {
+export function handleHelperLine(line: string, slug: string, scope?: string): string[] {
   const [cmd] = line.trim().split(' ');
-  if (cmd === 'capabilities') return ['import', 'push', 'option', ''];
+  if (cmd === 'capabilities')
+    return ['import', 'push', 'option', `refspec refs/heads/main:${remoteImportRef(slug, scope)}`, ''];
   if (cmd === 'list') return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
   if (cmd === 'option') return ['ok'];
   if (!cmd) return [];
   return [`error ${slug}: unknown helper command ${cmd}`];
 }
 
-export function listRefs(_versions: VersionRef[]): string[] {
-  return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
-}
-
-export function fastImportScript(input: {
-  slug: string;
-  versions: VersionRef[];
-  trees: Map<string, TreeFile[]>;
-}): string {
-  const chronological = [...input.versions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const chunks: string[] = [];
-  let mark = 1;
-  for (const row of chronological) {
-    const files = input.trees.get(row.version) ?? [];
-    const message = row.version;
-    chunks.push('commit refs/heads/main');
-    chunks.push(`mark :${mark}`);
-    chunks.push(`committer gamedevpl <cli@gamedev.pl> ${Math.floor(Date.parse(row.createdAt) / 1000)} +0000`);
-    chunks.push(`data ${Buffer.byteLength(message)}`);
-    chunks.push(message);
-    if (mark > 1) chunks.push(`from :${mark - 1}`);
-    chunks.push('deleteall');
-    for (const file of files) {
-      const rel = `games/${input.slug}/${file.path}`;
-      const bytes = Buffer.byteLength(file.content);
-      chunks.push(`M 100644 inline ${rel}`);
-      chunks.push(`data ${bytes}`);
-      chunks.push(file.content);
-    }
-    mark += 1;
-  }
-  chunks.push('done');
-  return chunks.join('\n');
+export function listRefs(versions: VersionRef[]): string[] {
+  return versions.length ? ['@refs/heads/main HEAD', '? refs/heads/main', ''] : [''];
 }
 
 export type PushResult = { ok: true } | { ok: false; message: string };
@@ -65,7 +36,9 @@ export type HelperIo = {
   write: (line: string) => void;
   fetchVersions: (slug: string) => Promise<VersionRef[]>;
   fetchTree: (slug: string, version: string) => Promise<TreeFile[]>;
-  importScript: (script: string) => Promise<void>;
+  importScript: (script: Buffer) => Promise<void>;
+  knownCommits?: () => Map<string, string>;
+  scope?: string;
   pushReconcile: (src: string) => Promise<PushResult>;
 };
 
@@ -86,25 +59,53 @@ export function formatPushStatus(dst: string, result: PushResult): string {
 
 export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void> {
   const pendingImport = { want: false };
+  let listedVersions: VersionRef[] | undefined;
   for (;;) {
     const line = await io.readLine();
     if (line === null) return;
     const trimmed = line.trim();
     if (!trimmed) {
       if (!pendingImport.want) continue;
-      const versions = await io.fetchVersions(slug);
-      const trees = new Map<string, TreeFile[]>();
-      for (const row of versions) {
-        trees.set(row.version, await io.fetchTree(slug, row.version));
+      const versions = listedVersions ?? (await io.fetchVersions(slug));
+      const knownCommits = io.knownCommits?.();
+      let parent: string | undefined;
+      let markOffset = 0;
+      const chronological = [...versions].sort(
+        (a, b) => a.createdAt.localeCompare(b.createdAt) || a.version.localeCompare(b.version),
+      );
+      for (const row of chronological) {
+        const known = knownCommits?.get(row.version);
+        if (known) {
+          parent = known;
+          continue;
+        }
+        const files = await io.fetchTree(slug, row.version);
+        await io.importScript(
+          fastImportScript({
+            slug,
+            versions: [row],
+            trees: new Map([[row.version, files]]),
+            scope: io.scope,
+            parent,
+            markOffset,
+            finish: false,
+          }),
+        );
+        markOffset++;
+        parent = versionImportRef(slug, row.version, io.scope);
       }
-      await io.importScript(fastImportScript({ slug, versions, trees }));
+      await io.importScript(
+        Buffer.from((parent ? `reset ${remoteImportRef(slug, io.scope)}\nfrom ${parent}\n\n` : '') + 'done\n'),
+      );
+      listedVersions = undefined;
       pendingImport.want = false;
       continue;
     }
     const [cmd, ...rest] = trimmed.split(' ');
-    if (cmd === 'capabilities') io.write('import\npush\noption\n\n');
+    if (cmd === 'capabilities') io.write(`${handleHelperLine(trimmed, slug, io.scope).join('\n')}\n`);
     else if (cmd === 'list') {
       const versions = await io.fetchVersions(slug);
+      listedVersions = versions;
       io.write(`${listRefs(versions).join('\n')}\n`);
     } else if (cmd === 'option') io.write('ok\n');
     else if (cmd === 'import' || cmd === 'fetch') pendingImport.want = true;

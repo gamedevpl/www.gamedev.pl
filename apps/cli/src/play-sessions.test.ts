@@ -54,7 +54,7 @@ async function fixture(
           .update(cwd + slug)
           .digest('hex');
   const token = 'a'.repeat(kind === 'preview' ? 48 : 64);
-  const base = kind === 'preview' ? `/${token}/` : '/';
+  const base = kind === 'preview' && options.legacy ? `/${token}/` : '/';
   let stopped = false,
     stops = 0;
   const server = createServer((req, res) => {

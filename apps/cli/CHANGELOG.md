@@ -10,6 +10,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - In a checkout at 120×16 or larger the interactive terminal runs full screen even with the sidebar hidden, so the wheel scrolls the conversation instead of the whole terminal history, and drag-to-copy works without opening the sidebar; Ctrl+B only shows or hides the sidebar. Set `GAMEDEV_TUI=inline` to keep the conversation in terminal scrollback instead (#1837).
+- `log`, `show`, version-to-version `diff` and `blame` read the game's delivered source history, including older versions, from a checkout or with `--slug`; the same commands work in interactive sessions and support `--json` (#1838).
+
+### Fixed
+
+- Git fetch imports platform versions into private refs, supports SHA-1 and SHA-256 repositories, preserves local branches and edits, keeps image bytes intact, and downloads only versions not already imported (#1838).
+- Raw local preview opens at the port's root without a token in the link, supports the current Codespaces host, and retains host/origin checks for reload and stop. Existing token-path previews are restarted; additional tunnel hosts use `GAMEDEVPL_PREVIEW_ALLOWED_HOSTS` (#1835).
 
 ## 0.47.0 — 2026-10-14
 

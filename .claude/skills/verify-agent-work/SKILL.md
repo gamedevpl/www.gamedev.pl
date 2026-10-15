@@ -110,6 +110,38 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+**A rate limit does not bound in-flight source buffers.** Full history imports need many
+sequential requests, but raising their per-minute limit also permits concurrent trees.
+Check an instance-wide concurrency budget, bounded storage fan-out, and slot lifetime:
+a disconnect or one rejected read must not free the slot while sibling reads continue,
+and a completed read must hold its slot until the buffered response finishes.
+
+**Remote-helper stream assertions do not verify Git history behavior.** Exercise the
+actual import in both SHA-1 and SHA-256 repositories. A hard-coded 40-character null
+parent breaks SHA-256 fast-import; clear the private ref with a parentless reset and
+omit `from` for a root commit. Remove version-cache refs after a successful fetch,
+then reimport: the previous private tip must not become the new root's parent.
+
+Exercise the actual helper with real `git fetch`, `git log` and `git blame` in an isolated repository,
+using deterministic version/tree fixtures. Repeat the fetch after a local commit on
+`main` and assert that local refs and working files stay intact. The gamedevpl helper
+advertised `import` without `refspec` and emitted commits into `refs/heads/main`:
+initial history reads worked, but fetching after a local commit failed in fast-import.
+Also check history pagination and tree-route rate limits before claiming a full-history
+import works against the platform API.
+
+Shared command dispatch also has synchronous behavior: update progress must appear
+before the first await. An unconditional await of a new history handler, even when
+it returned false for other verbs, delayed the update spinner and broke its fake-timer
+tests. Gate asynchronous handlers with a synchronous verb check and run the existing
+progress/cancellation fixtures as well as the new command tests.
+
+Run scoped CLI suites with `npm run test -w @gamedevpl/cli -- <files>` or from
+`apps/cli`. Vitest's `--root` does not change the process working directory. The
+Play lifetime fixtures resolve `../../node_modules` from that directory; running
+them from the monorepo root makes child processes look for `/node_modules/tsx`
+and produces startup timeouts unrelated to the product change.
+
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
 
 ```bash

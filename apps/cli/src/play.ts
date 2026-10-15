@@ -29,8 +29,13 @@ import { prepareWorkspace } from './prepare-workspace.js';
 import { PLAY_RUNTIME } from './play-runtime.js';
 import type { CliTelemetry } from './telemetry.js';
 import { CLI_VERSION, compareSemver } from './update.js';
+import { previewAllowedHosts, previewHostConfig } from './preview-request.js';
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const reusablePreview = (session: Session | null, env: NodeJS.ProcessEnv) =>
+  session?.cliVersion === CLI_VERSION &&
+  new URL(session.url).pathname === '/' &&
+  session.hostConfig === previewHostConfig(previewAllowedHosts(new URL(session.url).origin, env));
 
 export async function startLocalPlay(input: {
   root: string;
@@ -46,6 +51,7 @@ export async function startLocalPlay(input: {
     if (input.abort?.aborted) throw new CliError('preview startup cancelled', EXIT_REFUSED);
   };
   checkAbort();
+  const env = childEnv(input.env, '');
   const root = realpathSync(input.root);
   const key = previewKey(root, input.slug);
   const dir = join(tmpdir(), `gamedev-play-${process.getuid?.() ?? 'user'}`);
@@ -66,7 +72,7 @@ export async function startLocalPlay(input: {
     input.write(existing ? 'local preview stopped' : 'no local preview is running');
     return null;
   }
-  if (existing?.cliVersion === CLI_VERSION) return existing;
+  if (reusablePreview(existing, env)) return existing;
   for (let attempt = 0; ; attempt++) {
     checkAbort();
     try {
@@ -76,7 +82,7 @@ export async function startLocalPlay(input: {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const running = await alive(statePath, key);
-      if (running?.cliVersion === CLI_VERSION) return running;
+      if (reusablePreview(running, env)) return running;
       const age = lockAge(lock);
       if (age === null) continue;
       let abandoned = false;
@@ -101,11 +107,15 @@ export async function startLocalPlay(input: {
   }
   try {
     const raced = await alive(statePath, key);
-    if (raced?.cliVersion === CLI_VERSION) return raced;
+    if (reusablePreview(raced, env)) return raced;
     if (raced) {
       if (raced.cliVersion && compareSemver(raced.cliVersion, CLI_VERSION) > 0)
         throw new CliError('The preview uses a newer CLI.', EXIT_REFUSED, 'Run gamedevpl update, then retry play.');
-      input.write(`Restarting preview from ${raced.cliVersion ?? 'an older CLI'} with gamedevpl ${CLI_VERSION}…`);
+      input.write(
+        raced.cliVersion === CLI_VERSION && new URL(raced.url).pathname === '/'
+          ? 'Restarting preview to apply allowed hosts…'
+          : `Restarting preview from ${raced.cliVersion ?? 'an older CLI'} with gamedevpl ${CLI_VERSION}…`,
+      );
       await stopDiscoveredSession({ id: `p-${key}`, key, kind: 'preview', url: raced.url });
       for (let attempt = 0; await alive(statePath, key); attempt++) {
         checkAbort();
@@ -125,7 +135,7 @@ export async function startLocalPlay(input: {
     try {
       child = spawn(process.execPath, [runtime, root, input.slug, statePath, key], {
         cwd: root,
-        env: { ...childEnv(input.env, ''), GAMEDEVPL_PREVIEW_VERSION: CLI_VERSION },
+        env: { ...env, GAMEDEVPL_PREVIEW_VERSION: CLI_VERSION },
         stdio: ['ignore', log, log],
         detached: input.detached ?? true,
         windowsHide: true,

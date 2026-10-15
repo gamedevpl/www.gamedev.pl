@@ -32,6 +32,11 @@ function throwForStatus(res: Response, errBody: ApiErrorBody): never {
           );
   error.apiCode = errBody.code ?? errBody.error;
   error.httpStatus = res.status;
+  const retry = res.headers.get('retry-after');
+  if (retry) {
+    const ms = /^\d+$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now();
+    if (Number.isFinite(ms)) error.retryAfterMs = Math.max(1000, ms);
+  }
   throw error;
 }
 
