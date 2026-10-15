@@ -1,0 +1,222 @@
+@import '../../web/src/core/styles/tokens.css';
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+iframe {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--bg);
+}
+
+.preview-tools {
+  position: fixed;
+  z-index: 2;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  max-width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+}
+
+summary,
+button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 13px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+summary:hover,
+button:hover {
+  background: #293641;
+  border-color: #4b626e;
+}
+
+:where(summary, button):focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
+summary {
+  width: max-content;
+  margin-left: auto;
+  list-style: none;
+  background: var(--panel);
+  box-shadow: 0 6px 24px #0003;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+details[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.preview-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--turquoise);
+}
+
+body:is([data-state='preparing'], [data-state='building'], [data-state='paused']) .preview-indicator {
+  background: var(--muted);
+}
+
+body:is([data-state='error'], [data-state='disconnected']) .preview-indicator {
+  background: var(--error);
+}
+
+.preview-panel {
+  width: 280px;
+  max-width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+  max-height: calc(100dvh - 80px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: auto;
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px #0006;
+}
+
+.preview-panel h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+body:has(#error:not([hidden])) .preview-panel {
+  max-height: calc(70dvh - 80px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
+#status {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.preview-panel button {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.preview-panel button[aria-pressed='true'] {
+  border-color: var(--turquoise);
+}
+
+.preview-panel button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+#controls:not(:empty) {
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.preview-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg-gradient);
+  pointer-events: none;
+}
+
+.preview-loading .mascot {
+  width: 56px;
+  height: 48px;
+  margin-bottom: 20px;
+  color: var(--turquoise);
+}
+
+.preview-loading h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.preview-loading p {
+  max-width: 340px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+#error {
+  position: fixed;
+  z-index: 1;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  max-height: 30dvh;
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--error);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--error);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    13px/1.5 ui-monospace,
+    monospace;
+}
+
+@media (max-height: 400px) {
+  .preview-loading .mascot {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  summary,
+  button {
+    min-height: 44px;
+  }
+}
