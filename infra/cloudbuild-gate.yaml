@@ -56,6 +56,9 @@
 # agent gets the report and another round — but it must be visible, because a gate whose
 # failures nobody notices is not a gate.
 #
+# This path runs in the default pool, with open egress: it needs Docker Hub and apt, which
+# the egress-restricted gate pool (infra/setup-gate-egress.sh) does not allow.
+#
 # Inventory and owner-console follow-ups: infra/gate-hardening.md
 substitutions:
   _SLUG: ''
