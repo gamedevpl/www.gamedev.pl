@@ -67,6 +67,11 @@ game's sources — see `apps/web/src/surfaces/studio/webmcp.ts` and
 `CodeSurfaceAgentMode.tsx`. Only one needs a browser that speaks WebMCP; the other two work
 in any browser today.
 
+Unlike everything else on this page, the Code surface's own routes need a real
+**`GAMES_STORE_BUCKET`** (a GCS bucket) — there is no in-memory fallback yet
+(`apps/api/src/platform/app.ts`'s `gamesStore` is `undefined` without it), so every route
+below 503s ("the Code surface is not configured on this deployment") until one is set.
+
 1. Sign in (above), then create a game owned by that session so it has a Code surface to
    open:
 
@@ -76,7 +81,16 @@ in any browser today.
      -d '{"title":"WebMCP test","concept":"A tiny game for exercising the agent console.","builder":"self"}'
    ```
 
-   The response's `slug` is the game you just created.
+   The response's `slug` is the game you just created. Without `GAMES_REPO_TOKEN` /
+   `GITHUB_TOKEN` set (the no-key local setup this page assumes), a new game starts from an
+   **empty** source tree — `createGameSeederFromEnv` skips round-0 generation entirely. Stage
+   one file so there is something for `get_sources` to return and an agent to edit:
+
+   ```bash
+   curl -X PUT "http://localhost:5173/api/me/studio/games/<slug>/sources/stage" -b cookies.txt \
+     -H 'content-type: application/json' \
+     -d '{"path":"game.ts","content":"export function boot() {\n  // TODO: double jump\n}\n"}'
+   ```
 
 2. Open `http://localhost:5173/studio/<slug>/code` and click **Agent mode** in the header.
 3. The modal's three sections map to the three paths:
@@ -99,16 +113,23 @@ It's the only way to exercise the WebMCP toggle end-to-end locally, since nothin
 consumes `document.modelContext` yet.
 
 Needs **Chrome 155+** with `chrome://flags/#enable-webmcp-testing` turned on, and Node.js
-22.18+ for the extension's own build/server.
+22.18+ for the extension's own build tooling.
 
 ```bash
 git clone https://github.com/GoogleChromeLabs/webmcp-extension
 cd webmcp-extension
 npm install
-cp .env.example .env   # set an API key for MODEL, or skip and use the on-device model
-npm run server         # keep running in its own terminal — the model backend
-npm run build          # in a second terminal — writes the extension to dist/
+npm run build          # writes the extension to dist/
 ```
+
+Pick one model backend:
+
+- **A provider key (Google/OpenAI/Anthropic) or Ollama** — `cp .env.example .env`, set the
+  key for `MODEL`, then `npm run server` in its own terminal before loading the extension.
+- **On-device, no key** — skip `.env` and `npm run server` entirely. After loading the
+  extension (below), turn it on in the side panel's **Settings → Model → On-device model**,
+  and enable `chrome://flags/#prompt-api-tool-use` (a second flag, separate from
+  `enable-webmcp-testing` above). The model downloads on first use.
 
 Load `dist/` unpacked (`chrome://extensions` → Developer mode → **Load unpacked**), open the
 Code surface tab with the WebMCP toggle on, open the extension's side panel on that tab, and
