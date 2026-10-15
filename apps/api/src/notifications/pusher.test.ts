@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPusherFromEnv, NoopPusher, WebPushPusher } from './pusher.js';
 
-const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: 'p', auth: 'a' } };
+const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
 const payload = { title: 'Hi', body: 'Body', url: 'https://www.gamedev.pl/play/x', tag: 'sub-1-published' };
 
 function pusherWith(sendImpl: (...args: unknown[]) => Promise<unknown>) {

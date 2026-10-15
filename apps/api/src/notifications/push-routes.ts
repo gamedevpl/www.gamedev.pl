@@ -8,12 +8,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from '../platform/store.js';
+import { isAllowedPushEndpoint } from './push-endpoint.js';
 
 // The client sends `subscription.toJSON()` verbatim. Validate the shape we depend
 // on (endpoint + the two ECDH keys) and ignore any extra fields the browser adds.
 const SubscribeSchema = z.object({
   subscription: z.object({
-    endpoint: z.string().url().max(2048),
+    endpoint: z.string().url().max(2048).refine(isAllowedPushEndpoint, { message: 'unsupported push service' }),
     keys: z.object({
       p256dh: z.string().min(1).max(256),
       auth: z.string().min(1).max(256),
@@ -21,9 +22,7 @@ const SubscribeSchema = z.object({
   }),
 });
 
-const UnsubscribeSchema = z.object({
-  endpoint: z.string().url().max(2048),
-});
+const UnsubscribeSchema = z.object({ endpoint: z.string().url().max(2048) });
 
 export interface PushRoutesOptions {
   store: Store;

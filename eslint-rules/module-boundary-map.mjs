@@ -704,6 +704,7 @@ const FILE_BUCKET = {
   'notify-share': 'notifications',
   'beta-welcome-email': 'notifications',
   mailer: 'notifications',
+  'push-endpoint': 'notifications',
   'push-routes': 'notifications',
   pusher: 'notifications',
   'unsubscribe-token': 'notifications',
