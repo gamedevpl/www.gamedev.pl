@@ -335,10 +335,10 @@ it('refreshes local edits only while visible, and refreshes again when restored'
   }
 });
 
-it('leaves mouse selection and scrollback native by default, including during local work and resizes', async () => {
+it('leaves mouse selection and scrollback native in inline mode, including during local work and resizes', async () => {
   vi.stubEnv('GAMEDEV_SIDEBAR', '');
   try {
-    const view = screen(150, 28, 0, undefined, undefined, null);
+    const view = screen(150, 28, 0, undefined, undefined, null, { inline: true });
     void view.session.prompt();
     for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
     expect(view.frame()).not.toContain('WORKSPACE');
@@ -357,8 +357,8 @@ it('leaves mouse selection and scrollback native by default, including during lo
   }
 });
 
-it('enables mouse reporting only in the sidebar and releases it when returning to terminal history', async () => {
-  const view = screen(150, 28, 0, undefined, undefined, false);
+it('enables mouse reporting only in the inline-mode sidebar and releases it when returning to terminal history', async () => {
+  const view = screen(150, 28, 0, undefined, undefined, false, { inline: true });
   void view.session.prompt();
   for (let i = 0; i < 30; i++) view.session.writeLine(`Message ${i}`);
   view.session.setDraft('keep this draft');
@@ -387,7 +387,7 @@ it('enables mouse reporting only in the sidebar and releases it when returning t
 });
 
 it('returns from scrolled workspace output to native history without losing wrapped messages or the draft', async () => {
-  const view = screen();
+  const view = screen(150, 28, 0, undefined, undefined, true, { inline: true });
   void view.session.prompt();
   for (let i = 0; i < 40; i++) view.session.writeLine(`codex ▸ Message ${i} · ${'długa odpowiedź '.repeat(10)}`);
   view.session.setDraft('keep draft');

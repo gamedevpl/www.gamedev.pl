@@ -8,9 +8,9 @@ const press = (x: number, y: number) => `\u001b[<0;${x};${y}M`;
 const drag = (x: number, y: number) => `\u001b[<32;${x};${y}M`;
 const release = (x: number, y: number) => `\u001b[<0;${x};${y}m`;
 
-function workspace(lines: string[], options: { mouse?: boolean } = {}) {
+function workspace(lines: string[], options: { mouse?: boolean; inline?: boolean; sidebar?: boolean } = {}) {
   const copied: string[] = [];
-  const view = screen(150, 28, 0, undefined, undefined, true, {
+  const view = screen(150, 28, 0, undefined, undefined, options.sidebar ?? true, {
     ...options,
     clipboard: (text) => {
       copied.push(text);
@@ -138,7 +138,7 @@ it('opens the workspace on the alternate screen and leaves mouse reporting off w
 });
 
 it('releases the mouse before leaving the alternate screen, then prints workspace output to history', async () => {
-  const { view } = workspace(['Before workspace']);
+  const { view } = workspace(['Before workspace'], { inline: true });
   view.session.writeLine('Arrived in workspace');
   await view.press('\u0002');
   const output = view.terminalOutput();
@@ -146,4 +146,34 @@ it('releases the mouse before leaving the alternate screen, then prints workspac
   expect(output.lastIndexOf(MOUSE_OFF)).toBeLessThan(leave);
   expect(output.indexOf('Arrived in workspace', leave)).toBeGreaterThan(leave);
   expect(output.indexOf(ALT_ON)).toBeLessThan(output.indexOf(MOUSE_ON));
+});
+
+it('runs full screen without the sidebar by default and toggles the sidebar without leaving it', async () => {
+  const { view, copied, find } = workspace(messages, { sidebar: false });
+  expect(view.terminalOutput()).toContain(ALT_ON);
+  expect(view.terminalOutput()).toContain(MOUSE_ON);
+  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.frame()).toContain('Ctrl+B show sidebar');
+  await view.press('\u001b[<64;10;5M'.repeat(3));
+  expect(view.frame()).toContain('Earlier messages');
+  const at = find('Message 40');
+  await view.press(press(at.x, at.y) + drag(at.end, at.y) + release(at.end, at.y));
+  expect(copied).toEqual(['Message 40']);
+  const before = view.terminalOutput().length;
+  await view.press('\u0002');
+  expect(view.frame()).toContain('WORKSPACE');
+  await view.press('\u0002');
+  expect(view.frame()).not.toContain('WORKSPACE');
+  expect(view.terminalOutput().slice(before)).not.toContain(ALT_OFF);
+  expect(view.terminalOutput().slice(before)).not.toContain(MOUSE_OFF);
+});
+
+it('keeps terminal scrollback below the full-screen size and in inline mode', async () => {
+  const compact = screen(100, 28, 0, undefined, undefined, false);
+  void compact.session.prompt();
+  expect(compact.terminalOutput()).not.toContain(ALT_ON);
+  const { view } = workspace(messages, { sidebar: false, inline: true });
+  expect(view.terminalOutput()).not.toContain(ALT_ON);
+  expect(view.terminalOutput()).not.toContain(MOUSE_ON);
+  expect(view.frame()).toContain('Ctrl+B show sidebar');
 });

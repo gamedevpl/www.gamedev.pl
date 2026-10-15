@@ -18,7 +18,7 @@ export function screen(
   checkout: () => WorkspaceCheckout | null = () => ({ root: '/workspace', slug: 'demo' }),
   readLogs?: () => string[],
   sidebar: boolean | null = true,
-  options: { clipboard?: Clipboard; mouse?: boolean } = {},
+  options: { clipboard?: Clipboard; mouse?: boolean; inline?: boolean } = {},
 ) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
@@ -47,6 +47,7 @@ export function screen(
       initialSidebar: sidebar ?? undefined,
       clipboard: options.clipboard ?? (() => true),
       mouse: options.mouse ?? true,
+      inline: options.inline ?? false,
     });
   const app = render(element(), {
     stdin: buffered.stdin,
