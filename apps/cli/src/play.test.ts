@@ -63,6 +63,10 @@ describe('play', () => {
       const shell = await fetch(first!.url).then((r) => r.text());
       expect(shell).toContain('sandbox="allow-scripts allow-pointer-lock"');
       expect(shell).not.toContain('allow-same-origin');
+      const initial = JSON.parse(shell.match(/type="application\/json">([^]*?)<\/script>/)![1]);
+      expect(initial.revision).toBe(a.revision);
+      expect(initial.html).toContain('<h1>First</h1>');
+      expect((await fetch(first!.url)).headers.get('content-security-policy')).toContain('font-src data:');
       expect((await fetch(first!.url + 'game')).headers.get('content-type')).toContain('text/plain');
       expect((await fetch(first!.url + 'status', { headers: { Origin: 'https://evil.test' } })).status).toBe(403);
       writeFileSync(source, '<!doctype html><h1>Second</h1>');

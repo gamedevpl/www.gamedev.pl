@@ -1,5 +1,5 @@
-import { PLAY_EMBED_SCRIPT } from './generated/play-ui.js';
-import { MASCOT_FAVICON_DATA_URL } from './mascot-svg.js';
+import { PREVIEW_SCRIPT, PREVIEW_STYLE } from './generated/play-ui.js';
+import { MASCOT_FAVICON_DATA_URL, MASCOT_SVG } from './mascot-svg.js';
 import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 
 export const PLAY_PAGE = String.raw`<!doctype html>
@@ -9,59 +9,36 @@ export const PLAY_PAGE = String.raw`<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>gamedevpl play</title>
 <link rel="icon" type="image/svg+xml" href="${MASCOT_FAVICON_DATA_URL}">
-<style>
-html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#eee;font:14px system-ui}
-iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}
-details{position:fixed;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));z-index:1;max-width:calc(100% - 24px);background:#12151ce6;border-radius:12px;padding:10px}
-summary,button{cursor:pointer}
-button{font:inherit;color:inherit;background:#252b37;border:1px solid #536075;border-radius:8px;padding:8px;margin-top:8px}
-#controls{white-space:pre-wrap;max-height:30dvh;overflow:auto}
-pre{position:fixed;bottom:max(12px,env(safe-area-inset-bottom));left:12px;right:12px;z-index:1;white-space:pre-wrap;max-height:25dvh;overflow:auto;color:#ffd398;background:#12151ce6;border-radius:12px;padding:12px;margin:0}
-[hidden]{display:none!important}
-</style>
+<style>${PREVIEW_STYLE}</style>
 </head>
-<body>
+<body data-state="preparing">
 <iframe title="Game preview" sandbox="allow-scripts allow-pointer-lock"></iframe>
-<details><summary>Preview controls</summary><button id="pause">Pause reload</button> <button id="sound">Sound: On</button><div id="controls"></div><div id="status" role="status"></div></details>
+<div id="loading" class="preview-loading" role="status">
+${MASCOT_SVG}
+<h1 id="loading-title">Preparing your game</h1>
+<p id="loading-message">The first build is on its way. Your game will appear here automatically.</p>
+</div>
+<details class="preview-tools">
+<summary aria-label="Preview settings" title="Preview settings"><span class="preview-indicator" aria-hidden="true"></span><span>Preview</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary>
+<div class="preview-panel">
+<h2>Local preview</h2>
+<p id="status" role="status">Preparing your game…</p>
+<button id="pause" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg><span id="pause-label">Pause live reload</span></button>
+<button id="sound" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4V5ZM15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg><span id="sound-label">Sound on</span></button>
+<div id="controls"></div>
+</div>
+</details>
 <pre id="error" role="status" hidden></pre>
+<script id="preview-bootstrap" type="application/json">null</script>
+<script>${PREVIEW_SCRIPT}</script>
 <script>
-${PLAY_EMBED_SCRIPT}
 const presencePath=location.pathname+'presence',presenceProtocols=[];
 ${PLAY_PRESENCE_SCRIPT}
-let revision = '', paused = false, muted = false;
-const frame = document.querySelector('iframe');
-const status = document.querySelector('#status');
-const errorBox = document.querySelector('#error');
-const sound = document.querySelector('#sound');
-function posture(type,data={}) { frame.contentWindow?.postMessage({source:'gdpl-host',type,...data},'*'); }
-frame.onload=()=>{posture('hello');posture('setSound',{muted});};
-sound.onclick=()=>{muted=!muted;posture('setSound',{muted});sound.textContent=muted?'Sound: Off':'Sound: On';};
-addEventListener('message',event=>{
-  const data=event.data;
-  if(event.source!==frame.contentWindow||data?.source!=='gdpl-player')return;
-  if(data.type==='controls'&&Array.isArray(data.rows))document.querySelector('#controls').textContent=data.rows.slice(0,30).map(row=>[row?.keys,row?.action].filter(value=>typeof value==='string').map(value=>value.slice(0,200)).join(' · ')).join('\n');
-});
-document.querySelector('#pause').onclick = event => {
-  paused = !paused;
-  event.target.textContent = paused ? 'Resume reload' : 'Pause reload';
-};
-async function tick() {
-  try {
-    const state = await fetch(location.pathname + 'status', {cache:'no-store'}).then(r => r.json());
-    errorBox.textContent = state.error;
-    errorBox.hidden = !state.error;
-    status.textContent = state.busy ? ' · rebuilding…' : paused ? ' · paused' : ' · watching files';
-    if (!paused && state.revision && state.revision !== revision) {
-      const html = await fetch(location.pathname + 'game', {cache:'no-store'}).then(r => r.text());
-      frame.srcdoc = GAME_EMBED.embedGameHtml(html);
-      revision = state.revision;
-    }
-  } catch {
-    status.textContent = ' · preview disconnected';
-  }
-  setTimeout(tick, 750);
-}
-tick();
 </script>
 </body>
 </html>`;
+
+export function renderPlayPage(state: { revision: string; html: string; error: string; busy: boolean }): string {
+  const data = JSON.stringify(state).replace(/</g, '\\u003c');
+  return PLAY_PAGE.replace('type="application/json">null</script>', () => `type="application/json">${data}</script>`);
+}

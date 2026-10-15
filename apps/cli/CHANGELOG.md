@@ -11,6 +11,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - The terminal prompt supports the usual editing shortcuts: Option/Ctrl+arrows move by word, Ctrl+A/E and Home/End jump to line edges, Option+Backspace/Ctrl+W, Option+D, Fn+Delete, Ctrl+U/K delete, Ctrl+Y pastes the last cut and Ctrl+_ undoes. Option+Enter, Ctrl+J or a trailing `\` add a new line, pasted line breaks stay in the draft, Ctrl+R searches sent prompts, and Ctrl+C clears a typed draft (#1840).
 
+## 0.48.1 — 2026-10-15
+
+### Fixed
+
+- Raw preview starts its first build immediately, shows a loading state, and displays ready games with the first page response. Preview settings use the shared design system instead of the old controls overlay (#1841).
+
 ## 0.48.0 — 2026-10-15
 
 ### Added
