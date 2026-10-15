@@ -8,31 +8,15 @@ import {
   stageCodeSurfaceFile,
 } from './codeSurfaceApi.js';
 
-type ModelContextToolAnnotations = { readOnlyHint?: boolean; untrustedContentHint?: boolean };
-
-type ModelContextTool = {
-  name: string;
-  description: string;
-  inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] };
-  execute: (input: Record<string, unknown>) => Promise<string>;
-  annotations?: ModelContextToolAnnotations;
-};
-
-type ModelContextLike = {
-  registerTool: (tool: ModelContextTool, options?: { signal?: AbortSignal }) => Promise<void>;
-};
-
+// navigator.modelContext: the pre-webmcp-types trial's home for this.
 declare global {
   interface Navigator {
-    modelContext?: ModelContextLike;
-  }
-  interface Document {
-    modelContext?: ModelContextLike;
+    modelContext?: Pick<WebMCP.ModelContext, 'registerTool'>;
   }
 }
 
 // document.modelContext, falling back to navigator.modelContext.
-function getModelContext(): ModelContextLike | null {
+function getModelContext(): Pick<WebMCP.ModelContext, 'registerTool'> | null {
   if (typeof document !== 'undefined' && document.modelContext) return document.modelContext;
   if (typeof navigator !== 'undefined' && navigator.modelContext) return navigator.modelContext;
   return null;
@@ -86,13 +70,13 @@ function notifyAgentActivity(tool: string, phase: AgentActivityPhase, affectedPa
 }
 
 // Announce every call's start and end, whichever transport invoked it.
-function withActivity(tool: ModelContextTool): ModelContextTool {
+function withActivity(tool: WebMCP.ModelContextTool): WebMCP.ModelContextTool {
   return {
     ...tool,
-    execute: async (input) => {
+    execute: async (input, options) => {
       notifyAgentActivity(tool.name, 'start');
       try {
-        return await tool.execute(input);
+        return await tool.execute(input, options);
       } finally {
         notifyAgentActivity(tool.name, 'done', AFFECTED_PATHS[tool.name]?.(input));
       }
@@ -142,8 +126,8 @@ export function setAgentModeEnabled(slug: string, enabled: boolean): void {
 }
 
 // One definition list, shared by WebMCP registration and the console.
-function buildCodeSurfaceTools(slug: string): ModelContextTool[] {
-  const tools: ModelContextTool[] = [
+function buildCodeSurfaceTools(slug: string): WebMCP.ModelContextTool[] {
+  const tools: WebMCP.ModelContextTool[] = [
     {
       name: 'get_sources',
       description: "Fetch this round's game sources — every file's path and full working-copy content.",
@@ -320,8 +304,9 @@ export async function runAgentConsoleCommand(slug: string, raw: string): Promise
   }
 
   try {
-    const output = await tool.execute(rawInput as Record<string, unknown>);
-    return { ok: true, tool: tool.name, output };
+    // No cancel path here; a throwaway signal just satisfies the type.
+    const result = await tool.execute(rawInput as Record<string, unknown>, { signal: new AbortController().signal });
+    return { ok: true, tool: tool.name, output: typeof result === 'string' ? result : JSON.stringify(result) };
   } catch (error) {
     // Tools handle their own errors; this catches anything unexpected.
     return { ok: false, tool: tool.name, output: failure(error) };
