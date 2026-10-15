@@ -231,7 +231,7 @@ describe('TUI feedback', () => {
     await view.press('X');
     expect(view.session.get()).toMatchObject({ draft: `${'0123456789'.repeat(4)}012345678X9`, draftCursor: 50 });
     expect(view.frame()).toContain('█9');
-    expect(view.frame()).toContain('←→');
+    expect(view.frame()).toContain('⌥Enter newline');
   });
 
   it('opens the live preview with o while an agent is working', async () => {

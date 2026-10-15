@@ -93,6 +93,11 @@ instead of exposing their protocol bytes as composer text.
 Frames are byte strings and ignore Ink encoding resets, which otherwise merge
 queued frames and can replace legacy coordinate bytes before the parser sees them.
 
+The composer edits multi-line drafts with readline-style keys (word, line, kill/yank, undo) mapped from every
+common terminal encoding, enables bracketed paste so pasted line breaks stay in the draft, and offers Ctrl+R
+search over sent prompts. Up/Down move between draft lines before recalling history. Draft editing adds no
+telemetry event or creator-funnel dimension.
+
 The sidebar reads task/queue/preview and Studio updates from the shared session.
 `useWorkspaceChanges` samples local game files every three seconds only while visible,
 reusing `localGameFiles`, its ignore rules and `hashesOf` against `readBase`. Switching
