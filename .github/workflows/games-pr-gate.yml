@@ -1,0 +1,120 @@
+name: Games PR gate
+
+# Runs the games repository's gate for one open games-repo pull request and
+# signs the verdict. The games repo's gate service (tools/gate-service there)
+# sends a `games-validate` dispatch when a PR's head commit has no signed
+# result yet; this workflow runs the same scoped/static/full gate the merge
+# path runs, then the attest job signs pass/fail for that exact commit and
+# posts it back to the service, which puts it in the PR description.
+#
+# The candidate commit is unreviewed code. It runs only inside
+# games-catalog-gate.yml's gate jobs, which hold no OIDC permission and no
+# npm cache in this mode. The signing key lives in the `games-attest`
+# environment and reaches only the attest job, which checks out nothing from
+# the candidate commit: it signs with gate-attest.mjs from the games repo's
+# main branch.
+#
+# Every command output stays quiet (quiet-step.sh): this log is public and
+# the games repo is not.
+
+on:
+  repository_dispatch:
+    types: [games-validate]
+
+# A newer push to the same PR supersedes the running gate.
+concurrency:
+  group: games-pr-gate-${{ github.event.client_payload.pr }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate-games:
+    # games-catalog-gate.yml's resolve job declares id-token for the merge
+    # path's snapshot pointer read; with classify_push=0 it is never used,
+    # and the jobs that run candidate code drop it.
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/games-catalog-gate.yml
+    with:
+      sha: ${{ github.event.client_payload.sha }}
+      mode: ${{ github.event.client_payload.mode }}
+      slugs: ${{ github.event.client_payload.slugs }}
+      need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
+      narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+      classify_push: '0'
+      untrusted: '1'
+    secrets:
+      GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+
+  attest:
+    needs: validate-games
+    # A cancelled run was superseded by a newer push; it reports nothing.
+    if: always() && (needs.validate-games.result == 'success' || needs.validate-games.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: games-attest
+    env:
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+    steps:
+      - name: Check inputs
+        env:
+          PR: ${{ github.event.client_payload.pr }}
+          SHA: ${{ github.event.client_payload.sha }}
+          CHECKED_SHA: ${{ needs.validate-games.outputs.games_sha }}
+          MODE: ${{ github.event.client_payload.mode }}
+          SLUGS: ${{ github.event.client_payload.slugs }}
+          SERVICE_URL: ${{ vars.GATE_SERVICE_URL }}
+        run: |
+          set -euo pipefail
+          case "$PR" in ''|*[!0-9]*) echo "Error: invalid PR number"; exit 1 ;; esac
+          if [ "${#SHA}" -ne 40 ] || printf '%s' "$SHA" | grep -q '[^0-9a-f]'; then
+            echo "Error: dispatch sha is not a 40-hex commit"
+            exit 1
+          fi
+          case "$MODE" in full|static|scoped) ;; *) echo "Error: invalid mode"; exit 1 ;; esac
+          for slug in $SLUGS; do
+            case "$slug" in *[!a-z0-9-]*) echo "Error: invalid slug"; exit 1 ;; esac
+          done
+          case "$SERVICE_URL" in https://*) ;; *) echo "Error: GATE_SERVICE_URL is not set"; exit 1 ;; esac
+          # The gate must have checked exactly the commit we are about to sign.
+          if [ "${{ needs.validate-games.result }}" = success ] && [ "$CHECKED_SHA" != "$SHA" ]; then
+            echo "Error: the gate checked a different commit"
+            exit 1
+          fi
+
+      - name: Check out the signer from games main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ env.GAMES_REPO }}
+          ref: main
+          token: ${{ secrets.GAMES_REPO_TOKEN }}
+          path: signer
+          sparse-checkout: tools/gate-attest.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Sign and deliver the verdict
+        env:
+          GATE_ATTEST_SIGNING_KEY: ${{ secrets.GATE_ATTEST_SIGNING_KEY }}
+          PR: ${{ github.event.client_payload.pr }}
+          SHA: ${{ github.event.client_payload.sha }}
+          MODE: ${{ github.event.client_payload.mode }}
+          SLUGS: ${{ github.event.client_payload.slugs }}
+          SERVICE_URL: ${{ vars.GATE_SERVICE_URL }}
+          RESULT: ${{ needs.validate-games.result == 'success' && 'pass' || 'fail' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          block=$(node signer/tools/gate-attest.mjs sign \
+            --sha "$SHA" --mode "$MODE" --slugs "$SLUGS" --result "$RESULT" --run "$RUN_URL")
+          payload=$(jq -n --arg pr "$PR" --arg block "$block" '{pr: ($pr | tonumber), block: $block}')
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            "${SERVICE_URL%/}/attest")
+          echo "Gate service answered ${status} (result: ${RESULT})"
+          # 409: the PR moved on or closed while the gate ran; nothing to report.
+          case "$status" in 200|409) ;; *) exit 1 ;; esac

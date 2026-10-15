@@ -60,6 +60,11 @@ on:
         type: string
         required: false
         default: '0'
+      untrusted:
+        description: '1 = the SHA is an unreviewed PR commit (games-pr-gate.yml): no npm cache'
+        type: string
+        required: false
+        default: '0'
     outputs:
       games_sha:
         description: 'Commit SHA checked by every gate job'
@@ -74,8 +79,10 @@ on:
         required: false
         default: 'main'
 
+# PR gate runs get their own group per commit, so they never cancel the merge
+# path's gate (or each other); games-pr-gate.yml supersedes stale ones itself.
 concurrency:
-  group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
+  group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || github.workflow == 'Games PR gate' && format('games-catalog-gate-pr-{0}', inputs.sha) || 'games-catalog-gate' }}
   cancel-in-progress: true
 
 permissions:
@@ -357,6 +364,9 @@ jobs:
     if: needs.resolve.outputs.run_gate == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    # Runs games-repo code; on the PR path that code is unreviewed.
+    permissions:
+      contents: read
     env:
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
     steps:
@@ -400,7 +410,8 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # An unreviewed commit must not seed the cache merge runs restore.
+          cache: ${{ inputs.untrusted != '1' && 'npm' || '' }}
           cache-dependency-path: games-repo/package-lock.json
 
       - name: Install dependencies
@@ -542,7 +553,8 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # An unreviewed commit must not seed the cache merge runs restore.
+          cache: ${{ inputs.untrusted != '1' && 'npm' || '' }}
           cache-dependency-path: games-repo/package-lock.json
 
       - name: Install dependencies

@@ -33,7 +33,7 @@ name: Publish games snapshot
 
 on:
   repository_dispatch:
-    types: [games-published, games-validate]
+    types: [games-published]
   # 04:23 UTC daily: off the top of the hour, where GitHub's scheduler is
   # least contended. Cheap snapshot rebuild.
   # 06:17 UTC Sunday: catalog seal. github.event.schedule is this exact
@@ -79,9 +79,9 @@ jobs:
       # Merge dispatches re-classify against current.json's commitSha (the
       # last SHA that actually published). Payload mode is unused when
       # classify_push=1; compare/pointer failure is full, not a payload
-      # fallback. games-validate keeps its payload (including WebKit) and
-      # does not publish. Schedule / workflow_dispatch keep the full catalog
-      # seal.
+      # fallback. Schedule / workflow_dispatch keep the full catalog seal.
+      # PR validation (games-validate) lives in games-pr-gate.yml, outside
+      # this workflow's cancel-in-progress publish group.
       classify_push: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'games-published' && '1' || '0' }}
       # github.event.schedule is the cron string that fired this run (empty on
       # dispatch / workflow_dispatch). Match the Sunday cron above, not

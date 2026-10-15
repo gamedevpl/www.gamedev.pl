@@ -130,7 +130,8 @@ merge to games-repo main
     unpublished runtime change still in range of the live snapshot. The
     base is `current.json`'s `commitSha`, not `HEAD^`: with `cancel-in-progress`,
     a game-only B would otherwise skip a cancelled/failed runtime A and bake it.
-    Missing pointer or compare → full. `games-validate` keeps the payload as sent.
+    Missing pointer or compare → full. PR validation (`games-validate`) runs in
+    `games-pr-gate.yml` with the payload as sent and never publishes.
   → scoped/static/full games gate (one-game merges: scoped, no WebKit)
   → npm run snapshot:publish (only after a green gate, or immediately when
     the classified push needs no gate — a deletion, a docs-only dispatch)
@@ -285,3 +286,24 @@ soft degrade to GitHub.
   assembly when the snapshot is the configured source.
 - **`--max-instances 1`** remains the scaling ceiling (see `docs/roadmap.md`). This
   removes work from each request; it does not add instances.
+
+## Games PR gate
+
+Pull requests in the games repo get their gate result from
+[`games-pr-gate.yml`](../.github/workflows/games-pr-gate.yml), not from the PR
+author's machine. The games repo's gate service sends a `games-validate`
+dispatch (PR number, head SHA, scope) when a PR's head has no signed result.
+The workflow runs the same scoped/static/full gate as the merge path through
+`games-catalog-gate.yml` with `untrusted: '1'` (no npm cache; the gate jobs hold
+no OIDC permission), then a separate `attest` job signs pass or fail for that
+SHA with `gate-attest.mjs sign` from the games repo's `main` and posts it to the
+service's `/attest` endpoint. The service checks the signature and writes the
+block into the PR description; its `validate` status follows from it.
+
+Setup, once:
+
+- Environment `games-attest`, limited to the default branch, with secret
+  `GATE_ATTEST_SIGNING_KEY`: an Ed25519 private key in PEM
+  (`openssl genpkey -algorithm ed25519`). Its public half
+  (`openssl pkey -pubout`) goes to the gate service as `GATE_ATTEST_PUBLIC_KEY`.
+- Repository variable `GATE_SERVICE_URL`: the gate service's base URL.
