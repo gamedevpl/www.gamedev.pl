@@ -986,7 +986,7 @@
     "apps/world/src/host.ts": 345,
     "apps/world/src/server.ts": 111,
     "apps/world/src/sim-source.ts": 203,
-    "apps/world/src/snapshot-store.ts": 92,
+    "apps/world/src/snapshot-store.ts": 94,
     "packages/contract/src/agent-channel-routes.test.ts": 20,
     "packages/contract/src/agent-channel-routes.ts": 41,
     "packages/contract/src/agent-play-bridge-surface.ts": 307,
@@ -1069,14 +1069,14 @@
     "packages/zone-core/src/cage.test.ts": 317,
     "packages/zone-core/src/cage.ts": 464,
     "packages/zone-core/src/contract.test.ts": 123,
-    "packages/zone-core/src/contract.ts": 222,
-    "packages/zone-core/src/index.ts": 85,
+    "packages/zone-core/src/contract.ts": 224,
+    "packages/zone-core/src/index.ts": 87,
     "packages/zone-core/src/schema.test.ts": 141,
     "packages/zone-core/src/schema.ts": 142,
     "packages/zone-core/src/testSims.ts": 155,
     "packages/zone-core/src/ticket.test.ts": 101,
     "packages/zone-core/src/ticket.ts": 111,
     "packages/zone-core/src/zone.test.ts": 711,
-    "packages/zone-core/src/zone.ts": 680
+    "packages/zone-core/src/zone.ts": 701
   }
 }
