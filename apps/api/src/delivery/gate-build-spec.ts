@@ -25,6 +25,10 @@ const GATE_MACHINE_TYPE = 'E2_HIGHCPU_8';
 const GATE_DISK_SIZE_GB = 50;
 const GATE_TIMEOUT = '1800s';
 
+export function workerPoolRegion(pool: string | undefined): string | undefined {
+  return /^projects\/[^/]+\/locations\/([^/]+)\/workerPools\/[^/]+$/.exec(pool ?? '')?.[1];
+}
+
 // Loopback (capture) and the metadata server (credentials) bypass the proxy.
 const GATE_NO_PROXY = 'localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254';
 

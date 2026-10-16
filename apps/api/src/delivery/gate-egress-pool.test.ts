@@ -1,6 +1,7 @@
 // Egress-restricted pool wiring; see infra/gate-hardening.md, "Egress allow-list".
 
 import { describe, expect, it } from 'vitest';
+import { createCloudBuildOutcomeReader } from './gate-build-outcome.js';
 import { createCloudBuildGateTrigger } from './gate-trigger.js';
 
 function stubFetch() {
@@ -45,5 +46,24 @@ describe('gate worker pool', () => {
 
     expect(calls[0]!.url).toBe('https://cloudbuild.googleapis.com/v1/projects/gamedevpl/builds');
     expect(JSON.stringify(calls[0]!.body)).not.toContain('PROXY');
+  });
+
+  it('reads a pool build from its region, and an older one from the global path', async () => {
+    const urls: string[] = [];
+    const fetchImpl = (async (url: string | URL) => {
+      urls.push(String(url));
+      const regional = String(url).includes('/locations/');
+      const found = regional ? String(url).endsWith('/pooled') : String(url).endsWith('/older');
+      return { ok: found, status: found ? 200 : 404, json: async () => ({ status: 'FAILURE' }) } as Response;
+    }) as unknown as typeof fetch;
+    const read = createCloudBuildOutcomeReader({ ...OPTIONS, region: 'europe-west1', fetchImpl });
+
+    expect(await read('pooled')).toBe('failed');
+    expect(await read('older')).toBe('failed');
+    expect(urls).toEqual([
+      'https://cloudbuild.googleapis.com/v1/projects/gamedevpl/locations/europe-west1/builds/pooled',
+      'https://cloudbuild.googleapis.com/v1/projects/gamedevpl/locations/europe-west1/builds/older',
+      'https://cloudbuild.googleapis.com/v1/projects/gamedevpl/builds/older',
+    ]);
   });
 });

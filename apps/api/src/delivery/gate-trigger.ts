@@ -20,7 +20,7 @@
 // It is logged loudly because "quietly never verified" is the failure worth catching.
 
 import { GoogleAuth } from 'google-auth-library';
-import { buildSpec } from './gate-build-spec.js';
+import { buildSpec, workerPoolRegion } from './gate-build-spec.js';
 import type { GateTriggerInput } from './gate-build-spec.js';
 
 export interface GateTriggerOptions {
@@ -98,7 +98,7 @@ export function createCloudBuildGateTrigger(
     workerPool: options.workerPool ?? '',
     egressProxy: options.egressProxy ?? '',
   };
-  const poolRegion = /^projects\/[^/]+\/locations\/([^/]+)\/workerPools\/[^/]+$/.exec(resolved.workerPool)?.[1];
+  const poolRegion = workerPoolRegion(resolved.workerPool);
   const buildsUrl = poolRegion
     ? `https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/locations/${poolRegion}/builds`
     : `https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/builds`;

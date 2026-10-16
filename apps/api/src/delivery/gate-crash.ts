@@ -10,6 +10,7 @@ import { lastRoundActivityAt } from '../platform/quiet-round.js';
 import type { GateCrash, VersionManifest } from './games-store.js';
 import { buildRefsForCandidate, type GateBuildIdentity } from './gate-build-identity.js';
 import { gateTriggerOptionsFromEnv } from './gate-trigger.js';
+import { workerPoolRegion } from './gate-build-spec.js';
 
 // The A28 log metric keys on this exact string.
 export const DELIVERY_GATE_CRASHED_MSG = 'delivery gate crashed';
@@ -142,8 +143,10 @@ let cachedReader: ReturnType<typeof createCloudBuildOutcomeReader> | null | unde
 // Null means unconfigured: local dev gets no probe, like the trigger.
 function outcomeReader(): ReturnType<typeof createCloudBuildOutcomeReader> | null {
   if (cachedReader !== undefined) return cachedReader;
-  const project = gateTriggerOptionsFromEnv()?.project;
-  cachedReader = project ? createCloudBuildOutcomeReader({ project }) : null;
+  const options = gateTriggerOptionsFromEnv();
+  cachedReader = options?.project
+    ? createCloudBuildOutcomeReader({ project: options.project, region: workerPoolRegion(options.workerPool) })
+    : null;
   return cachedReader;
 }
 
