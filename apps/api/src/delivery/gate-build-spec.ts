@@ -32,7 +32,7 @@ export function workerPoolRegion(pool: string | undefined): string | undefined {
 // Loopback (capture) and the metadata server (credentials) bypass the proxy.
 const GATE_NO_PROXY = 'localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254';
 
-// The pool's only way out (infra/gate-hardening.md, "Egress allow-list").
+// The pool's only way out (ops gate-hardening.md, "Egress allow-list").
 export function gateProxyEnv(proxy: string): string[] {
   if (!proxy) return [];
   return [
@@ -56,7 +56,7 @@ export function gateProxyEnv(proxy: string): string[] {
  *
  * Hostile-input invariant: submitted sources must never reshape this CONFIG. Slug and
  * version are data for CLI args only; step images, SA, secrets, and caps stay pinned.
- * See `infra/gate-hardening.md`. The image is CONFIG, never input.
+ * See `ops gate-hardening.md`. The image is CONFIG, never input.
  */
 export function buildSpec(
   options: Required<Omit<GateTriggerOptions, 'fetchImpl' | 'getAccessToken'>>,
@@ -92,7 +92,7 @@ export function buildSpec(
     // meaningful setting (anything else means the default, on), and forwarding a
     // literal rather than arbitrary text keeps caller env out of the build config.
     ...(process.env.GATE_PREVIEW_STILLS === '0' ? ['GATE_PREVIEW_STILLS=0'] : []),
-    // Per-run capability: this slug and version only. See gate-hardening.md.
+    // Per-run capability: this slug and version only. See ops gate-hardening.md.
     ...(verdictEndpoint && verdictToken
       ? [`GATE_VERDICT_URL=${verdictEndpoint}`, `GATE_VERDICT_TOKEN=${verdictToken}`]
       : []),

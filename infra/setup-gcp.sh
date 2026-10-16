@@ -421,7 +421,7 @@ gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
 # projection. Object versioning + soft-delete are the BY-11 compensating controls
 # for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule
 # only deletes *noncurrent* versions so versioning does not grow unbounded.
-# See infra/gate-hardening.md "Store IAM: why objectAdmin".
+# See www.gamedev.pl-ops/infra/gate-hardening.md "Store IAM: why objectAdmin".
 echo "    IAM applied (deployer: admin, Cloud Run: read+create, staging prefix: mutate)."
 echo "    Ensuring object versioning, 30d soft-delete, and noncurrent-version prune…"
 gcloud storage buckets update "gs://${STORE_BUCKET}" \
@@ -452,7 +452,7 @@ echo "    Versioning on; soft-delete 30d; noncurrent versions pruned after 30d."
 # Dedicated identity for gate Cloud Build runs (cloudbuild-gate.yaml / gate-trigger.ts).
 # Submitted sources are hostile: the build must not inherit the project default Cloud
 # Build or Compute SA. Store write on this bucket + read of github-token + logWriter
-# only — see infra/gate-hardening.md.
+# only — see www.gamedev.pl-ops/infra/gate-hardening.md.
 GATE_SA_NAME="${GATE_SA_NAME:-gate-runner}"
 GATE_SA_EMAIL="${GATE_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 echo "==> Ensuring gate-runner service account ${GATE_SA_EMAIL}"
@@ -500,7 +500,7 @@ grant_gate_with_retry() {
 #
 # What this does not fix: within the versions it can name, the gate can still overwrite
 # another game's *artifacts*. Closing that needs a per-slug scope IAM cannot express for
-# a runtime value — see infra/gate-hardening.md for the staging-prefix design that would.
+# a runtime value — see www.gamedev.pl-ops/infra/gate-hardening.md for the staging-prefix design that would.
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectViewer" \
@@ -518,7 +518,7 @@ GATE_WRITE_CONDITION="expression=resource.type == 'storage.googleapis.com/Object
 #   gcloud builds list --ongoing --project "$PROJECT_ID" --filter='tags:gate'
 #   REVOKE_GATE_STORE_WRITE=1 ./infra/setup-gcp.sh
 #
-# Until then the conditional grant stays, exactly as before. See infra/gate-hardening.md.
+# Until then the conditional grant stays, exactly as before. See www.gamedev.pl-ops/infra/gate-hardening.md.
 if [ "${REVOKE_GATE_STORE_WRITE:-}" = "1" ]; then
   gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
     --member="serviceAccount:${GATE_SA_EMAIL}" \

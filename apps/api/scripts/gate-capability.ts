@@ -1,4 +1,4 @@
-// Capability for a hand-run gate. See infra/gate-hardening.md.
+// Capability for a hand-run gate. See ops gate-hardening.md.
 
 import { canonicalAppBaseUrl } from '../src/platform/canonical-app-url.js';
 import { GATE_VERDICT_PATH } from '../src/delivery/gate-verdict-routes.js';

@@ -134,7 +134,7 @@ describe('createCloudBuildGateTrigger', () => {
   it('runs as the least-privilege gate-runner SA with hard machine and time caps', async () => {
     // Hostile sources inherit whatever the build SA can do. Default Cloud Build /
     // Compute identities are too wide; caps live in the CONFIG we pin, not in the
-    // candidate (BY-11 / infra/gate-hardening.md).
+    // candidate (BY-11 / ops gate-hardening.md).
     const { impl, calls } = stubFetch();
     const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
 

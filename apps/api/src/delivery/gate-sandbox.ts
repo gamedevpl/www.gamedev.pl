@@ -1,4 +1,4 @@
-// Candidate code runs as an unprivileged user. See infra/gate-hardening.md.
+// Candidate code runs as an unprivileged user. See ops gate-hardening.md.
 
 import { execFile, spawn } from 'node:child_process';
 import { lstat, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';

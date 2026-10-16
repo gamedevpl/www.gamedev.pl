@@ -1,4 +1,4 @@
-// Egress-restricted pool wiring; see infra/gate-hardening.md, "Egress allow-list".
+// Egress-restricted pool wiring; see ops gate-hardening.md, "Egress allow-list".
 
 import { describe, expect, it } from 'vitest';
 import { createCloudBuildOutcomeReader } from './gate-build-outcome.js';

@@ -6,7 +6,7 @@ import { registerGateArtifactRoutes } from './gate-artifact-routes.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import { InvalidGateVerdictTokenError, readGateVerdictToken } from './gate-verdict-token.js';
 
-// Manifest writes the gate used to make itself. See gate-hardening.md.
+// Manifest writes the gate used to make itself; ops gate-hardening.md.
 const BodySchema = z.object({
   slug: z.string().min(1),
   version: z.string().min(1),
@@ -54,7 +54,7 @@ export function registerGateVerdictRoutes(app: FastifyInstance, options: GateVer
       throw error;
     }
 
-    // Lane is signed, not sent. See infra/gate-hardening.md.
+    // Lane is signed, not sent. See ops gate-hardening.md.
     if (kind !== 'progress' && kind !== claims.kind) {
       request.log.warn({ allowed: claims.kind, asked: kind }, 'gate verdict lane');
       return reply.status(403).send({ error: 'gate capability does not cover this verdict' });

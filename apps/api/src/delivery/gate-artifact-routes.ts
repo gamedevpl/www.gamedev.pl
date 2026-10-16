@@ -11,7 +11,7 @@ import {
   type GateVerdictKind,
 } from './gate-verdict-token.js';
 
-// Per-object upload URLs for gate artifacts. See infra/gate-hardening.md.
+// Per-object upload URLs for gate artifacts. See ops gate-hardening.md.
 export const GATE_ARTIFACT_URL_PATH = '/api/internal/gate-artifact-url';
 
 // Minted just before each PUT; covers a slow capture video.

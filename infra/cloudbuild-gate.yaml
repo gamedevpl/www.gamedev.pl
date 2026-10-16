@@ -59,7 +59,7 @@
 # This path runs in the default pool, with open egress: it needs Docker Hub and apt, which
 # the egress-restricted gate pool (infra/setup-gate-egress.sh) does not allow.
 #
-# Inventory and owner-console follow-ups: infra/gate-hardening.md
+# Inventory and owner-console follow-ups: www.gamedev.pl-ops/infra/gate-hardening.md
 substitutions:
   _SLUG: ''
   _VERSION: ''
