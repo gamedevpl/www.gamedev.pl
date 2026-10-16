@@ -43,6 +43,8 @@ export function gateProxyEnv(proxy: string): string[] {
     `NO_PROXY=${GATE_NO_PROXY}`,
     `no_proxy=${GATE_NO_PROXY}`,
     'NODE_USE_ENV_PROXY=1',
+    // Otherwise every child Node, tsc included, prints an experimental warning on stderr.
+    'NODE_OPTIONS=--disable-warning=UNDICI-EHPA',
   ];
 }
 

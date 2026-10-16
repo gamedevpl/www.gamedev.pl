@@ -20,6 +20,7 @@ steps:
       - 'NO_PROXY=localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254'
       - 'no_proxy=localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254'
       - 'NODE_USE_ENV_PROXY=1'
+      - 'NODE_OPTIONS=--disable-warning=UNDICI-EHPA'
       - 'CANONICAL_HOST=${_CANONICAL_HOST}'
       - 'GAMES_REPO=${_GAMES_REPO}'
     args:
@@ -52,6 +53,13 @@ steps:
           pass "node fetch via proxy"
         else
           fail "node fetch via proxy (NODE_USE_ENV_PROXY not honoured by this image's Node?)"
+        fi
+
+        # Harness tools read stderr; the proxy must not add anything to it.
+        if [ -z "$$(node -e "fetch('https://' + process.env.CANONICAL_HOST + '/').catch(() => {})" 2>&1 >/dev/null)" ]; then
+          pass "node stderr clean under the proxy"
+        else
+          fail "node writes to stderr under the proxy"
         fi
 
         # The GCS client authenticates from the metadata server, which must stay off the proxy.

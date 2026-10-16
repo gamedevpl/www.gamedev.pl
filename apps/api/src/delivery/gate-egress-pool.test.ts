@@ -33,7 +33,11 @@ describe('gate worker pool', () => {
     const body = calls[0]!.body as { options: Record<string, unknown>; steps: Array<{ env: string[] }> };
     expect(body.options).toEqual({ logging: 'CLOUD_LOGGING_ONLY', pool: { name: pool } });
     expect(body.steps[0]!.env).toEqual(
-      expect.arrayContaining(['HTTPS_PROXY=http://10.90.0.10:3128', 'NODE_USE_ENV_PROXY=1']),
+      expect.arrayContaining([
+        'HTTPS_PROXY=http://10.90.0.10:3128',
+        'NODE_USE_ENV_PROXY=1',
+        'NODE_OPTIONS=--disable-warning=UNDICI-EHPA',
+      ]),
     );
     expect(body.steps[0]!.env.find((entry) => entry.startsWith('NO_PROXY='))).toContain('169.254.169.254');
   });
