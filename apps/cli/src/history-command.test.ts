@@ -221,6 +221,34 @@ describe('platform history commands without a local Git repository', () => {
         write: (text) => chunks.push(text),
       });
       expect(chunks.join('').split('\n')).toEqual(['v2 Change 2', 'v1 Change 1']);
+      chunks.length = 0;
+      expect(
+        await runCli(
+          ['node', 'gamedevpl', '--no-pager', 'log', 'probe', '--grep', 'Change 1', '--', 'game.ts'],
+          { GAMEDEV_TOKEN: 'fixture' },
+          io,
+        ),
+      ).toBe(0);
+      expect(chunks.join('')).toContain('v1');
+      expect(chunks.join('')).not.toContain('version v2');
+      chunks.length = 0;
+      await handleReplLine({
+        line: '/log --oneline probe --grep "Change 1" -- game.ts',
+        api: f.api,
+        token: null,
+        cwd: f.cwd,
+        write: (text) => chunks.push(text),
+      });
+      expect(chunks.join('')).toBe('v1 Change 1');
+      chunks.length = 0;
+      await handleReplLine({
+        line: '/log probe --grep "unfinished',
+        api: f.api,
+        token: null,
+        cwd: f.cwd,
+        write: (text) => chunks.push(text),
+      });
+      expect(chunks.join('')).toContain('close the quoted log argument');
     } finally {
       vi.unstubAllGlobals();
     }

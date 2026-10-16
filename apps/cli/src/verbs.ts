@@ -9,9 +9,10 @@ import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 import { npmCliProject, updateProjectCli } from './update-project.js';
 import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
+import { historyOutput } from './history-pager.js';
 
 type Flags = Record<string, string | boolean>;
-type Io = { stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
+type Io = { stdin?: { isTTY?: boolean }; stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
 
 function emit(io: Io, asJson: boolean, data: unknown, line: string): void {
   io.stdout.write(asJson ? `${JSON.stringify(data)}\n` : `${line}\n`);
@@ -35,18 +36,29 @@ export async function dispatchReadVerb(input: {
   cwd?: string;
   runningVersion?: string;
   onActivity?: (message: string) => void;
+  paths?: string[];
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
-  if (
-    isHistoryVerb(verb, args, flags) &&
-    (await historyCommand({
-      ...input,
-      format: historyTerminalFormat(input.env, io.stdout),
-      write: (text) => io.stdout.write(`${text}\n`),
-    }))
-  )
+  if (isHistoryVerb(verb, args, flags)) {
+    const output = historyOutput({ io, env: input.env, disabled: asJson || flags['no-pager'] === true });
+    let failed = false;
+    try {
+      await historyCommand({
+        ...input,
+        format: historyTerminalFormat(input.env, io.stdout),
+        write: (text) => io.stdout.write(`${text}\n`),
+        writeLog: output.write,
+        signal: output.signal,
+      });
+    } catch (error) {
+      failed = !output.stopped();
+      if (!output.stopped()) throw error;
+    } finally {
+      await output.finish(failed);
+    }
     return EXIT_GREEN;
+  }
 
   if (verb === 'agents') {
     const agents = discoverAgents(input.env);

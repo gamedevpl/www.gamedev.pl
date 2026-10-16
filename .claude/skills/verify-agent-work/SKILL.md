@@ -115,6 +115,12 @@ Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrappin
 stripping all controls after formatting removes intended colors as well.
 History summaries need separate paragraphs; dense rows can pass semantic tests
 while remaining unreadable in a terminal.
+Exercise a real pager subprocess: early quit must cancel pending API reads and
+rate-limit waits, not merely stop printing an already-buffered history. Check
+missing default pagers, failing configured commands, backpressure and JSON/pipes.
+For path-filtered history, compare adjacent unfiltered deliveries, including deleted
+and binary files. Apply limits after matching; test beyond the first API page and
+quote-containing slash arguments as well as shell argv.
 For Ink slash output, use the transcript's width after sidebar and label columns,
 not the terminal width. Exercise sidebar toggles and resizing in the actual Ink
 component, plus widths below twenty columns; a minimum-width clamp can hide overflow.

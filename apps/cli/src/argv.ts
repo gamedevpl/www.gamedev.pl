@@ -90,6 +90,8 @@ const BOOLEAN_FLAGS = new Set([
   'list',
   'all',
   'oneline',
+  'no-pager',
+  'ignore-case',
   'force',
   'publish',
   'handoff',
@@ -101,14 +103,59 @@ const BOOLEAN_FLAGS = new Set([
   'version',
 ]);
 
-export function parseArgv(argv: string[]): { verb: string; args: string[]; flags: Record<string, string | boolean> } {
-  const rest = argv.slice(2);
+function slashTokens(line: string): string[] {
+  const tokens: string[] = [];
+  let token = '',
+    quote = '',
+    started = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]!;
+    if (quote) {
+      if (char === quote) quote = '';
+      else if (quote === '"' && char === '\\' && /["\\]/.test(line[i + 1] ?? '')) token += line[++i];
+      else token += char;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/\s/.test(char)) {
+      if (started) tokens.push(token);
+      token = '';
+      started = false;
+    } else if (char === '\\' && /[\s"'\\]/.test(line[i + 1] ?? '')) {
+      token += line[++i];
+      started = true;
+    } else {
+      token += char;
+      started = true;
+    }
+  }
+  if (quote) throw new Error('close the quoted log argument');
+  if (started) tokens.push(token);
+  return tokens;
+}
+
+export function parseArgv(argv: string[] | string): {
+  verb: string;
+  args: string[];
+  flags: Record<string, string | boolean>;
+  paths?: string[];
+} {
+  const rest = typeof argv === 'string' ? slashTokens(argv.replace(/^\//, '')) : argv.slice(2);
+  const noPager = rest[0] === '--no-pager';
+  if (noPager) rest.shift();
   const verb = rest[0] && !rest[0].startsWith('-') ? rest[0] : 'repl';
   const args: string[] = [];
   const flags: Record<string, string | boolean> = {};
+  if (noPager) flags['no-pager'] = true;
+  let paths: string[] | undefined;
   const tokens = rest[0] && !rest[0].startsWith('-') ? rest.slice(1) : rest;
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]!;
+    if (token === '--') {
+      if (verb === 'log') paths = tokens.slice(i + 1);
+      else args.push(...tokens.slice(i + 1));
+      break;
+    }
     if (token.startsWith('--')) {
       const body = token.slice(2);
       const eq = body.indexOf('=');
@@ -136,7 +183,7 @@ export function parseArgv(argv: string[]): { verb: string; args: string[]; flags
       args.push(token);
     }
   }
-  return { verb, args, flags };
+  return { verb, args, flags, ...(paths ? { paths } : {}) };
 }
 
 export function jsonMode(flags: Record<string, string | boolean>): boolean {

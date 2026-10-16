@@ -36,7 +36,6 @@ import { handoffBuilder, handoffLine, workshopTurn, type Workshop } from './work
 import { handleWorkshopVerb } from './workshop-verbs.js';
 import { chooseExecution, executeChoice, type PendingExecution } from './execution.js';
 import type { CliTelemetry } from './telemetry.js';
-
 export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
@@ -180,6 +179,7 @@ export async function handleReplLine(input: {
     const parsed = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
     if (cmd && isHistoryVerb(cmd, parsed.args, parsed.flags)) {
       try {
+        if (cmd === 'log') Object.assign(parsed, parseArgv(trimmed));
         await historyCommand({
           ...parsed,
           api: input.api,

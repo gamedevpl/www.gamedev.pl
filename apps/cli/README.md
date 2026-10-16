@@ -214,10 +214,13 @@ also accepts the slug as its argument. All commands support `--json` and their
 interactive `/log`, `/show`, `/diff` and `/blame` forms.
 
 ```sh
-gamedevpl log                     # latest 20 delivered versions
+gamedevpl log                     # full history, newest first, in a terminal pager
 gamedevpl log --oneline           # compact, one line per version
-gamedevpl log --all               # all pages, newest first
+gamedevpl --no-pager log          # print directly
 gamedevpl log tabletop-turbos --limit 50
+gamedevpl log --since 2026-10-01 --until 2026-10-16
+gamedevpl log --grep 'rail|train' -i
+gamedevpl log --limit 10 -- game/ai.ts game/model.ts
 gamedevpl show <version>          # metadata and patch against the preceding delivery
 gamedevpl diff <version1> <version2>
 gamedevpl diff --from <version1> --to <version2> --slug tabletop-turbos
@@ -238,6 +241,24 @@ are relative to the game's source root; a full `games/<slug>/...` path also work
 and source repositories accept `src/...`. `show`, version diffs and `blame` require
 Git on `PATH` and use a private temporary repository removed after the read.
 They leave the current checkout, index and local history untouched.
+
+In a terminal, `log` streams into `less -FRX` (`more` on Windows); use `q` to quit,
+arrows or Space to scroll, and `/text` to search in `less`. `PAGER` overrides the
+command, including its arguments. `--no-pager` (before or after `log`), `PAGER=cat`,
+an empty `PAGER`, non-terminal input/output and `TERM=dumb` disable paging. A missing
+default pager falls back to plain output; a failing custom pager reports an error.
+Quitting the pager cancels further history reads. Interactive `/log` uses the
+session's own scrollback. Piped output and `--json` never start a pager.
+
+`--since` and `--until` accept ISO dates or timestamps, inclusively; dates without
+a time cover the whole local day. `--grep` matches the full change summary as a
+regular expression; add `-i` or `--ignore-case` for case-insensitive matching.
+Arguments after `--` select literal source files or directories (no glob expansion).
+The path filter compares each delivery with its immediate predecessor, including
+additions, deletions and binary changes; it can require additional source reads.
+Multiple paths match any selected path; dates, summary and path filters combine.
+`--limit N` counts matching versions, after filtering. The default reads all pages;
+`--all` remains an alias for that default and cannot be combined with `--limit`.
 
 Plain `gamedevpl diff` still compares platform sources with local edits. Two
 timestamp version IDs (`v...`) select the version comparison; use `--from` and

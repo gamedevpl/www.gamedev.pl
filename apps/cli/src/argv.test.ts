@@ -3,6 +3,24 @@ import { CLI_VERBS, completeSlash, parseArgv, suggestSlash, suggestVerb } from '
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID } from './oauth.js';
 
 describe('argv and slash completion', () => {
+  it('keeps log paths literal and accepts a global pager override', () => {
+    expect(
+      parseArgv(['node', 'cli', '--no-pager', 'log', '--grep', 'rail.*', '-i', '--', '--strange.ts', 'a b.ts']),
+    ).toEqual({
+      verb: 'log',
+      args: [],
+      flags: { 'no-pager': true, grep: 'rail.*', i: true },
+      paths: ['--strange.ts', 'a b.ts'],
+    });
+    expect(parseArgv('/log --grep "two words\\d+" -i -- \'a b.ts\'')).toEqual({
+      verb: 'log',
+      args: [],
+      flags: { grep: 'two words\\d+', i: true },
+      paths: ['a b.ts'],
+    });
+    expect(() => parseArgv('/log --grep "unfinished')).toThrow('quoted');
+    expect(parseArgv(['node', 'cli', 'show', '--', '--literal'])).toMatchObject({ args: ['--literal'], flags: {} });
+  });
   it('parses verbs, flags, and json mode', () => {
     expect(parseArgv(['node', 'gamedev', 'status', 'ghost-roads', '--json', '--watch'])).toEqual({
       verb: 'status',
