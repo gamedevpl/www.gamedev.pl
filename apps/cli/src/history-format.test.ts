@@ -31,19 +31,22 @@ describe('readable history output', () => {
     expect(formatHistoryLog([])).toBe('No delivered versions yet.');
   });
 
-  it.each([24, 40, 80])('fits Unicode and long words in %i columns, with or without color', (columns) => {
-    const input = { ...row, summary: `Zmiany torów 🚂 世界 ${'x'.repeat(150)}` };
-    for (const oneline of [false, true]) {
-      const plain = formatHistoryVersion(input, { columns, oneline });
-      const colored = formatHistoryVersion(input, { columns, oneline, color: true });
-      expect(plain.split('\n').every((line) => stringWidth(line) <= columns)).toBe(true);
-      expect(stripTerminalControls(colored)).toBe(plain);
-      if (oneline) {
-        expect(plain).not.toContain('\n');
-        expect(plain).toMatch(/…$/);
+  it.each([2, 3, 8, 12, 19, 24, 40, 80])(
+    'fits Unicode and long words in %i columns, with or without color',
+    (columns) => {
+      const input = { ...row, summary: `Zmiany torów 🚂 世界 ${'x'.repeat(150)}` };
+      for (const oneline of [false, true]) {
+        const plain = formatHistoryVersion(input, { columns, oneline });
+        const colored = formatHistoryVersion(input, { columns, oneline, color: true });
+        expect(plain.split('\n').every((line) => stringWidth(line) <= columns)).toBe(true);
+        expect(stripTerminalControls(colored)).toBe(plain);
+        if (oneline) {
+          expect(plain).not.toContain('\n');
+          expect(plain).toMatch(/…$/);
+        }
       }
-    }
-  });
+    },
+  );
 
   it('removes untrusted terminal escapes before applying its own colors', () => {
     const output = formatHistoryVersion(

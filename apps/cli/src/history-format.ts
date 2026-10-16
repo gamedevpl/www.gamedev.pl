@@ -8,8 +8,9 @@ export type HistoryFormat = { columns?: number; color?: boolean; oneline?: boole
 export function historyTerminalFormat(
   env = process.env,
   output: { columns?: number; isTTY?: boolean } = process.stdout,
+  columns = output.columns,
 ): HistoryFormat {
-  return { columns: output.columns, color: wantsColor(env, Boolean(output.isTTY)) };
+  return { columns, color: wantsColor(env, Boolean(output.isTTY)) };
 }
 
 function field(value: string): string {
@@ -17,7 +18,8 @@ function field(value: string): string {
 }
 
 function width(columns = 80): number {
-  return Number.isFinite(columns) ? Math.max(20, Math.min(100, Math.floor(columns))) : 80;
+  // Wide glyphs require two columns.
+  return Number.isFinite(columns) ? Math.max(2, Math.min(100, Math.floor(columns))) : 80;
 }
 
 function paint(text: string, code: number, color?: boolean): string {
@@ -25,9 +27,10 @@ function paint(text: string, code: number, color?: boolean): string {
 }
 
 function indented(text: string, columns: number): string {
-  return wrapAnsi(text, columns - 4, { hard: true })
+  const indent = ' '.repeat(Math.min(4, columns - 2));
+  return wrapAnsi(text, columns - indent.length, { hard: true })
     .split('\n')
-    .map((line) => (line ? `    ${line}` : ''))
+    .map((line) => (line ? indent + line : ''))
     .join('\n');
 }
 

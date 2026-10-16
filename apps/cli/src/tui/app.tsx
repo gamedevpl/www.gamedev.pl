@@ -1,7 +1,7 @@
 import { TaskDebug } from './debug.js';
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Box, Text, useStdout, type DOMElement, type Key } from 'ink';
 import wrapAnsi from 'wrap-ansi';
 import { RichText } from './transcript.js';
@@ -32,6 +32,7 @@ export function ReplApp({
   mouse = process.env.GAMEDEV_DISABLE_MOUSE !== '1',
   inline = process.env.GAMEDEV_TUI === 'inline',
   clipboard = systemClipboard,
+  onTranscriptWidth,
 }: {
   session: TuiSession;
   color: boolean;
@@ -43,6 +44,7 @@ export function ReplApp({
   mouse?: boolean;
   inline?: boolean;
   clipboard?: Clipboard;
+  onTranscriptWidth?: (columns: number) => void;
 }) {
   const [state, setState] = useState<TuiState>(session.get);
   const [debug, setDebug] = useState(false);
@@ -72,6 +74,7 @@ export function ReplApp({
   const choicePanel = useRef<DOMElement>(null);
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
+  useLayoutEffect(() => onTranscriptWidth?.(Math.max(2, width - 7)), [onTranscriptWidth, width]);
   const rows = dimensions.rows - Number(split);
   const selection = useSelection({ enabled: split && mouse, rows, regions, clipboard, color });
   const changes = useWorkspaceChanges(activeCheckout, split && sidebar);

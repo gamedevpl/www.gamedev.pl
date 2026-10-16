@@ -63,6 +63,7 @@ export async function handleReplLine(input: {
   onLocalPreview?: (url: string) => void;
   currentPath?: string;
   cwd?: string;
+  columns?: number;
   allowShell?: boolean;
 }): Promise<ReplLineResult> {
   if (input.line.trimStart().startsWith('!')) {
@@ -176,18 +177,18 @@ export async function handleReplLine(input: {
       await submitRepl(input, cmd === 'publish' ? 'push' : cmd, cmd === 'publish' ? [...rest, '--publish'] : rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
-    const parsedHistory = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
-    if (cmd && isHistoryVerb(cmd, parsedHistory.args, parsedHistory.flags)) {
+    const parsed = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
+    if (cmd && isHistoryVerb(cmd, parsed.args, parsed.flags)) {
       try {
         await historyCommand({
-          ...parsedHistory,
+          ...parsed,
           api: input.api,
           cwd: input.workshop?.root ?? input.cwd,
-          format: historyTerminalFormat(input.env),
+          format: historyTerminalFormat(input.env, undefined, input.columns),
           slug:
             input.workshop?.slug ??
             findCheckout(input.workshop?.root ?? input.cwd ?? process.cwd())?.slug ??
-            (input.token && typeof parsedHistory.flags.slug !== 'string' && !(cmd === 'log' && parsedHistory.args[0])
+            (input.token && typeof parsed.flags.slug !== 'string' && !(cmd === 'log' && parsed.args[0])
               ? (await getStatus(input.api, input.token)).slug
               : undefined),
           write: input.write,
@@ -199,7 +200,6 @@ export async function handleReplLine(input: {
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
-        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const cwd = input.workshop?.root ?? input.cwd ?? process.cwd();
         const here = findCheckout(cwd);
         const sessionSlug =
