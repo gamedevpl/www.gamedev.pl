@@ -121,6 +121,9 @@ missing default pagers, failing configured commands, backpressure and JSON/pipes
 Inject API failure after output starts, with a real configured `less`: killing
 only its shell left the pager owning the terminal after the CLI returned. Finish
 the pager's input and wait for it to release the terminal before returning errors.
+Exercise unpaged stdout with a real Writable that returns false, plus an early
+exiting pipe reader. Waiting for pager stdin alone leaves piped output buffering
+unbounded history and can emit unhandled EPIPE; stop reads on either stream closing.
 For path-filtered history, compare adjacent unfiltered deliveries, including deleted
 and binary files. Apply limits after matching; test beyond the first API page and
 quote-containing slash arguments as well as shell argv.

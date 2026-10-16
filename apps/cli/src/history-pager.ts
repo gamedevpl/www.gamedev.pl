@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
+import { historyStream } from './history-stream.js';
 
 type Io = { stdin?: { isTTY?: boolean }; stdout: NodeJS.WriteStream };
 
@@ -16,6 +17,10 @@ export function historyOutput(input: { io: Io; env?: NodeJS.ProcessEnv; disabled
   const abort = new AbortController();
   let child: ChildProcess | undefined;
   let stopped = false;
+  const pipe = historyStream(input.io.stdout, () => {
+    stopped = true;
+    abort.abort();
+  });
   let complete: Promise<{ code: number | null; signal: NodeJS.Signals | null }> | undefined;
   const start = async () => {
     child = configured
@@ -49,8 +54,7 @@ export function historyOutput(input: { io: Io; env?: NodeJS.ProcessEnv; disabled
       if (stopped) return false;
       if (!plain && !child) await start();
       if (plain) {
-        input.io.stdout.write(text + '\n');
-        return true;
+        return pipe.write(text + '\n');
       }
       if (stopped) return false;
       return new Promise<boolean>((resolve, reject) => {
@@ -66,6 +70,7 @@ export function historyOutput(input: { io: Io; env?: NodeJS.ProcessEnv; disabled
       });
     },
     async finish(failed = false): Promise<void> {
+      pipe.finish();
       if (!child) return;
       child.stdin?.end();
       const result = await complete!;

@@ -249,6 +249,7 @@ an empty `PAGER`, non-terminal input/output and `TERM=dumb` disable paging. A mi
 default pager falls back to plain output; a failing custom pager reports an error.
 Quitting the pager cancels further history reads. Interactive `/log` uses the
 session's own scrollback. Piped output and `--json` never start a pager.
+Text output waits for slow pipe readers; closing the reader cancels further reads.
 If a history read fails after paging starts, close the pager to see the error;
 the CLI waits for the pager to release the terminal before returning.
 
