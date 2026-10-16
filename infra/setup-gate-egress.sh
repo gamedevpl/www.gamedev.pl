@@ -2,8 +2,8 @@
 #
 # Egress allow-list for quality-gate builds: a Cloud Build private pool with no public
 # egress, peered to a small VPC whose only way out is an allow-list proxy.
-# OWNER-RUN: creates a VPC, a VM, Cloud NAT, a service-networking peering and a worker
-# pool, and binds one project role. Nothing here is applied by merging.
+# OWNER-RUN: creates a VPC, a VM, a service-networking peering and a worker pool, and
+# binds one project role. Nothing here is applied by merging.
 #
 # Why: the default pool gives a gate run unrestricted egress, and a gate run executes
 # candidate code (infra/gate-hardening.md, "Network egress"). Cloud Build YAML cannot
@@ -12,8 +12,14 @@
 # Shape:
 #
 #   gate-pool (no external IP)  --peering-->  gate-egress VPC
-#                                               gate-proxy VM (squid, :3128, no external IP)
-#                                                 --> Cloud NAT --> allow-listed hosts only
+#                                               gate-proxy VM (squid, :3128)
+#                                                 --> allow-listed hosts only
+#
+# Cost: the proxy is an e2-micro with a 10 GB standard disk in us-central1, which is
+# what GCP's always-free tier covers (one such VM per billing account). It has its own
+# external IP instead of Cloud NAT, which would cost more than the VM. What remains is
+# the IP and the pool-to-proxy traffic between regions: a few USD a month. The pool
+# itself bills per build minute at the default pool's rate.
 #
 # The pool gets no default route: workers without an external IP reach only the peered
 # VPC's subnets (and Google's own services, which pull the step image). Code that ignores
@@ -43,9 +49,11 @@
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
-# Same region as the app and the Artifact Registry repo holding the gate-runner image.
+# The pool: same region as the app and the Artifact Registry repo holding the image.
 REGION="${REGION:-europe-west1}"
-ZONE="${ZONE:-${REGION}-b}"
+# The proxy: a free-tier region. The VPC is global, so the pool reaches it over peering.
+PROXY_REGION="${PROXY_REGION:-us-central1}"
+ZONE="${ZONE:-${PROXY_REGION}-a}"
 NETWORK="${NETWORK:-gate-egress}"
 SUBNET="${SUBNET:-gate-proxy}"
 SUBNET_RANGE="${SUBNET_RANGE:-10.90.0.0/28}"
@@ -55,7 +63,7 @@ POOL_RANGE_NAME="${POOL}-range"
 POOL_RANGE="${POOL_RANGE:-10.91.0.0}"
 POOL_PREFIX="${POOL_PREFIX:-24}"
 PROXY_VM="${PROXY_VM:-gate-proxy}"
-PROXY_MACHINE_TYPE="${PROXY_MACHINE_TYPE:-e2-small}"
+PROXY_MACHINE_TYPE="${PROXY_MACHINE_TYPE:-e2-micro}"
 PROXY_PORT=3128
 CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 # Production path only (gate-hardening.md, items 1-4): the harness clone, `npm ci`,
@@ -79,22 +87,12 @@ echo "==> Network ${NETWORK} and proxy subnet ${SUBNET} (${SUBNET_RANGE})"
 if ! gcloud compute networks describe "$NETWORK" --project="$PROJECT_ID" >/dev/null 2>&1; then
   gcloud compute networks create "$NETWORK" --project="$PROJECT_ID" --subnet-mode=custom
 fi
-if ! gcloud compute networks subnets describe "$SUBNET" --region="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud compute networks subnets create "$SUBNET" --project="$PROJECT_ID" --region="$REGION" \
+if ! gcloud compute networks subnets describe "$SUBNET" --region="$PROXY_REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud compute networks subnets create "$SUBNET" --project="$PROJECT_ID" --region="$PROXY_REGION" \
     --network="$NETWORK" --range="$SUBNET_RANGE" --enable-private-ip-google-access
 fi
 
-# The proxy has no external IP; NAT gives it (and only its subnet) a way out.
-echo "==> Cloud NAT for the proxy subnet"
-if ! gcloud compute routers describe "${NETWORK}-router" --region="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud compute routers create "${NETWORK}-router" --project="$PROJECT_ID" --region="$REGION" --network="$NETWORK"
-fi
-if ! gcloud compute routers nats describe "${NETWORK}-nat" --router="${NETWORK}-router" --region="$REGION" \
-  --project="$PROJECT_ID" >/dev/null 2>&1; then
-  gcloud compute routers nats create "${NETWORK}-nat" --project="$PROJECT_ID" --region="$REGION" \
-    --router="${NETWORK}-router" --nat-custom-subnet-ip-ranges="$SUBNET" --auto-allocate-nat-external-ips
-fi
-
+# The VPC has no other ingress rule, so the proxy's external IP accepts nothing inbound.
 echo "==> Firewall: pool -> proxy:${PROXY_PORT}, and IAP SSH for the operator"
 if ! gcloud compute firewall-rules describe "${NETWORK}-pool-to-proxy" --project="$PROJECT_ID" >/dev/null 2>&1; then
   gcloud compute firewall-rules create "${NETWORK}-pool-to-proxy" --project="$PROJECT_ID" --network="$NETWORK" \
@@ -115,7 +113,8 @@ if ! gcloud compute instances describe "$PROXY_VM" --zone="$ZONE" --project="$PR
   # No service account: the proxy calls no Google API, and a VM identity is one more
   # credential next to traffic we do not trust.
   gcloud compute instances create "$PROXY_VM" --project="$PROJECT_ID" --zone="$ZONE" \
-    --machine-type="$PROXY_MACHINE_TYPE" --subnet="$SUBNET" --private-network-ip="$PROXY_IP" --no-address \
+    --machine-type="$PROXY_MACHINE_TYPE" --subnet="$SUBNET" --private-network-ip="$PROXY_IP" \
+    --boot-disk-type=pd-standard --boot-disk-size=10GB \
     --image-family=debian-12 --image-project=debian-cloud --tags=gate-proxy \
     --no-service-account --no-scopes \
     --shielded-secure-boot --shielded-vtpm --shielded-integrity-monitoring \
