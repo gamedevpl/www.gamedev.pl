@@ -38,7 +38,9 @@ combined list would permit apt and a platform clone that production never uses.
 common case once `setup-gcp.sh` has granted the pull below):
 
 1. **GitHub** (`github.com`) — shallow clone of the games-repo harness only; the platform
-   is baked into the image, so this run does not clone it.
+   is baked into the image, so this run does not clone it. Plus
+   `release-assets.githubusercontent.com`, where the harness's ffmpeg-static postinstall
+   downloads its binary.
 2. **npm** (`registry.npmjs.org` and the registry’s CDN hosts) — `npm ci` for the harness
    only; the image’s warm cache resolves what it can from disk, the rest still goes out.
 3. **GCS JSON API** (`storage.googleapis.com`) — read candidate sources; write derived artifacts.
