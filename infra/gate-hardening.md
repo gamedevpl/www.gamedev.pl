@@ -22,7 +22,7 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 | **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectViewer` only once the owner revokes the store write (see “Signed artifact uploads”); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
 | **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret, held only by root-owned processes; candidate code runs as `gate` with no credential in its env and cannot read root's `/proc/<pid>/environ`                                              |
 | **Metadata server**        | GCE metadata credentials for the build SA                                                            | Best-effort `iptables` reject for the `gate` uid (logged when the host refuses); otherwise bounded by the gate SA’s IAM, which no longer includes a write                                                  |
-| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                                                                                             |
+| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | With `GATE_WORKER_POOL` set: private pool, no public egress, out only through an allow-list proxy (see “Egress allow-list”). Unset: unrestricted, as before                                                |
 | **Writable paths**         | `/workspace`, `/tmp`, container root FS                                                              | Unchanged (ephemeral VM); no durable write except via games-store API                                                                                                                                      |
 | **Source of build CONFIG** | This YAML + inline `gate-trigger` spec                                                               | Unchanged — slug/version are CLI data only                                                                                                                                                                 |
 | **Step image**             | `node:22` + per-run `apt-get install` in the same container that later runs candidate code           | Prebuilt `gate-runner` (`infra/gate-runner.Dockerfile`) from Artifact Registry; no package manager runs beside agent-authored code                                                                         |
@@ -55,6 +55,38 @@ common case once `setup-gcp.sh` has granted the pull below):
 
 No other Google APIs, no Firestore, no Cloud Run admin, no Artifact Registry push, no
 ability to start further builds should be granted to `gate-runner`.
+
+### Egress allow-list (private pool)
+
+`infra/setup-gate-egress.sh` builds it; nothing changes until the owner runs it and sets
+two repository variables.
+
+- **Pool.** `gate-pool` in `europe-west1`, `--no-public-egress`, peered to a dedicated
+  `gate-egress` VPC. Workers have no external IP and the VPC exports no default route, so
+  the only addresses a run can reach outside Google's own services are the VPC's subnets.
+- **Proxy.** One squid VM in that VPC (no external IP, no service account, out through
+  Cloud NAT). It accepts only `CONNECT` to port 443, only from the pool's range, only to
+  the names in its allow-list (items 1–4 above by default), matched by name with no
+  reverse lookups. Everything else is a 403, logged on the VM.
+- **Build.** With `GATE_WORKER_POOL` and `GATE_EGRESS_PROXY` set, `gate-build-spec.ts`
+  puts the build in the pool (created through the pool's regional endpoint; machine and
+  disk come from the pool, which has the same caps) and gives the step `HTTPS_PROXY`,
+  `NO_PROXY` for loopback and the metadata server, and `NODE_USE_ENV_PROXY=1` for Node's
+  own `fetch`. Code that ignores the proxy variables reaches nothing, not everything.
+- **Fallback.** The pool serves the prebuilt image path only. A gate with no
+  `GATE_RUNNER_IMAGE` would need Docker Hub and apt, which are not on the list, so it
+  fails in the pool rather than quietly running with open egress. The hand-run
+  `cloudbuild-gate.yaml` stays in the default pool.
+
+Rollout: run the script, run the egress check it prints
+(`infra/cloudbuild-gate-egress-check.yaml`, which proves the allowed hosts answer, an
+unlisted one is refused and nothing goes direct), then set both variables and deploy.
+Rollback is clearing them and deploying. A destination the harness turns out to need is
+added with `EXTRA_ALLOWED_DOMAINS=... ./infra/setup-gate-egress.sh`.
+
+Residual: the allowed hosts are general-purpose services. A run holds no credential for
+them, but candidate code can still talk to GitHub and npm. The proxy is also a single VM,
+so if it is down gates fail (loudly) until it is back.
 
 ### Writable / durable paths
 
@@ -281,13 +313,11 @@ These require project credentials. Re-run or perform after merging:
    (`gcloud projects get-iam-policy`).
 3. **Confirm `github-token` is contents:read only** on `gamedevpl/www.gamedev.pl-games`
    (and not a dispatch / workflow PAT). Rotate if scope is wider than clone.
-4. **Egress restriction (recommended, console/Terraform-or-gcloud)** — Cloud Build YAML
-   cannot allow-list destinations. Owner options:
-   - Private worker pool attached to a VPC with egress firewall / Cloud NAT allow-list
-     matching the destinations above; or
-   - VPC Service Controls perimeter around the project with appropriate egress rules.
-     Until then, treat open egress as accepted residual risk bounded by the gate SA —
-     which, after the store-write revocation, can read the bucket but write nothing.
+4. **Egress restriction** — Cloud Build YAML cannot allow-list destinations, so the pool
+   does: `./infra/setup-gate-egress.sh`, the egress check it prints, then repository
+   variables `GATE_WORKER_POOL` and `GATE_EGRESS_PROXY` and a deploy (see “Egress
+   allow-list”). Until then, open egress is accepted residual risk bounded by the gate
+   SA, which after the store-write revocation can read the bucket but write nothing.
 5. **Done (September 2026): the runtime no longer holds project-wide
    `roles/iam.serviceAccountUser`.** The services moved off the default compute account
    (project-wide editor + serviceAccountUser) onto per-service identities, and the only

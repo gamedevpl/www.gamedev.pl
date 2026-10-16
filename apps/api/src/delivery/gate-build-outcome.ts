@@ -18,6 +18,8 @@ export function outcomeFromBuildStatus(status: string | undefined): GateBuildOut
 
 export interface GateBuildReaderOptions {
   project: string;
+  // Pool builds live in their region; the global path cannot read them.
+  region?: string;
   fetchImpl?: typeof fetch;
   getAccessToken?: () => Promise<string>;
 }
@@ -42,10 +44,18 @@ export function createCloudBuildOutcomeReader(
   const read = async (buildId: string): Promise<Read> => {
     try {
       // Never hang the sweep on one build read.
-      const response = await fetchImpl(
-        `https://cloudbuild.googleapis.com/v1/projects/${options.project}/builds/${encodeURIComponent(buildId)}`,
-        { headers: { authorization: `Bearer ${await getAccessToken()}` }, signal: AbortSignal.timeout(10_000) },
+      const base = `https://cloudbuild.googleapis.com/v1/projects/${options.project}`;
+      const id = encodeURIComponent(buildId);
+      const get = async (url: string) =>
+        fetchImpl(url, {
+          headers: { authorization: `Bearer ${await getAccessToken()}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+      let response = await get(
+        options.region ? `${base}/locations/${options.region}/builds/${id}` : `${base}/builds/${id}`,
       );
+      // Started before the pool was switched on.
+      if (options.region && response.status === 404) response = await get(`${base}/builds/${id}`);
       if (!response.ok) return { outcome: 'unknown' };
       const body = (await response.json()) as CloudGateBuild;
       return { outcome: outcomeFromBuildStatus(body?.status), identity: identityFromBuild(body) };

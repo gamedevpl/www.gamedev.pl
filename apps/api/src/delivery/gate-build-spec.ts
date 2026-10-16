@@ -25,6 +25,27 @@ const GATE_MACHINE_TYPE = 'E2_HIGHCPU_8';
 const GATE_DISK_SIZE_GB = 50;
 const GATE_TIMEOUT = '1800s';
 
+export function workerPoolRegion(pool: string | undefined): string | undefined {
+  return /^projects\/[^/]+\/locations\/([^/]+)\/workerPools\/[^/]+$/.exec(pool ?? '')?.[1];
+}
+
+// Loopback (capture) and the metadata server (credentials) bypass the proxy.
+const GATE_NO_PROXY = 'localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254';
+
+// The pool's only way out (infra/gate-hardening.md, "Egress allow-list").
+export function gateProxyEnv(proxy: string): string[] {
+  if (!proxy) return [];
+  return [
+    `HTTPS_PROXY=${proxy}`,
+    `HTTP_PROXY=${proxy}`,
+    `https_proxy=${proxy}`,
+    `http_proxy=${proxy}`,
+    `NO_PROXY=${GATE_NO_PROXY}`,
+    `no_proxy=${GATE_NO_PROXY}`,
+    'NODE_USE_ENV_PROXY=1',
+  ];
+}
+
 /**
  * The build the gate runs in.
  *
@@ -75,6 +96,7 @@ export function buildSpec(
     ...(verdictEndpoint && verdictToken
       ? [`GATE_VERDICT_URL=${verdictEndpoint}`, `GATE_VERDICT_TOKEN=${verdictToken}`]
       : []),
+    ...(options.workerPool ? gateProxyEnv(options.egressProxy) : []),
   ];
 
   // The image already carries everything but the candidate.
@@ -147,11 +169,10 @@ export function buildSpec(
     },
     // Least-privilege identity — not the project default Cloud Build SA.
     serviceAccount: `projects/${options.project}/serviceAccounts/${options.serviceAccountEmail}`,
-    options: {
-      logging: 'CLOUD_LOGGING_ONLY',
-      machineType: GATE_MACHINE_TYPE,
-      diskSizeGb: GATE_DISK_SIZE_GB,
-    },
+    // A pool build takes machine and disk from the pool.
+    options: options.workerPool
+      ? { logging: 'CLOUD_LOGGING_ONLY', pool: { name: options.workerPool } }
+      : { logging: 'CLOUD_LOGGING_ONLY', machineType: GATE_MACHINE_TYPE, diskSizeGb: GATE_DISK_SIZE_GB },
     timeout: GATE_TIMEOUT,
     // Searchable in the Cloud Build history: "show me every gate run for this game" —
     // and health/preview runs carry their own tag so a fleet re-check reads as one, not as a

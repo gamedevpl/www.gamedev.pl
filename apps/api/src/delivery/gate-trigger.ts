@@ -20,7 +20,7 @@
 // It is logged loudly because "quietly never verified" is the failure worth catching.
 
 import { GoogleAuth } from 'google-auth-library';
-import { buildSpec } from './gate-build-spec.js';
+import { buildSpec, workerPoolRegion } from './gate-build-spec.js';
 import type { GateTriggerInput } from './gate-build-spec.js';
 
 export interface GateTriggerOptions {
@@ -38,11 +38,12 @@ export interface GateTriggerOptions {
   runnerImage?: string;
   /** Secret Manager resource holding a contents:read PAT on the games repo. */
   gamesTokenSecret?: string;
-  /**
-   * Email of the least-privilege SA the build runs as (store write + github-token).
-   * Defaults to `gate-runner@${project}.iam.gserviceaccount.com`.
-   */
+  /** Build SA; defaults to gate-runner@project. */
   serviceAccountEmail?: string;
+  /** Egress-restricted pool; empty = default. */
+  workerPool?: string;
+  /** The pool's allow-list proxy, `http://IP:PORT`. */
+  egressProxy?: string;
   fetchImpl?: typeof fetch;
   getAccessToken?: () => Promise<string>;
 }
@@ -94,7 +95,13 @@ export function createCloudBuildGateTrigger(
     gamesTokenSecret: options.gamesTokenSecret ?? DEFAULTS.gamesTokenSecret,
     serviceAccountEmail: options.serviceAccountEmail ?? `gate-runner@${options.project}.iam.gserviceaccount.com`,
     runnerImage: options.runnerImage ?? '',
+    workerPool: options.workerPool ?? '',
+    egressProxy: options.egressProxy ?? '',
   };
+  const poolRegion = workerPoolRegion(resolved.workerPool);
+  const buildsUrl = poolRegion
+    ? `https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/locations/${poolRegion}/builds`
+    : `https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/builds`;
 
   const fetchImpl = options.fetchImpl ?? fetch;
   let auth: GoogleAuth | null = null;
@@ -109,7 +116,7 @@ export function createCloudBuildGateTrigger(
 
   return async (input: GateTriggerInput): Promise<GateTriggerResult> => {
     try {
-      const response = await fetchImpl(`https://cloudbuild.googleapis.com/v1/projects/${resolved.project}/builds`, {
+      const response = await fetchImpl(buildsUrl, {
         method: 'POST',
         headers: { authorization: `Bearer ${await getAccessToken()}`, 'content-type': 'application/json' },
         body: JSON.stringify(buildSpec(resolved, input)),
@@ -156,5 +163,7 @@ export function gateTriggerOptionsFromEnv(): GateTriggerOptions | null {
     // development and in any environment that has not deployed since the image existed,
     // where the gate falls back to building its environment per run.
     ...(process.env.GATE_RUNNER_IMAGE?.trim() ? { runnerImage: process.env.GATE_RUNNER_IMAGE.trim() } : {}),
+    ...(process.env.GATE_WORKER_POOL?.trim() ? { workerPool: process.env.GATE_WORKER_POOL.trim() } : {}),
+    ...(process.env.GATE_EGRESS_PROXY?.trim() ? { egressProxy: process.env.GATE_EGRESS_PROXY.trim() } : {}),
   };
 }

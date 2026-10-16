@@ -359,6 +359,10 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # the image existed — slower, and correct. Pass the tag deploy.yml pushed to keep the
   # fast path: GATE_RUNNER_IMAGE=europe-west1-docker.pkg.dev/<project>/gamedev/gate-runner:<sha>
   ENV_VARS="${ENV_VARS}|GATE_RUNNER_IMAGE=${GATE_RUNNER_IMAGE:-}"
+  # The egress-restricted pool and its proxy (infra/setup-gate-egress.sh), threaded for the
+  # same reason: a hand deploy that omitted them would silently move the gate back to the
+  # default pool's open egress. Empty is the default pool.
+  ENV_VARS="${ENV_VARS}|GATE_WORKER_POOL=${GATE_WORKER_POOL:-}|GATE_EGRESS_PROXY=${GATE_EGRESS_PROXY:-}"
 fi
 # The remix code-lane trace. Threaded here as well as in the Actions workflow,
 # because --set-env-vars replaces the whole map: a deploy from this script would

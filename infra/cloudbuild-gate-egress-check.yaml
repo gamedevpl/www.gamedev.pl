@@ -1,0 +1,68 @@
+# Proves the gate pool's egress allow-list before production gates are routed into it
+# (infra/setup-gate-egress.sh prints the exact submit line). Runs in the gate-runner
+# image as gate-runner@, in the pool, so it sees exactly what a gate run would.
+#
+# Passes when every allow-listed destination answers through the proxy (any HTTP status
+# counts: the point is the tunnel, not the page), a host off the list is refused by the
+# proxy, and nothing is reachable without the proxy at all.
+substitutions:
+  _IMAGE: ''
+  _PROXY: ''
+  _CANONICAL_HOST: 'www.gamedev.pl'
+  _GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+steps:
+  - id: egress-check
+    name: '${_IMAGE}'
+    entrypoint: bash
+    env:
+      - 'HTTPS_PROXY=${_PROXY}'
+      - 'https_proxy=${_PROXY}'
+      - 'NO_PROXY=localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254'
+      - 'no_proxy=localhost,127.0.0.1,::1,metadata.google.internal,169.254.169.254'
+      - 'NODE_USE_ENV_PROXY=1'
+      - 'CANONICAL_HOST=${_CANONICAL_HOST}'
+      - 'GAMES_REPO=${_GAMES_REPO}'
+    args:
+      - -c
+      - |
+        set -u
+        failed=0
+        # `$$` is Cloud Build's escape for a literal `$`.
+        reach() { curl -sS -o /dev/null --max-time 20 "$$@"; }
+        pass() { echo "ok    $$1"; }
+        fail() { echo "FAIL  $$1"; failed=1; }
+
+        for url in \
+          "https://github.com/$${GAMES_REPO}.git/info/refs?service=git-upload-pack" \
+          "https://registry.npmjs.org/react" \
+          "https://storage.googleapis.com/" \
+          "https://$${CANONICAL_HOST}/"; do
+          if reach "$$url"; then pass "via proxy: $$url"; else fail "via proxy: $$url"; fi
+        done
+
+        if reach https://example.com/; then fail "proxy let an unlisted host through"; else pass "proxy refuses example.com"; fi
+
+        for url in https://example.com/ https://github.com/ "https://$${CANONICAL_HOST}/"; do
+          if reach --noproxy '*' "$$url"; then fail "direct egress open: $$url"; else pass "no direct route: $$url"; fi
+        done
+
+        # Node's own fetch is how the runner posts its verdict and artifacts.
+        if node -e "fetch('https://' + process.env.CANONICAL_HOST + '/').then(() => process.exit(0), () => process.exit(1))"; then
+          pass "node fetch via proxy"
+        else
+          fail "node fetch via proxy (NODE_USE_ENV_PROXY not honoured by this image's Node?)"
+        fi
+
+        # The GCS client authenticates from the metadata server, which must stay off the proxy.
+        if curl -sS -o /dev/null --max-time 10 -H 'Metadata-Flavor: Google' \
+          http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email; then
+          pass "metadata server reachable for root"
+        else
+          fail "metadata server"
+        fi
+
+        exit "$$failed"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: '300s'
