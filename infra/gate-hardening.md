@@ -64,8 +64,9 @@ two repository variables.
 - **Pool.** `gate-pool` in `europe-west1`, `--no-public-egress`, peered to a dedicated
   `gate-egress` VPC. Workers have no external IP and the VPC exports no default route, so
   the only addresses a run can reach outside Google's own services are the VPC's subnets.
-- **Proxy.** One squid VM in that VPC (no external IP, no service account, out through
-  Cloud NAT). It accepts only `CONNECT` to port 443, only from the pool's range, only to
+- **Proxy.** One free-tier e2-micro squid VM in that VPC (`us-central1`, the VPC is
+  global; no service account; its own external IP, with no inbound rule but the pool's
+  and IAP SSH). It accepts only `CONNECT` to port 443, only from the pool's range, only to
   the names in its allow-list (items 1–4 above by default), matched by name with no
   reverse lookups. Everything else is a 403, logged on the VM.
 - **Build.** With `GATE_WORKER_POOL` and `GATE_EGRESS_PROXY` set, `gate-build-spec.ts`
