@@ -46,6 +46,7 @@ export async function runInkRepl(input: {
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
+  let transcriptColumns = Math.max(2, Math.min(input.io.stdout.columns || 80, 110) - 7);
   const host: { instance?: ReturnType<typeof render>; stopInput?: () => void } = {};
   const unmount = () => {
     host.instance?.unmount();
@@ -153,6 +154,9 @@ export async function runInkRepl(input: {
           historyOffset,
           openPreview,
           readLogs,
+          onTranscriptWidth: (columns) => {
+            transcriptColumns = columns;
+          },
           checkout: () => (workshop?.slug === slug ? workshop : input.checkout?.slug === slug ? input.checkout : null),
         }),
         {
@@ -319,6 +323,7 @@ export async function runInkRepl(input: {
       try {
         result = await handleReplLine({
           line,
+          columns: () => transcriptColumns,
           allowShell,
           api: foregroundApi,
           token,

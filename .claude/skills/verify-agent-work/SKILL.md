@@ -110,6 +110,17 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+For colored CLI output, sanitize untrusted metadata before adding ANSI styling.
+Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrapping:
+stripping all controls after formatting removes intended colors as well.
+History summaries need separate paragraphs; dense rows can pass semantic tests
+while remaining unreadable in a terminal.
+For Ink slash output, use the transcript's width after sidebar and label columns,
+not the terminal width. Exercise sidebar toggles and resizing in the actual Ink
+component, plus widths below twenty columns; a minimum-width clamp can hide overflow.
+Delay history API responses while changing the terminal or sidebar: resolve width
+immediately before formatting, rather than capturing it before asynchronous reads.
+
 **A rate limit does not bound in-flight source buffers.** Full history imports need many
 sequential requests, but raising their per-minute limit also permits concurrent trees.
 Check an instance-wide concurrency budget, bounded storage fan-out, and slot lifetime:

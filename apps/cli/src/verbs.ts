@@ -8,7 +8,7 @@ import { updateProgress } from './update-progress.js';
 import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 import { npmCliProject, updateProjectCli } from './update-project.js';
-import { historyCommand, isHistoryVerb } from './history-command.js';
+import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
@@ -40,7 +40,11 @@ export async function dispatchReadVerb(input: {
   const { verb, args, api, io, flags } = input;
   if (
     isHistoryVerb(verb, args, flags) &&
-    (await historyCommand({ ...input, write: (text) => io.stdout.write(`${text}\n`) }))
+    (await historyCommand({
+      ...input,
+      format: historyTerminalFormat(input.env, io.stdout),
+      write: (text) => io.stdout.write(`${text}\n`),
+    }))
   )
     return EXIT_GREEN;
 

@@ -1,5 +1,5 @@
 import { splitEvidence, withEvidence } from './workbench-evidence.js';
-import { historyCommand, isHistoryVerb } from './history-command.js';
+import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
 import { runReplShell } from './repl-shell.js';
 import { workbenchPlatformAction } from './workbench-platform-actions.js';
 import { workbenchLocalAction } from './workbench-checkpoints.js';
@@ -63,6 +63,7 @@ export async function handleReplLine(input: {
   onLocalPreview?: (url: string) => void;
   currentPath?: string;
   cwd?: string;
+  columns?: number | (() => number);
   allowShell?: boolean;
 }): Promise<ReplLineResult> {
   if (input.line.trimStart().startsWith('!')) {
@@ -176,14 +177,14 @@ export async function handleReplLine(input: {
       await submitRepl(input, cmd === 'publish' ? 'push' : cmd, cmd === 'publish' ? [...rest, '--publish'] : rest);
       return { next: 'continue', conversationId: input.conversationId };
     }
-    const historyArgs = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
-    if (cmd && isHistoryVerb(cmd, historyArgs.args, historyArgs.flags)) {
+    const parsed = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
+    if (cmd && isHistoryVerb(cmd, parsed.args, parsed.flags)) {
       try {
-        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         await historyCommand({
           ...parsed,
           api: input.api,
           cwd: input.workshop?.root ?? input.cwd,
+          format: historyTerminalFormat(input.env, undefined, input.columns),
           slug:
             input.workshop?.slug ??
             findCheckout(input.workshop?.root ?? input.cwd ?? process.cwd())?.slug ??
@@ -199,7 +200,6 @@ export async function handleReplLine(input: {
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
-        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const cwd = input.workshop?.root ?? input.cwd ?? process.cwd();
         const here = findCheckout(cwd);
         const sessionSlug =

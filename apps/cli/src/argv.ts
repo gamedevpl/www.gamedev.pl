@@ -89,6 +89,7 @@ const BOOLEAN_FLAGS = new Set([
   'stop',
   'list',
   'all',
+  'oneline',
   'force',
   'publish',
   'handoff',
