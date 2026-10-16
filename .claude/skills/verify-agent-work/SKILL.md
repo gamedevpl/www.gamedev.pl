@@ -118,6 +118,8 @@ while remaining unreadable in a terminal.
 For Ink slash output, use the transcript's width after sidebar and label columns,
 not the terminal width. Exercise sidebar toggles and resizing in the actual Ink
 component, plus widths below twenty columns; a minimum-width clamp can hide overflow.
+Delay history API responses while changing the terminal or sidebar: resolve width
+immediately before formatting, rather than capturing it before asynchronous reads.
 
 **A rate limit does not bound in-flight source buffers.** Full history imports need many
 sequential requests, but raising their per-minute limit also permits concurrent trees.

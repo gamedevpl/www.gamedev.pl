@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import stringWidth from 'string-width';
 import type { HistoryVersion } from '@gamedevpl/contract';
 import { stripTerminalControls } from './ansi.js';
-import { formatHistoryLog, formatHistoryVersion } from './history-format.js';
+import { formatHistoryLog, formatHistoryVersion, historyTerminalFormat } from './history-format.js';
 
 const row: HistoryVersion = {
   version: 'v20261014T083417049Z-597aa5561aa5',
@@ -18,6 +18,14 @@ const row: HistoryVersion = {
 };
 
 describe('readable history output', () => {
+  it('reads terminal width at formatting time rather than when a command starts', () => {
+    const output = { columns: 90, isTTY: true };
+    const format = historyTerminalFormat({}, output);
+    output.columns = 30;
+    const text = formatHistoryLog([row], format);
+    expect(text.split('\n').every((line) => stringWidth(line) <= 30)).toBe(true);
+  });
+
   it('keeps paragraphs, indents wrapped summaries and separates complete version blocks', () => {
     const output = formatHistoryLog([row, { ...row, version: 'v-previous', summary: undefined }], { columns: 60 });
     expect(output).toContain(`version ${row.version}\nDate:    `);

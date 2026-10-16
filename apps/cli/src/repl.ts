@@ -63,7 +63,7 @@ export async function handleReplLine(input: {
   onLocalPreview?: (url: string) => void;
   currentPath?: string;
   cwd?: string;
-  columns?: number;
+  columns?: number | (() => number);
   allowShell?: boolean;
 }): Promise<ReplLineResult> {
   if (input.line.trimStart().startsWith('!')) {

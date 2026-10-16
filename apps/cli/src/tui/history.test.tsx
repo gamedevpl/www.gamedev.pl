@@ -46,20 +46,24 @@ it('fits slash history to the Ink transcript with the sidebar open, closed and a
       patchConsole: false,
     },
   );
+  let pendingRead: Promise<void> | undefined;
   const api = {
-    request: async () => ({
-      versions: [
-        {
-          version: 'v20261014T083417049Z-597aa5561aa5',
-          createdAt: '2026-10-14T08:34:17Z',
-          verdict: 'passed',
-          summary:
-            'History summary with enough words to wrap and retain indentation across multiple visual rows in the transcript.',
-        },
-      ],
-      hasMore: false,
-      nextCursor: null,
-    }),
+    request: async () => {
+      await pendingRead;
+      return {
+        versions: [
+          {
+            version: 'v20261014T083417049Z-597aa5561aa5',
+            createdAt: '2026-10-14T08:34:17Z',
+            verdict: 'passed',
+            summary:
+              'History summary with enough words to wrap and retain indentation across multiple visual rows in the transcript.',
+          },
+        ],
+        hasMore: false,
+        nextCursor: null,
+      };
+    },
   } as unknown as ApiClient;
   const log = async (oneline: boolean) => {
     const lines: string[] = [];
@@ -69,7 +73,7 @@ it('fits slash history to the Ink transcript with the sidebar open, closed and a
       token: null,
       env: { NO_COLOR: '1' },
       cwd: root,
-      columns,
+      columns: () => columns,
       write: (text) => {
         lines.push(...text.split('\n'));
         session.writeLine(text);
@@ -90,9 +94,17 @@ it('fits slash history to the Ink transcript with the sidebar open, closed and a
     stdin.write('\u0002');
     await vi.waitFor(() => expect(columns).toBe(113));
     await log(true);
+    let release!: () => void;
+    pendingRead = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = log(true);
     stdout.columns = 40;
     stdout.emit('resize');
     await vi.waitFor(() => expect(columns).toBe(33));
+    release();
+    await pending;
+    pendingRead = undefined;
     await log(false);
     await log(true);
   } finally {

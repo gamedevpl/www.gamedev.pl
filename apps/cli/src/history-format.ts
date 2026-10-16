@@ -3,12 +3,12 @@ import wrapAnsi from 'wrap-ansi';
 import { sanitizePath, stripTerminalControls } from './ansi.js';
 import { wantsColor } from './renderer.js';
 
-export type HistoryFormat = { columns?: number; color?: boolean; oneline?: boolean };
+export type HistoryFormat = { columns?: number | (() => number | undefined); color?: boolean; oneline?: boolean };
 
 export function historyTerminalFormat(
   env = process.env,
   output: { columns?: number; isTTY?: boolean } = process.stdout,
-  columns = output.columns,
+  columns: HistoryFormat['columns'] = () => output.columns,
 ): HistoryFormat {
   return { columns, color: wantsColor(env, Boolean(output.isTTY)) };
 }
@@ -35,7 +35,7 @@ function indented(text: string, columns: number): string {
 }
 
 export function formatHistoryVersion(row: HistoryVersion, options: HistoryFormat = {}): string {
-  const columns = width(options.columns);
+  const columns = width(typeof options.columns === 'function' ? options.columns() : options.columns);
   const version = field(row.version);
   const summary =
     stripTerminalControls(row.summary ?? '')

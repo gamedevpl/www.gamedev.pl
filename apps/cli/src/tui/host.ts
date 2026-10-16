@@ -323,7 +323,7 @@ export async function runInkRepl(input: {
       try {
         result = await handleReplLine({
           line,
-          columns: transcriptColumns,
+          columns: () => transcriptColumns,
           allowShell,
           api: foregroundApi,
           token,
