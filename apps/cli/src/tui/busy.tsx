@@ -9,7 +9,7 @@ export function BusyPanel({
   lastOutputAt,
   color,
   previewAvailable,
-  previewKey = 'o',
+  previewKey = 'Ctrl+O',
 }: {
   activity: string;
   since: number;

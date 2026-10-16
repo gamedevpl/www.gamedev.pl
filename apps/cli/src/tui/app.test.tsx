@@ -239,18 +239,47 @@ describe('TUI feedback', () => {
     expect(view.frame()).toContain('⌥Enter newline');
   });
 
-  it('opens the live preview with o while an agent is working', async () => {
+  it('opens the live preview with Ctrl+O while an agent is working, and o types ahead', async () => {
     const openPreview = vi.fn();
     const view = screen(80, 24, openPreview);
     view.session.setPreview('http://127.0.0.1:64897/preview/');
-    expect(view.frame()).toContain('o open preview');
+    expect(view.frame()).toContain('Ctrl+O open preview');
     await view.press('o');
+    expect(openPreview).not.toHaveBeenCalled();
+    expect(view.session.get().draft).toBe('o');
+    await view.press('\u000f');
     expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
 
     view.session.clearPreview();
-    expect(view.frame()).not.toContain('o open preview');
-    await view.press('o');
+    expect(view.frame()).not.toContain('open preview');
+    await view.press('\u000f');
     expect(openPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows text typed during startup and history restore, then opens the first prompt with it', async () => {
+    const view = screen(80, 24);
+    view.session.setActivity('Connecting to Studio');
+    await view.press('napraw');
+    expect(view.frame()).toContain('Next message');
+    expect(view.frame()).toContain('napraw');
+    view.session.restoreHistory({ lines: ['› stara prośba'], prompts: ['stara prośba'] });
+    view.session.setActivity('Checking Creator Kit updates');
+    await view.press(' skok');
+    expect(view.frame()).toContain('napraw skok');
+    const kit = view.session.prompt(['Update Creator Kit now', 'Later'], 'Update the game tools?');
+    expect(view.frame()).not.toContain('Next message');
+    view.session.movePick(1);
+    view.session.submit();
+    expect(await kit).toBe('Later');
+    expect(view.frame()).toContain('napraw skok');
+    await view.press('\r');
+    await view.press('!');
+    expect(view.session.get().draft).toBe('napraw skok!');
+    const first = view.session.prompt();
+    expect(view.session.get()).toMatchObject({ mode: 'prompt', draft: 'napraw skok!', draftCursor: 12 });
+    expect(view.frame()).toContain('napraw skok!');
+    await view.press('\r');
+    expect(await first).toBe('napraw skok!');
   });
 
   it('shows connection choices and returns to chat for the selected game', async () => {
@@ -282,7 +311,7 @@ describe('TUI feedback', () => {
     view.session.setActivity('Thinking about your request');
     const first = view.frame();
     expect(first).toContain('Thinking about your request');
-    expect(first).toContain('input paused');
+    expect(first).toContain('type ahead for the next prompt');
     expect(first).not.toContain('What would you like');
     await until(() => expect(view.frame()).not.toBe(first));
     void view.session.prompt();
@@ -321,7 +350,7 @@ it('shows the Kit choice, then installation activity instead of an idle textbox'
   expect(await choice).toBe('Update Creator Kit now');
   view.session.setActivity('Downloading Creator Kit and installing dependencies');
   expect(view.frame()).toContain('Downloading Creator Kit');
-  expect(view.frame()).toContain('input paused');
+  expect(view.frame()).toContain('type ahead for the next prompt');
   expect(view.frame()).not.toContain('What would you like');
 });
 

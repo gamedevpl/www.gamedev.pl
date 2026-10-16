@@ -93,12 +93,12 @@ export function ReplApp({
     };
   }, [stdout]);
   const shellMode =
-    !state.question &&
-    (state.mode === 'prompt' || Boolean(state.localTask && state.mode === 'busy')) &&
-    state.draft.trimStart().startsWith('!');
+    !state.question && (state.mode === 'prompt' || state.mode === 'busy') && state.draft.trimStart().startsWith('!');
   const shellPrefix = shellMode ? [...state.draft].indexOf('!') + 1 : 0;
   const shellDraft = state.draft.slice(shellPrefix);
-  const editable = state.mode === 'prompt' || Boolean(state.localTask && state.mode === 'busy');
+  const editable = state.mode === 'prompt' || state.mode === 'busy';
+  // Typed while starting or working; the next prompt opens with it.
+  const typeAhead = state.mode === 'busy' && !state.localTask && Boolean(state.draft);
   // Editing keys shared by the prompt and the follow-up composer.
   const edit = (key: Key, raw: string): boolean => {
     if (key.return && [...state.draft][state.draftCursor - 1] === '\\') {
@@ -155,7 +155,7 @@ export function ReplApp({
     if (state.mode === 'busy') {
       if (key.ctrl && input === 'c') {
         // Clear a typed follow-up first; another Ctrl+C stops the task.
-        if (state.localTask && state.draft) session.setDraft('');
+        if (state.draft) session.setDraft('');
         else session.cancel();
         return;
       }
@@ -174,10 +174,8 @@ export function ReplApp({
         } else if (!key.ctrl && !key.meta && input) session.insertDraft(input);
         return;
       }
-      if (!key.ctrl && !key.meta && input.toLowerCase() === 'o' && state.previewUrl) {
-        openPreview?.(state.previewUrl);
-        return;
-      }
+      if (key.ctrl && input === 'o' && state.previewUrl) openPreview?.(state.previewUrl);
+      else if (!edit(key, raw) && !key.ctrl && !key.meta && !key.return && input) session.insertDraft(input);
       return;
     }
     if (state.mode === 'prompt' && search.handle(input, key, raw)) return;
@@ -263,7 +261,7 @@ export function ReplApp({
       : state.mode === 'busy'
         ? state.localTask
           ? 6 + Number(Boolean(state.sendStatus))
-          : 2
+          : 2 + (typeAhead ? 4 : 0)
         : 3 + Number(shellMode));
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
@@ -313,7 +311,7 @@ export function ReplApp({
             lastOutputAt={state.lastOutputAt}
             color={color}
             previewAvailable={Boolean(state.previewUrl)}
-            previewKey={state.localTask ? 'Ctrl+O' : 'o'}
+            previewKey="Ctrl+O"
           />
         ) : (
           <Box
@@ -384,6 +382,12 @@ export function ReplApp({
             )}
           </Box>
         )}
+        {typeAhead && (
+          <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
+            <Text dimColor>{shellMode ? 'Shell when ready' : 'Next message'}</Text>
+            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} color={color} />
+          </Box>
+        )}
         {state.mode === 'busy' && state.localTask && (
           <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
             <Text dimColor>
@@ -421,7 +425,9 @@ export function ReplApp({
                   : state.canSteer
                     ? 'Enter send now · Ctrl+Q queue for later · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop'
                     : 'Enter queue · Ctrl+O preview · Ctrl+L logs · Ctrl+C stop and clear queue'
-                : 'Working — input paused'}
+                : typeAhead
+                  ? 'Enter when the prompt opens · Ctrl+C clear'
+                  : 'Working — type ahead for the next prompt'}
         </Text>
         <Text dimColor wrap="truncate-end">
           <RichText
