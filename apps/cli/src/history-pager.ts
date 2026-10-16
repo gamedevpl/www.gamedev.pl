@@ -65,12 +65,11 @@ export function historyOutput(input: { io: Io; env?: NodeJS.ProcessEnv; disabled
         });
       });
     },
-    async finish(terminate = false): Promise<void> {
+    async finish(failed = false): Promise<void> {
       if (!child) return;
-      if (terminate && !stopped) child.kill();
       child.stdin?.end();
       const result = await complete!;
-      if (!terminate && !plain && result.code !== 0)
+      if (!failed && !plain && result.code !== 0)
         throw new CliError(
           `pager exited unsuccessfully (${result.signal ?? result.code}); use --no-pager or check PAGER`,
           EXIT_REFUSED,

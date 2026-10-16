@@ -18,7 +18,7 @@ function fixture() {
     received = join(dir, 'received.txt');
   writeFileSync(
     script,
-    `const fs=require('node:fs'); const mode=process.argv[2]; let data=''; process.stdin.on('data',chunk=>{ data+=chunk; if(mode==='quit') process.exit(0); }); process.stdin.on('end',()=>{fs.writeFileSync(process.argv[3],data);process.exit(mode==='fail'?3:0)});`,
+    `const fs=require('node:fs'); const mode=process.argv[2]; let data=''; process.stdin.on('data',chunk=>{ data+=chunk; if(mode==='quit') process.exit(0); }); process.stdin.on('end',()=>{setTimeout(()=>{fs.writeFileSync(process.argv[3],data);process.exit(mode==='fail'?3:0)},mode==='delay'?100:0)});`,
   );
   const chunks: string[] = [];
   const io = {
@@ -113,5 +113,29 @@ describe.skipIf(process.platform === 'win32')('real pager processes', () => {
     );
     expect(aborted).toBe(true);
     expect(calls).toBe(2);
+  });
+
+  it('waits for configured pagers to finish on API errors and preserves the original failure', async () => {
+    const f = fixture();
+    for (const mode of ['delay', 'fail']) {
+      let calls = 0;
+      const api = {
+        request: async () => {
+          if (++calls > 1) throw new Error('fixture API failure');
+          return {
+            versions: [
+              { version: 'v2', createdAt: '2026-10-16T00:00:00Z', summary: 'Before failure', verdict: 'passed' },
+            ],
+            hasMore: true,
+            nextCursor: 'v2',
+          };
+        },
+      } as unknown as ApiClient;
+      await expect(
+        dispatchReadVerb({ verb: 'log', args: ['probe'], flags: {}, api, io: f.io, env: f.env(mode) }),
+      ).rejects.toThrow('fixture API failure');
+      expect(readFileSync(f.received, 'utf8')).toContain('Before failure');
+      rmSync(f.received);
+    }
   });
 });

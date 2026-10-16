@@ -118,6 +118,9 @@ while remaining unreadable in a terminal.
 Exercise a real pager subprocess: early quit must cancel pending API reads and
 rate-limit waits, not merely stop printing an already-buffered history. Check
 missing default pagers, failing configured commands, backpressure and JSON/pipes.
+Inject API failure after output starts, with a real configured `less`: killing
+only its shell left the pager owning the terminal after the CLI returned. Finish
+the pager's input and wait for it to release the terminal before returning errors.
 For path-filtered history, compare adjacent unfiltered deliveries, including deleted
 and binary files. Apply limits after matching; test beyond the first API page and
 quote-containing slash arguments as well as shell argv.
