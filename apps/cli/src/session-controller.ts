@@ -133,6 +133,9 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     histIndex = history.length;
     stash = '';
     undo = [];
+    // Hands back a draft parked by a picker or browser answer.
+    const draft = followupDraft;
+    followupDraft = '';
     state = {
       ...state,
       lines: spoken,
@@ -140,8 +143,8 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       activity: state.mode === 'pick' ? 'Continuing' : 'Working on your request',
       busySince: Date.now(),
       lastOutputAt: Date.now(),
-      draft: '',
-      draftCursor: 0,
+      draft,
+      draftCursor: [...draft].length,
       choices: [],
       question: '',
       pickIndex: 0,

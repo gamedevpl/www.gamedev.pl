@@ -239,17 +239,20 @@ describe('TUI feedback', () => {
     expect(view.frame()).toContain('⌥Enter newline');
   });
 
-  it('opens the live preview with o while an agent is working', async () => {
+  it('opens the live preview with Ctrl+O while an agent is working, and o types ahead', async () => {
     const openPreview = vi.fn();
     const view = screen(80, 24, openPreview);
     view.session.setPreview('http://127.0.0.1:64897/preview/');
-    expect(view.frame()).toContain('o open preview');
+    expect(view.frame()).toContain('Ctrl+O open preview');
     await view.press('o');
+    expect(openPreview).not.toHaveBeenCalled();
+    expect(view.session.get().draft).toBe('o');
+    await view.press('\u000f');
     expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
 
     view.session.clearPreview();
-    expect(view.frame()).not.toContain('o open preview');
-    await view.press('o');
+    expect(view.frame()).not.toContain('open preview');
+    await view.press('\u000f');
     expect(openPreview).toHaveBeenCalledTimes(1);
   });
 
@@ -282,7 +285,7 @@ describe('TUI feedback', () => {
     view.session.setActivity('Thinking about your request');
     const first = view.frame();
     expect(first).toContain('Thinking about your request');
-    expect(first).toContain('input paused');
+    expect(first).toContain('type ahead for the next prompt');
     expect(first).not.toContain('What would you like');
     await until(() => expect(view.frame()).not.toBe(first));
     void view.session.prompt();
@@ -321,7 +324,7 @@ it('shows the Kit choice, then installation activity instead of an idle textbox'
   expect(await choice).toBe('Update Creator Kit now');
   view.session.setActivity('Downloading Creator Kit and installing dependencies');
   expect(view.frame()).toContain('Downloading Creator Kit');
-  expect(view.frame()).toContain('input paused');
+  expect(view.frame()).toContain('type ahead for the next prompt');
   expect(view.frame()).not.toContain('What would you like');
 });
 
