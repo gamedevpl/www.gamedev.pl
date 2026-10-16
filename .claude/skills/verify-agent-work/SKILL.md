@@ -121,6 +121,8 @@ missing default pagers, failing configured commands, backpressure and JSON/pipes
 For path-filtered history, compare adjacent unfiltered deliveries, including deleted
 and binary files. Apply limits after matching; test beyond the first API page and
 quote-containing slash arguments as well as shell argv.
+Keep generated test scripts static and pass fixture paths as arguments: embedding
+even a JSON-quoted temporary path triggered CodeQL's code-construction sanitizer check.
 For Ink slash output, use the transcript's width after sidebar and label columns,
 not the terminal width. Exercise sidebar toggles and resizing in the actual Ink
 component, plus widths below twenty columns; a minimum-width clamp can hide overflow.

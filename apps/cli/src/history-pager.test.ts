@@ -18,7 +18,7 @@ function fixture() {
     received = join(dir, 'received.txt');
   writeFileSync(
     script,
-    `const fs=require('node:fs'); const mode=process.argv[2]; let data=''; process.stdin.on('data',chunk=>{ data+=chunk; if(mode==='quit') process.exit(0); }); process.stdin.on('end',()=>{fs.writeFileSync(${JSON.stringify(received)},data);process.exit(mode==='fail'?3:0)});`,
+    `const fs=require('node:fs'); const mode=process.argv[2]; let data=''; process.stdin.on('data',chunk=>{ data+=chunk; if(mode==='quit') process.exit(0); }); process.stdin.on('end',()=>{fs.writeFileSync(process.argv[3],data);process.exit(mode==='fail'?3:0)});`,
   );
   const chunks: string[] = [];
   const io = {
@@ -32,7 +32,9 @@ function fixture() {
       },
     } as unknown as NodeJS.WriteStream,
   };
-  const env = (mode = 'read') => ({ PAGER: `${quote(process.execPath)} ${quote(script)} ${quote(mode)}` });
+  const env = (mode = 'read') => ({
+    PAGER: `${quote(process.execPath)} ${quote(script)} ${quote(mode)} ${quote(received)}`,
+  });
   return { dir, received, chunks, io, env };
 }
 
