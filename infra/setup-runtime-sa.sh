@@ -306,7 +306,7 @@ fi
 
 echo "==> 4/6 Service-account IAM"
 # actAs gate-runner and nothing else: the runtime may start gate builds only as the gate
-# identity (infra/gate-hardening.md). A project-wide serviceAccountUser would let it
+# identity (www.gamedev.pl-ops/infra/gate-hardening.md). A project-wide serviceAccountUser would let it
 # launch builds as any account, which is how the default compute account had it.
 grant_on_sa "$GATE_SA" "$APP_SA" roles/iam.serviceAccountUser
 # signBlob on itself: on Cloud Run the metadata credentials carry no private key, so

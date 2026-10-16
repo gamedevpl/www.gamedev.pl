@@ -8,7 +8,7 @@ No Terraform configuration is used or required for this repository.
 
 The upload quality gate (`cloudbuild-gate.yaml`, started by the API on delivery) treats
 candidate sources as hostile input. Inventory, caps, and owner follow-ups:
-[`gate-hardening.md`](./gate-hardening.md).
+the ops repo's `infra/gate-hardening.md`.
 
 ## Scripts
 

@@ -383,7 +383,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.agentChannel?.gamesStore ??
     (gamesStoreBucket ? createGcsGamesStore({ bucket: gamesStoreBucket }) : undefined);
   // The gate records its verdict here rather than writing the manifest itself; see
-  // gate-verdict-routes.ts and infra/gate-hardening.md.
+  // gate-verdict-routes.ts and ops gate-hardening.md.
   const notifyProposal = (event: Parameters<typeof emitProposalNotification>[1]) =>
     emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event);
   const notifyOperators = (event: { proposalId: string; gameTitle: string }) =>

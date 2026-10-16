@@ -46,7 +46,7 @@ RUN apt-get update -qq \
 # The user candidate code runs as. The runner starts as root (Cloud Build runs steps that
 # way) and keeps the credentials; `npm ci`, `check:game` and the browser run as this user,
 # which cannot read root's /proc/<pid>/environ and lets Chrome keep its sandbox.
-# See infra/gate-hardening.md and apps/api/src/delivery/gate-sandbox.ts.
+# See www.gamedev.pl-ops/infra/gate-hardening.md and apps/api/src/delivery/gate-sandbox.ts.
 RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin gate
 
 # A shim rather than the browser itself, for two reasons carried over verbatim from the
@@ -100,7 +100,7 @@ ENV GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome \
 # cache object in the games store bucket — would be writable by the gate service account,
 # whose credentials are reachable from candidate code via the metadata server. That makes
 # a node_modules cache a write-once-execute-everywhere hole: one hostile game poisons
-# every later gate run. See infra/gate-hardening.md (BY-11).
+# every later gate run. See www.gamedev.pl-ops/infra/gate-hardening.md (BY-11).
 ARG GAMES_REPO=gamedevpl/www.gamedev.pl-games
 # Best-effort, not `set -e`: a games-repo hiccup (rate limit, a 404 on one dependency)
 # must cost a cold cache, not the whole image. Chromium, ffmpeg and the platform below

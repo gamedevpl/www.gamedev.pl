@@ -6,7 +6,7 @@
 # binds one project role. Nothing here is applied by merging.
 #
 # Why: the default pool gives a gate run unrestricted egress, and a gate run executes
-# candidate code (infra/gate-hardening.md, "Network egress"). Cloud Build YAML cannot
+# candidate code (www.gamedev.pl-ops/infra/gate-hardening.md, "Network egress"). Cloud Build YAML cannot
 # filter destinations, so the filter has to be the network the worker sits in.
 #
 # Shape:
@@ -30,7 +30,7 @@
 # What it does not close: the allow-listed hosts are themselves general-purpose services
 # (GitHub, npm). A run holds no credential for them, but a determined candidate can still
 # talk to them. The list is the "Egress the run actually needs" section of
-# gate-hardening.md and nothing more.
+# www.gamedev.pl-ops/infra/gate-hardening.md and nothing more.
 #
 # Rollout (each step reversible):
 #   1. ./infra/setup-gate-egress.sh                      creates everything; gates unaffected
@@ -66,7 +66,7 @@ PROXY_VM="${PROXY_VM:-gate-proxy}"
 PROXY_MACHINE_TYPE="${PROXY_MACHINE_TYPE:-e2-micro}"
 PROXY_PORT=3128
 CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
-# Production path only (gate-hardening.md, items 1-4): the harness clone, `npm ci`,
+# Production path only (www.gamedev.pl-ops/infra/gate-hardening.md, items 1-4): the harness clone, `npm ci`,
 # candidate reads and signed artifact uploads, and the verdict POST. No apt mirrors and
 # no Docker Hub: the from-scratch fallback does not run in this pool.
 GATE_ALLOWED_DOMAINS="${GATE_ALLOWED_DOMAINS:-github.com codeload.github.com release-assets.githubusercontent.com registry.npmjs.org storage.googleapis.com ${CANONICAL_HOST}}"
