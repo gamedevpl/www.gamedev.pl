@@ -44,9 +44,12 @@ export function wordAt(line: string, column: number): [number, number] | null {
   return [start + 1, end + 1];
 }
 
-export function highlight(frame: Frame, y: number, from: number, to: number): string {
+// A soft gray, like Claude Code, instead of full inversion.
+export const SELECTED = '\u001b[0;48;5;245;38;5;231m';
+
+export function highlight(frame: Frame, y: number, from: number, to: number, color = true): string {
   const text = columnText(frame.plain[y - 1] ?? '', from, to).trimEnd();
-  return text ? `\u001b[${y};${from}H\u001b[0;7m${text}\u001b[0m` : '';
+  return text ? `\u001b[${y};${from}H${color ? SELECTED : '\u001b[0;7m'}${text}\u001b[0m` : '';
 }
 
 export function repaint(frame: Frame, y: number): string {

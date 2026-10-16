@@ -73,7 +73,7 @@ export function ReplApp({
   const panelWidth = split && sidebar ? Math.min(44, Math.floor(dimensions.columns / 3)) : 0;
   const width = split ? dimensions.columns - panelWidth : Math.min(dimensions.columns, 110);
   const rows = dimensions.rows - Number(split);
-  const selection = useSelection({ enabled: split && mouse, rows, regions, clipboard });
+  const selection = useSelection({ enabled: split && mouse, rows, regions, clipboard, color });
   const changes = useWorkspaceChanges(activeCheckout, split && sidebar);
   const [detailScroll, setDetailScroll] = useState({ promptId: -1, offset: 0 });
   useBracketedPaste();
@@ -366,6 +366,7 @@ export function ReplApp({
                 ) : shellDraft ? (
                   <DraftLines
                     draft={shellDraft}
+                    color={color}
                     cursor={draftCursor}
                     room={width - 7}
                     prompt={prompt}
@@ -394,7 +395,7 @@ export function ReplApp({
               · {state.queued.length} queued
             </Text>
             {state.sendStatus && <Text wrap="truncate-end">{state.sendStatus}</Text>}
-            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} />
+            <DraftLines draft={shellDraft} cursor={draftCursor} room={width - 7} prompt={prompt} color={color} />
           </Box>
         )}
         {suggestionRows > 0 && (
