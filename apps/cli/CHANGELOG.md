@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.49.1 — 2026-10-16
+
 ### Fixed
 
 - The prompt cursor highlights the character under it in soft gray, like Claude Code, instead of inserting a block, so text no longer shifts while moving the cursor; mouse selections use the same gray (#1849).
