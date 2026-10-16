@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import {
+  readStoredSeats,
   MAX_STATE_BYTES,
   ZONE_SNAPSHOT_VERSION,
   type ZoneSnapshot,
@@ -62,6 +63,7 @@ export function createFirestoreZoneStore(options: FirestoreZoneStoreOptions = {}
         draws: data.draws,
         state: data.state,
         savedAt: data.savedAt,
+        seats: readStoredSeats(data.seats),
       };
     },
 

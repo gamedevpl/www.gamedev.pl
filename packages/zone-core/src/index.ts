@@ -83,3 +83,5 @@ export {
   type ZoneStatus,
   type ZoneWarnEvent,
 } from './zone.js';
+
+export { readStoredSeats, RECLAIM_GRACE_MS, type StoredSeat } from './seat-ledger.js';

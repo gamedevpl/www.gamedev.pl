@@ -82,6 +82,8 @@ export interface ZoneSnapshot {
   state: string;
   /** Wall-clock milliseconds when this was taken — the input to `wake`. */
   savedAt: number;
+  // Owner of each slot's actor; absent on older snapshots.
+  seats?: Array<{ slot: number; tag: string }>;
 }
 
 export const ZONE_SNAPSHOT_VERSION = 1;

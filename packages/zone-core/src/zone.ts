@@ -10,6 +10,7 @@ import {
 } from './contract.js';
 import { isSimTimeoutError, type SimCage, type SimInstance } from './cage.js';
 import { validateZoneInput, type ZoneSchema } from './schema.js';
+import { SeatLedger } from './seat-ledger.js';
 
 /**
  * One authoritative zone: a live simulation, the players in it, and its life cycle
@@ -175,6 +176,10 @@ export class Zone {
   private tick = 0;
   /** Slot → the player's pseudonymous tag, for the roster and for reclaiming a seat. */
   private readonly seats = new Map<number, string>();
+  // Restored actors whose owner has not reconnected yet.
+  private readonly held = new SeatLedger();
+  // Joins awaiting a wake, counted against capacity before holding a slot.
+  private arriving = 0;
   // Slot → last arrival or accepted input. An open socket proves nothing.
   private readonly lastActiveAt = new Map<number, number>();
   private pending: ZoneEvent[] = [];
@@ -230,32 +235,34 @@ export class Zone {
   async join(playerTag: string): Promise<number> {
     if (this.status === 'closed') throw new ZoneUnavailableError('zone is closed');
 
-    const existing = [...this.seats.entries()].find(([, tag]) => tag === playerTag);
-    if (existing) {
-      this.lastActiveAt.set(existing[0], this.now());
+    const existing = [...this.seats].find(([, tag]) => tag === playerTag)?.[0];
+    if (existing !== undefined) {
+      this.lastActiveAt.set(existing, this.now());
       await this.ensureLive();
-      return existing[0];
+      return existing;
     }
 
-    if (this.seats.size >= this.maxPlayers) throw new ZoneFullError('zone is full');
+    if (this.seats.size + this.arriving >= this.maxPlayers) throw new ZoneFullError('zone is full');
 
-    let slot = 0;
-    while (this.seats.has(slot)) slot += 1;
-    this.seats.set(slot, playerTag);
-    // Before the await: the seat is taken for the whole sim fetch.
-    this.lastActiveAt.set(slot, this.now());
-
+    // Slot chosen after the wake: the snapshot names each actor's owner.
+    this.arriving += 1;
     try {
       await this.ensureLive();
-    } catch (error) {
-      this.seats.delete(slot);
-      this.lastActiveAt.delete(slot);
-      throw error;
+    } finally {
+      this.arriving -= 1;
     }
+    if (this.status !== 'live') throw new ZoneUnavailableError('zone stopped while waking');
+    const raced = [...this.seats].find(([, tag]) => tag === playerTag)?.[0];
+    if (raced !== undefined) return raced;
+    if (this.seats.size >= this.maxPlayers) throw new ZoneFullError('zone is full');
+
+    const { slot, events } = this.held.claim(playerTag, this.seats, this.maxPlayers);
+    this.seats.set(slot, playerTag);
+    this.lastActiveAt.set(slot, this.now());
 
     // The sim hears about the arrival through the same ordered stream as everything
     // else, rather than through a side channel that could be applied out of order.
-    this.pending.push({ slot, k: 'join' });
+    this.pending.push(...events, { slot, k: 'join' });
     return slot;
   }
 
@@ -368,6 +375,7 @@ export class Zone {
     }
     if (this.status !== 'live' || !this.sim) return;
 
+    this.pending.push(...this.held.expire(now));
     if (this.lastPumpAt === 0) this.lastPumpAt = now;
     this.accumulatorMs += Math.max(0, now - this.lastPumpAt);
     this.lastPumpAt = now;
@@ -505,8 +513,10 @@ export class Zone {
     let sim = await loadSim();
     const stored = await this.options.store.load(this.id);
     const now = this.now();
+    let reconcile: ZoneEvent[] = [];
 
     if (stored && stored.version === ZONE_SNAPSHOT_VERSION) {
+      reconcile = this.held.adopt(stored.seats, this.seats, this.maxPlayers, now);
       this.seed = stored.seed;
       this.tick = stored.tick;
       sim.restore(stored.seed, stored.state, stored.draws);
@@ -537,6 +547,7 @@ export class Zone {
     } else {
       this.seed = (this.options.newSeed ?? defaultSeed)();
       this.tick = 0;
+      this.held.clear();
       sim.init(this.seed);
     }
 
@@ -548,7 +559,7 @@ export class Zone {
     this.lastPumpAt = now;
     this.lastSnapshotAt = now;
     this.recentOverruns = [];
-    this.pending = [];
+    this.pending = reconcile;
   }
 
   // Memory holds exactly the park snapshot; only the catch-up is owed.
@@ -580,7 +591,16 @@ export class Zone {
   // Synchronous, so what is written is what the sim held at this instant.
   private captureSnapshot(): ZoneSnapshot {
     const { state, draws } = this.sim!.snapshot();
-    return { version: ZONE_SNAPSHOT_VERSION, seed: this.seed, tick: this.tick, draws, state, savedAt: this.now() };
+    const seats = this.held.record(this.seats);
+    return {
+      version: ZONE_SNAPSHOT_VERSION,
+      seed: this.seed,
+      tick: this.tick,
+      draws,
+      state,
+      savedAt: this.now(),
+      seats,
+    };
   }
 
   /** Writes the zone to Firestore. Refuses a state that JSON would mangle on the way back. */
@@ -653,6 +673,7 @@ export class Zone {
     await this.hibernate(reason);
     this.status = 'closed';
     this.seats.clear();
+    this.held.clear();
     this.lastActiveAt.clear();
   }
 }
