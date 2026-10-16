@@ -124,6 +124,9 @@ the pager's input and wait for it to release the terminal before returning error
 Exercise unpaged stdout with a real Writable that returns false, plus an early
 exiting pipe reader. Waiting for pager stdin alone leaves piped output buffering
 unbounded history and can emit unhandled EPIPE; stop reads on either stream closing.
+Run a JSON-producing CLI process against a delayed pipe reader with output larger
+than the pipe buffer. Returning from a raw stdout write before process.exit can
+truncate valid JSON; display-mode branches must use the guarded writer too.
 For path-filtered history, compare adjacent unfiltered deliveries, including deleted
 and binary files. Apply limits after matching; test beyond the first API page and
 quote-containing slash arguments as well as shell argv.

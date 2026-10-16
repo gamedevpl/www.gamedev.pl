@@ -92,7 +92,7 @@ export async function historyCommand(input: {
         return true;
       count++;
     }
-    if (jsonMode(flags)) emit({ slug, versions }, '');
+    if (jsonMode(flags)) await write(JSON.stringify({ slug, versions }));
     else if (count && !input.writeLog) emit({}, formatHistoryLog(versions, { ...input.format, oneline }));
     else if (!count)
       await write(

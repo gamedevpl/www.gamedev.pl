@@ -1,7 +1,7 @@
 import { Writable } from 'node:stream';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { setImmediate } from 'node:timers/promises';
+import { setImmediate, setTimeout } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from './api.js';
 import { historyStream } from './history-stream.js';
@@ -23,6 +23,56 @@ const page = {
 const io = (stdout: Writable) => ({ stdin: { isTTY: true }, stdout: stdout as unknown as NodeJS.WriteStream });
 
 describe('unpaged history streams', () => {
+  it.each([false, true])(
+    'finishes large JSON before process exit, early reader close=%s',
+    async (earlyClose) => {
+      const producer = spawn(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          '--input-type=module',
+          '-e',
+          `
+      const {runCli}=await import(process.argv[2]);
+      const versions=Array.from({length:160},(_,i)=>({version:'v'+String(160-i).padStart(3,'0'),createdAt:'2026-10-16T00:00:00Z',summary:'x'.repeat(4096),sourceFiles:[]}));
+      globalThis.fetch=async (url)=>{const u=new URL(url); const start=Number(u.searchParams.get('cursor')??0), limit=Number(u.searchParams.get('limit')??100); const rows=versions.slice(start,start+limit), next=start+rows.length; return Response.json({slug:'probe',versions:rows,hasMore:next<versions.length,nextCursor:next<versions.length?String(next):null});};
+      process.exit(await runCli(['node','cli','log','probe','--json'],{GAMEDEV_TOKEN:'fixture'}));
+    `,
+          'fixture',
+          new URL('./main.ts', import.meta.url).href,
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      const closed = once(producer, 'close');
+      const chunks: Buffer[] = [];
+      let stderr = '';
+      producer.stderr.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      try {
+        await once(producer.stdout, 'readable');
+        if (earlyClose) producer.stdout.destroy();
+        else {
+          await setTimeout(50);
+          producer.stdout.on('data', (chunk) => chunks.push(chunk));
+          producer.stdout.resume();
+        }
+        expect((await closed)[0], stderr).toBe(0);
+        expect(stderr).not.toContain('EPIPE');
+        if (!earlyClose) {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          expect(data.versions).toHaveLength(160);
+          expect(data.versions[159].summary).toHaveLength(4096);
+        }
+      } finally {
+        producer.kill();
+        producer.stdout.destroy();
+        await closed;
+      }
+    },
+    20000,
+  );
   it('waits for stdout drain before requesting another history page', async () => {
     let flush: (() => void) | undefined;
     const output = new Writable({
