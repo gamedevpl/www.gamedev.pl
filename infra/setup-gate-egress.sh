@@ -69,7 +69,7 @@ CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 # Production path only (gate-hardening.md, items 1-4): the harness clone, `npm ci`,
 # candidate reads and signed artifact uploads, and the verdict POST. No apt mirrors and
 # no Docker Hub: the from-scratch fallback does not run in this pool.
-GATE_ALLOWED_DOMAINS="${GATE_ALLOWED_DOMAINS:-github.com codeload.github.com registry.npmjs.org storage.googleapis.com ${CANONICAL_HOST}}"
+GATE_ALLOWED_DOMAINS="${GATE_ALLOWED_DOMAINS:-github.com codeload.github.com release-assets.githubusercontent.com registry.npmjs.org storage.googleapis.com ${CANONICAL_HOST}}"
 EXTRA_ALLOWED_DOMAINS="${EXTRA_ALLOWED_DOMAINS:-}"
 ALLOWED="$(echo "$GATE_ALLOWED_DOMAINS $EXTRA_ALLOWED_DOMAINS" | xargs)"
 APP_SA_NAME="${APP_SA_NAME:-gamedev-app}"

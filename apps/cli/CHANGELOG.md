@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `log` reads full history by default, streams into a terminal pager with `PAGER` and `--no-pager` controls, and filters by `--since`, `--until`, `--grep`/`-i` and changed files after `--`; `--limit` counts matching versions.
+- `log` reads full history by default, streams into a terminal pager with `PAGER` and `--no-pager` controls, and filters by `--since`, `--until`, `--grep`/`-i` and changed files after `--`; `--limit` counts matching versions (#1861).
 
 ## 0.49.2 — 2026-10-16
 
