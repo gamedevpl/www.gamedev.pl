@@ -416,7 +416,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: games-repo
-        run: npm ci
+        # Install hooks are games-repo code too; keep their output out of this log.
+        run: '"$QUIET" npm ci'
 
       - name: Install Chrome
         uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
@@ -559,7 +560,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: games-repo
-        run: npm ci
+        # Install hooks are games-repo code too; keep their output out of this log.
+        run: '"$QUIET" npm ci'
 
       - name: Check games on WebKit
         working-directory: games-repo
