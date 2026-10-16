@@ -9,6 +9,7 @@ import { historyCommand, isHistoryVerb } from './history-command.js';
 import { readHistory, readHistoryTree } from './history-api.js';
 import { handleReplLine } from './repl.js';
 import { runCli } from './main.js';
+import { parseArgv } from './argv.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -94,6 +95,7 @@ describe('platform history commands without a local Git repository', () => {
     const first = JSON.parse(await f.run('show', ['v1'], { json: true }));
     expect(first.parent).toBeNull();
     expect(first.patch).toContain('+const a = 1;');
+    expect(await f.run('show', ['v2'])).toContain('version v2\nDate:');
   });
   it('diff compares in either direction without changing a checkout', async () => {
     const f = fixture();
@@ -170,6 +172,29 @@ describe('platform history commands without a local Git repository', () => {
       expect(await runCli(['node', 'gamedevpl', 'log', 'probe', '--json'], { GAMEDEV_TOKEN: 'fixture' }, io)).toBe(0);
       expect(JSON.parse(chunks.join('')).versions).toHaveLength(2);
       chunks.length = 0;
+      const parsed = parseArgv(['node', 'gamedevpl', 'log', '--oneline', 'probe']);
+      expect(parsed).toMatchObject({ args: ['probe'], flags: { oneline: true } });
+      for (const [tty, env, color] of [
+        [true, {}, true],
+        [true, { NO_COLOR: '1' }, false],
+        [false, {}, false],
+      ] as const) {
+        io.stdout.isTTY = tty;
+        expect(
+          await runCli(['node', 'gamedevpl', 'log', '--oneline', 'probe'], { GAMEDEV_TOKEN: 'fixture', ...env }, io),
+        ).toBe(0);
+        expect(chunks.join('').includes('\u001b')).toBe(color);
+        expect(chunks.join('').trim().split('\n')).toHaveLength(2);
+        expect(chunks.join('')).toContain('v2');
+        chunks.length = 0;
+      }
+      io.stdout.isTTY = true;
+      expect(
+        await runCli(['node', 'gamedevpl', 'log', 'probe', '--oneline', '--json'], { GAMEDEV_TOKEN: 'fixture' }, io),
+      ).toBe(0);
+      expect(JSON.parse(chunks.join('')).versions[0]).toMatchObject(f.versions[0]!);
+      expect(chunks.join('')).not.toContain('\u001b');
+      chunks.length = 0;
       expect(
         await runCli(
           ['node', 'gamedevpl', 'blame', 'game.ts', '--slug', 'probe', '--version', 'v1', '--json'],
@@ -187,6 +212,15 @@ describe('platform history commands without a local Git repository', () => {
         write: (text) => chunks.push(text),
       });
       expect(chunks.join('')).toContain('+const b = 3;');
+      chunks.length = 0;
+      await handleReplLine({
+        line: '/log --oneline probe',
+        api: f.api,
+        token: null,
+        cwd: f.cwd,
+        write: (text) => chunks.push(text),
+      });
+      expect(chunks.join('').split('\n')).toEqual(['v2 Change 2', 'v1 Change 1']);
     } finally {
       vi.unstubAllGlobals();
     }

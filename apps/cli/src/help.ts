@@ -14,7 +14,7 @@ export const BLURB: Record<SlashVerb, string> = {
   stop: 'stop local Play — stop [slug] [--session <id>|--all]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',
-  log: 'delivered version history — log [slug] [--limit N|--all]',
+  log: 'delivered version history — log [slug] [--limit N|--all] [--oneline]',
   show: 'version metadata and patch — show <version> [--slug <slug>]',
   blame: 'last version changing each line — blame <file> [--version <version>] [--slug <slug>]',
   model: 'view or choose delegated model and effort — model [agent]',

@@ -1,4 +1,4 @@
-import type { HistoryVersion, HistorySourceFile } from '@gamedevpl/contract';
+import type { HistorySourceFile } from '@gamedevpl/contract';
 import type { ApiClient } from './api.js';
 import { findCheckout } from './checkout.js';
 import { sourceProject } from './source-project.js';
@@ -8,6 +8,8 @@ import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { historyVersion, historySlug, readHistory, readHistoryTree } from './history-api.js';
 import { sourceBytes } from './git-history-import.js';
 import { versionBlame, versionPatch, withHistoryGit } from './history-git.js';
+import { formatHistoryLog, formatHistoryVersion, type HistoryFormat } from './history-format.js';
+export { historyTerminalFormat } from './history-format.js';
 
 type Flags = Record<string, string | boolean>;
 export function isHistoryVerb(verb: string, args: string[], flags: Flags): boolean {
@@ -20,20 +22,6 @@ export function isHistoryVerb(verb: string, args: string[], flags: Flags): boole
   );
 }
 
-export function formatHistoryVersion(row: HistoryVersion): string {
-  return [
-    row.version,
-    row.createdAt,
-    row.deliveryMode ?? 'publish',
-    row.verdict ?? 'unknown',
-    row.backend,
-    row.model,
-    row.summary,
-  ]
-    .filter(Boolean)
-    .join('  ');
-}
-
 export async function historyCommand(input: {
   verb: string;
   args: string[];
@@ -42,6 +30,7 @@ export async function historyCommand(input: {
   cwd?: string;
   slug?: string;
   write: (text: string) => void;
+  format?: HistoryFormat;
 }): Promise<boolean> {
   const { verb, args, flags, api } = input;
   if (!isHistoryVerb(verb, args, flags)) return false;
@@ -58,17 +47,19 @@ export async function historyCommand(input: {
   const chosen = explicit ?? here?.slug;
   if (!chosen) throw new CliError('choose a game with --slug <slug>, or run inside its checkout', EXIT_INPUT);
   const slug = historySlug(chosen);
-  const emit = (data: unknown, text: string) =>
-    input.write(jsonMode(flags) ? JSON.stringify(data) : stripTerminalControls(text));
+  const emit = (data: unknown, text: string) => input.write(jsonMode(flags) ? JSON.stringify(data) : text);
   if (verb === 'log') {
-    if (args.length > 1) throw new CliError('usage: gamedevpl log [slug] [--limit N | --all]', EXIT_INPUT);
+    if (args.length > 1) throw new CliError('usage: gamedevpl log [slug] [--limit N | --all] [--oneline]', EXIT_INPUT);
     const limit = flags.all ? Infinity : Number(flags.limit ?? 20);
     if (flags.limit !== undefined && typeof flags.limit !== 'string')
       throw new CliError('--limit needs a number', EXIT_INPUT);
     if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1))
       throw new CliError('--limit must be a positive integer', EXIT_INPUT);
     const versions = await readHistory(api, slug, limit);
-    emit({ slug, versions }, versions.map(formatHistoryVersion).join('\n') || 'No delivered versions yet.');
+    emit(
+      { slug, versions },
+      formatHistoryLog(versions, { ...input.format, oneline: flags.oneline === true || flags.oneline === 'true' }),
+    );
     return true;
   }
   if (verb === 'diff') {
@@ -83,7 +74,7 @@ export async function historyCommand(input: {
       },
       (git) => versionPatch(git, slug, before, after),
     );
-    emit({ slug, from: before, to: after, patch }, patch || 'No source changes.');
+    emit({ slug, from: before, to: after, patch }, stripTerminalControls(patch || 'No source changes.'));
     return true;
   }
   if (verb === 'show') {
@@ -102,7 +93,7 @@ export async function historyCommand(input: {
     );
     emit(
       { slug, metadata: tree.metadata, parent: parent?.version ?? null, patch },
-      `${formatHistoryVersion(tree.metadata)}\n\n${patch || 'No source changes.'}`,
+      `${formatHistoryVersion(tree.metadata, input.format)}\n\n${stripTerminalControls(patch || 'No source changes.')}`,
     );
     return true;
   }
@@ -140,9 +131,11 @@ export async function historyCommand(input: {
   );
   emit(
     { slug, version, path, lines },
-    lines
-      .map((row) => `${row.version} ${row.createdAt} ${row.line.toString().padStart(5)} | ${row.content}`)
-      .join('\n'),
+    stripTerminalControls(
+      lines
+        .map((row) => `${row.version} ${row.createdAt} ${row.line.toString().padStart(5)} | ${row.content}`)
+        .join('\n'),
+    ),
   );
   return true;
 }

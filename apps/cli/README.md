@@ -215,6 +215,7 @@ interactive `/log`, `/show`, `/diff` and `/blame` forms.
 
 ```sh
 gamedevpl log                     # latest 20 delivered versions
+gamedevpl log --oneline           # compact, one line per version
 gamedevpl log --all               # all pages, newest first
 gamedevpl log tabletop-turbos --limit 50
 gamedevpl show <version>          # metadata and patch against the preceding delivery
@@ -224,8 +225,13 @@ gamedevpl blame game/ai.ts        # version that last changed each line
 gamedevpl blame game/ai.ts --version <version>
 ```
 
-`log` shows delivery dates, preview/publication mode, gate outcome, stored change
-summary and backend/model when available. It lists delivered source versions;
+`log` separates versions into Git-style blocks with a readable local date,
+preview/publication mode, gate outcome and backend/model when available. Change
+summaries appear below the metadata, indented and wrapped to the terminal width.
+`show` uses the same header before its patch. Colors follow the terminal and
+`NO_COLOR`; piped output is plain text. `--oneline` shows the version ID and a
+single-line summary, shortened to fit the terminal. `--json` retains the full
+metadata and summary, regardless of display options. It lists delivered source versions;
 rounds that never delivered sources are not versions. `blame` reports version and
 date, not a person or agent identity that the platform cannot establish. Paths
 are relative to the game's source root; a full `games/<slug>/...` path also works,
