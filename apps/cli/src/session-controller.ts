@@ -133,9 +133,9 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     histIndex = history.length;
     stash = '';
     undo = [];
-    // An answered picker hands back the draft it set aside.
-    const draft = answer ? followupDraft : '';
-    if (answer) followupDraft = '';
+    // Hands back a draft parked by a picker or browser answer.
+    const draft = followupDraft;
+    followupDraft = '';
     state = {
       ...state,
       lines: spoken,

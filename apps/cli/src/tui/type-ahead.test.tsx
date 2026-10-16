@@ -26,3 +26,15 @@ it('shows text typed during startup and history restore, then opens the first pr
   await view.press('\r');
   expect(await first).toBe('napraw skok!');
 });
+
+it('keeps a terminal draft parked by a browser answer and appends type-ahead to it', async () => {
+  const view = screen(80, 24);
+  const first = view.session.prompt();
+  await view.press('half');
+  expect(view.session.acceptInput('from browser', view.session.get().promptId)).toBe(true);
+  expect(await first).toBe('from browser');
+  expect(view.frame()).toContain('Next message');
+  await view.press(' done');
+  void view.session.prompt();
+  expect(view.session.get()).toMatchObject({ mode: 'prompt', draft: 'half done' });
+});
