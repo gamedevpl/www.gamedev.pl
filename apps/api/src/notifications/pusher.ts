@@ -9,6 +9,7 @@
 // is client + manifest work only, no change to this file.
 
 import webpush from 'web-push';
+import { isAllowedPushEndpoint } from './push-endpoint.js';
 
 // The browser's PushSubscription, as serialized by `subscription.toJSON()` on the
 // client and stored verbatim. `web-push` accepts exactly this shape.
@@ -62,14 +63,10 @@ export class WebPushPusher implements Pusher {
   }
 
   async send(subscription: PushSubscriptionJSON, payload: PushPayload): Promise<PushSendResult> {
+    if (!isAllowedPushEndpoint(subscription.endpoint)) return { outcome: 'gone' }; // off-list host: prune it
+    const { subject, publicKey, privateKey } = this.config;
     try {
-      await this.sendImpl(subscription, JSON.stringify(payload), {
-        vapidDetails: {
-          subject: this.config.subject,
-          publicKey: this.config.publicKey,
-          privateKey: this.config.privateKey,
-        },
-      });
+      await this.sendImpl(subscription, JSON.stringify(payload), { vapidDetails: { subject, publicKey, privateKey } });
       return { outcome: 'sent' };
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;

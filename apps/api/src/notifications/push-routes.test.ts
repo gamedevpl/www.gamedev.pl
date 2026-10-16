@@ -10,7 +10,7 @@ function authHeaders(uid: string) {
 }
 
 const subscription = {
-  endpoint: 'https://push.example.com/sub-1',
+  endpoint: 'https://fcm.googleapis.com/fcm/send/sub-1',
   keys: { p256dh: 'BPk...', auth: 'auth123' },
 };
 
