@@ -4,6 +4,7 @@ import { GAME_KIT_MODULES } from './games-repo-contract.js';
 it('lists GameKit modules in the post-draw-surface canonical order', () => {
   expect([...GAME_KIT_MODULES]).toEqual([
     'input',
+    'gamepad',
     'collision',
     'world',
     'grid',

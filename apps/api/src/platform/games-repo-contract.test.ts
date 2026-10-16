@@ -89,9 +89,7 @@ describe('games-repo-contract (website half)', () => {
       };
     };
     expect(fixture.version).toBe(2);
-    // The audio injection shape is half of what this fixture exists to pin: `music` is the
-    // autoplay track and `musicTracks` the extras a game switches to. Serve-time assembly
-    // must embed both, or a published game's mid-round score change silently no-ops.
+    // Serve-time assembly must embed every selected music track.
     expect(fixture.audio.musicField).toBe(MUSIC_CONTRACT.manifestFieldType);
     expect(fixture.audio.musicTracksField).toBe(MUSIC_CONTRACT.manifestTracksFieldType);
     // Per-game audio.bank clips: serve-time assembly embeds them under the same global.
@@ -215,7 +213,7 @@ describe('games-repo source extractors', () => {
     const source = `
       // Canonical order
       export const GAME_KIT_MODULES = [
-        'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
+        'input', 'gamepad', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
         'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'platformer', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
         'sensing', 'voice', 'editor', 'settings', 'inspect',
       ] as const;
