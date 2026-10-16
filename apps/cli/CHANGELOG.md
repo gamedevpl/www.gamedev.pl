@@ -12,13 +12,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - `log` and `show` display readable Git-style version blocks, with terminal colors, local dates and wrapped change summaries; `log --oneline` offers a compact view while `--json` keeps full data (#1856).
+- Text typed while `gamedevpl connect` starts, restores history or checks Kit updates now shows in a "Next message" box and opens the first prompt; the live preview opens with Ctrl+O so typing `o` no longer launches the browser (#1853).
 
 ## 0.49.1 — 2026-10-16
 
 ### Fixed
 
 - The prompt cursor highlights the character under it in soft gray, like Claude Code, instead of inserting a block, so text no longer shifts while moving the cursor; mouse selections use the same gray (#1849).
-- Text typed while `gamedevpl connect` starts, restores history or checks Kit updates now shows in a "Next message" box and opens the first prompt; the live preview opens with Ctrl+O so typing `o` no longer launches the browser (#1853).
 
 ## 0.49.0 — 2026-10-15
 
