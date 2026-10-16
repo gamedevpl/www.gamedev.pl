@@ -34,6 +34,7 @@ steps:
 
         for url in \
           "https://github.com/$${GAMES_REPO}.git/info/refs?service=git-upload-pack" \
+          "https://release-assets.githubusercontent.com/" \
           "https://registry.npmjs.org/react" \
           "https://storage.googleapis.com/" \
           "https://$${CANONICAL_HOST}/"; do
