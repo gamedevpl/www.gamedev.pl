@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- `log` and `show` display readable Git-style version blocks, with terminal colors, local dates and wrapped change summaries; `log --oneline` offers a compact view while `--json` keeps full data.
+- `log` and `show` display readable Git-style version blocks, with terminal colors, local dates and wrapped change summaries; `log --oneline` offers a compact view while `--json` keeps full data (#1856).
 
 ## 0.49.1 — 2026-10-16
 
