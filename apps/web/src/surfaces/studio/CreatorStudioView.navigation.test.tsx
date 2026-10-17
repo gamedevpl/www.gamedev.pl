@@ -57,9 +57,12 @@ afterEach(async () => {
   window.history.replaceState(null, '', '/');
 });
 
-it('keeps Back and Forward on the requested game without rewriting history', async () => {
+it.each([
+  { slug: 'transport-tycoon-remake', title: 'Transport Tycoon Remake' },
+  { slug: 'missing-game', title: null },
+])('keeps Back and Forward on $slug without rewriting history', async ({ slug, title }) => {
   const first = '/studio/trenchline-command/details';
-  const second = '/studio/transport-tycoon-remake/details';
+  const second = `/studio/${slug}/details`;
   window.history.replaceState(null, '', first);
   const replacements = vi.spyOn(window.history, 'replaceState');
   const navigations = vi.fn();
@@ -88,7 +91,7 @@ it('keeps Back and Forward on the requested game without rewriting history', asy
             onNavigate(second);
           },
         },
-        'Open Transport Tycoon',
+        'Open next game',
       ),
       createElement(CreatorStudioView, {
         selectedGame: route.game,
@@ -106,14 +109,24 @@ it('keeps Back and Forward on the requested game without rewriting history', asy
     container.querySelector<HTMLAnchorElement>(`a[href="${second}"]`)!.click();
   });
   expect(window.location.pathname).toBe(second);
-  expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Transport Tycoon Remake');
+  const expectGame = (expectedTitle: string | null) => {
+    if (expectedTitle) {
+      expect(container.querySelector('.studio-strip-title')?.textContent).toContain(expectedTitle);
+      expect(container.querySelector('.studio-rail')).not.toBeNull();
+    } else {
+      expect(container.querySelector('.studio-strip-title')).toBeNull();
+      expect(container.querySelector('.studio-rail')).toBeNull();
+      expect(container.textContent).toContain(i18n.t('studioPanel.gameNotFound'));
+    }
+  };
+  expectGame(title);
   navigations.mockClear();
   replacements.mockClear();
 
-  for (const [path, title] of [
-    [first, 'Trenchline Command'],
-    [second, 'Transport Tycoon Remake'],
-    [first, 'Trenchline Command'],
+  for (const { path, expectedTitle } of [
+    { path: first, expectedTitle: 'Trenchline Command' },
+    { path: second, expectedTitle: title },
+    { path: first, expectedTitle: 'Trenchline Command' },
   ]) {
     await act(async () => {
       const changed = new Promise<void>((resolve) =>
@@ -124,8 +137,7 @@ it('keeps Back and Forward on the requested game without rewriting history', asy
       await changed;
     });
     expect(window.location.pathname).toBe(path);
-    expect(container.querySelector('.studio-strip-title')?.textContent).toContain(title);
-    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expectGame(expectedTitle);
     expect(navigations).not.toHaveBeenCalled();
     expect(replacements).not.toHaveBeenCalled();
   }

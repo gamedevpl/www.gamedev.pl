@@ -173,10 +173,7 @@ export function CreatorStudioView({
   const shelfOpenRef = useRef<HTMLButtonElement>(null!);
   const shareContainerRef = useRef<HTMLDivElement>(null);
 
-  // What the URL is asking for, readable from inside the shelf fetch below without
-  // making that fetch re-run every time the address changes. Seeded rather than
-  // assigned in an effect because the case that matters is the first render: a deep
-  // link arrives with the shelf request already in flight.
+  // Deep links must be available before the first shelf request.
   const requestedGameRef = useRef(selectedGame);
   useEffect(() => {
     requestedGameRef.current = selectedGame;
@@ -194,7 +191,8 @@ export function CreatorStudioView({
   }, [selectedGame, games, shelfGames]);
   useEffect(() => {
     if (requestedShelfGame) setSelected(requestedShelfGame.token);
-  }, [requestedShelfGame]);
+    else if (selectedGame && !loading && !error) setSelected(null);
+  }, [requestedShelfGame, selectedGame, loading, error]);
 
   useEffect(() => {
     if (!user) {

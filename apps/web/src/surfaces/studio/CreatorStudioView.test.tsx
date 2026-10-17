@@ -1234,8 +1234,7 @@ describe('CreatorStudioView', () => {
       ]),
     );
 
-    // Two `/details` URLs in a row — a browser Back, or a link. The panel stays mounted
-    // across that, so anything it seeded from the first game would still be on screen.
+    // Consecutive Details routes must discard the previous game's panel state.
     const { container, root, rerender } = await renderStudio({
       selectedGame: 'tv-tycoon',
       selectedTab: 'details',
@@ -1273,11 +1272,9 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(3)));
     window.history.replaceState(null, '', '/studio/token-1');
 
-    // The shape of a link from a months-old notification email, minted before games
-    // were given a slug at submission.
+    // Legacy notification links address games by capability token.
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-1' });
 
-    // It still opens the right game…
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Game 2');
     // Replace legacy tokens without adding a history entry.
     expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread', { replace: true });
@@ -1292,9 +1289,7 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(3)));
     window.history.replaceState(null, '', '/studio/somebody-elses-game');
 
-    // Slugs are public — they are in every /play/ link — so the guard cannot be that
-    // the address is secret. It is that the shelf holds only this creator's games, and
-    // nothing on this screen is fetched by the URL's value.
+    // Public slugs must resolve only against the creator's own shelf.
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'somebody-elses-game' });
 
     expect(container.querySelector('.studio-detail')).toBeNull();
@@ -1312,9 +1307,8 @@ describe('CreatorStudioView', () => {
 
     const { container, root, onNavigate } = await renderStudio();
 
-    // First game is selected in the UI for convenience…
+    // Bare Studio keeps convenience selection out of the URL.
     expect(container.querySelector('.studio-shelf-item.is-active')?.textContent).toContain('Game 1');
-    // …but nothing is written to the address bar until an explicit pick.
     expect(onNavigate).not.toHaveBeenCalled();
 
     const second = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
@@ -1324,8 +1318,7 @@ describe('CreatorStudioView', () => {
     await act(async () => {
       second!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    // And when it is written, it names the game — not the capability token that used
-    // to sit in the URL bar, in history, and in every screenshot of this screen.
+    // Explicit selection writes the slug without exposing its capability token.
     expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread');
 
     root.unmount();
@@ -1846,6 +1839,10 @@ describe('CreatorStudioView abandon', () => {
       selectedTab: 'details',
     });
 
+    vi.mocked(onNavigate).mockImplementation((path) => {
+      if (path === '/studio') root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn() }));
+    });
+
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
     await act(async () => {
       abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1858,7 +1855,6 @@ describe('CreatorStudioView abandon', () => {
 
     expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
     expect(onNavigate).toHaveBeenCalledWith('/studio');
-    // Detail pane must render, not a blank main area.
     expect(container.querySelector('.studio-detail')).not.toBeNull();
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Other Game');
     expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
@@ -1898,6 +1894,10 @@ describe('CreatorStudioView abandon', () => {
     const { container, root, onNavigate } = await renderStudio({
       selectedGame: 'neon-draft',
       selectedTab: 'details',
+    });
+
+    vi.mocked(onNavigate).mockImplementation((path) => {
+      if (path === '/studio') root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn() }));
     });
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
