@@ -82,12 +82,14 @@ export async function initializeGitCheckout(input: { api: ApiClient; root: strin
       git(['config', `remote.${remote}.gamedevpl-${key}`, value]);
     const known = knownHistoryCommits(slug, here.root, scope);
     let parent: string | undefined;
+    let previousFiles: string[] = [];
     for (const row of [...versions].sort(
       (a, b) => a.createdAt.localeCompare(b.createdAt) || a.version.localeCompare(b.version),
     )) {
       const cached = known.get(row.version);
       if (cached) {
         parent = cached;
+        previousFiles = row.sourceFiles;
         continue;
       }
       const tree = await readHistoryTree(input.api, slug, row.version);
@@ -103,9 +105,12 @@ export async function initializeGitCheckout(input: { api: ApiClient; root: strin
           parent,
           sourceRoot: root,
           trees: new Map([[row.version, projectGitFiles(tree.files, layout)]]),
+          preserveOutsideSources: true,
+          parentSourceFiles: previousFiles,
         }),
       );
       parent = revision(git, versionImportRef(slug, row.version, scope)) ?? undefined;
+      previousFiles = row.sourceFiles;
     }
     const latest = versions[0],
       tracking = `refs/remotes/${remote}/main`;

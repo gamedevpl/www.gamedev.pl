@@ -1,7 +1,7 @@
 import type { HistorySourceFile } from '@gamedevpl/contract';
 import { historySlug } from './history-api.js';
 
-export type VersionRef = { version: string; createdAt: string };
+export type VersionRef = { version: string; createdAt: string; sourceFiles?: string[] };
 export type TreeFile = HistorySourceFile;
 export const remoteImportRef = (slug: string, scope?: string): string =>
   `refs/gamedevpl/${scope ? `${scope}/` : ''}${historySlug(slug)}/main`;
@@ -23,6 +23,8 @@ export function fastImportScript(input: {
   markOffset?: number;
   finish?: boolean;
   sourceRoot?: string;
+  preserveOutsideSources?: boolean;
+  parentSourceFiles?: string[];
 }): Buffer {
   historySlug(input.slug);
   const ref = input.ref ?? remoteImportRef(input.slug, input.scope);
@@ -34,11 +36,13 @@ export function fastImportScript(input: {
   const chunks: Buffer[] = [];
   const emit = (text: string) => chunks.push(Buffer.from(text + '\n'));
   let parent = input.parent;
+  let previousFiles = input.parentSourceFiles ?? [];
   let mark = input.markOffset ?? 0;
   for (const row of chronological) {
     const known = input.knownCommits?.get(row.version);
     if (known) {
       parent = known;
+      previousFiles = row.sourceFiles ?? [];
       continue;
     }
     const files = input.trees.get(row.version);
@@ -55,7 +59,17 @@ export function fastImportScript(input: {
     emit(`data ${Buffer.byteLength(row.version)}`);
     emit(row.version);
     if (parent) emit(`from ${parent}`);
-    emit('deleteall');
+    if (input.preserveOutsideSources) {
+      for (const path of previousFiles) {
+        if (
+          !path ||
+          path.includes('\\') ||
+          path.split('/').some((p) => !p || p === '.' || p === '..' || p.toLowerCase() === '.git')
+        )
+          throw new Error('invalid previous Git source path');
+        emit(`D ${JSON.stringify(`${sourceRoot}/${path}`)}`);
+      }
+    } else emit('deleteall');
     for (const file of files) {
       if (
         !file.path ||
@@ -70,6 +84,7 @@ export function fastImportScript(input: {
       chunks.push(bytes, Buffer.from('\n'));
     }
     parent = `:${mark}`;
+    previousFiles = files.map((file) => file.path);
     emit(`reset ${versionImportRef(input.slug, row.version, input.scope)}`);
     emit(`from ${parent}`);
     emit('');

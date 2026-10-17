@@ -176,6 +176,8 @@ For pull merges, verify historical content against base hashes before applying t
 Git remains optional: exercise native checkout with no repository and explicit Git setup separately.
 Verify real Git pull/stash/push across both source layouts and raster representations.
 Derive delivery bases from pushed commit ancestry, not a mutable working-copy base.
+Exercise push followed by fetch and fast-forward pull; cache-only receipts leave sibling commits.
+Preserve repository context outside the platform manifest when importing later source versions.
 Record the remote tree as the new base; merged drafts must remain local differences.
 Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
 Test historical checkout through the real entrypoint as well as slash routing;

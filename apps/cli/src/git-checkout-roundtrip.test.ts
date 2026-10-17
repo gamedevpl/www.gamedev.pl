@@ -60,7 +60,7 @@ const submit = async ({dest}) => {
   else if (!rel.endsWith('.txt') && rel !== 'cache.ts') files.push({path:rel, content:fs.readFileSync(abs).toString(root==='src' && /[.](png|webp)$/i.test(rel) ? 'base64' : 'utf8')});
  }}; walk(path.join(dest,root));
  fs.writeFileSync(path.join(__dirname,'delivery.json'), JSON.stringify({base:JSON.parse(fs.readFileSync(path.join(dest,'.gamedev-base.json'),'utf8')),files}));
- data.trees[version]=files; data.versions.unshift({...data.versions[0],version,createdAt:'2026-10-05T00:00:00Z',sourceFiles:files.map(f=>f.path)}); fs.writeFileSync(file,JSON.stringify(data));
+ data.trees[version]=files.map(f=>/[.](png|webp)$/i.test(f.path)?{...f,encoding:'base64'}:f); data.versions.unshift({...data.versions[0],version,createdAt:'2026-10-05T00:00:00Z',sourceFiles:files.map(f=>f.path)}); fs.writeFileSync(file,JSON.stringify(data));
  return {kind:'delivered', version, files, ignored:[], staged:[]};
 };
 import(pathToFileURL(path.join(__dirname, 'bridge.mjs')).href).then(m => m.runGitRemoteHelper(process.argv, process.env,{submit})).then(code => process.exitCode=code).catch(e=>{console.error(e); process.exitCode=1;});
@@ -163,6 +163,8 @@ it.each([false, true])(
 it.each([false, true])('delivers only committed files through real git push, source repository=%s', async (project) => {
   const f = await fixture(project);
   writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  writeFileSync(join(f.root, 'README.md'), 'creator repository context\n');
+  f.git('add', '-f', 'README.md');
   f.git('add', `${f.prefix}/game.ts`);
   f.commit('committed game');
   writeFileSync(join(f.game, 'game.ts'), 'unsent editor draft\n');
@@ -171,6 +173,22 @@ it.each([false, true])('delivers only committed files through real git push, sou
   expect(receipt.base.version).toBe('v3');
   expect(receipt.files.find((file: TreeFile) => file.path === 'game.ts').content).toBe(sourceLines(9, 3));
   expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe('unsent editor draft\n');
+  const head = f.git('rev-parse', 'HEAD');
+  f.git('fetch', 'origin');
+  f.git('pull', '--ff-only');
+  expect(f.git('rev-parse', 'origin/main')).toBe(head);
+  expect(f.git('rev-parse', 'HEAD')).toBe(head);
+  expect(readFileSync(join(f.root, 'README.md'), 'utf8')).toBe('creator repository context\n');
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  const data = JSON.parse(readFileSync(f.data, 'utf8'));
+  data.trees.v5 = data.trees.v4.map((file: TreeFile) =>
+    file.path === 'game.ts' ? { ...file, content: sourceLines(11, 3) } : file,
+  );
+  data.versions.unshift({ ...data.versions[0], version: 'v5', createdAt: '2026-10-06T00:00:00Z' });
+  writeFileSync(f.data, JSON.stringify(data));
+  f.git('pull', '--ff-only');
+  expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(11, 3));
+  expect(readFileSync(join(f.root, 'README.md'), 'utf8')).toBe('creator repository context\n');
 });
 
 it('remembers a confirmed no-change push before the next local revision', async () => {

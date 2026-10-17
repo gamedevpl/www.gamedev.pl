@@ -23,6 +23,9 @@ import {
   type GitLayout,
 } from './git-checkout-layout.js';
 import { gitPushBase, rememberGitDelivery } from './git-push-base.js';
+import { bindGitDelivery } from './git-delivery-ref.js';
+import { historyTree } from './history-edit-tree.js';
+import { isRasterSourcePath } from '@gamedevpl/contract';
 import { formatIgnoredNotice } from './working-copy.js';
 import { readHistory, readHistoryTree, historySlug } from './history-api.js';
 import { knownHistoryCommits } from './git-history-cache.js';
@@ -83,16 +86,31 @@ export async function reconcilePush(input: {
         JSON.stringify({ ...base, ...(input.layout.root === 'src' ? { slug: input.slug } : {}) }),
       );
     }
+    const pushed = localGameFiles(dest, input.slug);
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
     try {
-      if (input.scope)
+      if (input.scope) {
+        const version = result.kind === 'delivered' ? result.version : result.sync.version;
+        let files = result.kind === 'delivered' ? result.files : localGameFiles(dest, input.slug);
+        if (result.kind === 'nothing') {
+          const tree = await readHistoryTree(input.api, input.slug, version);
+          if (tree.slug !== input.slug || tree.version !== version)
+            throw Error('History response identity does not match this Git delivery.');
+          files = [...historyTree(tree)].map(([path, bytes]) => ({
+            path,
+            content: bytes.toString(isRasterSourcePath(path) ? 'base64' : 'utf8'),
+          }));
+        }
         rememberGitDelivery({
           ...input,
           commit,
           scope: input.scope,
-          version: result.kind === 'delivered' ? result.version : result.sync.version,
-          files: result.kind === 'delivered' ? result.files : localGameFiles(dest, input.slug),
+          version,
+          files,
         });
+        if (input.layout)
+          bindGitDelivery({ ...input, commit, scope: input.scope, layout: input.layout, version, files, pushed });
+      }
       adoptCheckoutBase(input.cwd, input.slug, dest, result);
     } catch {
       stderr.write(
@@ -146,6 +164,7 @@ export async function runGitRemoteHelper(
         );
       },
       sourceRoot: layout.root,
+      preserveOutsideSources: Boolean(pinned),
       pushReconcile: async (src) =>
         reconcilePush({
           api,

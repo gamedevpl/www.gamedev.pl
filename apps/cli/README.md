@@ -377,6 +377,10 @@ another branch cannot silently borrow a newer working-copy base. A branch withou
 known platform ancestry is refused; merge the platform history explicitly or use
 native `gamedevpl push` for your local files. Git pushes deliver source snapshots,
 not your local commit graph; local commit messages and authors remain in your repository.
+The local bridge maps an accepted version to the pushed commit when its sources match.
+If the platform canonicalizes sources, a projection commit follows that commit instead.
+Later fetches preserve repository files outside the platform's source manifest, allowing
+fast-forward pulls after a push without dropping your README or project configuration.
 
 Native `gamedevpl pull`, `push`, `restore` and `revert` continue to operate on local
 sources and platform history. They do not create commits or move your Git branch/index.
@@ -384,7 +388,7 @@ When mixing workflows, inspect `git diff` and commit source changes yourself bef
 using Git pull. Git stash belongs to the optional Git workflow; no-repository sessions
 continue using the platform's history and local files.
 
-The helper imports a deterministic commit per version into `refs/gamedevpl/`,
+The helper caches a commit per delivered version in `refs/gamedevpl/`,
 which Git maps to `origin/main`. It never updates a local branch. Repeated fetches
 reuse imported commits and fetch only new source trees; PNG/WebP files retain
 the checkout's representation: base64 text in standard workspaces, raw bytes in source
