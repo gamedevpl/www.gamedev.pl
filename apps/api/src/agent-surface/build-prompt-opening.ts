@@ -2,7 +2,7 @@ import type { BuildBrief } from './agent-backend.js';
 
 // A refused delivery leaves the work staged; clearing blind destroyed it.
 const STAGED_FIRST =
-  'Call `list_staged_sources` before your first edit: files staged earlier in this round survive, and `fromStaged` submits whatever is staged. Read them, keep what fits the request, and call `clear_staged_sources` only to discard them.';
+  'Call `list_staged_sources` before your first edit: files staged earlier in this round survive, `fromStaged` submits them with yours, and their contents cannot be read back. When those paths are the work this request still needs, submit them as they are with `fromStaged` before you edit; otherwise call `clear_staged_sources`.';
 
 export function buildPromptOpening(brief: BuildBrief, slug: string, creating: boolean, mounted = false): string {
   const base = mounted ? `the files already in \`games/${slug}/\`` : 'what `get_sources` returns';
