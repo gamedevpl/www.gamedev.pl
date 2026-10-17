@@ -475,6 +475,17 @@ Playwright cache). The Anthropic sandbox already ships Playwright's Chromium und
 `EPIPE` and, being on `PATH`, wins over the Playwright cache. Without a browser the agent is
 told to carry on without looking.
 
+**Visual targets (managed only).** With `MANAGED_VISUAL_TARGET=true`, managed builder sessions with a shell
+(the signed opener carries a shell marker; today Anthropic) see an
+extra MCP tool, `visual_target({ direction })`
+([`mcp-visual-target-tools.ts`](../apps/api/src/agent-surface/mcp-visual-target-tools.ts)). It edits
+the round's latest green gate frame with the dream-job image model (HUD locked), stores the result
+as a `Visual target` build shot that never reaches the creator's strip, and returns a signed
+download URL (never bytes). It is listed and callable only when the request carries a managed-session
+opener bearer for the same job (`verifyManagedMcpOpener`); every public, BYOCA, OAuth or creator-key
+client gets `unknown tool`. Two per round, the shared daily dream allowance and the dreams kill
+switch apply, and each call books a `concept` cost.
+
 The live registry does not yet pass a kit digest loader into the managed backend. When it
 does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
 to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent

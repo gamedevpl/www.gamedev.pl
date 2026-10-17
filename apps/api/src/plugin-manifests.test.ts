@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './agent-surface/mcp-install-links.js';
-import { MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './agent-surface/mcp-server.js';
+import { MCP_MANAGED_ONLY_TOOLS, MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './agent-surface/mcp-server.js';
 import { MCP_UI_APP_ONLY_TOOLS } from './agent-surface/mcp-ui.js';
 
 // Copy in several places drifts — the closed-beta clause already did.
@@ -255,12 +255,12 @@ describe('the documented tool list', () => {
   // Hand-kept lists go stale.
   it('names exactly the tools a connecting client is offered', () => {
     const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
-    expect([...documented].sort()).toEqual([...advertised].sort());
+    expect([...documented, ...MCP_MANAGED_ONLY_TOOLS].sort()).toEqual([...advertised].sort());
   });
 
-  it('does not document a tool no agent can discover', () => {
-    for (const name of MCP_UNADVERTISED_TOOLS) {
-      expect(documented, `${name} is unadvertised and must not read as available`).not.toContain(name);
+  it('does not document a tool no agent can discover or a managed-only tool', () => {
+    for (const name of [...MCP_UNADVERTISED_TOOLS, ...MCP_MANAGED_ONLY_TOOLS]) {
+      expect(documented, `${name} is not public and must not read as available`).not.toContain(name);
     }
   });
 

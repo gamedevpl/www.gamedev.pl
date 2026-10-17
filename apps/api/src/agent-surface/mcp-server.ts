@@ -11,6 +11,7 @@ import {
   toolErrForReason,
   withErrorBranch,
   MCP_VISIBLE_TOOLS,
+  MCP_MANAGED_ONLY_TOOLS,
   channelControlFields,
   pendingMessagesFromChannel,
   CREATOR_TEXT_SAFETY,
@@ -32,6 +33,7 @@ import { createRoundCardTools } from './mcp-round-card-tools.js';
 import { createShareDraftTools } from './mcp-share-draft-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
+import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -53,7 +55,7 @@ import {
   ROUND_SEQUENCE_TEXT,
 } from './mcp-round-guide.js';
 
-export { MCP_VISIBLE_TOOLS };
+export { MCP_MANAGED_ONLY_TOOLS, MCP_VISIBLE_TOOLS };
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import {
@@ -86,6 +88,7 @@ import {
   verifyManagedMcpOpener,
   type AgentTokenAccess,
   type AgentTokenClaims,
+  type ManagedOpenerClaims,
 } from '../platform/agent-token.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
@@ -200,6 +203,8 @@ export interface McpServerOptions {
    * mitigation). Absent Origin is allowed — coding agents are not browsers.
    */
   allowedOrigins?: string[];
+  // Image frames for managed builders' visual_target; unset refuses it.
+  visualTarget?: Pick<VisualTargetToolsDeps, 'frames' | 'availability'> | null;
   // Green-gate share rule, injected so Studio and share_draft agree.
   refuseShare?: (record: SubmissionRecord) => Promise<{ error: string; message: string } | null>;
   startImprovementRound?: (input: {
@@ -1345,10 +1350,34 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
+    // Absent unless configured, so no session is offered a dead tool.
+    ...(options.visualTarget
+      ? createVisualTargetTools({
+          resolveAuth,
+          managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
+          store,
+          gamesStore: options.gamesStore,
+          frames: options.visualTarget.frames,
+          availability: options.visualTarget.availability,
+          agentTokenSecret,
+          now,
+        })
+      : {}),
 
     ...createInboxTools({ resolveAuth, injectChannel, writePiggyback }),
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
+
+  // A managed-session opener's claims; null for every public client.
+  function managedOpenerClaims(bearer: string | null): ManagedOpenerClaims | null {
+    if (!bearer || !agentTokenSecret) return null;
+    try {
+      return verifyManagedMcpOpener(bearer, agentTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) return null;
+      throw error;
+    }
+  }
 
   function noteInvalidStart(request: FastifyRequest): void {
     noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
@@ -1468,6 +1497,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     if (message.method === 'tools/list') {
+      // Managed-only tools answer with URLs, so only shell sessions see them.
+      const offersManaged = managedOpenerClaims(bearerToken)?.shell === true;
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);
@@ -1475,6 +1506,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
             .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
+            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || offersManaged)
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
@@ -1550,6 +1582,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // reach a tool its model was never meant to see. This refuses in exactly the
       // situations views are already unavailable, so it cannot break a working view.
       if (MCP_UI_APP_ONLY_TOOLS.has(name) && !sessionWantsUi(sessionHeader)) {
+        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+      }
+      // Managed-only tools do not exist for public clients.
+      if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerClaims(bearerToken) === null) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};

@@ -123,6 +123,7 @@ import type { OptionImageGenerator } from '../creation/option-images.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
+import { createVisualTargetFromEnv } from '../creation/dream-job-env.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
 import { mintToken } from './submission-token.js';
 import { loadReviewCandidate } from '../community/review-candidate.js';
@@ -564,6 +565,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       proposalDiffPage,
     },
     assertDeliverableSourcePath,
+    visualTarget: createVisualTargetFromEnv({ store, log: app.log }),
   });
 
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });

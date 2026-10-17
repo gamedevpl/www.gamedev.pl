@@ -15,6 +15,7 @@ import {
   REFERENCE_IMAGE_DOWNLOAD_ROUTE,
   verifyReferenceImageToken,
 } from './reference-image-url.js';
+import { VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
 
 // Round brief and creator-attached reference images the agent starts from.
 export interface AgentChannelBriefRoutesDeps {
@@ -113,11 +114,16 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       const claim = agentTokenSecret && token ? verifyReferenceImageToken(agentTokenSecret, token, now()) : null;
       if (!claim || !store) return reply.status(404).send({ error: 'not found' });
       const shot = await store.getBuildShot(claim.jobId, claim.shotId);
-      if (!shot || shot.label !== 'creator-reference') return reply.status(404).send({ error: 'not found' });
+      const reference = shot?.label === 'creator-reference';
+      if (!shot || (!reference && shot.label !== VISUAL_TARGET_SHOT_LABEL)) {
+        return reply.status(404).send({ error: 'not found' });
+      }
       // Seen once the body is fully sent; a failed mark stays silent.
-      reply.raw.once('finish', () => {
-        void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
-      });
+      if (reference) {
+        reply.raw.once('finish', () => {
+          void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+        });
+      }
       return reply
         .header('content-type', shot.mediaType ?? 'image/png')
         .header('cache-control', 'private, max-age=300')
