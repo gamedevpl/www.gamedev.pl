@@ -52,7 +52,7 @@ describe('fitDreamSource', () => {
   });
 
   it('refuses a header too large to decode without decoding it', () => {
-    // 20000x20000 declared; the pixels never exist, so decoding would allocate 1.6 GB.
+    // Declares 20000x20000; decoding would allocate 1.6 GB.
     const huge = pngOf(20000, 20000, { scanlines: Buffer.alloc(1) });
     expect(fitDreamSource(huge)).toEqual({ refused: 'gate capture is too large to decode' });
   });
