@@ -161,6 +161,21 @@ initial history reads worked, but fetching after a local commit failed in fast-i
 Also check history pagination and tree-route rate limits before claiming a full-history
 import works against the platform API.
 
+For history edits, verify reverse patches against later changes in the same file,
+binary files, renames and root deliveries; replacing a tree with its parent is not
+revert. Preserve synchronization bases and caller Git state. Standard checkouts store
+raster sources as base64 text while source repositories store raw bytes: check both.
+Inject a failure between directory renames and recover with the source directory
+missing. Resolve recovery before source-project discovery, which otherwise fails on
+missing SPEC.md. Refuse recovery over subsequent editor changes and validate its namespace.
+Kill a separate writer process and exercise recovery: an in-process rename-failure test
+does not leave the persistent writer lock behind. Reclaim only a demonstrably dead
+history-edit owner, never a live or agent-owned lock; serialize stale-lock cleanup too.
+Recheck the remote tip after fetching trees and computing reverse merges, before writing.
+Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
+Test historical checkout through the real entrypoint as well as slash routing;
+the ordinary checkout branch and global --version handling can bypass the new action.
+
 Shared command dispatch also has synchronous behavior: update progress must appear
 before the first await. An unconditional await of a new history handler, even when
 it returned false for other verbs, delayed the update spinner and broke its fake-timer

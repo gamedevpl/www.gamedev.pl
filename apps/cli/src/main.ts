@@ -152,7 +152,7 @@ export async function runCli(
   }
   const { verb, args, flags, paths } = parseArgv(argv);
   const asJson = jsonMode(flags);
-  if (printVersion(flags, (line) => io.stdout.write(line))) return EXIT_GREEN;
+  if (printVersion(flags, (line) => io.stdout.write(line), verb)) return EXIT_GREEN;
   const origin = originFromEnv(env);
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
@@ -340,7 +340,7 @@ export async function runCli(
         ...(telemetry ? { telemetry } : {}),
       });
     }
-    if (verb === 'checkout') {
+    if (verb === 'checkout' && flags.version === undefined) {
       const slug = args[0];
       if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = resolvePath(args[1] ?? slug);

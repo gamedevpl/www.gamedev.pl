@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `restore <version>` and `checkout --version <version>` restore delivered sources locally; `revert <version>` undoes one delivery while preserving later changes, with conflict checks, dry-run plans, recovery copies and interrupted-edit recovery (#1887).
+
 ## 0.50.0 — 2026-10-17
 
 ### Added

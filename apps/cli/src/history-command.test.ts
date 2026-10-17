@@ -117,6 +117,15 @@ describe('platform history commands without a local Git repository', () => {
     await expect(f.run('blame', ['game.ts'])).rejects.toThrow('text source');
     await expect(f.run('blame', ['../game.ts'])).rejects.toThrow('invalid source path');
   });
+  it('rejects blame --version without a value before reading delivered history', async () => {
+    const f = fixture();
+    const { flags } = parseArgv(['node', 'cli', 'blame', 'game.ts', '--version']);
+    await expect(f.run('blame', ['game.ts'], flags)).rejects.toMatchObject({
+      exitCode: 4,
+      message: '--version needs a delivered version',
+    });
+    expect(f.calls).toEqual([]);
+  });
   it('infers the game from a checkout subdirectory and strips terminal controls only from human output', async () => {
     const f = fixture();
     writeFileSync(join(f.cwd, '.gamedev-slug'), 'probe');

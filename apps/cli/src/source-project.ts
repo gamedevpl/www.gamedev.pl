@@ -32,6 +32,20 @@ function assertSourceIdentity(root: string, slug: string): void {
   }
 }
 
+export function sourceSpecSlug(content: string): string {
+  const header = content.match(/^---\s*\n([\s\S]*?)\n---/)?.[1];
+  let slug = '';
+  for (const line of header?.split(/\r?\n/) ?? []) {
+    const colon = line.indexOf(':');
+    if (colon !== -1 && line.slice(0, colon).trim() === 'slug')
+      slug = line
+        .slice(colon + 1)
+        .trim()
+        .replace(/^["']|["']$/g, '');
+  }
+  return slug;
+}
+
 export function sourceProject(root: string): { slug: string } | null {
   const pinPath = join(root, 'gamedev-kit.json');
   const src = join(root, 'src');
@@ -52,16 +66,7 @@ export function sourceProject(root: string): { slug: string } | null {
     };
     if (!/^[a-f0-9]{40}$/.test(String(pin.engineRef)) || !/^[a-f0-9]{64}$/.test(String(pin.kitSha256)))
       throw new Error('The Creator Kit pin is invalid.');
-    const header = readFileSync(spec, 'utf8').match(/^---\s*\n([\s\S]*?)\n---/)?.[1];
-    let slug = '';
-    for (const line of header?.split(/\r?\n/) ?? []) {
-      const colon = line.indexOf(':');
-      if (colon !== -1 && line.slice(0, colon).trim() === 'slug')
-        slug = line
-          .slice(colon + 1)
-          .trim()
-          .replace(/^["']|["']$/g, '');
-    }
+    const slug = sourceSpecSlug(readFileSync(spec, 'utf8'));
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) throw new Error('SPEC.md needs a valid slug.');
     assertSourceIdentity(root, slug);
     return { slug };
