@@ -88,7 +88,11 @@ export const KIT_ENGINE_REF_PROP = {
     'Creator Kit engineRef from get_kit. Pass on every browse/read call so a mid-round registry bump cannot mix kit revisions.',
 };
 
+// Listed and callable only under a managed-session opener bearer.
+export const MCP_MANAGED_ONLY_TOOLS: ReadonlySet<string> = new Set(['visual_target']);
+
 export const MCP_VISIBLE_TOOLS = new Set([
+  'visual_target',
   'create_game',
   'list_account_games',
   'get_game_performance',

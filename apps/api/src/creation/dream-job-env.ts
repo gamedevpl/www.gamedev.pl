@@ -65,3 +65,18 @@ export function createAgentProposalsEnabledFromEnv(options: DreamingEnabledEnvOp
     });
   return () => gate.dreamingEnabled();
 }
+
+// MANAGED_VISUAL_TARGET=true: image frames for managed builders' visual_target.
+export function createVisualTargetFromEnv(options: {
+  store?: Store;
+  log: DreamLog;
+  env?: NodeJS.ProcessEnv;
+}): { frames: DreamFrameGenerator; availability: DreamAvailabilityGate } | null {
+  const env = options.env ?? process.env;
+  if (!options.store || env.MANAGED_VISUAL_TARGET?.trim() !== 'true') return null;
+  const availability = createDreamAvailabilityGate({
+    store: options.store,
+    logWarn: (payload, message) => options.log.warn(payload, message),
+  });
+  return { frames: new VertexDreamFrameGenerator(), availability };
+}

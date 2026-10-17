@@ -11,6 +11,7 @@ import {
   toolErrForReason,
   withErrorBranch,
   MCP_VISIBLE_TOOLS,
+  MCP_MANAGED_ONLY_TOOLS,
   channelControlFields,
   pendingMessagesFromChannel,
   CREATOR_TEXT_SAFETY,
@@ -32,6 +33,7 @@ import { createRoundCardTools } from './mcp-round-card-tools.js';
 import { createShareDraftTools } from './mcp-share-draft-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
+import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -200,6 +202,8 @@ export interface McpServerOptions {
    * mitigation). Absent Origin is allowed — coding agents are not browsers.
    */
   allowedOrigins?: string[];
+  // Image frames for managed builders' visual_target; unset refuses it.
+  visualTarget?: Pick<VisualTargetToolsDeps, 'frames' | 'availability'> | null;
   // Green-gate share rule, injected so Studio and share_draft agree.
   refuseShare?: (record: SubmissionRecord) => Promise<{ error: string; message: string } | null>;
   startImprovementRound?: (input: {
@@ -1345,10 +1349,31 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
+    ...createVisualTargetTools({
+      resolveAuth,
+      managedJobId: (ctx) => managedOpenerJobId(ctx.bearerToken),
+      store,
+      gamesStore: options.gamesStore,
+      frames: options.visualTarget?.frames,
+      availability: options.visualTarget?.availability,
+      agentTokenSecret,
+      now,
+    }),
 
     ...createInboxTools({ resolveAuth, injectChannel, writePiggyback }),
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
+
+  // The job a managed-session opener names; null for every public client.
+  function managedOpenerJobId(bearer: string | null): number | null {
+    if (!bearer || !agentTokenSecret) return null;
+    try {
+      return verifyManagedMcpOpener(bearer, agentTokenSecret).jobId;
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) return null;
+      throw error;
+    }
+  }
 
   function noteInvalidStart(request: FastifyRequest): void {
     noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
@@ -1475,6 +1500,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
             .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
+            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || managedOpenerJobId(bearerToken) !== null)
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
@@ -1550,6 +1576,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // reach a tool its model was never meant to see. This refuses in exactly the
       // situations views are already unavailable, so it cannot break a working view.
       if (MCP_UI_APP_ONLY_TOOLS.has(name) && !sessionWantsUi(sessionHeader)) {
+        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+      }
+      // Managed-only tools do not exist for public clients.
+      if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerJobId(bearerToken) === null) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};

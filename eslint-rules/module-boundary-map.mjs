@@ -494,6 +494,7 @@ const FILE_BUCKET = {
   'managed-game-memory': 'agent-surface',
   'managed-session-retention': 'agent-surface',
   'managed-session-retention-routes': 'agent-surface',
+  'mcp-visual-target-tools': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',

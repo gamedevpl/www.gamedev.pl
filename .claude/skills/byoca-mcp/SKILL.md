@@ -297,6 +297,15 @@ remain; `apps/api/src/agent-surface/mcp-server.test.ts` fails if an unadvertised
 descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
 
+### Managed-only tools (`MCP_MANAGED_ONLY_TOOLS`)
+
+Some tools exist only for platform-managed builder sessions, never for the public MCP. Today
+that is `visual_target` (an image-model edit of the green gate frame, returned as a signed URL).
+`tools/list` shows such a tool only when the request carries a managed-session opener bearer
+(`verifyManagedMcpOpener`), `tools/call` answers `unknown tool` otherwise, and the handler also
+checks that the opener names the same job. Never mention a managed-only tool in public
+descriptions, `MCP_INSTRUCTIONS` or replies; only the managed builder system prompt may name it.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens
