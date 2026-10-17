@@ -82,7 +82,9 @@ Accepted sources, a started gate, a gate verdict, and publish are four different
 Staging or delivering from the CLI opens a fresh manual round when the previous round
 has closed. `gamedevpl publish` can therefore deliver unchanged sources without a separate
 round-opening step. That delivery uses the existing source version and preserves its
-authorship; staging left over from a closed round is excluded. `--takeover` only disconnects
+authorship. If a closed round still has staged edits or deletions, delivery refuses rather
+than silently omitting the changes shown in Studio. Restage those edits in a new round, or
+explicitly discard them in Studio before retrying. `--takeover` only disconnects
 an active own-agent session so local files can be delivered; it is not needed to open a round.
 
 ## One delivery allowlist, not two

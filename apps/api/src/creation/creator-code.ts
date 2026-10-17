@@ -1035,6 +1035,14 @@ export async function registerCreatorCodeRoutes(
 
       const roundGeneration = record.roundGeneration ?? 1;
       const closed = roundIsClosed(record);
+      const stagedEntries = await gamesStore.listStagedSources({ slug, jobId: record.jobId, roundGeneration });
+      if (closed && stagedEntries.files.length > 0) {
+        return reply.status(409).send({
+          error: 'closed_round_staging',
+          message:
+            'This closed round has staged changes. Open a new round and restage your edits, or discard them in Studio before retrying.',
+        });
+      }
       const version = await resolveVersion(store, record, slug);
       const baseFiles = new Map<string, string>();
       const baseManifest = version ? await gamesStore.getManifest(slug, version) : null;
@@ -1049,12 +1057,7 @@ export async function registerCreatorCodeRoutes(
           if (entry.content !== null) baseFiles.set(entry.path, entry.content);
         }
       }
-      const staged = closed
-        ? []
-        : await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
-      const stagedEntries = closed
-        ? { files: [] }
-        : await gamesStore.listStagedSources({ slug, jobId: record.jobId, roundGeneration });
+      const staged = await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
       for (const entry of staged) {
         if (entry.deleted) baseFiles.delete(entry.path);
         else baseFiles.set(entry.path, entry.content);
