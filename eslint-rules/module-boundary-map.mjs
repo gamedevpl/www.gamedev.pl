@@ -492,6 +492,8 @@ const FILE_BUCKET = {
   'managed-anthropic-files': 'agent-surface',
   'managed-anthropic-memory': 'agent-surface',
   'managed-game-memory': 'agent-surface',
+  'managed-session-retention': 'agent-surface',
+  'managed-session-retention-routes': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',

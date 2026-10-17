@@ -24,12 +24,12 @@ import {
 
 export const ANTHROPIC_VENDOR = 'anthropic';
 
-const DEFAULT_BASE_URL = 'https://api.anthropic.com';
+export const DEFAULT_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_TIMEOUT_MS = 30_000;
-const API_VERSION = '2023-06-01';
+export const API_VERSION = '2023-06-01';
 
-const BETA_HEADER = 'managed-agents-2026-04-01';
-const BETA_QUERY = '?beta=true';
+export const BETA_HEADER = 'managed-agents-2026-04-01';
+export const BETA_QUERY = '?beta=true';
 
 const UsageSchema = z
   .object({

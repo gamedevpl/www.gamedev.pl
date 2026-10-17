@@ -71,6 +71,7 @@ const AUDIENCE_ENV_VAR = {
   healthSweep: 'HEALTH_SWEEP_AUDIENCE',
   accountDeletionSweep: 'ACCOUNT_DELETION_SWEEP_AUDIENCE',
   dispatchReaper: 'DISPATCH_REAPER_AUDIENCE',
+  managedSessionRetention: 'MANAGED_SESSION_RETENTION_AUDIENCE',
   // Cloud Monitoring's Pub/Sub push, not the scheduler.
   spendBrake: 'SPEND_BRAKE_AUDIENCE',
   // Not a sweep and not called by the scheduler: this one is the app service calling the
