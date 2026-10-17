@@ -85,9 +85,17 @@ export function createAnthropicSessionJanitor(config: SessionJanitorConfig): Man
     'anthropic-beta': BETA_HEADER,
   };
 
-  async function listPage(cursor: string | undefined): Promise<z.infer<typeof SessionPageSchema>> {
-    const page = cursor ? `&page=${encodeURIComponent(cursor)}` : '';
-    const response = await fetchImpl(`${baseUrl}/v1/sessions${BETA_QUERY}&limit=${PAGE_LIMIT}${page}`, {
+  // Server-side filters, so recent sessions never use up the page cap.
+  async function listPage(cursor: string | undefined, olderThan: Date): Promise<z.infer<typeof SessionPageSchema>> {
+    const query = new URLSearchParams({
+      limit: String(PAGE_LIMIT),
+      agent_id: config.agentId,
+      'created_at[lt]': olderThan.toISOString(),
+      order: 'asc',
+    });
+    for (const status of DELETABLE_STATUSES) query.append('statuses', status);
+    if (cursor) query.set('page', cursor);
+    const response = await fetchImpl(`${baseUrl}/v1/sessions${BETA_QUERY}&${query.toString()}`, {
       method: 'GET',
       headers,
       signal: AbortSignal.timeout(timeoutMs),
@@ -121,7 +129,7 @@ export function createAnthropicSessionJanitor(config: SessionJanitorConfig): Man
       // Attempts, not successes, bound the run so failures cannot loop.
       const budgetLeft = () => result.deleted + result.failed < maxDeletes;
       while (result.pages < maxPages && budgetLeft()) {
-        const page = await listPage(cursor);
+        const page = await listPage(cursor, olderThan);
         result.pages++;
         for (const item of page.data) {
           if (!budgetLeft()) break;

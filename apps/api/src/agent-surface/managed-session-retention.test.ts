@@ -97,11 +97,17 @@ describe('createAnthropicSessionJanitor', () => {
 
     expect(result).toEqual({ scanned: 3, deleted: 3, failed: 0, pages: 3 });
     const lists = api.calls.filter((c) => c.method === 'GET').map((c) => c.url);
-    expect(lists).toEqual([
-      'https://anthropic.test/v1/sessions?beta=true&limit=100',
-      'https://anthropic.test/v1/sessions?beta=true&limit=100&page=cursor-1',
-      'https://anthropic.test/v1/sessions?beta=true&limit=100&page=cursor-2',
-    ]);
+    const queries = lists.map((url) => new URL(url).searchParams);
+    expect(queries.map((query) => query.get('page'))).toEqual([null, 'cursor-1', 'cursor-2']);
+    // Old, ours and settled are asked for by the server, oldest first.
+    for (const query of queries) {
+      expect(query.get('beta')).toBe('true');
+      expect(query.get('limit')).toBe('100');
+      expect(query.get('agent_id')).toBe('agent_ours');
+      expect(query.get('created_at[lt]')).toBe(CUTOFF.toISOString());
+      expect(query.get('order')).toBe('asc');
+      expect(query.getAll('statuses').sort()).toEqual(['idle', 'terminated']);
+    }
     expect(api.calls[1].url).toBe('https://anthropic.test/v1/sessions/a?beta=true');
     for (const call of api.calls) {
       expect(call.headers).toMatchObject({
