@@ -92,6 +92,8 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       return toolRefusal(`this round already used its ${VISUAL_TARGETS_PER_ROUND} visual targets`, 'quota_exhausted');
     }
     if (!(await availability.spendFrameSlots(new Date(now()).toISOString().slice(0, 10), 1))) {
+      // No image was bought, so the round keeps its attempt.
+      await store.releaseVisualTarget(jobId, generation).catch(() => undefined);
       return toolRefusal('the daily image allowance is spent', 'quota_exhausted');
     }
     await store.recordJobCost(jobId, { kind: 'concept', at: new Date(now()).toISOString(), by: frames.model });

@@ -15,6 +15,8 @@ for (const [name, makeStore] of IMPLEMENTATIONS) {
       expect(await store.reserveVisualTarget(7, 1, 2)).toBe(1);
       expect(await store.reserveVisualTarget(7, 1, 2)).toBe(2);
       expect(await store.reserveVisualTarget(7, 1, 2)).toBeNull();
+      await store.releaseVisualTarget(7, 1);
+      expect(await store.reserveVisualTarget(7, 1, 2)).toBe(2);
     });
 
     it('starts a new round from zero and refuses a stale round or unknown job', async () => {

@@ -119,6 +119,15 @@ describe('visual_target', () => {
     expect(spend).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the round attempt when the daily allowance refuses', async () => {
+    const spend = vi.fn(async () => spend.mock.calls.length > 2);
+    const { call } = await setup({ availability: { dreamingEnabled: async () => true, spendFrameSlots: spend } });
+    for (const direction of ['a', 'b']) {
+      expect((await call({ direction })).structuredContent).toMatchObject({ code: 'quota_exhausted' });
+    }
+    expect((await call({ direction: 'c' })).isError).toBeUndefined();
+  });
+
   it('rejects a frame whose shape no longer matches the gate frame', async () => {
     const square = {
       model: 'img-model',

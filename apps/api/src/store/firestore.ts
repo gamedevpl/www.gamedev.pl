@@ -571,6 +571,10 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.roundBudgetStore.reserveVisualTarget(jobId, generation, max);
   }
 
+  async releaseVisualTarget(jobId: number, generation: number): Promise<void> {
+    return this.roundBudgetStore.releaseVisualTarget(jobId, generation);
+  }
+
   async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number> {
     return this.roundBudgetStore.incrementRoundPreflightRefusal(jobId, kind, generation);
   }

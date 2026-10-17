@@ -54,6 +54,8 @@ export interface RoundBudgetStore {
 
   // Reserves one of `max` visual_target attempts for this round, atomically.
   reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null>;
+  // Hands back one reserved attempt that bought nothing.
+  releaseVisualTarget(jobId: number, generation: number): Promise<void>;
 
   // Bumps the audio or symbols preflight refusal count.
   incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number>;
@@ -125,6 +127,13 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     if (!sub || !next) return null;
     this.submissions.set(jobId, { ...sub, visualTargetAttempts: next });
     return next.count;
+  }
+
+  async releaseVisualTarget(jobId: number, generation: number): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    const held = sub?.visualTargetAttempts;
+    if (!sub || held?.generation !== generation || held.count < 1) return;
+    this.submissions.set(jobId, { ...sub, visualTargetAttempts: { generation, count: held.count - 1 } });
   }
 
   async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
@@ -255,6 +264,16 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       if (!next) return null;
       tx.set(ref, { visualTargetAttempts: next }, { merge: true });
       return next.count;
+    });
+  }
+
+  async releaseVisualTarget(jobId: number, generation: number): Promise<void> {
+    const ref = this.ref(jobId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const held = snap.exists ? (snap.data() as SubmissionRecord).visualTargetAttempts : undefined;
+      if (held?.generation !== generation || held.count < 1) return;
+      tx.set(ref, { visualTargetAttempts: { generation, count: held.count - 1 } }, { merge: true });
     });
   }
 
