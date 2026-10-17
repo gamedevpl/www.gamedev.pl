@@ -167,7 +167,7 @@ export async function bakeGameDocument(
   slug: string,
   fallbackTitle?: string,
 ): Promise<SnapshotGame | null> {
-  const sources = await client.getGameSources(ref, slug);
+  const sources = await client.getGameSources(ref, slug, undefined, { entry: 'publish' });
   if (!sources) return null;
   const project: GameProject = projectFromSources(sources, sources.title ?? fallbackTitle ?? slug);
   // Published games are self-contained, so lock them to inline assets.

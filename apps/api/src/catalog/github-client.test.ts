@@ -737,6 +737,38 @@ describe('getGameSources', () => {
     ).toBeUndefined();
   });
 
+  it('bundles publish.ts for the publish entry when the game has one', async () => {
+    const files = new Map<string, string>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'GameKit.mount({ full: "full-game" });'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      ['games/raid/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const clientFor = (extra: Array<[string, string]>) => {
+      const all = new Map([...files, ...extra]);
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        const pathname = new URL(String(input)).pathname;
+        const marker = '/contents/';
+        const value = all.get(decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length)));
+        return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+      }) as unknown as typeof fetch;
+      return createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    };
+    const publish: Array<[string, string]> = [['games/raid/publish.ts', 'GameKit.mount({ soon: "coming-soon" });']];
+
+    const served = await clientFor(publish).getGameSources('main', 'raid', undefined, { entry: 'publish' });
+    expect(served?.gameJs).toContain('coming-soon');
+    expect(served?.gameJs).not.toContain('full-game');
+    expect((await clientFor(publish).getGameSources('main', 'raid'))?.gameJs).toContain('full-game');
+    expect((await clientFor([]).getGameSources('main', 'raid', undefined, { entry: 'publish' }))?.gameJs).toContain(
+      'full-game',
+    );
+  });
+
   it('rejects an inherited Object.prototype name as a track', async () => {
     // The catalog comes from JSON.parse, so `tracks.constructor` is a function rather than
     // undefined and survives a truthiness check — and `constructor` is lowercase, so it

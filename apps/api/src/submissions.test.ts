@@ -4259,7 +4259,7 @@ describe('published game route', () => {
     expect(body.html).toContain(sampleSources.styleCss);
     expect(body.html).toContain('Content-Security-Policy');
     expect(body.html).toContain("default-src 'none'");
-    expect(getGameSources).toHaveBeenCalledWith('main', 'foo');
+    expect(getGameSources).toHaveBeenCalledWith('main', 'foo', undefined, { entry: 'publish' });
 
     await app.close();
   });
