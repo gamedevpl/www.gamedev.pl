@@ -171,11 +171,26 @@ Telemetry failures never block the task.
 version the copy was taken from). `diff`, `pull`, and `submit` share that three-way
 model:
 
-- **local-only** — your edits; `submit` delivers them. `pull` will not overwrite them.
+- **local-only** — your edits; `submit` delivers them. `pull` keeps them.
 - **platform-only** — the site moved; `pull` is safe.
 - **both** — different files; `pull` keeps yours and takes theirs.
-- **conflict** — the same path changed on both sides. Copy those files aside, then `pull`.
-  `--force` is the explicit overwrite.
+- **conflict** — the same path changed on both sides. `pull` attempts a three-way
+  text merge using the recorded platform base. Independent edits within a file combine;
+  overlapping edits, conflicting binary changes and add/delete conflicts stop before
+  writing any source files or advancing the base. `--force` explicitly replaces local sources.
+
+`gamedevpl pull` and `/pull` in a connected session use the same merge. Successful merges
+report `Auto-merged` paths and keep local edits available for `diff` and a later `push`.
+They update the synchronization base to the downloaded platform tree, preserving the
+difference between your merged draft and the platform. No Git commits, refs or index
+entries are changed, and nothing is delivered or published.
+
+Merging overlapping paths requires Git on `PATH` and access to the historical base.
+The CLI verifies base hashes, preserves ignored files, and refuses symbolic links or
+source snapshots over 32 MB, 2000 files or 2000 directories during a merge. Source and
+metadata edits or a newer platform delivery detected during merging refuse the pull.
+If a merge conflicts, use `gamedevpl diff` to review both sides and reconcile the changes
+before retrying. No conflict markers are written into your game.
 
 `status` with no token, inside a checkout, lists local edits, incoming platform changes
 and conflicts in separate groups, with one path per line and added/modified/deleted labels.

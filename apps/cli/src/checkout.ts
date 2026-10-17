@@ -19,6 +19,8 @@ import {
 } from './checkout-sync.js';
 import { createIgnoreMatcher, type IgnoredHit } from './ignore.js';
 import { formatCheckoutIncoming, formatPatches, formatPullNotices, ignoredClashMessage } from './working-copy.js';
+import { preparePullMerge } from './checkout-pull-merge.js';
+import { pendingHistoryRoot } from './history-edit-files.js';
 
 export type { TreeFile, SyncResult } from './checkout-sync.js';
 export type { IgnoredHit } from './ignore.js';
@@ -376,6 +378,8 @@ async function pullGameUnlocked(input: {
   dest: string;
   force?: boolean;
 }): Promise<{ version: string; sync: SyncResult; kept: string[]; notices: string[] }> {
+  if (pendingHistoryRoot(input.dest))
+    throw new CliError('An interrupted history edit needs recovery: gamedevpl restore --recover', EXIT_REFUSED);
   const { sync, tree } = await inspectGame(input);
   const incoming = classifyIncoming(input.dest, input.slug, tree.files);
   if (incoming.blocked.length && !input.force) {
@@ -393,6 +397,29 @@ async function pullGameUnlocked(input: {
     writeGameFiles(input.dest, input.slug, tracked);
     writeBase(input.dest, tree.version, tracked);
     return { version: tree.version, sync, kept, notices };
+  }
+  if (sync.kind === 'local_only') {
+    writeBase(input.dest, tree.version, tracked);
+    return { version: tree.version, sync, kept: sync.local, notices };
+  }
+  if (sync.kind === 'conflict') {
+    const result = await preparePullMerge({
+      ...input,
+      version: tree.version,
+      local: localGameFiles(input.dest, input.slug),
+      remote: tracked,
+      conflicts: sync.conflict,
+    });
+    writeGameFiles(input.dest, input.slug, result.files);
+    writeBase(input.dest, tree.version, tracked);
+    if (result.merged.length) notices.push(`Auto-merged: ${result.merged.join(', ')}`);
+    const reconciled = classify({
+      local: result.files,
+      remote: tracked,
+      remoteVersion: tree.version,
+      base: { version: tree.version, files: hashesOf(tracked) },
+    });
+    return { version: tree.version, sync: reconciled, kept: result.kept, notices };
   }
   if (sync.kind === 'both') {
     const localMap = new Map(localGameFiles(input.dest, input.slug).map((file) => [file.path, file]));
