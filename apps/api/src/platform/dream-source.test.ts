@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
-import { encodePng } from '../platform/image-rgba.js';
-import { imageSize, isJpeg } from '../platform/image-size.js';
+import { encodePng } from './image-rgba.js';
+import { imageSize, isJpeg } from './image-size.js';
 import { fitDreamSource, MAX_DREAM_SOURCE_EDGE, scaleHudRegions } from './dream-source.js';
 
 // Noise defeats compression, like a very detailed game scene.

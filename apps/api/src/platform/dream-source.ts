@@ -1,9 +1,11 @@
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { encode as encodeJpegData } from 'jpeg-js';
-import { decodePng, downscaleRgba, type RgbaImage } from '../platform/image-rgba.js';
-import { imageSize, isPng, type ImageSize } from '../platform/image-size.js';
-import { DREAM_JPEG_QUALITY, type DreamFrame, type HudRegion } from './dream-frames.js';
+import { decodePng, downscaleRgba, type RgbaImage } from './image-rgba.js';
+import { imageSize, isPng, type ImageSize } from './image-size.js';
+import type { DreamFrame, HudRegion } from '../creation/dream-frames.js';
 
+// One quality for the source and the frames drawn from it.
+export const DREAM_JPEG_QUALITY = 85;
 // Both models downsample past this anyway; fixed size, predictable cards.
 export const MAX_DREAM_SOURCE_EDGE = 1024;
 // JPEG rarely needs it: 415 KB of PNG art came out small.

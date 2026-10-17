@@ -15,7 +15,7 @@ import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
-import { fitDreamSource, scaleHudRegions } from './dream-source.js';
+import { fitDreamSource, scaleHudRegions } from '../platform/dream-source.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import { dreamHistory } from './dream-history.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';

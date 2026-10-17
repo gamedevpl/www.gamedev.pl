@@ -1,6 +1,5 @@
 // visual_target: an AI-edited gate frame the builder aims its code at.
 
-import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import type { GamesStore } from '../delivery/games-store.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { carriesPixels, imageSize, isJpeg, isPng, sameAspectRatio } from '../platform/image-size.js';
@@ -8,6 +7,7 @@ import { MAX_PROPOSAL_FRAME_BYTES, VISUAL_TARGET_SHOT_LABEL } from '../platform/
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { DreamAvailabilityGate } from '../creation/dream-availability.js';
 import type { DreamFrameGenerator } from '../creation/dream-frames.js';
+import { fitDreamSource } from '../platform/dream-source.js';
 import { gateFrameOf } from './agent-channel-proposal.js';
 import { mintReferenceImageToken, REFERENCE_IMAGE_DOWNLOAD_ROUTE } from './reference-image-url.js';
 import {
@@ -89,8 +89,9 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     const version = record.previewVersion ?? record.deliveredVersion;
     const path = record.slug && version ? gateFrameOf(await gamesStore.getManifest(record.slug, version)) : null;
     const source = path ? await gamesStore.getDerivedArtifact(record.slug!, version!, path) : null;
-    const size = source && source.length <= MAX_SHOT_BYTES && isPng(source) ? imageSize(source) : null;
-    if (!source || !size) return toolErr('no green gate capture of this game yet; the target is drawn on one');
+    const fitted = fitDreamSource(source);
+    if ('refused' in fitted) return toolErr('no green gate capture of this game yet; the target is drawn on one');
+    const { image: sourceImage, size } = fitted;
 
     if (!(await availability.dreamingEnabled())) {
       return toolRefusal('image generation is switched off right now', 'feature_unavailable');
@@ -109,7 +110,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     let throttled = false;
     const frame = await frames
       .generate({
-        sourcePng: source.toString('base64'),
+        source: sourceImage,
         width: size.width,
         height: size.height,
         styleNote: `the browser game "${record.title}"`,

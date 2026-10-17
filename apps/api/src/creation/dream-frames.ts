@@ -1,4 +1,5 @@
 import { image, user, type GenAIClient } from 'genaicode';
+import { DREAM_JPEG_QUALITY } from '../platform/dream-source.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 
 // One rectangle of the game's own UI, in screenshot pixels.
@@ -36,7 +37,6 @@ export interface DreamFrameGenerator {
 // Owner policy: 3.x only; VERTEX_MODEL must not leak in.
 export const DEFAULT_DREAM_IMAGE_MODEL = 'gemini-3.1-flash-image';
 export const DEFAULT_DREAM_TIMEOUT_MS = 60_000;
-export const DREAM_JPEG_QUALITY = 85;
 
 function describeRegion(region: HudRegion, index: number): string {
   const name = region.label ? `"${region.label}"` : `HUD element ${index + 1}`;
