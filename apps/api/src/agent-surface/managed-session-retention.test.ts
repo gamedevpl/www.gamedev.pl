@@ -23,6 +23,25 @@ function session(id: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
+// Copied from the API's own 400 message, plus the beta flag.
+const LIST_PARAMS = new Set([
+  'beta',
+  'agent_id',
+  'agent_version',
+  'created_at[gt]',
+  'created_at[gte]',
+  'created_at[lt]',
+  'created_at[lte]',
+  'created_by_ids[]',
+  'deployment_id',
+  'include_archived',
+  'limit',
+  'memory_store_id',
+  'order',
+  'page',
+  'statuses[]',
+]);
+
 function fakeApi(
   pages: Array<{ data: unknown[]; next_page?: string | null }>,
   deleteStatus: Record<string, number> = {},
@@ -38,6 +57,9 @@ function fakeApi(
       if (status === -1) throw new Error('network down');
       return new Response(status === 200 ? '{}' : 'nope', { status });
     }
+    // The real list endpoint 400s on any parameter it does not know.
+    const unknown = [...new URL(url).searchParams.keys()].find((key) => !LIST_PARAMS.has(key));
+    if (unknown) return Response.json({ error: { message: `Unknown query parameter '${unknown}'` } }, { status: 400 });
     const cursor = new URL(url).searchParams.get('page');
     const index = cursor ? Number(cursor.replace('cursor-', '')) : 0;
     return Response.json(pages[index]);
@@ -106,7 +128,7 @@ describe('createAnthropicSessionJanitor', () => {
       expect(query.get('created_at[lt]')).toBe(CUTOFF.toISOString());
       expect(query.get('order')).toBe('asc');
       expect(query.get('include_archived')).toBe('true');
-      expect(query.getAll('statuses').sort()).toEqual(['idle', 'terminated']);
+      expect(query.getAll('statuses[]').sort()).toEqual(['idle', 'terminated']);
     }
     expect(api.calls[1].url).toBe('https://anthropic.test/v1/sessions/a?beta=true');
     for (const call of api.calls) {
