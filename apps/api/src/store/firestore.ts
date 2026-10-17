@@ -5,7 +5,7 @@ import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.j
 import { eraseTransferRows } from './erase-transfer-rows.js';
 import type { ShelfDocument } from './records/shelf.js';
 import type { Store } from '../platform/store.js';
-import type { DispatchInput, TransitionGuard } from './slices/dispatch.js';
+import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
 import type { ProposalState } from '../community/proposal-state.js';
 import type { AgentTaskState } from '../platform/agent-state.js';
@@ -595,7 +595,10 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.dispatchStore.allocateJobId();
   }
 
-  async recordDispatch(jobId: number, dispatch: DispatchInput): Promise<void> {
+  async recordDispatch(
+    jobId: number,
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+  ): Promise<void> {
     return this.dispatchStore.recordDispatch(jobId, dispatch);
   }
 

@@ -181,6 +181,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         mcpOpenerToken: mintManagedMcpOpener(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
+          shell: selected.shell === true,
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.undelivered ? { undelivered: true } : {}),
@@ -206,7 +207,6 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       }
       await store.recordDispatch(input.jobId, {
         backend: selected.name,
-        shell: selected.shell === true,
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,

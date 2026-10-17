@@ -151,6 +151,7 @@ export function createDispatcher(deps: DispatcherDeps) {
         mcpOpenerToken: mintManagedMcpOpener(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
+          shell: selected.shell === true,
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
@@ -176,7 +177,6 @@ export function createDispatcher(deps: DispatcherDeps) {
       }
       await store.recordDispatch(input.jobId, {
         backend: selected.name,
-        shell: selected.shell === true,
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,

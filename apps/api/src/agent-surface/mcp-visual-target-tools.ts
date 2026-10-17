@@ -36,7 +36,9 @@ export interface VisualTargetToolsDeps {
     args: Record<string, unknown>,
   ) => Promise<{ jobId: number; record: SubmissionRecord; claims: { roundGeneration?: number } } | ToolResult>;
   // Claims of a managed-session opener bearer, else null.
-  managedOpener: (ctx: ToolContext) => { jobId: number; roundGeneration?: number; exp?: number } | null;
+  managedOpener: (
+    ctx: ToolContext,
+  ) => { jobId: number; roundGeneration?: number; exp?: number; shell?: boolean } | null;
   store: Store | undefined;
   gamesStore: GamesStore | null | undefined;
   frames: DreamFrameGenerator | null | undefined;
@@ -71,7 +73,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       (opener.exp ?? 0) * 1000 <= now() ||
       (record.builder ?? 'platform') !== 'platform' ||
       // A URL result needs a shell to open it.
-      record.dispatch?.shell !== true
+      opener.shell !== true
     ) {
       return toolRefusal('visual_target is not available here', 'not_owner');
     }

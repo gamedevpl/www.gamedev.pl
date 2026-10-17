@@ -19,21 +19,15 @@ import { clearRoundSignals, guardHolds, stampReceiptRound, type TransitionGuard 
 
 export type { TransitionGuard } from './round-close.js';
 
-export type DispatchInput = {
-  backend: string;
-  shell?: boolean;
-  ref: string;
-  workspace?: string;
-  seedWorkspace?: string;
-  credentialRef?: string;
-};
-
 export interface DispatchStore {
   // Moves a job to transition.to, stamping stateSince and appending to history.
   recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean>;
 
   // Appends a dispatch ref -- which backend is building this job, and where.
-  recordDispatch(jobId: number, dispatch: DispatchInput): Promise<void>;
+  recordDispatch(
+    jobId: number,
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+  ): Promise<void>;
 
   // Appends one billed thing to the job's ledger; best-effort.
   recordJobCost(jobId: number, entry: JobCostEntry): Promise<void>;
@@ -114,7 +108,10 @@ export class InMemoryDispatchStore implements DispatchStore {
     return this.nextJobId;
   }
 
-  async recordDispatch(jobId: number, dispatch: DispatchInput): Promise<void> {
+  async recordDispatch(
+    jobId: number,
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+  ): Promise<void> {
     const sub = this.submissions.get(jobId);
     if (!sub) return;
     const existing = sub.dispatch;
@@ -122,7 +119,6 @@ export class InMemoryDispatchStore implements DispatchStore {
       ...sub,
       dispatch: {
         backend: dispatch.backend,
-        shell: dispatch.shell === true,
         refs: [...(existing?.refs ?? []), dispatch.ref],
         ...(dispatch.credentialRef
           ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }
@@ -283,7 +279,10 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async recordDispatch(jobId: number, dispatch: DispatchInput): Promise<void> {
+  async recordDispatch(
+    jobId: number,
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+  ): Promise<void> {
     const ref = this.ref(jobId);
     // Transactional -- a dispatch and a reconciler observation could land together.
     await this.db.runTransaction(async (tx) => {
@@ -295,7 +294,6 @@ export class FirestoreDispatchStore implements DispatchStore {
         {
           dispatch: {
             backend: dispatch.backend,
-            shell: dispatch.shell === true,
             refs: [...(existing?.refs ?? []), dispatch.ref],
             ...(dispatch.credentialRef
               ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }

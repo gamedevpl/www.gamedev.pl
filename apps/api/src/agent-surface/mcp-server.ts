@@ -88,6 +88,7 @@ import {
   verifyManagedMcpOpener,
   type AgentTokenAccess,
   type AgentTokenClaims,
+  type ManagedOpenerClaims,
 } from '../platform/agent-token.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
@@ -1367,15 +1368,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
 
-  // Managed-only tools answer with URLs, so only shell sessions see them.
-  async function managedSessionHasShell(bearer: string | null): Promise<boolean> {
-    const claims = managedOpenerClaims(bearer);
-    if (!claims || !store) return false;
-    return (await store.getSubmission(claims.jobId))?.dispatch?.shell === true;
-  }
-
   // A managed-session opener's claims; null for every public client.
-  function managedOpenerClaims(bearer: string | null): AgentTokenClaims | null {
+  function managedOpenerClaims(bearer: string | null): ManagedOpenerClaims | null {
     if (!bearer || !agentTokenSecret) return null;
     try {
       return verifyManagedMcpOpener(bearer, agentTokenSecret);
@@ -1503,7 +1497,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     if (message.method === 'tools/list') {
-      const offersManaged = await managedSessionHasShell(bearerToken);
+      // Managed-only tools answer with URLs, so only shell sessions see them.
+      const offersManaged = managedOpenerClaims(bearerToken)?.shell === true;
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);

@@ -60,6 +60,16 @@ describe('agent build-channel token', () => {
     expect(() => verifyManagedMcpOpener(channel, secret)).toThrow(InvalidAgentTokenError);
   });
 
+  it('signs the shell marker into a managed opener', () => {
+    const plain = mintManagedMcpOpener(42, secret, { roundGeneration: 1, now, ttlDays: 14 });
+    const shell = mintManagedMcpOpener(42, secret, { roundGeneration: 1, now, ttlDays: 14, shell: true });
+    expect(verifyManagedMcpOpener(plain, secret).shell).toBe(false);
+    expect(verifyManagedMcpOpener(shell, secret).shell).toBe(true);
+    const [job, gen, exp, sig] = Buffer.from(plain, 'base64url').toString('utf8').split('.');
+    const forged = Buffer.from(`${job}.${gen}.${exp}.shell.${sig}`, 'utf8').toString('base64url');
+    expect(() => verifyManagedMcpOpener(forged, secret)).toThrow(InvalidAgentTokenError);
+  });
+
   it('accepts an active generation before expiry', () => {
     const token = mintAgentToken(7, secret, { roundGeneration: 3, now, ttlDays: 14 });
     const claims = verifyAgentToken(token, secret);

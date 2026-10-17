@@ -170,7 +170,6 @@ export interface SubmissionRecord {
    */
   dispatch?: {
     backend: string;
-    shell?: boolean;
     refs: string[];
     credentialRefs?: Record<string, string>;
     workspace?: string;

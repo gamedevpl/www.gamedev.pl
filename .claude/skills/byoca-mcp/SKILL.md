@@ -302,8 +302,8 @@ descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 Some tools exist only for platform-managed builder sessions, never for the public MCP. Today
 that is `visual_target` (an image-model edit of the green gate frame, returned as a signed URL).
 `tools/list` shows such a tool only when the request carries a managed-session opener bearer
-(`verifyManagedMcpOpener`) and the round's dispatch recorded a shell (`dispatch.shell`), since the
-result is a URL. `tools/call` answers `unknown tool` without an opener, and the handler also checks
+(`verifyManagedMcpOpener`) whose signed shell marker is set (minted from the backend's `shell`),
+since the result is a URL. `tools/call` answers `unknown tool` without an opener, and the handler also checks
 that the opener names this job and current round, the builder is `platform`, and the session has a shell. Never mention a managed-only tool in public
 descriptions, `MCP_INSTRUCTIONS` or replies; only the managed builder system prompt may name it.
 

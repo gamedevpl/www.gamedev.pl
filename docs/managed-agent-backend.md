@@ -476,7 +476,7 @@ Playwright cache). The Anthropic sandbox already ships Playwright's Chromium und
 told to carry on without looking.
 
 **Visual targets (managed only).** With `MANAGED_VISUAL_TARGET=true`, managed builder sessions with a shell
-(the dispatch recorded `shell: true`, today Anthropic) see an
+(the signed opener carries a shell marker; today Anthropic) see an
 extra MCP tool, `visual_target({ direction })`
 ([`mcp-visual-target-tools.ts`](../apps/api/src/agent-surface/mcp-visual-target-tools.ts)). It edits
 the round's latest green gate frame with the dream-job image model (HUD locked), stores the result

@@ -756,12 +756,12 @@ describe('dispatch records', () => {
     // Refs accumulate per round; the workspace and newest ref stay current.
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:1', 'A game');
+
     await store.recordDispatch(1, { backend: 'copilot', ref: 'task-1', workspace: 'copilot/x' });
     await store.recordDispatch(1, { backend: 'copilot', ref: 'task-2' });
 
     expect((await store.getSubmission(1))?.dispatch).toEqual({
       backend: 'copilot',
-      shell: false,
       refs: ['task-1', 'task-2'],
       workspace: 'copilot/x',
       seedWorkspace: undefined,
