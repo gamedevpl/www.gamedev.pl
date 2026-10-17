@@ -47,7 +47,7 @@ export async function dispatchReadVerb(input: {
       io,
       asJson,
       result,
-      `Git connected: ${result.tracking}, ${result.versions} delivered versions. ${result.initialized ? 'Local history initialized.' : 'Existing local branch preserved.'}`,
+      `Git connected: ${result.tracking}, ${result.versions} delivered versions. ${!result.versions ? 'Make a local commit to start Git history.' : result.initialized ? 'Local history initialized.' : 'Existing local branch preserved.'}`,
     );
     return EXIT_GREEN;
   }

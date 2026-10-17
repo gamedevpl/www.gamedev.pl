@@ -6,7 +6,7 @@ import { formatError } from './errors.js';
 import type { AgentTask } from 'genaicode/agents';
 import type { ApproveTool } from './agent-approval.js';
 
-export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture, then capture_status for its returned jobId. The completed result contains a PNG: inspect it. Tools run on the local CLI, need no shell browser setup, and never publish. They capture the initial rendered state, not an interactive playtest. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
+export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture_game({viewport: "desktop"}) (or "mobile"), then capture_status({jobId}) for its returned jobId. Poll until complete or failed; the completed result contains a PNG: inspect it. The local CLI host runs the browser and capture server, outside your shell sandbox; these tools do not require sandbox escalation or npm run capture. Prefer them for local screenshots even when shell commands report listen EPERM or no browser tool is available. They never publish and capture only the current game's initial rendered state, not an interactive playtest or the Creator Kit's deterministic capture plan. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
 
 export async function localPreviewTools(input: {
   spec: AdapterSpec;
@@ -25,7 +25,7 @@ export async function localPreviewTools(input: {
     server = await startLocalPreviewMcp({ ...input, previewUrl: input.previewUrl });
     const wired = localPreviewAdapter(input.spec, server, Boolean(input.onApproval));
     cleanup = wired.cleanup;
-    input.write('Local task tools connected: report_progress (Ctrl+L for diagnostics).');
+    input.write(`Local task tools connected: ${server.tools.join(', ')} (Ctrl+L for diagnostics).`);
     return {
       spec: wired.spec,
       // Claude's permission prompts go to the approve tool on this server.

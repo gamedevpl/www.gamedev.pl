@@ -140,9 +140,9 @@ export async function runGitRemoteHelper(
   const api = createApi({ origin: originFromEnv(env), store: storeFromEnv(env), env });
   historySlug(slug);
   const git = checkoutGit(process.cwd()),
-    remote = argv[2] ?? 'origin',
-    layout = remoteLayout(git, slug, remote);
-  const pinned = gitConfig(git, `remote.${remote}.gamedevpl-origin`);
+    remote = argv[2] && /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(argv[2]) ? argv[2] : undefined,
+    layout = remote ? remoteLayout(git, slug, remote) : { root: `games/${slug}`, rasters: 'raw' as const };
+  const pinned = remote ? gitConfig(git, `remote.${remote}.gamedevpl-origin`) : undefined;
   if (pinned && pinned !== api.origin) throw Error('This Git remote belongs to another platform origin.');
   const scope = historyScope(api.origin, slug, layout);
   const rl = createInterface({ input: stdin, crlfDelay: Infinity });

@@ -13,8 +13,9 @@ import { historyScope, remoteLayout, checkoutGit } from './git-checkout-layout.j
 
 afterEach(cleanupHistoryFixtures);
 
-async function fixture(project: boolean) {
+async function fixture(project: boolean, empty = false) {
   const f = gitFixture(project);
+  if (empty) f.versions.length = 0;
   await f.setup();
   const bin = join(f.root, 'fixture-bin');
   mkdirSync(bin);
@@ -259,4 +260,28 @@ it('refuses an unrelated pushed branch instead of trusting the working-copy base
     },
   });
   expect(result).toMatchObject({ ok: false, message: expect.stringContaining('no known platform base') });
+});
+
+it('tracks the remote while unborn and supports argument-less pull after the first push', async () => {
+  const f = await fixture(false, true);
+  expect(f.git('config', '--get', 'branch.main.remote')).toBe('origin');
+  expect(f.git('config', '--get', 'branch.main.merge')).toBe('refs/heads/main');
+  f.git('add', f.prefix);
+  f.commit('first local game');
+  f.git('push', 'origin', 'HEAD:main');
+  f.git('pull', '--no-rebase');
+  expect(f.git('rev-parse', 'HEAD')).toBe(f.git('rev-parse', 'origin/main'));
+});
+
+it('fetches a direct helper URL using the legacy projection without moving the local branch', async () => {
+  const f = await fixture(false),
+    head = f.git('rev-parse', 'HEAD');
+  f.git('fetch', 'gamedevpl://probe');
+  expect(f.git('log', 'FETCH_HEAD', '--format=%s')).toBe('v3\nv2\nv1');
+  expect(f.git('rev-parse', 'HEAD')).toBe(head);
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('direct URL delivery');
+  f.git('push', 'gamedevpl://probe', 'HEAD:main');
+  expect(JSON.parse(readFileSync(f.delivery, 'utf8')).base.version).toBe('v3');
 });

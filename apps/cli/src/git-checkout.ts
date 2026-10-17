@@ -124,10 +124,15 @@ export async function initializeGitCheckout(input: { api: ApiClient; root: strin
         commit = revision(git, versionImportRef(slug, selected, scope))!,
         branch = git(['symbolic-ref', 'HEAD']).toString().trim();
       bootstrapGitBranch(here.root, branch, commit);
-      const name = branch.replace(/^refs\/heads\//, '');
+      initialized = true;
+    }
+    if (!head) {
+      const name = git(['symbolic-ref', 'HEAD'])
+        .toString()
+        .trim()
+        .replace(/^refs\/heads\//, '');
       git(['config', `branch.${name}.remote`, remote]);
       git(['config', `branch.${name}.merge`, 'refs/heads/main']);
-      initialized = true;
     }
     excludeWorkspace(git, here.root, root, !head);
     return { slug, root: here.root, remote, versions: versions.length, initialized, tracking: `${remote}/main` };

@@ -812,10 +812,17 @@ available for scripts and recovery under another slug.
 
 Interactive local delegation to Codex, Claude, and Copilot automatically connects a
 session-scoped `gamedevpl_local` MCP server when the CLI preview is available.
-`preview_status` reports build errors and freshness. `capture` starts a desktop or
+`preview_status` reports build errors and freshness. `capture_game` starts a desktop or
 mobile screenshot; `capture_status` returns its PNG, rendered HTML revision, and
 browser console errors. Agents can inspect the returned image without launching a
 browser through their shell sandbox. Other adapters continue without these tools.
+
+The connection message lists the tools actually exposed to the agent. For screenshots,
+agents use `capture_game({ viewport: "desktop" })` (or `"mobile"`) and poll
+`capture_status({ jobId })` until complete or failed. The CLI host starts the capture
+server, so the agent does not need to run `npm run capture` or request sandbox
+escalation when shell commands fail with `listen EPERM`. The former `capture` name
+remains callable for compatibility.
 
 The creator's CLI launches an installed system Chrome/Chromium (Chrome/Edge on Windows)
 with a temporary profile and its browser sandbox enabled. It does not install a browser.

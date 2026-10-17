@@ -23,7 +23,6 @@ export function bootstrapGitBranch(root: string, branch: string, commit: string)
     git(['update-ref', branch, commit, '0'.repeat(commit.length)]);
     created = true;
     renameSync(temp, index);
-    created = false;
   } catch (error) {
     if (created) git(['update-ref', '-d', branch, commit]);
     throw error;

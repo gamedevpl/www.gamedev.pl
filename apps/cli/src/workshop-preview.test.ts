@@ -250,5 +250,6 @@ it.each([false, true])('skips static success for a no-op: permission handoff=%s'
   expect(run).not.toHaveBeenCalled();
   expect(ws.pick).toHaveBeenCalledTimes(handoff ? 1 : 0);
   expect(write).toHaveBeenCalledWith(expect.stringContaining('No game files changed'));
+  expect(write).not.toHaveBeenCalledWith(expect.stringContaining('Missing browser access prevents'));
   expect(write).not.toHaveBeenCalledWith('✓ static ladder green');
 });

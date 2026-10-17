@@ -17,6 +17,7 @@ it('separates browser verification from implementation and bounds temporary tool
   expect(brief).toContain('Do not install global packages, change sandbox permissions, or bypass a denied operation');
   expect(brief).toContain('Never claim screenshots or visual verification you did not perform');
   expect(brief).toContain('task consisting only of browser interaction or screenshots');
+  expect(brief).toContain('capture_game runs on the CLI host');
   expect(brief).not.toContain('report that limitation and finish');
 });
 

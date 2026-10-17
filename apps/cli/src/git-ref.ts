@@ -79,7 +79,13 @@ export function materializePushCheckout(input: {
           stat = lstatSync(path);
         if (stat.isSymbolicLink()) throw new CliError('Git sources must not contain symbolic links.', EXIT_REFUSED);
         if (stat.isDirectory()) convert(path, rel);
-        else if (isRasterSourcePath(rel)) writeFileSync(path, readFileSync(path).toString('base64'));
+        else if (isRasterSourcePath(rel)) {
+          const bytes = readFileSync(path),
+            text = bytes.toString('utf8').replace(/\s+/g, '');
+          const encoded =
+            /^[a-zA-Z0-9+/]+={0,2}$/.test(text) && Buffer.from(text, 'base64').toString('base64') === text;
+          writeFileSync(path, encoded ? text : bytes.toString('base64'));
+        }
       }
     };
     convert(join(input.dest, layout.root));
