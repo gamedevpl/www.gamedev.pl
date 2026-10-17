@@ -33,7 +33,7 @@ function platformStub() {
   const briefs: BuildBrief[] = [];
   const canceledRefs: string[] = [];
   const backend: AgentBackend = {
-    name: 'copilot',
+    name: 'managed:stub',
     dispatch: async (brief) => {
       briefs.push(brief);
       return { ref: `copilot-${briefs.length}`, workspace: `copilot/branch-${briefs.length}` };
@@ -225,7 +225,7 @@ describe('self builder (BY-02)', () => {
     // Background dispatch — wait briefly for the voided promise.
     await vi.waitFor(async () => {
       const records = await store.listSubmissionsByOwner('g:creator');
-      expect(records[0]?.dispatch?.backend).toBe('copilot');
+      expect(records[0]?.dispatch?.backend).toBe('managed:stub');
     });
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.seed).toBeUndefined();
@@ -756,7 +756,7 @@ describe('self builder (BY-02)', () => {
     const afterPlatform = await store.getSubmission(jobId);
     expect(afterPlatform?.builder).toBe('platform');
     expect(afterPlatform?.defaultBuilder).toBe('platform');
-    expect(afterPlatform?.dispatch?.backend).toBe('copilot');
+    expect(afterPlatform?.dispatch?.backend).toBe('managed:stub');
     // self→platform carries latest candidate sources as brief.seed.
     expect(briefs.at(-1)?.seed?.files.some((f) => f.path === 'SPEC.md')).toBe(true);
 
@@ -828,7 +828,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
     const afterHandoff = await store.getSubmission(jobId);
     expect(afterHandoff?.builder).toBe('platform');
-    expect(afterHandoff?.dispatch?.backend).toBe('copilot');
+    expect(afterHandoff?.dispatch?.backend).toBe('managed:stub');
     expect(afterHandoff?.roundGeneration).toBeGreaterThan(generationBefore);
   });
 
@@ -863,7 +863,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(async () => {
       const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
-      expect(record?.dispatch?.backend).toBe('copilot');
+      expect(record?.dispatch?.backend).toBe('managed:stub');
       expect(record?.roundGeneration).toBeGreaterThan(generationBefore);
     });
     expect(await store.listPendingCreatorMessages(jobId)).toEqual([]);
@@ -920,7 +920,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(async () => {
       const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
-      expect(record?.dispatch?.backend).toBe('copilot');
+      expect(record?.dispatch?.backend).toBe('managed:stub');
       expect(record?.roundGeneration).toBeGreaterThan(generationBefore);
     });
     expect(briefs.at(-1)?.spec).toBe(CONCEPT);
@@ -999,7 +999,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(async () => {
       const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
-      expect(record?.dispatch?.backend).toBe('copilot');
+      expect(record?.dispatch?.backend).toBe('managed:stub');
       expect(record?.builderHandoff).toBeUndefined();
       expect(record?.transitions?.some((t) => t.to === 'ready_for_review')).toBe(true);
     });
@@ -1316,7 +1316,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
     const after = await store.getSubmission(jobId);
     expect(after?.builder).toBe('platform');
-    expect(after?.dispatch?.backend).toBe('copilot');
+    expect(after?.dispatch?.backend).toBe('managed:stub');
     expect(after?.roundGeneration).toBeGreaterThan(genBefore);
     expect(briefs.at(-1)?.seed?.files.some((f) => f.path === 'SPEC.md')).toBe(true);
   });
@@ -1398,7 +1398,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
     const after = await store.getSubmission(jobId);
     expect(after?.builder).toBe('platform');
-    expect(after?.dispatch?.backend).toBe('copilot');
+    expect(after?.dispatch?.backend).toBe('managed:stub');
     expect(after?.roundGeneration).toBeGreaterThan(genBefore);
     expect(after?.agentEndedAt).toBeUndefined();
   });

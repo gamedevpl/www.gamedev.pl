@@ -8,11 +8,9 @@ import type { AgentBackend } from './agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
-import './managed-provider-copilot.js';
 import './managed-provider-openai.js';
 import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
 import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
-import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 import type { KitDigestLoader } from './kit-digest.js';
 import type { ManagedWorkspaceLoader } from './managed-workspace.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
@@ -60,8 +58,6 @@ export interface ManagedBackendDeps {
   readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
   // Used only when MANAGED_AGENT_GAME_MEMORY=true.
   gameMemory?: GameMemoryIndex;
-  // N1: catalog's GitHub client, built at the composition root for copilot.
-  githubClientFactory?: CopilotGitHubClientFactory;
 }
 
 const EFFORTS: readonly ManagedAgentEffort[] = ['low', 'medium', 'high'];
@@ -83,41 +79,30 @@ function buildManagedBackendForVendor(
   log: Logger | undefined,
   allowGenericApiKeyFallback = false,
 ): AgentBackend | undefined {
-  const isCopilot = vendor === 'copilot';
   const isGemini = vendor === 'gemini';
   const isOpenAi = vendor === 'openai';
   const apiKey = (
-    isCopilot
-      ? process.env.AGENT_TASKS_TOKEN
-      : isGemini
-        ? (process.env.GEMINI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
-        : isOpenAi
-          ? (process.env.OPENAI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
-          : process.env.MANAGED_AGENT_API_KEY
+    isGemini
+      ? (process.env.GEMINI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
+      : isOpenAi
+        ? (process.env.OPENAI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
+        : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
-    isCopilot
-      ? process.env.AGENT_TASKS_MODEL?.trim() || 'claude-sonnet-4.6'
-      : isGemini
-        ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim() || GEMINI_DEFAULT_MODEL
-        : isOpenAi
-          ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
-          : process.env.MANAGED_AGENT_MODEL?.trim()
+    isGemini
+      ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim() || GEMINI_DEFAULT_MODEL
+      : isOpenAi
+        ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
+        : process.env.MANAGED_AGENT_MODEL?.trim()
   )?.trim();
   if (!apiKey || !model) {
-    log?.warn(
-      { vendor },
-      isCopilot
-        ? 'copilot managed agent requires AGENT_TASKS_TOKEN'
-        : 'managed agent vendor requires MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL',
-    );
+    log?.warn({ vendor }, 'managed agent vendor requires MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL');
     return undefined;
   }
   const agentId = process.env.MANAGED_AGENT_ID?.trim();
   const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
   const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
   const maxListCostCents = Number(process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
-  const maxCopilotCredits = Number(process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
   const maxTotalTokens = Number(process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS ?? '');
   const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
     ?.split(',')
@@ -144,20 +129,7 @@ function buildManagedBackendForVendor(
     log?.warn({ vendor }, 'managed agent requires MANAGED_AGENT_MCP_URL');
     return undefined;
   }
-  // Without the scratch repo an MCP round has nowhere to dispatch.
-  if (isCopilot && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
-    log?.warn({ vendor }, 'copilot managed agent requires MANAGED_AGENT_COPILOT_MCP_REPO');
-    return undefined;
-  }
-
   // Wall clock bounds how long a round runs, never what it spends.
-  if (isCopilot && (!Number.isFinite(maxCopilotCredits) || maxCopilotCredits <= 0)) {
-    log?.warn(
-      { vendor },
-      'copilot managed agent requires a positive credit ceiling: MANAGED_AGENT_COPILOT_MAX_CREDITS',
-    );
-    return undefined;
-  }
   if ((isGemini || isOpenAi) && (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0)) {
     log?.warn({ vendor }, 'managed agent requires a positive token ceiling: MANAGED_AGENT_MAX_TOTAL_TOKENS');
     return undefined;
@@ -183,19 +155,7 @@ function buildManagedBackendForVendor(
         ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
         : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
-      ...(isCopilot
-        ? {
-            mcpRepo: process.env.MANAGED_AGENT_COPILOT_MCP_REPO!.trim(),
-            ...(process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF?.trim()
-              ? { mcpBaseRef: process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF.trim() }
-              : {}),
-            ...(process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT?.trim()
-              ? { mcpCustomAgent: process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT.trim() }
-              : {}),
-          }
-        : {}),
-      ...(!isCopilot ? { overrideTools: true } : {}),
-      ...(isCopilot && deps?.githubClientFactory ? { githubClientFactory: deps.githubClientFactory } : {}),
+      overrideTools: true,
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {
@@ -210,12 +170,7 @@ function buildManagedBackendForVendor(
     ...(deps?.readSignals ? { readSignals: deps.readSignals } : {}),
     ...(deps?.readCredentialRef ? { readCredentialRef: deps.readCredentialRef } : {}),
     tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
-    ...(!isCopilot
-      ? {
-          mcpBearerCredential: (brief) =>
-            brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined,
-        }
-      : {}),
+    mcpBearerCredential: (brief) => (brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined),
     systemPrompt: deps?.systemPrompt ?? (async () => builderSystemPrompt({ shell: provider.shell === true })),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(deps?.workspace ? { workspace: deps.workspace } : {}),
@@ -224,9 +179,6 @@ function buildManagedBackendForVendor(
       : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
-    ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
-      ? { budget: { unit: 'credits' as const, max: maxCopilotCredits } }
-      : {}),
     ...((isGemini || isOpenAi) && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
       ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
       : {}),

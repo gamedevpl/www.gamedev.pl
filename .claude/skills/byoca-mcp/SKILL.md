@@ -6,15 +6,13 @@ description: BYOCA / self-build MCP contract for gamedev.pl — session loop (st
 # BYOCA MCP (self-build)
 
 Creators connect their own coding agent (ChatGPT, Claude, Cursor, …) to a round via
-`/api/mcp`. Platform Copilot is a separate builder. This skill is the public-repo
+`/api/mcp`. The platform's managed builders are a separate lane. This skill is the public-repo
 contract; internal planning lives in the ops repo’s `docs/byoca-*.md` (do not copy
 private content into PRs).
 
-Platform Copilot's MCP lane uses the same session loop with one extra boundary: the
-Copilot MCP connector authenticates the connection, while `start({ slug, key })` binds a
-live round. Connector-only requests are inert; do not treat the connector as a round key.
-The GitHub Agents-side secret reference must use the `COPILOT_MCP_` prefix. Copilot's
-firewall does not cover MCP servers, so the round-key boundary is the isolation layer.
+Managed builders (Anthropic, Gemini, OpenAI) use the same session loop; their bearer is a
+per-round managed opener (`mcpOpenerToken`), and `start` exchanges it for the round's
+`sessionKey`. GitHub Copilot is no longer a managed vendor and there is no connector secret.
 
 ## Session loop (what a round usually does)
 
@@ -269,8 +267,7 @@ array of prior turns:
 - **Gemini** (`managed-provider-gemini.ts`) takes `input: string` — one prompt, no
   turn array. `environment.sources` seeds _files_ (used only for the round-0 draft on
   a scratch environment), not conversation turns.
-- **Copilot** (`managed-provider-copilot.ts` → `agent-tasks.ts`, GitHub's Agent Tasks
-  API) takes `prompt: string` — one problem statement, nothing else.
+- **OpenAI** (`managed-provider-openai.ts`) takes one `input` per response.
 
 So a tool call is not a workaround for a missing feature we could otherwise use —
 it is the only mechanism that exists today across all three vendors. If a vendor adds
@@ -347,7 +344,7 @@ keep the full contract single-copy; a short creator-text safety reminder may sta
 returns tarball metadata only (engineRef, `kitUrl`, sha256) — it was never the API
 reference its own description claimed to be pointing at, because nothing injected a digest
 into the MCP surface. `appendKitDigest` (`apps/api/src/agent-surface/kit-digest.ts`) had exactly one
-caller, the platform Copilot system prompt (`managed-backend.ts`); a BYOCA agent with no
+caller, the managed builder system prompt (`managed-backend.ts`); a BYOCA agent with no
 shell egress and no system prompt carrying the kit had no in-band way to answer "what can
 this platform build" at all. Observed consequence: an agent asked for a party/multiplayer
 game had nowhere to look and went to the public web for gamedev.pl documentation that was
@@ -605,7 +602,7 @@ it:
   attaching `workspaceFiles` and drops the seed from `brief` before building the prompt
   too — `buildPrompt` writes "a first draft is already in your checkout" whenever
   `brief.seed` is set, and that line must not survive an unseeded dispatch.
-  `supportsSeedFiles` is a plain boolean: `false` for Anthropic, Copilot and OpenAI, and
+  `supportsSeedFiles` is a plain boolean: `false` for Anthropic and OpenAI, and
   `!config.environmentId` for Gemini, which takes inline sources only when it has no
   named environment to run in.
 
@@ -621,10 +618,10 @@ then-existing `SEED_DISPATCH` flag (since removed) or credentials being unset.
 `AgentBackend.seedDelivery()` answers, before anything is generated, how a seed would
 reach that round's agent:
 
-| Answer      | Means                                                                | Who                                                                                                       |
-| ----------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `workspace` | Files are placed for the agent, so the prompt may say so             | Gemini with no named environment (inline sources)                                                         |
-| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; Anthropic (also mounted, still read), Copilot, OpenAI, Gemini-with-an-environment |
+| Answer      | Means                                                                | Who                                                                                              |
+| ----------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `workspace` | Files are placed for the agent, so the prompt may say so             | Gemini with no named environment (inline sources)                                                |
+| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; Anthropic (also mounted, still read), OpenAI, Gemini-with-an-environment |
 
 **`channel` is the entry that made managed rounds seedable at all.** The first pass at this
 only asked whether the provider accepts `workspaceFiles` (`acceptsSeed`), and skipped
@@ -1118,8 +1115,7 @@ What this does **not** change:
 - **Every real credentialed lane already presents a Bearer at `initialize`**, so none of
   them notice: the keyless connect flow puts the creator key in the client's configured
   `Authorization` header (`self-build-connect.ts`); managed Anthropic/Gemini/OpenAI get a
-  vaulted `mcpBearerCredential` from `brief.mcpOpenerToken` (`agent-backend-env.ts`);
-  Copilot's connector authenticates with `COPILOT_MCP_CONNECTOR_SECRET`.
+  vaulted `mcpBearerCredential` from `brief.mcpOpenerToken` (`agent-backend-env.ts`).
 - **Any token shape clears the handshake** — validity is still decided per call, because
   the point of the challenge is to name the sign-in path, not to vet the credential.
 
@@ -1413,10 +1409,10 @@ To put this state on a screen locally, run the dev server with `DEV_SEED_STUDIO=
 ### Platform session boot (no heuristics)
 
 After a platform dispatch (including self→platform handoff), the job stays
-`dispatched` until GitHub's Agent Tasks API reports `in_progress`. That is a real
+`dispatched` until the vendor reports the session running. That is a real
 vendor signal — not a timer. Studio shows phase copy ("Starting agent" / session
 booting) and polls tightly on `phase === 'dispatched'`. Feedback also busts the
-60s status cache so the previous self stall cannot linger while Copilot is already
+60s status cache so the previous self stall cannot linger while a platform round is already
 queued.
 
 ## Key code

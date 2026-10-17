@@ -252,8 +252,8 @@ flowchart LR
 A round is **dispatched to an agent backend** and the agent delivers back over the **build
 channel**, calling `submit_sources`. It does not travel as a merged pull request:
 `GitHubClient` has no issue-creation method at all (the issue-first flow was retired — see
-`docs/steel-thread-plan.md`'s M4 history), and the managed Copilot provider passes
-`createPullRequest: false`, so the agent path opens no pull request at all. The one
+`docs/steel-thread-plan.md`'s M4 history), and no managed provider opens a pull
+request, so the agent path opens none at all. The one
 production caller of `ensureOpenPullRequest` is `community/proposal-apply-bot.ts` — the
 repo-lane merge-back described just below, not agent mechanics; that PR follows the games
 repo's normal review-and-merge lifecycle, not any programmatic close (`GitHubClient` has no

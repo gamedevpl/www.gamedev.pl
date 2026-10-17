@@ -38,10 +38,7 @@ export interface DispatchStore {
   // Every seed outcome recorded at or after `since`, newest first.
   listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]>;
 
-  // Overwrites credits on an existing agent_session ledger entry; no-op if absent.
-  setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void>;
-
-  // Token-billed twin of setJobCostCredits; drops the credit placeholder.
+  // Records an agent_session's tokens; drops the dispatch credit placeholder.
   setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
 
   // First-settled wins; no-op once already stamped.
@@ -157,19 +154,6 @@ export class InMemoryDispatchStore implements DispatchStore {
       ...sub,
       costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
     });
-  }
-
-  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
-    const sub = this.submissions.get(jobId);
-    if (!sub?.costs?.length) return;
-    let changed = false;
-    const costs = sub.costs.map((entry) => {
-      if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
-      changed = true;
-      return { ...entry, credits, creditsMeasured: true };
-    });
-    if (!changed) return;
-    this.submissions.set(jobId, { ...sub, costs });
   }
 
   async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
@@ -336,23 +320,6 @@ export class FirestoreDispatchStore implements DispatchStore {
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).costs ?? [];
       tx.set(ref, { costs: [...existing, entry].slice(-MAX_JOB_COSTS) }, { merge: true });
-    });
-  }
-
-  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
-    const docRef = this.ref(jobId);
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).costs ?? [];
-      let changed = false;
-      const costs = existing.map((entry) => {
-        if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
-        changed = true;
-        return { ...entry, credits, creditsMeasured: true };
-      });
-      if (!changed) return;
-      tx.set(docRef, { costs }, { merge: true });
     });
   }
 

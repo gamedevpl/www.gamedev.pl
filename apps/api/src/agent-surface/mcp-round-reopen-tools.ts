@@ -30,8 +30,6 @@ import {
   toolRefusal,
   toolErrForReason,
   RETIRED_GAME_KEY_REASON,
-  PLATFORM_CONNECTOR_ONLY_REASON,
-  matchesPlatformConnectorSecret,
   type ToolHandler,
 } from './mcp-tool-support.js';
 
@@ -50,7 +48,6 @@ const RELAY_VERBATIM =
 export interface RoundReopenToolsDeps {
   store: Store | undefined;
   agentTokenSecret: string | undefined;
-  platformConnectorSecret: string | undefined;
   startImprovementRound:
     | ((
         input: Omit<Parameters<SubmissionRoutesHandle['startImprovementRound']>[0], 'requestedBy'> & {
@@ -88,7 +85,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
   const {
     store,
     agentTokenSecret,
-    platformConnectorSecret,
     startImprovementRound,
     continueDraftRound,
     contentChecker,
@@ -143,9 +139,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
 
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {
@@ -383,9 +376,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
 
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {

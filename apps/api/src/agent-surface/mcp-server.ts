@@ -16,9 +16,7 @@ import {
   channelControlFields,
   pendingMessagesFromChannel,
   CREATOR_TEXT_SAFETY,
-  PLATFORM_CONNECTOR_ONLY_REASON,
   RETIRED_GAME_KEY_REASON,
-  matchesPlatformConnectorSecret,
   type ChannelControlBody,
   type ToolResult,
   type ToolHandler,
@@ -171,7 +169,6 @@ const MAX_TRANSPORT_SESSIONS = 10_000;
 export interface McpServerOptions {
   store?: Store;
   agentTokenSecret?: string;
-  platformConnectorSecret?: string;
   now?: () => number;
   /**
    * Closed beta, so the endpoint can say so. The beta wall itself sits on sign-in, not
@@ -271,7 +268,7 @@ interface AuthedJob {
   jobId: number;
   record: SubmissionRecord;
   access: AgentTokenAccess;
-  identity: 'creator' | 'oauth' | 'round' | 'platform_connector';
+  identity: 'creator' | 'oauth' | 'round';
   /** Round-scoped agent token for channel inject (same generation as the capability). */
   channelToken: string;
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
@@ -396,7 +393,6 @@ function startToolResult(structured: { sessionKey: string } & Record<string, unk
 export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions): Promise<void> {
   const store = options.store;
   const agentTokenSecret = options.agentTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
-  const platformConnectorSecret = options.platformConnectorSecret;
   const now = options.now ?? Date.now;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
   const assertDeliverableSourcePath = options.assertDeliverableSourcePath;
@@ -534,14 +530,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (!(error instanceof InvalidAgentTokenError)) throw error;
       }
     }
-    const bearerIsPlatformConnector = matchesPlatformConnectorSecret(bearer, platformConnectorSecret);
     const preferSessionKey =
       Boolean(sessionKeyArg) &&
       (!bearer ||
         bearerIsOAuth ||
         bearerIsOpener ||
         bearerIsRetiredGameKey ||
-        bearerIsPlatformConnector ||
         bearerIsManagedOpener);
     let identity!: AuthedJob['identity'];
     let sessionActorUid: string | undefined;
@@ -594,7 +588,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         actorUid: sessionClaims.actorUid,
         actorRevision: sessionClaims.actorRevision,
       };
-      identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
+      identity = 'round';
       sessionActorUid = sessionClaims.actorUid;
       channelToken = '';
     } else if (bearerIsOAuth) {
@@ -611,8 +605,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(
         'this session opener only opens a session via start() — pass the sessionKey start returned for later tools',
       );
-    } else if (bearerIsPlatformConnector) {
-      return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
     } else if (bearer) {
       try {
         claims = verifyAgentToken(bearer, agentTokenSecret);
@@ -1036,11 +1028,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        if (!key && matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          noteInvalidStart(ctx.request);
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
-
         const bindActiveRound = async (active: SubmissionRecord, actorUid: string): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
@@ -1300,22 +1287,20 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
-    ...createGameCreateTools({ store, agentTokenSecret, platformConnectorSecret, now, createGame }),
+    ...createGameCreateTools({ store, agentTokenSecret, now, createGame }),
     ...createAccountGamesTools({
       store,
       agentTokenSecret,
-      platformConnectorSecret,
-      now,
+        now,
       loadOwnerGames: options.loadOwnerGames,
     }),
     ...createPerformanceTools({ store, agentTokenSecret, readGamePerformance: options.readGamePerformance, now }),
-    ...createOwnershipTools({ store, platformConnectorSecret, now }),
+    ...createOwnershipTools({ store, now }),
 
     ...createProposalTools({
       store,
       agentTokenSecret,
-      platformConnectorSecret,
-      now,
+        now,
       missingCredentialHint,
       gamesStore: gamesStoreForProposals,
       resolveProposalBase: resolveProposalBaseFor,
@@ -1326,8 +1311,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createRoundReopenTools({
       store,
       agentTokenSecret,
-      platformConnectorSecret,
-      startImprovementRound,
+        startImprovementRound,
       continueDraftRound,
       contentChecker,
       dailyImprovementQuota,

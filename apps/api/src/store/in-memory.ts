@@ -603,10 +603,6 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.dispatchStore.recordJobCost(jobId, entry);
   }
 
-  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
-    return this.dispatchStore.setJobCostCredits(jobId, ref, credits);
-  }
-
   async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
     return this.dispatchStore.setJobCostTokens(jobId, ref, tokens);
   }

@@ -1,10 +1,11 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: ✅ **Anthropic, Gemini, Copilot, and OpenAI drivers are implemented, and all
-> four dispatch over MCP.** Copilot's earlier harness lane — a git branch, a full
-> repository checkout, the build channel's shell-based upload — is retired; every managed
-> round now runs the same MCP-only, no-checkout contract `buildPrompt` produces. All four
-> run through the managed lifecycle and record their native usage units. Production
+> Status: ✅ **Anthropic, Gemini and OpenAI drivers are implemented, and all three
+> dispatch over MCP.** GitHub Copilot was a fourth vendor and has been removed; stored jobs
+> whose `dispatch.backend` is `managed:copilot` resolve to no backend (`isRetiredBackend`), so
+> no other vendor is asked to observe, cancel or clean them. Every managed round runs the
+> same MCP-only, no-checkout contract `buildPrompt` produces. All three run through the
+> managed lifecycle and record their native usage units. Production
 > cutover has happened — managed dispatch serves live platform builds. Which vendor is
 > serving them is a deploy-time value (`MANAGED_AGENT_VENDOR`, or the runtime override
 > below) and is deliberately not recorded in this repo; read the env on the revision.
@@ -82,11 +83,11 @@ a second vendor would spell differently belongs in its adapter.
    onto the `AgentTaskState` the job machine already understands. An unknown word reads as
    `in_progress`, never `failed`: a vendor adding a state is not a reason to abandon a live
    build.
-2. **Usage keeps native units.** Token and credit observations are discriminated and carry
-   their vendor/model identity. No driver converts one unit into another.
+2. **Usage keeps native units.** Token observations are discriminated and carry their
+   vendor/model identity. No driver converts one unit into another.
 3. **The shared parts are shared, and live in neutral files.** The state vocabulary is
-   `agent-state.ts`, not GitHub's client; the brief is `build-prompt.ts`, not Copilot's
-   backend. Both used to sit inside the first backend that needed them, which made a second
+   `agent-state.ts`, not GitHub's client; the brief is `build-prompt.ts`, not the first
+   backend's. Both used to sit inside the first backend that needed them, which made a second
    backend look like it depended on the first.
 4. **The vendor is a variable.** `MANAGED_AGENT_VENDOR` selects a registered adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
@@ -97,90 +98,6 @@ a second vendor would spell differently belongs in its adapter.
 Anthropic rounds defer optional MCP tool definitions at the provider layer so the context starts
 with the round-start, source-read and delivery path. The server's shared MCP behavioural contract
 is carried once in `initialize.instructions`; it must not be repeated in every tool description.
-
-## Copilot under the seam
-
-Copilot implements `ManagedAgentProvider` like the other two vendors — MCP-only, no
-harness fallback:
-
-| Seam capability    | Copilot's answer                                                     |
-| ------------------ | -------------------------------------------------------------------- |
-| `startSession`     | An Agent Task on the scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`) |
-| `getSession` usage | **Credits**, never tokens                                            |
-| `cancelSession`    | Cancels the Actions run behind the task — `enforced: true`           |
-
-GitHub's Agent Tasks API still creates a git branch as an implementation detail of every
-task, on that scratch repo — the agent itself has no shell to reach it with, and nothing in
-this seam ever reads it as a workspace of files.
-
-### Interrupting a Copilot round
-
-The agent tasks API is create/list/get only: `cancelled` is a state it reports, never one it
-accepts, and there is no stop endpoint. That is not the whole picture, though — a Copilot
-session **is** a GitHub Actions run on the scratch repo, dispatched by the `copilot-swe-agent`
-app under the synthetic workflow path `dynamic/copilot-swe-agent/copilot`. Cancelling that run
-is what the Stop button in Copilot's own UI does, and it is what `cancelSession` does here:
-
-1. Read the task and resolve its branch (`resolveTaskBranch`).
-2. List the branch's workflow runs and keep the ones whose path is the agent workflow and
-   whose status is still in flight. Validation CI runs on the same branch — matching the path
-   is what keeps the cancel off it.
-3. `POST /repos/{owner}/{repo}/actions/runs/{id}/cancel` for each, and report `enforced: true`
-   if any was accepted.
-
-Two consequences worth knowing before reading a log:
-
-- **A task with no branch yet cannot be stopped.** The branch artifact appears only once the
-  task leaves `queued`, so an interrupt that early answers `enforced: false` — nothing is
-  burning yet, and the next poll retries once there is something to stop.
-- **The dispatch token needs `actions: write`** on the scratch repo (`AGENT_TASKS_TOKEN`).
-  Without it dispatch still works and every cancel silently answers `enforced: false` — a
-  round that blows its ceiling gets marked stopped here while GitHub keeps billing it.
-
-Because the wall clock is enforced by the backend on observation, a round is only interrupted
-as fast as it is observed: the creator's status poll and the two-minute notification sweep are
-what drive it, so a closed tab does not mean an unbounded run.
-
-### Copilot's MCP dispatch
-
-Copilot's prompt uses the same `buildPrompt` fast contract as Anthropic and Gemini, and the
-round key travels in `start({ slug, key })`. The static Copilot MCP connector authenticates
-the connection only; the MCP server requires the live round key before it resolves any
-round-scoped tool.
-
-Rounds dispatch into a separate, content-free scratch repo
-(`MANAGED_AGENT_COPILOT_MCP_REPO`) holding nothing but an MCP-only custom agent doc — not
-the games repo. A prompt-injectable session therefore never shares a checkout with real
-proprietary source; the games repo carries no Copilot MCP connector at all. The
-connector-only replay test enumerates every mutating tool advertised by the MCP server and
-requires refusal.
-
-GitHub configures this connector outside the repository, under the repository's Copilot
-MCP settings. The remote-server header must reference an Agents secret named
-`COPILOT_MCP_CONNECTOR_SECRET`, for example:
-
-```json
-{
-  "mcpServers": {
-    "gamedevpl": {
-      "url": "https://www.gamedev.pl/api/mcp",
-      "headers": {
-        "Authorization": "Bearer $COPILOT_MCP_CONNECTOR_SECRET"
-      }
-    }
-  }
-}
-```
-
-The Cloud Run deployment maps the corresponding runtime value into the same environment
-name. GitHub's MCP secret-prefix rule applies to the Agents-side secret; the lower-level
-Secret Manager resource name is only a deployment detail. The checked-in root `mcp.json`
-is the Cursor manifest and does not configure Copilot.
-
-Copilot's firewall does not apply to MCP servers; it only covers processes started through
-the agent's Bash tool. The connector bearer is therefore not an isolation boundary. The
-security property is the round-key exchange and the refusal of every mutating tool before
-that exchange, which the connector-only replay test keeps load-bearing.
 
 ## Gemini under the seam
 
@@ -302,10 +219,8 @@ round.
 `registerSubmissionRoutes` builds the platform registry via
 `createAgentBackendRegistryFromEnv`. A managed adapter is selected only when
 `MANAGED_AGENT_VENDOR` and its required configuration are valid — **since MP-04, that is
-the only way to get a platform backend.** The direct Copilot backend and its unconditional
-`AGENT_TASKS_TOKEN`-alone fallback were retired: `MANAGED_AGENT_VENDOR=copilot` must be set
-explicitly, with `AGENT_TASKS_TOKEN` supplying its credential, or platform dispatch is
-unavailable regardless of which secrets are present. An explicit `agentBackends.platform`
+the only way to get a platform backend**; without it platform dispatch is unavailable
+regardless of which secrets are present. An explicit `agentBackends.platform`
 still wins over the environment registry.
 
 There are four levels of test:
@@ -370,21 +285,6 @@ and deletes the session. `--base-url` aims the same adapter at a local HTTP stub
 `--budget-usd` is converted to whole US cents for Anthropic's session budget; the backend
 interrupts the session when the wall-clock cap expires. Omitting either `--wait` value makes
 the probe refuse to start rather than run unbounded.
-
-Copilot dispatches into the scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`) and its own
-Agent Tasks credential:
-
-```bash
-AGENT_TASKS_TOKEN=... \
-MANAGED_AGENT_COPILOT_MCP_REPO=gamedevpl/scratchpad \
-npm run managed:probe -w @gamedevpl/api -- --vendor copilot --wait \
-  --wait-seconds 120 --budget-credits 25
-```
-
-The repository's Copilot MCP configuration supplies the static connector header; the probe
-never passes a per-round bearer credential to GitHub for this vendor. A standalone probe
-can print task transitions and usage, but the production channel signals and gate verdict
-require the app's configured store and delivery wiring.
 
 Gemini uses a native token ceiling:
 
@@ -486,9 +386,8 @@ opener bearer for the same job (`verifyManagedMcpOpener`); every public, BYOCA, 
 client gets `unknown tool`. Two per round, the shared daily dream allowance and the dreams kill
 switch apply, and each call books a `concept` cost.
 
-**Creator notes (managed only, opener vendors).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
-exists for that vendor alone, so managed sessions that carry a managed opener (Anthropic, Gemini, OpenAI;
-not Copilot, which connects with the connector secret) also get `creator_notes`
+**Creator notes (managed only).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
+exists for that vendor alone, so managed sessions (Anthropic, Gemini, OpenAI) also get `creator_notes`
 ([`mcp-creator-notes-tools.ts`](../apps/api/src/agent-surface/mcp-creator-notes-tools.ts)): without
 `notes` it returns what builders learned about this creator across all their games and a `revision`;
 with `notes` (≤4000 chars) and that `revision` it replaces them, and a write based on an older revision
@@ -521,38 +420,26 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 
 ## Configuration
 
-| Variable                                 | Meaning                                                                                                              |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid                                                     |
-| `MANAGED_AGENT_API_KEY`                  | Anthropic credential, or a generic fallback for the default vendor's Gemini/OpenAI key                               |
-| `GEMINI_API_KEY`                         | Gemini-specific credential; takes priority over the generic fallback                                                 |
-| `OPENAI_API_KEY`                         | OpenAI-specific credential; takes priority over the generic fallback                                                 |
-| `MANAGED_AGENT_MODEL`                    | Anthropic model label                                                                                                |
-| `MANAGED_AGENT_GEMINI_MODEL`             | Gemini model label; falls back to the adapter's built-in default                                                     |
-| `MANAGED_AGENT_OPENAI_MODEL`             | OpenAI model label — **required for OpenAI; never defaulted**, see "How to exercise it"                              |
-| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt                                                 |
-| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model                                                          |
-| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                                                                  |
-| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                                                                            |
-| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini/OpenAI |
-| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations                                                            |
-| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`, sent on every vendor's request; Anthropic rejects it — use the next row                   |
-| `MANAGED_AGENT_ANTHROPIC_EFFORT`         | Anthropic session effort; the session's model override drops the Agent's own `effort`, so this is what runs          |
-| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor**                                                |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                                                                             |
-| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                                                                            |
-| `MANAGED_AGENT_COPILOT_MCP_REPO`         | The scratch repo Copilot dispatches into — **required for Copilot**                                                  |
-| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                                                                     |
-| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                                                                   |
-| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini or OpenAI per-round token ceiling — shared variable, whichever vendor is selected                    |
-| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                                                                     |
-| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                                                                            |
-
-Copilot dispatches into a separate, content-free scratch repo — never the games repo —
-holding nothing but an MCP-only custom agent doc, so a prompt-injectable session never
-shares a checkout with real source. Both `MANAGED_AGENT_MCP_URL` and
-`MANAGED_AGENT_COPILOT_MCP_REPO` are required for Copilot to build at all; missing either
-one fails startup rather than falling back to anything else.
+| Variable                            | Meaning                                                                                                              |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`              | Registered adapter id; required configuration must also be valid                                                     |
+| `MANAGED_AGENT_API_KEY`             | Anthropic credential, or a generic fallback for the default vendor's Gemini/OpenAI key                               |
+| `GEMINI_API_KEY`                    | Gemini-specific credential; takes priority over the generic fallback                                                 |
+| `OPENAI_API_KEY`                    | OpenAI-specific credential; takes priority over the generic fallback                                                 |
+| `MANAGED_AGENT_MODEL`               | Anthropic model label                                                                                                |
+| `MANAGED_AGENT_GEMINI_MODEL`        | Gemini model label; falls back to the adapter's built-in default                                                     |
+| `MANAGED_AGENT_OPENAI_MODEL`        | OpenAI model label — **required for OpenAI; never defaulted**, see "How to exercise it"                              |
+| `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                                                                                  |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                                                                            |
+| `MANAGED_AGENT_MCP_URL`             | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini/OpenAI |
+| `MANAGED_AGENT_VAULT_IDS`           | Optional static vault ids for probe-only MCP integrations                                                            |
+| `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`, sent on every vendor's request; Anthropic rejects it — use the next row                   |
+| `MANAGED_AGENT_ANTHROPIC_EFFORT`    | Anthropic session effort; the session's model override drops the Agent's own `effort`, so this is what runs          |
+| `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock — **required, every vendor**                                                |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                                                                             |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Optional Gemini or OpenAI per-round token ceiling — shared variable, whichever vendor is selected                    |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                                                                     |
+| `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                                                                            |
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose

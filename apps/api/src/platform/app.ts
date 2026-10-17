@@ -161,8 +161,6 @@ export interface BuildAppOptions {
   /** Seam for Sign in with Apple; defaults to JWKS-or-deny-all from APPLE_CLIENT_IDS. */
   appleAuthVerifier?: AppleAuthVerifier;
   submissionRoutes?: SubmissionRoutesOptions;
-  // Shared secret the Copilot MCP connector authenticates with.
-  platformConnectorSecret?: string;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
   optionImageGenerator?: OptionImageGenerator;
@@ -482,7 +480,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       loadBuildTranscript(transcriptStore, record, isMcpPresenceEventText, opts),
   };
 
-  const platformConnectorSecret = options.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET;
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     snapshotReader,
@@ -499,8 +496,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Self needs store callbacks inside registerSubmissionRoutes; do not pre-build it.
     agentBackends: resolvedAgentBackends,
     managedBackendDeps: {
-      // N1: catalog's GitHub client, built here for copilot's run cancel.
-      githubClientFactory: createGitHubClient,
       ...(options.submissionRoutes?.managedBackendDeps ??
         (options.submissionRoutes?.agentBackend
           ? undefined
@@ -545,7 +540,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     readGamePerformance,
     ...agentSurface.mcp,
     store,
-    platformConnectorSecret,
     // So /api/mcp can say the product is closed. Not a gate.
     privateBeta,
     gamesStore,

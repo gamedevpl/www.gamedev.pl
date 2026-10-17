@@ -59,17 +59,9 @@ workspace files gets them inline; every other round reads the draft from the job
 
 ## Hosted agents
 
-GitHub Copilot's coding agent is dispatched programmatically through GitHub's Agent Tasks
-API (`managed-provider-copilot.ts`, under the managed-backend seam) — a prompt in, a
-session state back, no issue assignment and no PR-relay workflow. Unlike the interactive
-agents above, a managed Copilot round never checks out the games repository at all: it
-dispatches into a separate, content-free scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`)
-holding nothing but an MCP-only custom agent doc, and delivers exclusively through the same
-`stage_source_file` / `submit_sources` MCP contract Anthropic and Gemini use. GitHub's
-Agent Tasks API still creates a git branch there as an implementation detail of every task,
-but the agent has no shell to reach it with and nothing on our side ever reads it as a
-workspace of files; it is released with the round on a best-effort basis. The agent's
-output goes out over MCP, never as a merged branch.
+Hosted platform rounds run on the managed-backend seam (Anthropic, Gemini, OpenAI; see
+[`managed-agent-backend.md`](./managed-agent-backend.md)). GitHub Copilot used to be a
+fourth hosted vendor and has been removed.
 
 Hosted MCP clients without a shell or browser (ChatGPT) cannot produce a mid-build
 WebGL screenshot. They skip `screenshot_upload_url`, deliver `mode=preview`, `end`,

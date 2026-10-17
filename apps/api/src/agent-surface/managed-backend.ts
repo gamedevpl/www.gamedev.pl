@@ -86,7 +86,7 @@ function ledgerTokens(
   return {
     input: usage.inputTokens,
     output: usage.outputTokens,
-    ...(usage.vendor === 'anthropic' || usage.vendor === 'copilot' ? { vendor: usage.vendor } : {}),
+    ...(usage.vendor === 'anthropic' ? { vendor: usage.vendor } : {}),
     ...(usage.model ? { model: usage.model } : {}),
   };
 }
@@ -96,8 +96,7 @@ function observedBudget(
   budget: ManagedUsageBudget | undefined,
 ): number | undefined {
   if (!usage || !budget) return undefined;
-  if (budget.unit === 'credits' && usage.unit === 'credits') return usage.credits;
-  if (budget.unit === 'tokens' && usage.unit === 'tokens') {
+  if (budget.unit === 'tokens') {
     return 'totalTokens' in usage ? usage.totalTokens : usage.inputTokens + usage.outputTokens;
   }
   return undefined;
@@ -228,11 +227,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       if (!session) return null;
 
       const usage = session.usage;
-      const usageFields = usage
-        ? usage.unit === 'tokens'
-          ? { sessionTokens: ledgerTokens(usage), sessionUsage: usage }
-          : { sessionCredits: usage.credits, sessionUsage: usage }
-        : {};
+      const usageFields = usage ? { sessionTokens: ledgerTokens(usage), sessionUsage: usage } : {};
       const stopped = budgetStops.get(ref);
       if (stopped) {
         return {

@@ -182,16 +182,12 @@ async function createApp(
   channelExtras?: {
     onSourcesDelivered?: (input: unknown) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
     knowledgeSearch?: QueryKnowledgeFn;
-    platformConnectorSecret?: string;
   },
 ) {
-  const platformConnectorSecret = channelExtras?.platformConnectorSecret;
   const agentChannel = { ...channelExtras };
-  delete agentChannel.platformConnectorSecret;
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
-    ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
     submissionRoutes: {
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
@@ -736,15 +732,15 @@ describe('POST /api/mcp (BY-05)', () => {
     );
   });
 
-  it('keeps the Copilot MCP connector inert without a round key', async () => {
+  it('keeps a stray bearer inert without a round key', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
-    const connectorSecret = randomBytes(32).toString('hex');
-    app = await createApp(store, undefined, undefined, { platformConnectorSecret: connectorSecret });
+    const strayBearer = randomBytes(32).toString('hex');
+    app = await createApp(store);
     const sessionId = await initialize(app);
     const headers = {
       'mcp-session-id': sessionId,
-      authorization: `Bearer ${connectorSecret}`,
+      authorization: `Bearer ${strayBearer}`,
     };
     const listed = await mcpCall(app, 'tools/list', undefined, headers);
     const tools = listed.json().result.tools as Array<{
@@ -760,7 +756,6 @@ describe('POST /api/mcp (BY-05)', () => {
     for (const tool of mutating) {
       const result = await callTool(app, tool.name, {}, headers);
       expect(result.isError, tool.name).toBe(true);
-      expect(JSON.stringify(result.structured), tool.name).toMatch(/connector|key|credential/i);
     }
     const foreign = await callTool(
       app,
@@ -772,18 +767,14 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(JSON.stringify(await store.getSubmission(ISSUE))).toBe(before);
   });
 
-  it('exchanges a live round key when the connector is present', async () => {
+  // No connector secret any more: the bearer is verified like any key.
+  it('refuses a stray bearer even beside a live sessionKey', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
-    const connectorSecret = randomBytes(32).toString('hex');
-    app = await createApp(store, undefined, undefined, { platformConnectorSecret: connectorSecret });
+    const strayBearer = randomBytes(32).toString('hex');
+    app = await createApp(store);
     const sessionId = await initialize(app);
-    const started = await callTool(
-      app,
-      'start',
-      { key: roundKey() },
-      { 'mcp-session-id': sessionId, authorization: `Bearer ${connectorSecret}` },
-    );
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
 
     expect(started.isError).toBe(false);
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
@@ -791,9 +782,9 @@ describe('POST /api/mcp (BY-05)', () => {
       app,
       'get_brief',
       { sessionKey },
-      { 'mcp-session-id': sessionId, authorization: `Bearer ${connectorSecret}` },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${strayBearer}` },
     );
-    expect(brief.isError, JSON.stringify(brief.structured)).toBe(false);
+    expect(brief.isError).toBe(true);
   });
 
   it('never names an unadvertised tool in anything the model reads', async () => {

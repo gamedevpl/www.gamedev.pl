@@ -100,8 +100,7 @@ A backend on a hosted agent platform paid through a **metered first-party API ke
 neither condition: we operate no sandbox, and an API key is sold for programmatic use
 rather than seated to a person. That is why
 [`managed-agent-backend.md`](./managed-agent-backend.md) can exist without reopening the
-pivot. It does not make it a good idea — the cost case is a separate argument, and the
-default platform builder is still Copilot dispatch — but the blocker is a property of
+pivot. It does not make it a good idea — the cost case is a separate argument — but the blocker is a property of
 _who runs the compute and on whose licence_, not of hosted builders as a category.
 
 ## The product consequence: creation is asynchronous

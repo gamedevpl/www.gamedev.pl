@@ -244,7 +244,7 @@ on every revision because `--set-env-vars` replaces the whole map:
 
 | Variable                            | Meaning                                                                 |
 | ----------------------------------- | ----------------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `copilot`, `gemini`, or `openai`         |
+| `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `gemini`, or `openai`                    |
 | `MANAGED_AGENT_MODEL`               | Anthropic model label                                                   |
 | `MANAGED_AGENT_ANTHROPIC_EFFORT`    | Anthropic session effort (`low`/`medium`/`high`); unset = model default |
 | `MANAGED_AGENT_GEMINI_MODEL`        | Gemini model label; falls back to the built-in default                  |
@@ -253,11 +253,9 @@ on every revision because `--set-env-vars` replaces the whole map:
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                                            |
 | `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit — required for every vendor                |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                                      |
-| `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Copilot per-round credit ceiling                                        |
 | `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Gemini and OpenAI native token ceiling (shared variable, either vendor) |
 | `MANAGED_AGENT_VAULT_IDS`           | Optional static vaults for probe-only integrations                      |
 | `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls — required for every vendor            |
-| `MANAGED_AGENT_COPILOT_MCP_REPO`    | The scratch repo Copilot dispatches into — required for Copilot         |
 | `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                                                  |
 
 `MANAGED_AGENT_API_KEY` is wired from the `anthropic-api-key` Secret Manager secret,
