@@ -690,8 +690,8 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.creatorNotesStore.getCreatorNotes(uid);
   }
 
-  async setCreatorNotes(record: CreatorNotesRecord): Promise<void> {
-    return this.creatorNotesStore.setCreatorNotes(record);
+  async setCreatorNotes(record: Omit<CreatorNotesRecord, 'revision'>, basedOn: number): Promise<number> {
+    return this.creatorNotesStore.setCreatorNotes(record, basedOn);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

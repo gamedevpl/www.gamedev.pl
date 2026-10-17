@@ -486,11 +486,13 @@ opener bearer for the same job (`verifyManagedMcpOpener`); every public, BYOCA, 
 client gets `unknown tool`. Two per round, the shared daily dream allowance and the dreams kill
 switch apply, and each call books a `concept` cost.
 
-**Creator notes (managed only, every vendor).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
-exists for that vendor alone, so managed sessions of every vendor also get `creator_notes`
+**Creator notes (managed only, opener vendors).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
+exists for that vendor alone, so managed sessions that carry a managed opener (Anthropic, Gemini, OpenAI;
+not Copilot, which connects with the connector secret) also get `creator_notes`
 ([`mcp-creator-notes-tools.ts`](../apps/api/src/agent-surface/mcp-creator-notes-tools.ts)): without
-`notes` it returns what builders learned about this creator across all their games, with `notes` (≤4000
-chars) it replaces them. They live in `creatorNotes/{uid}`, keyed by the job's `ownerUid`, written only by
+`notes` it returns what builders learned about this creator across all their games and a `revision`;
+with `notes` (≤4000 chars) and that `revision` it replaces them, and a write based on an older revision
+is refused with the newer notes to merge, so two rounds of one creator never overwrite each other blind. They live in `creatorNotes/{uid}`, keyed by the job's `ownerUid`, written only by
 that owner's current platform round, and deleted with the account. The system prompt asks the builder to
 read them before its first edit and to update them (tastes, style, accepted and rejected ideas) before
 `end`. Public clients never see the tool.

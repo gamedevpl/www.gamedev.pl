@@ -9,22 +9,38 @@ export interface CreatorNotesRecord {
   updatedAt: string;
   jobId: number;
   roundGeneration: number;
+  // Bumped on every write; a writer names the revision it read.
+  revision: number;
 }
 
 export const MAX_CREATOR_NOTES_CHARS = 4000;
 
 export interface CreatorNotesStore {
   getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null>;
-  // Replaces the notes; only the job owner's current round.
-  setCreatorNotes(record: CreatorNotesRecord): Promise<void>;
+  // Replaces the notes read at `basedOn`; returns the new revision.
+  setCreatorNotes(record: Omit<CreatorNotesRecord, 'revision'>, basedOn: number): Promise<number>;
+}
+
+export class CreatorNotesConflict extends Error {
+  constructor(readonly current: CreatorNotesRecord | null) {
+    super('the creator notes changed since they were read');
+  }
 }
 
 // Throws like the round-budget writes when the round moved on.
-function assertWriter(sub: SubmissionRecord | undefined, record: CreatorNotesRecord): void {
+function assertWriter(
+  sub: SubmissionRecord | undefined,
+  record: Omit<CreatorNotesRecord, 'revision'>,
+  current: CreatorNotesRecord | null,
+  basedOn: number,
+): number {
   assertAgentRound(sub, record.roundGeneration);
   if (sub?.ownerUid !== record.uid) {
     throw Object.assign(new Error('this round belongs to another creator'), { statusCode: 409 });
   }
+  // Two rounds of one creator must not overwrite each other blind.
+  if ((current?.revision ?? 0) !== basedOn) throw new CreatorNotesConflict(current);
+  return basedOn + 1;
 }
 
 export class InMemoryCreatorNotesStore implements CreatorNotesStore {
@@ -37,9 +53,11 @@ export class InMemoryCreatorNotesStore implements CreatorNotesStore {
     return record ? { ...record } : null;
   }
 
-  async setCreatorNotes(record: CreatorNotesRecord): Promise<void> {
-    assertWriter(this.getSubmission(record.jobId), record);
-    this.notes.set(record.uid, { ...record });
+  async setCreatorNotes(record: Omit<CreatorNotesRecord, 'revision'>, basedOn: number): Promise<number> {
+    const current = this.notes.get(record.uid) ?? null;
+    const revision = assertWriter(this.getSubmission(record.jobId), record, current, basedOn);
+    this.notes.set(record.uid, { ...record, revision });
+    return revision;
   }
 }
 
@@ -55,12 +73,16 @@ export class FirestoreCreatorNotesStore implements CreatorNotesStore {
     return snap.exists ? (snap.data() as CreatorNotesRecord) : null;
   }
 
-  async setCreatorNotes(record: CreatorNotesRecord): Promise<void> {
+  async setCreatorNotes(record: Omit<CreatorNotesRecord, 'revision'>, basedOn: number): Promise<number> {
     const jobRef = this.db.collection('submissions').doc(String(record.jobId));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(jobRef);
-      assertWriter(snap.exists ? (snap.data() as SubmissionRecord) : undefined, record);
-      tx.set(this.doc(record.uid), record);
+    const notesRef = this.doc(record.uid);
+    return this.db.runTransaction(async (tx) => {
+      const [jobSnap, notesSnap] = await Promise.all([tx.get(jobRef), tx.get(notesRef)]);
+      const sub = jobSnap.exists ? (jobSnap.data() as SubmissionRecord) : undefined;
+      const current = notesSnap.exists ? (notesSnap.data() as CreatorNotesRecord) : null;
+      const revision = assertWriter(sub, record, current, basedOn);
+      tx.set(notesRef, { ...record, revision });
+      return revision;
     });
   }
 }
