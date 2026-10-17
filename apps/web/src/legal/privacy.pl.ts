@@ -206,8 +206,8 @@ export const privacyPl: LegalDocument = {
               'sprawdza model Google Gemini. Nie przechowujemy tych ilustracji; nie są częścią Twojego zgłoszenia ' +
               'i nie trafiają do agenta kodującego.',
             'Zaakceptowany opis trafia jako zadanie do agenta kodującego — modelu Anthropic, Google Gemini lub ' +
-              'OpenAI, zależnie od wyboru — który pisze kod gry w naszym prywatnym repozytorium. Repozytorium nie ' +
-              'jest publiczne — Twój opis nie staje się publicznie widoczny w wyniku samego zgłoszenia.',
+              'OpenAI, zależnie od wyboru — który pisze kod gry. Kod jest przechowywany w naszym prywatnym ' +
+              'magazynie; Twój opis nie staje się publicznie widoczny w wyniku samego zgłoszenia.',
             'Opublikowana gra jest widoczna dla wszystkich użytkowników Serwisu wraz z tytułem i — jeśli ją ' +
               'podałeś/podałaś — nazwą twórcy.',
           ],
@@ -304,7 +304,12 @@ export const privacyPl: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderacja i doprecyzowanie opisu gry; sprawdzanie bezpieczeństwa ilustracji do odpowiedzi na pytania ' +
-                'pomocnicze; podpowiedzi kodu w edytorze; pisze grę jako wybrany agent kodujący',
+                'pomocnicze; podpowiedzi uzupełnień kodu w edytorze kodu',
+              'USA / globalnie — standardowe klauzule umowne',
+            ],
+            [
+              'Google Gemini API',
+              'Pisze grę jako wybrany agent kodujący',
               'USA / globalnie — standardowe klauzule umowne',
             ],
             [

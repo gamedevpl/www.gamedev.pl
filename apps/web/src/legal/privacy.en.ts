@@ -201,8 +201,8 @@ export const privacyEn: LegalDocument = {
               'checks each illustration before you see it. We do not store the illustrations; they are not part ' +
               'of your submission and never reach the coding agent.',
             'An accepted description is handed as a task to a coding agent — an Anthropic, Google Gemini or OpenAI ' +
-              'model, whichever we selected — which writes the game’s code in our private repository. That ' +
-              'repository is not public — submitting a description does not by itself make it publicly visible.',
+              'model, whichever we selected — which writes the game’s code. The code is kept in our private ' +
+              'storage; submitting a description does not by itself make it publicly visible.',
             'A published game is visible to all users of the Service, together with its title and — if you supplied ' +
               'one — your creator name.',
           ],
@@ -294,7 +294,12 @@ export const privacyEn: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderating and refining your game description; checking illustrations of clarifying-question ' +
-                'answers for safety; code completions in the Code editor; writing your game as the coding agent',
+                'answers for safety; suggesting code completions in the Code editor',
+              'USA / global — Standard Contractual Clauses',
+            ],
+            [
+              'Google Gemini API',
+              'Writing your game as the coding agent, when selected',
               'USA / global — Standard Contractual Clauses',
             ],
             [
