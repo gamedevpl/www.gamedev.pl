@@ -86,6 +86,8 @@ authorship. If a closed round still has staged edits or deletions, delivery refu
 than silently omitting the changes shown in Studio. Restage those edits in a new round, or
 explicitly discard them in Studio before retrying. `--takeover` only disconnects
 an active own-agent session so local files can be delivered; it is not needed to open a round.
+Discard can clear owner-, agent-, and legacy-staged entries once a round is closed.
+In an open round it continues to preserve agent staging, and a live agent session blocks discard.
 
 ## One delivery allowlist, not two
 

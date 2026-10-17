@@ -652,6 +652,11 @@ another editor changed the acknowledged rejected paths.
 Retry guidance is behavior too: check preview versus publication and shell versus
 interactive commands, preserving the original mode and delivery flags.
 
+Closed-round recovery must cover owner, agent and legacy staging. Exercise the actual
+read → refusal → discard → retry sequence for edits and deletions, and keep an open-round
+control that protects agent staging. Confirm Studio exposes the same recovery action.
+When round opening changes, update the task-table contract as well as any dated note.
+
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
 
 ```bash

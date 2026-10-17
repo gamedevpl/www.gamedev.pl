@@ -639,12 +639,7 @@ export async function registerCreatorCodeRoutes(
     paths: z.array(z.string().trim().min(1).max(120)).max(DELIVERY_MAX_FILES).optional(),
   });
 
-  /**
-   * POST /api/me/studio/games/:slug/sources/stage/discard (CE-10) — owner-scoped
-   * clear. Only clears paths this owner staged (`stagedBy === 'owner'`); an agent's own
-   * staged work in a mixed buffer is left standing, because "discard my edits" must not
-   * also discard an agent's.
-   */
+  // Open rounds keep the agent's staging protected from creator discard.
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/discard',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
@@ -672,9 +667,12 @@ export async function registerCreatorCodeRoutes(
         jobId: record.jobId,
         roundGeneration,
       });
-      const ownerPaths = new Set(summary.files.filter((file) => file.stagedBy === 'owner').map((file) => file.path));
+      const closed = roundIsClosed(record);
+      const discardable = new Set(
+        summary.files.filter((file) => closed || file.stagedBy === 'owner').map((file) => file.path),
+      );
       const requested = parsed.data.paths;
-      const paths = requested ? requested.filter((path) => ownerPaths.has(path)) : [...ownerPaths];
+      const paths = requested ? requested.filter((path) => discardable.has(path)) : [...discardable];
 
       if (paths.length === 0) {
         return reply.send({ cleared: 0 });

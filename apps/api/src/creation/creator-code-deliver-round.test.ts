@@ -14,14 +14,14 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-async function setup() {
+async function setup(closed = true) {
   const store = new InMemoryStore();
   await store.createSubmission(10, 'g:creator', 'Sky Dodge');
   await store.setSubmissionSlug(10, slug);
   await store.setSubmissionLocale(10, 'pl');
   await store.setSubmissionDeliveredVersion(10, 'base');
   await store.ensureRoundGeneration(10);
-  await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+  if (closed) await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
   const getManifest = vi.fn(async () => ({ sourceFiles: ['game.ts'], authorship: 'agent' }));
   const staging: {
     contents: Awaited<ReturnType<GamesStore['getStagedSourceFiles']>>;
@@ -119,18 +119,24 @@ describe('delivery without staging on a closed round', () => {
     expect(deliver).toHaveBeenCalledOnce();
   });
 
-  it.each(['preview', 'publish'] as const)(
-    'preserves closed-round edits and deletions until explicitly discarded (%s)',
-    async (mode) => {
+  it.each(
+    (['preview', 'publish'] as const).flatMap((mode) =>
+      (['owner', 'agent', undefined] as const).map((stagedBy) => ({ mode, stagedBy })),
+    ),
+  )(
+    'preserves closed-round edits and deletions until explicitly discarded ($mode, $stagedBy)',
+    async ({ mode, stagedBy }) => {
       for (const deleted of [false, true]) {
         const { app, store, deliver, staging, clearStagedSources } = await setup();
-        staging.files.push({ path: 'game.ts', bytes: 0, stagedBy: 'owner', ...(deleted ? { deleted: true } : {}) });
+        staging.files.push({ path: 'game.ts', bytes: 0, stagedBy, ...(deleted ? { deleted: true } : {}) });
         staging.contents.push({ path: 'game.ts', content: 'unsent edit', ...(deleted ? { deleted: true } : {}) });
         const before = await app.inject({ method: 'GET', url: url.replace('/deliver', '') });
         expect(before.statusCode).toBe(200);
         expect(before.json().deleted).toEqual(deleted ? ['game.ts'] : []);
         expect(before.json().files).toEqual(
-          deleted ? [] : [expect.objectContaining({ path: 'game.ts', content: 'unsent edit', stagedBy: 'owner' })],
+          deleted
+            ? []
+            : [expect.objectContaining({ path: 'game.ts', content: 'unsent edit', stagedBy: stagedBy ?? 'agent' })],
         );
 
         const refused = await app.inject({ method: 'POST', url, payload: { mode, attestation: true } });
@@ -161,6 +167,17 @@ describe('delivery without staging on a closed round', () => {
       }
     },
   );
+
+  it('keeps agent staging protected while a round is still open', async () => {
+    const { app, staging, clearStagedSources } = await setup(false);
+    staging.files.push({ path: 'game.ts', bytes: 0, stagedBy: 'agent' });
+    staging.contents.push({ path: 'game.ts', content: 'agent edit' });
+    const discarded = await app.inject({ method: 'POST', url: url.replace('/deliver', '/stage/discard'), payload: {} });
+    expect(discarded.statusCode).toBe(200);
+    expect(discarded.json()).toEqual({ cleared: 0 });
+    expect(clearStagedSources).not.toHaveBeenCalled();
+    expect(staging.contents).toEqual([{ path: 'game.ts', content: 'agent edit' }]);
+  });
 
   it('does not open a round for invalid requests or another user', async () => {
     const { app, store, deliver } = await setup();
