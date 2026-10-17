@@ -167,8 +167,8 @@ const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
  */
 const GAME_KIT_MODULE_ENTRIES = GAME_KIT_VERTICAL_ENTRIES;
 
-/** What `getGameFile` will read. Declarations and manifests, never source or media. */
-const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json', 'AGENT.json']);
+/** What `getGameFile` will read. Declarations and manifests, never media; publish.ts is read for its presence. */
+const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json', 'AGENT.json', 'publish.ts']);
 
 // Malformed or missing means "declares none".
 const HIDDEN_FIELDS_CAP = 64;
@@ -740,6 +740,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       throw new Error(`${sourceKind} TypeScript exceeds ${MAX_SOURCE_GRAPH_BYTES} bytes`);
     }
 
+    // A publish entry is the served build of a game whose full code stays private.
+    const minify = entryPath.endsWith('/publish.ts');
     const result = await build({
       stdin: {
         contents: entrySource,
@@ -752,7 +754,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       platform: 'browser',
       target: 'es2022',
       format: 'iife',
-      legalComments: 'inline',
+      minify,
+      legalComments: minify ? 'none' : 'inline',
       plugins: [
         {
           name: 'github-typescript-modules',
