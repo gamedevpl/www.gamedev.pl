@@ -333,7 +333,8 @@ export class ModelGameSeeder implements GameSeeder {
       name: 'seed_picks',
       schema: {
         type: 'object',
-        properties: { picks: { type: 'array', items: { type: 'string' }, maxItems: this.references } },
+        // No maxItems: Anthropic structured outputs 400 on it; the slice below caps.
+        properties: { picks: { type: 'array', items: { type: 'string' } } },
         required: ['picks'],
       },
     };
