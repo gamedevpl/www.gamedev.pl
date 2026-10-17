@@ -7,15 +7,9 @@ import { verifyReferenceImageToken } from './reference-image-url.js';
 import { pngOf } from '../platform/image-size.test.js';
 import type { ToolContext } from './mcp-tool-support.js';
 
-// A 4x2 PNG header is all imageSize and isPng read.
+// The capture gets decoded, so it must be a real PNG.
 function png(width = 4, height = 2): Buffer {
-  const bytes = Buffer.alloc(33);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
-  bytes.writeUInt32BE(13, 8);
-  bytes.write('IHDR', 12, 'ascii');
-  bytes.writeUInt32BE(width, 16);
-  bytes.writeUInt32BE(height, 20);
-  return bytes;
+  return pngOf(width, height);
 }
 
 const JOB = 7;

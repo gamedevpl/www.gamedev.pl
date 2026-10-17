@@ -1,6 +1,6 @@
 import { closeDreamClaim } from './dream-claim-finalization.js';
 import { randomUUID } from 'node:crypto';
-import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
+import { type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
 import {
   DREAM_FRAME_SHOT_LABEL,
   DREAM_SOURCE_SHOT_LABEL,
@@ -15,6 +15,7 @@ import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
+import { fitDreamSource, scaleHudRegions } from '../platform/dream-source.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import { dreamHistory } from './dream-history.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
@@ -142,7 +143,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
 
   async function dreamFrame(input: {
     idea: NextIdea;
-    sourcePng: string;
+    source: DreamFrame;
     size: ImageSize;
     styleNote: string;
     hudRegions: NonNullable<Awaited<ReturnType<HudRegionsReader>>>;
@@ -152,7 +153,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     try {
       const frame = await generateThrottled(
         {
-          sourcePng: input.sourcePng,
+          source: input.source,
           width: input.size.width,
           height: input.size.height,
           styleNote: input.styleNote,
@@ -216,14 +217,14 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (halt) return halt;
     if (!record.slug || !screenshotPath) return 'no_screenshot';
 
-    const source = await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath);
-    if (!source || source.length === 0 || source.length > MAX_SHOT_BYTES || !isPng(source)) return 'no_screenshot';
-    const size = imageSize(source);
-    if (!size) return 'no_screenshot';
+    const fitted = fitDreamSource(await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath));
+    if ('refused' in fitted) log.warn({ jobId, reason: fitted.refused }, 'dream source refused');
+    if ('refused' in fitted) return 'no_screenshot';
+    const { image: source, size, original } = fitted;
 
     // Undeclared means the model finds the UI itself.
-    const hudRegions =
-      (await readHudRegions({ slug: record.slug, version, width: size.width, height: size.height })) ?? [];
+    const declared = await readHudRegions({ slug: record.slug, version, ...original });
+    const hudRegions = scaleHudRegions(declared ?? [], fitted.scale);
     if (hudCoverage(hudRegions, size.width, size.height) >= PURE_UI_COVERAGE) return 'pure_ui';
 
     if (!record.spec?.trim()) return 'no_ideas';
@@ -239,7 +240,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // Booked as each call starts: a failed one still billed.
     const attemptBookings: Promise<void>[] = [];
     const generated = await ideas.generate({
-      screenshotPng: source.toString('base64'),
+      screenshot: source,
       onAttempt: (model) => attemptBookings.push(bookConcept(jobId, model)),
       ...(history.length ? { history } : {}),
       spec: record.spec,
@@ -253,7 +254,6 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // A slot and an image call for a card that cannot post.
     if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
 
-    const sourcePng = source.toString('base64');
     const styleNote = styleNoteFor(record);
     const dreamed: { frame: DreamFrame; idea: NextIdea }[] = [];
     // Both frames or neither; one buys nothing.
@@ -264,7 +264,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       if (halt) return halt;
       await bookConcept(jobId, frames.model);
       const halted = async () => (halt = await stopped()) !== null;
-      const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId, halted });
+      const result = await dreamFrame({ idea, source, size, styleNote, hudRegions, jobId, halted });
       if (halt) return halt;
       if (result) dreamed.push(result);
     }
@@ -316,8 +316,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       written.push(sourceId);
       const sourceShot = await store.appendBuildShot(jobId, {
         id: sourceId,
-        data: sourcePng,
-        mediaType: 'image/png',
+        data: source.data,
+        mediaType: source.mediaType,
         label: DREAM_SOURCE_SHOT_LABEL,
         platformDrawn: true,
       });

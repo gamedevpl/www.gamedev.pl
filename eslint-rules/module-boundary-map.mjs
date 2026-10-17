@@ -90,6 +90,7 @@ const FILE_BUCKET = {
   'moderation-terms': 'platform',
   'credential-scan': 'platform',
   'dream-shots': 'platform',
+  'dream-source': 'platform',
   'image-size': 'platform',
   // PNG/JPEG fixtures; a harness outside a test file imports them.
   'image-size.test': 'platform',

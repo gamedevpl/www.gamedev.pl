@@ -8,7 +8,7 @@ describe('createDreamJob ideas context', () => {
     await store.appendCreatorMessage(7, 'Add a second moon');
     expect(await run()).toBe('posted');
     const request = ideas.requests[0]!;
-    expect(request.screenshotPng).toBeTruthy();
+    expect(request.screenshot?.mediaType).toBe('image/jpeg');
     expect(request.history).toEqual(['Creator asked: Add a second moon']);
   });
 
