@@ -8,7 +8,7 @@ import { gitFixture } from '../test/git-checkout-fixture.js';
 import { cleanupHistoryFixtures, sourceLines } from '../test/history-edit-fixture.js';
 import { reconcilePush } from './git-remote-main.js';
 import { localGameFiles, readBase } from './checkout.js';
-import { hashContent, type TreeFile } from './checkout-sync.js';
+import { classify, hashContent, type TreeFile } from './checkout-sync.js';
 import { historyScope, remoteLayout, checkoutGit } from './git-checkout-layout.js';
 
 afterEach(cleanupHistoryFixtures);
@@ -171,4 +171,74 @@ it.each([false, true])('delivers only committed files through real git push, sou
   expect(receipt.base.version).toBe('v3');
   expect(receipt.files.find((file: TreeFile) => file.path === 'game.ts').content).toBe(sourceLines(9, 3));
   expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe('unsent editor draft\n');
+});
+
+it('remembers a confirmed no-change push before the next local revision', async () => {
+  const f = await fixture(false),
+    layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin');
+  const scope = historyScope(f.api.origin, 'probe', layout);
+  f.trees.v4 = f.trees.v3!.map((file) => (file.path === 'game.ts' ? { ...file, content: sourceLines(9, 3) } : file));
+  f.versions.unshift({ ...f.versions[0]!, version: 'v4', createdAt: '2026-10-04T00:00:00Z' });
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('same as platform');
+  expect(
+    await reconcilePush({
+      api: f.api,
+      slug: 'probe',
+      cwd: f.root,
+      srcRef: 'HEAD',
+      layout,
+      scope,
+      submit: async ({ dest }) => {
+        const sync = classify({
+          local: localGameFiles(dest, 'probe'),
+          remote: f.trees.v4!,
+          remoteVersion: 'v4',
+          base: readBase(dest),
+        });
+        expect(sync.kind).toBe('clean');
+        return { kind: 'nothing', sync, ignored: [] };
+      },
+    }),
+  ).toEqual({ ok: true });
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(10, 3));
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('next revision');
+  expect(
+    await reconcilePush({
+      api: f.api,
+      slug: 'probe',
+      cwd: f.root,
+      srcRef: 'HEAD',
+      layout,
+      scope,
+      submit: async ({ dest }) => {
+        expect(readBase(dest)?.version).toBe('v4');
+        return { kind: 'delivered', version: 'v5', files: localGameFiles(dest, 'probe'), staged: [], ignored: [] };
+      },
+    }),
+  ).toEqual({ ok: true });
+});
+
+it('refuses an unrelated pushed branch instead of trusting the working-copy base', async () => {
+  const f = await fixture(false);
+  f.git('checkout', '--orphan', 'unrelated');
+  f.git('read-tree', '--empty');
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('unrelated local history');
+  const layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin'),
+    scope = historyScope(f.api.origin, 'probe', layout);
+  const result = await reconcilePush({
+    api: f.api,
+    slug: 'probe',
+    cwd: f.root,
+    srcRef: 'HEAD',
+    layout,
+    scope,
+    submit: async () => {
+      throw Error('must refuse before delivering');
+    },
+  });
+  expect(result).toMatchObject({ ok: false, message: expect.stringContaining('no known platform base') });
 });

@@ -85,8 +85,14 @@ export async function reconcilePush(input: {
     }
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
     try {
-      if (input.scope && result.kind === 'delivered')
-        rememberGitDelivery({ ...input, commit, scope: input.scope, version: result.version, files: result.files });
+      if (input.scope)
+        rememberGitDelivery({
+          ...input,
+          commit,
+          scope: input.scope,
+          version: result.kind === 'delivered' ? result.version : result.sync.version,
+          files: result.kind === 'delivered' ? result.files : localGameFiles(dest, input.slug),
+        });
       adoptCheckoutBase(input.cwd, input.slug, dest, result);
     } catch {
       stderr.write(
