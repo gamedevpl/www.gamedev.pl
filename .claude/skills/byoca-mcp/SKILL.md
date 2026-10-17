@@ -301,8 +301,8 @@ descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 
 Some tools exist only for platform-managed builder sessions, never for the public MCP. Today
 these are `visual_target` (an image-model edit of the green gate frame, returned as a signed URL)
-and `builder_notes` (read or replace the game's notes for its next managed round, stored in
-`gameBuilderNotes/{slug}`, any vendor, cleared when the game changes hands). `tools/list` shows such a
+and `creator_notes` (read or replace what builders learned about the creator, stored in
+`creatorNotes/{ownerUid}` across all their games, any vendor, deleted with the account). `tools/list` shows such a
 tool only when the request carries a managed-session opener bearer (`verifyManagedMcpOpener`);
 tools in `MCP_SHELL_ONLY_TOOLS` (`visual_target`, whose result is a URL) also need the opener's signed
 shell marker (minted from the backend's `shell`). `tools/call` answers `unknown tool` without an opener,

@@ -486,13 +486,14 @@ opener bearer for the same job (`verifyManagedMcpOpener`); every public, BYOCA, 
 client gets `unknown tool`. Two per round, the shared daily dream allowance and the dreams kill
 switch apply, and each call books a `concept` cost.
 
-**Builder notes (managed only, every vendor).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
-exists for that vendor alone, so managed sessions of every vendor also get `builder_notes`
-([`mcp-builder-notes-tools.ts`](../apps/api/src/agent-surface/mcp-builder-notes-tools.ts)): without
-arguments it returns the game's notes, with `notes` (≤4000 chars) it replaces them. They live in
-`gameBuilderNotes/{slug}`, written only by the current platform round of a job on that slug, and are
-deleted when the game is transferred. The system prompt asks the builder to read them before its first
-edit and to update them before `end`. Public clients never see the tool.
+**Creator notes (managed only, every vendor).** Anthropic's memory store (`MANAGED_AGENT_GAME_MEMORY`)
+exists for that vendor alone, so managed sessions of every vendor also get `creator_notes`
+([`mcp-creator-notes-tools.ts`](../apps/api/src/agent-surface/mcp-creator-notes-tools.ts)): without
+`notes` it returns what builders learned about this creator across all their games, with `notes` (≤4000
+chars) it replaces them. They live in `creatorNotes/{uid}`, keyed by the job's `ownerUid`, written only by
+that owner's current platform round, and deleted with the account. The system prompt asks the builder to
+read them before its first edit and to update them (tastes, style, accepted and rejected ideas) before
+`end`. Public clients never see the tool.
 
 The live registry does not yet pass a kit digest loader into the managed backend. When it
 does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref

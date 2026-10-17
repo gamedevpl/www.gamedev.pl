@@ -66,7 +66,7 @@ import {
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { FirestoreGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
-import { FirestoreBuilderNotesStore, type BuilderNotesRecord } from './slices/builder-notes.js';
+import { FirestoreCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
 import { FirestoreDispatchStore } from './slices/dispatch.js';
@@ -145,7 +145,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
   private gameMemoryStore: FirestoreGameMemoryStore;
-  private builderNotesStore: FirestoreBuilderNotesStore;
+  private creatorNotesStore: FirestoreCreatorNotesStore;
   private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
@@ -187,7 +187,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
     this.gameMemoryStore = new FirestoreGameMemoryStore(this.db);
-    this.builderNotesStore = new FirestoreBuilderNotesStore(this.db);
+    this.creatorNotesStore = new FirestoreCreatorNotesStore(this.db);
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
@@ -330,6 +330,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     }
     deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
     deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
+    deleteRefs.set(`creatorNotes/${uid}`, this.db.collection('creatorNotes').doc(uid));
 
     const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
     for (const { doc, record } of owned) {
@@ -685,16 +686,12 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.gameMemoryStore.claimGameMemory(record);
   }
 
-  async getBuilderNotes(slug: string): Promise<BuilderNotesRecord | null> {
-    return this.builderNotesStore.getBuilderNotes(slug);
+  async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {
+    return this.creatorNotesStore.getCreatorNotes(uid);
   }
 
-  async setBuilderNotes(record: BuilderNotesRecord): Promise<void> {
-    return this.builderNotesStore.setBuilderNotes(record);
-  }
-
-  async clearBuilderNotes(slug: string): Promise<void> {
-    return this.builderNotesStore.clearBuilderNotes(slug);
+  async setCreatorNotes(record: CreatorNotesRecord): Promise<void> {
+    return this.creatorNotesStore.setCreatorNotes(record);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

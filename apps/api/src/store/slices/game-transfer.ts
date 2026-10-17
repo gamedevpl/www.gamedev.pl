@@ -119,8 +119,6 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     private revokeRoundCapabilities: (slug: string) => void = () => {},
     // Same write as the access change; neither lands alone.
     private invalidateShelf: (ownerUid: string, at: string) => void = () => {},
-    // The sender's builder notes describe the sender's rounds.
-    private clearBuilderNotes: (slug: string) => void = () => {},
   ) {}
 
   private erased(uid: string): boolean {
@@ -187,7 +185,6 @@ export class InMemoryGameTransferStore implements GameTransferStore {
     this.invalidateShelf(recipientUid, at);
     this.retireGameAgentKey(slug);
     this.resetGameAutonomy(slug);
-    this.clearBuilderNotes(slug);
     this.revokeRoundCapabilities(slug);
     const accepted: GameTransferInvitation = { ...existing, status: 'accepted', respondedAt: at };
     this.transfers.set(slug, accepted);
@@ -369,8 +366,6 @@ export class FirestoreGameTransferStore implements GameTransferStore {
       if (agentKeySnap.exists) tx.delete(agentKeyRef);
       // The recipient never opted into the sender's autonomy consent.
       if (gameSnap.data()?.autonomy !== undefined) tx.update(gameRef, { autonomy: FieldValue.delete() });
-      // The sender's builder notes describe the sender's rounds.
-      tx.delete(this.db.collection('gameBuilderNotes').doc(slug));
 
       // Atomic with the access change; a transfer moves no ownerUid.
       for (const [uid, shelfSnap] of [

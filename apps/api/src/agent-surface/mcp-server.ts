@@ -35,7 +35,7 @@ import { createShareDraftTools } from './mcp-share-draft-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
-import { createBuilderNotesTools } from './mcp-builder-notes-tools.js';
+import { createCreatorNotesTools } from './mcp-creator-notes-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -1352,7 +1352,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
-    ...createBuilderNotesTools({
+    ...createCreatorNotesTools({
       resolveAuth,
       managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
       store,

@@ -71,7 +71,7 @@ import {
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
-import { InMemoryBuilderNotesStore, type BuilderNotesRecord } from './slices/builder-notes.js';
+import { InMemoryCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
@@ -149,7 +149,6 @@ export class InMemoryStore extends OAuthFacade implements Store {
       }
     },
     (ownerUid, at) => this.shelfGuard.tombstoneAt(ownerUid, at),
-    (slug) => this.builderNotesStore.notes.delete(slug),
   );
   protected gameTransferProposalStore = new InMemoryGameTransferProposalStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
@@ -197,7 +196,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private gameMemoryStore = new InMemoryGameMemoryStore();
-  private builderNotesStore = new InMemoryBuilderNotesStore((jobId) => this.submissions.get(jobId));
+  private creatorNotesStore = new InMemoryCreatorNotesStore((jobId) => this.submissions.get(jobId));
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private dreamQuotaStore = new InMemoryDreamQuotaStore((uid) =>
@@ -330,6 +329,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
     }
     this.agentKeysStore.creatorAgentKeys.delete(uid);
     this.cliChatStore.chats.delete(uid);
+    this.creatorNotesStore.notes.delete(uid);
     for (const [id, suggestion] of [...this.contributionStore.suggestions]) {
       if (suggestion.ownerUid === uid) {
         this.contributionStore.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
@@ -667,16 +667,12 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.gameMemoryStore.claimGameMemory(record);
   }
 
-  async getBuilderNotes(slug: string): Promise<BuilderNotesRecord | null> {
-    return this.builderNotesStore.getBuilderNotes(slug);
+  async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {
+    return this.creatorNotesStore.getCreatorNotes(uid);
   }
 
-  async setBuilderNotes(record: BuilderNotesRecord): Promise<void> {
-    return this.builderNotesStore.setBuilderNotes(record);
-  }
-
-  async clearBuilderNotes(slug: string): Promise<void> {
-    return this.builderNotesStore.clearBuilderNotes(slug);
+  async setCreatorNotes(record: CreatorNotesRecord): Promise<void> {
+    return this.creatorNotesStore.setCreatorNotes(record);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

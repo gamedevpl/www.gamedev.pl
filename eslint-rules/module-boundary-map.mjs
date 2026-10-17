@@ -495,7 +495,7 @@ const FILE_BUCKET = {
   'managed-session-retention': 'agent-surface',
   'managed-session-retention-routes': 'agent-surface',
   'mcp-visual-target-tools': 'agent-surface',
-  'mcp-builder-notes-tools': 'agent-surface',
+  'mcp-creator-notes-tools': 'agent-surface',
   'mcp-managed-round': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
