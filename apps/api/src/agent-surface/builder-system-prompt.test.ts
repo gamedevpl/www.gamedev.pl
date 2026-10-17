@@ -34,6 +34,14 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: false })).not.toContain('npm ci');
   });
 
+  it('captures visual requests on the shell lane only, once for 3D', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('npm run --silent capture -- <slug> --stills --out /tmp/shots-before');
+    expect(shell).toContain('SwiftShader and takes one to three minutes, so capture it once, after your edit');
+    expect(shell).toContain('If no browser starts, do not try to install one');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('npm run --silent capture');
+  });
+
   it('names one delivery path per edit size on the shell lane', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('send `patch_source_file` with the same old/new text you applied locally');
