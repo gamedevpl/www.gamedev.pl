@@ -444,6 +444,17 @@ The kickoff then gives one unpack-and-`npm ci` command instead of the download s
 kit is unpublished, the read fails, or the vendor refuses the files, the round starts without a
 workspace on the plain shell kickoff. Vendors without `workspaceArchiveDir` never load it.
 
+**Visual checks.** On the shell lane the system prompt has the agent run the kit's
+`npm run capture -- <slug> --stills` before and after a change the creator will judge by eye,
+and read the PNGs (6–12 s for 2D; 1–3 min for a `gfx3d` game, which renders through
+SwiftShader, so 3D captures once). This needs a Chromium the kit can find
+(`tools/lib/chrome.ts`: `CHROME_PATH`, then `chromium`/`chromium-browser` on `PATH`, then the
+Playwright cache). The Anthropic sandbox already ships Playwright's Chromium under
+`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, which the kit finds on its own. Do not add the apt
+`chromium` package to the environment: on its Ubuntu image that is a snap stub that fails with
+`EPIPE` and, being on `PATH`, wins over the Playwright cache. Without a browser the agent is
+told to carry on without looking.
+
 The live registry does not yet pass a kit digest loader into the managed backend. When it
 does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
 to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent
