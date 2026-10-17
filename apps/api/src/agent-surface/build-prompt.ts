@@ -8,7 +8,7 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const creating = Boolean(brief.createGame);
   const lines = [
-    buildPromptOpening(brief, slug, creating),
+    buildPromptOpening(brief, slug, creating, lane.mountedSources),
     '',
     // Disposable on purpose: a defended bad draft is the failure.
     ...(brief.seed
@@ -27,7 +27,7 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
           '',
         ]
       : []),
-    ...((brief.feedback && !brief.undelivered) || brief.gateRepair
+    ...(((brief.feedback && !brief.undelivered) || brief.gateRepair) && !lane.mountedSources
       ? [
           '## Before you change anything',
           '',
@@ -50,7 +50,7 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
     // Measured: 15s of a two-minute round spent finding nothing.
     '- There is no repository checkout here. The kit you unpack is the only copy of any of it.',
     '',
-    ...channelDelivery(brief, creating, lane.shell, lane.workspace),
+    ...channelDelivery(brief, creating, lane),
     ...gateRepairPrompt(brief),
   ];
 
@@ -65,8 +65,14 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
   return finish(lines, brief);
 }
 
-// workspace: mounted-kit kickoff lines, replacing the download steps.
-type PromptLane = { shell: boolean; workspace?: string[] };
+// workspace: mounted-kit kickoff lines; mountedSources: the game is in them too.
+type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean };
+
+const GET_SOURCES = [
+  "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
+  'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
+  'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
+];
 
 const SHELL_DOWNLOAD = [
   'A larger game comes back truncated: GET its `archive` once (exact headers), unpack it inside the kit’s `games/`, read locally.',
@@ -74,7 +80,8 @@ const SHELL_DOWNLOAD = [
 ];
 
 // The push contract: report and upload over the build channel, clocked.
-function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean, workspace?: string[]): string[] {
+function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane): string[] {
+  const { shell, workspace, mountedSources } = lane;
   return [
     '## This round is on a clock',
     '',
@@ -93,12 +100,10 @@ function channelDelivery(brief: BuildBrief, creating: boolean, shell: boolean, w
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, \`get_sources\` and \`get_kit\`.`,
+          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, ${mountedSources ? '' : '`get_sources` '}and \`get_kit\`.`,
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
-    "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
-    'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
-    'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
+    ...(mountedSources ? [] : GET_SOURCES),
     ...(shell
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),

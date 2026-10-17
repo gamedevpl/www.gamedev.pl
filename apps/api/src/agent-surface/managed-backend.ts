@@ -169,7 +169,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     };
     const load = options.workspace ? () => options.workspace!(brief) : undefined;
-    const withWorkspace = (lines: string[]) => buildPrompt(effectiveBrief, { shell, workspace: lines });
+    const withWorkspace = (lines: string[], mountedSources: boolean) =>
+      buildPrompt(effectiveBrief, { shell, workspace: lines, mountedSources });
     const vendor = {
       workspaceArchiveDir: options.provider.workspaceArchiveDir,
       startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),

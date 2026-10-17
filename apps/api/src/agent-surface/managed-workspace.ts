@@ -88,7 +88,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
     : 'an empty `games/` — write the files `get_sources` returns into `games/<slug>/`';
   return [
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
-    `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive.`,
+    `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.slug ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
     `Call \`get_kit\` only for kitEngineRef. If it is not ${workspace.engineRef}, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
   ];
@@ -110,7 +110,7 @@ export async function startWithWorkspace(
   provider: Pick<ManagedAgentProvider, 'startSession' | 'workspaceArchiveDir'>,
   load: (() => Promise<ManagedWorkspace | null>) | undefined,
   request: ManagedSessionRequest,
-  promptWith: (kickoff: string[]) => string,
+  promptWith: (kickoff: string[], mountedSources: boolean) => string,
   log?: { warn: (context: object, message: string) => void },
   loadTimeoutMs = WORKSPACE_LOAD_TIMEOUT_MS,
 ): Promise<ManagedSession> {
@@ -124,7 +124,7 @@ export async function startWithWorkspace(
       : null;
   if (!dir || !workspace) return provider.startSession(request);
   try {
-    const prompt = promptWith(workspaceKickoff(dir, workspace));
+    const prompt = promptWith(workspaceKickoff(dir, workspace), Boolean(workspace.slug));
     return await provider.startSession({ ...request, prompt, workspaceArchives: workspace.archives });
   } catch (error) {
     if (!(error instanceof ManagedWorkspaceError)) throw error;

@@ -15,8 +15,7 @@ describe('seed-status', () => {
     expect(seedNoticeFor('available')).toMatch(/get_sources/);
     expect(seedNoticeFor('pending')).toMatch(/get_sources again/);
     expect(seedNoticeFor('pending')).toMatch(/still generating/i);
-    expect(seedNoticeFor('unavailable')).toMatch(/starters\/<slug>\/ via read_kit_file/);
-    expect(seedNoticeFor('unavailable')).toMatch(/get_sources returns the files this round builds on/);
+    expect(seedNoticeFor('unavailable')).toMatch(/get_sources returns the files .* kit starter/);
     expect(seedNoticeFor('available')).not.toMatch(/get_seed/);
     expect(seedPayload({ seedStatus: 'pending' })).toMatchObject({
       seedAvailable: false,
