@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
+import { parsePathRoute } from '../../core/router.js';
 import i18n from '../../i18n/index.js';
 import type { StudioGame, StudioGamesResponse, StudioScorecard } from '../../studioApi.js';
 
@@ -98,6 +99,16 @@ async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[
   return { container, root, onNavigate, rerender };
 }
 
+function followStudioNavigation(root: ReturnType<typeof createRoot>, onNavigate: (path: string) => void) {
+  vi.mocked(onNavigate).mockImplementation((path) => {
+    window.history.replaceState(null, '', path);
+    const route = parsePathRoute(path);
+    if (route.view !== 'studio') return;
+    const { game: selectedGame, tab: selectedTab } = route;
+    root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn(), selectedGame, selectedTab }));
+  });
+}
+
 describe('CreatorStudioView', () => {
   beforeEach(() => {
     authUser = null;
@@ -149,8 +160,7 @@ describe('CreatorStudioView', () => {
     );
 
     const container = document.createElement('div');
-    // The shell CSS is keyed off `.app:has(...)`, so the marker has to sit under an
-    // `.app` that also holds a footer — the real tree App mounts.
+    // Match the app shell targeted by the footer's :has() selector.
     const app = document.createElement('div');
     app.className = 'app';
     const content = document.createElement('div');
@@ -168,8 +178,7 @@ describe('CreatorStudioView', () => {
 
     expect(container.querySelector('.studio-shell-pending')).toBeTruthy();
     expect(container.textContent).toContain('Loading your games…');
-    // jsdom does not apply stylesheets, so assert the marker the `:has()` rule keys on
-    // rather than computed footer display — that is what keeps the flash from painting.
+    // jsdom exposes the shell marker without applying its stylesheet.
     expect(app.querySelector('.studio-shell-pending')).toBeTruthy();
 
     await act(async () => {
@@ -416,8 +425,7 @@ describe('CreatorStudioView', () => {
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(6)));
-    // jsdom has no matchMedia; width is the same fallback the drawer uses in embedded
-    // webviews. Narrow enough that the shelf is off-canvas, not the desktop rail.
+    // jsdom exercises the drawer's width fallback without matchMedia.
     const width = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
 
@@ -471,8 +479,7 @@ describe('CreatorStudioView', () => {
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details');
-    // A layer over the stage, not instead of it: opening the facts about a game must
-    // not take the game off the screen (the ground-state rule).
+    // Details must preserve the stage beneath it.
     expect(container.querySelector('.studio-rail')).not.toBeNull();
     expect(container.querySelector('.studio-stage')).not.toBeNull();
 
@@ -480,8 +487,7 @@ describe('CreatorStudioView', () => {
   });
 
   it('the ground-state rule: every surface that covers the stage offers a way back to it', async () => {
-    // A state with no exit should fail here, not reach a bug report — see
-    // docs/studio-game-first-implementation-plan.md Workstream F.
+    // Escape paths follow docs/studio-game-first-implementation-plan.md Workstream F.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -713,8 +719,7 @@ describe('CreatorStudioView', () => {
     });
     expect(setDraftShared).toHaveBeenCalledWith('token-draft', true);
 
-    // Published games have no draft switch — the link is already public — but the head
-    // control stays so the permalink is still one click away.
+    // Published games keep sharing their permalink without a draft switch.
     await rerender({ selectedGame: 'live-game' });
     const liveShare = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');
     expect(liveShare).not.toBeNull();
@@ -770,8 +775,7 @@ describe('CreatorStudioView', () => {
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0/playtest');
 
-    // Play is a posture of the always-mounted stage now, not a tab — the old
-    // `/playtest` deep link carries its meaning through `selectedPosture` instead.
+    // Legacy playtest links restore play posture through selectedPosture.
     const { container, root } = await renderStudio({
       selectedGame: 'token-0',
       selectedPosture: 'play',
@@ -868,7 +872,6 @@ describe('CreatorStudioView', () => {
     expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.code-surface')).not.toBeNull();
 
-    // A genuine switch to a different game still resets to Thread.
     const otherItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.studio-shelf-item')).find(
       (item) => item.title === 'Other Game',
     );
@@ -1839,9 +1842,7 @@ describe('CreatorStudioView abandon', () => {
       selectedTab: 'details',
     });
 
-    vi.mocked(onNavigate).mockImplementation((path) => {
-      if (path === '/studio') root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn() }));
-    });
+    followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
     await act(async () => {
@@ -1896,9 +1897,7 @@ describe('CreatorStudioView abandon', () => {
       selectedTab: 'details',
     });
 
-    vi.mocked(onNavigate).mockImplementation((path) => {
-      if (path === '/studio') root.render(createElement(CreatorStudioView, { onNavigate, onPlay: vi.fn() }));
-    });
+    followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
     await act(async () => {
@@ -1957,6 +1956,8 @@ describe('CreatorStudioView abandon', () => {
       selectedGame: 'neon-draft',
       selectedTab: 'details',
     });
+
+    followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
     await act(async () => {

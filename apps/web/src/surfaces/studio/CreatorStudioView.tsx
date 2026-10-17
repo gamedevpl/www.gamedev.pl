@@ -23,6 +23,7 @@ import { StudioFullBleed } from './StudioFullBleed.js';
 import { stageCheckVerdict } from '../../stageCheckVerdict.js';
 import { useStageSource } from '../../useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
+import { useStudioShelfLookup } from './useStudioShelfLookup.js';
 import { GameTheater } from '../../GameTheater.js';
 import {
   collapseStudioGames,
@@ -49,6 +50,7 @@ import {
   fetchStudioHealth,
   fetchStudioScorecards,
   type StudioGame,
+  type StudioGamesResponse,
   type StudioScorecard,
 } from '../../studioApi.js';
 import type { EditorContentPush, EditorControllerState } from '../../editorBridge.js';
@@ -62,31 +64,7 @@ import './studio-stage.css';
 import './studio-share.css';
 import './studio-stats.css';
 
-/**
- * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
- *
- * One game is one thread, and the thread is the studio.
- *
- * Making a game here is a conversation with an agent, and this screen used to be five
- * tabs laid across the top of it — with the same act, "say what to change", living in
- * three of them, so which box a creator was allowed depended on a lifecycle state they
- * had to know in order to find it. There are three surfaces now: the thread, the things
- * beside the thread (facts, sharing, play health, stopping it), and playtest, which
- * genuinely takes the screen. The composer at the foot of the thread is the only one,
- * and it always targets the game's current state — published or not, there is only ever
- * the tip to work on.
- *
- * Shelf scales past a handful of games: compact rows, search/filter once the list grows.
- * On a desktop with a long shelf it collapses to a left-edge rail of dots (not a "switch
- * game" combo); expand it to get the full list back. On a phone with a game open the
- * shelf is never permanently in the page — it is a drawer over ~90% of the width. A
- * published game plus its improve tip share a slug — the shelf shows one row (the tip),
- * not the same title twice.
- *
- * Selection + surface live in the URL (`/studio/<slug>/<surface>`) so a refresh or a
- * shared link reopens the same place. The five old tab names still resolve, onto
- * whichever surface absorbed them.
- */
+// Studio surface contracts live in docs/studio-game-first-implementation-plan.md.
 
 // Keep in step with the same breakpoint in styles.css.
 const SHEET_MAX_WIDTH = 1099;
@@ -134,10 +112,17 @@ export function CreatorStudioView({
   const [healthDays, setHealthDays] = useState<string[] | null>([]);
   const [truncated, setTruncated] = useState(false);
   const [shelfTruncated, setShelfTruncated] = useState(false);
+  const [shelfLoadedFor, setShelfLoadedFor] = useState<string>();
   const [totalGames, setTotalGames] = useState(0);
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const applyShelfPage = useCallback((page: StudioGamesResponse, game?: string) => {
+    setGames(page.games);
+    setShelfTruncated(page.truncated);
+    setTotalGames(page.totalGames);
+    setShelfLoadedFor(game);
+  }, []);
   const [abandonNotice, setAbandonNotice] = useState<string | null>(null);
   // Internally a game is its token — that is what every API call on this screen takes.
   // The URL says slug; the shelf is what translates between them.
@@ -189,10 +174,22 @@ export function CreatorStudioView({
     if (!match) return null;
     return (match.slug ? shelfGames.find((game) => game.slug === match.slug) : match) ?? null;
   }, [selectedGame, games, shelfGames]);
+  const shelfLookup = useStudioShelfLookup({
+    requestedGame: selectedGame,
+    resolved: Boolean(requestedShelfGame),
+    loadedFor: shelfLoadedFor,
+    loading,
+    failed: Boolean(error),
+    truncated: shelfTruncated,
+    onLoaded: applyShelfPage,
+  });
+  const shelfPending = loading || shelfLookup.pending;
+  const shelfError = error ?? (shelfLookup.failed ? t('studioPanel.loadError') : null);
   useEffect(() => {
     if (requestedShelfGame) setSelected(requestedShelfGame.token);
-    else if (selectedGame && !loading && !error) setSelected(null);
-  }, [requestedShelfGame, selectedGame, loading, error]);
+    else if (!shelfPending)
+      setSelected((current) => (selectedGame ? null : (current ?? sortStudioGames(shelfGames)[0]?.token ?? null)));
+  }, [requestedShelfGame, selectedGame, shelfPending, shelfGames]);
 
   useEffect(() => {
     if (!user) {
@@ -208,13 +205,12 @@ export function CreatorStudioView({
     setError(null);
 
     // Health is optional: a refused scan (429) must never hide the shelf.
-    Promise.all([fetchStudioGames(requestedGameRef.current), fetchStudioHealth(days).catch(() => null)])
+    const requested = requestedGameRef.current;
+    Promise.all([fetchStudioGames(requested), fetchStudioHealth(days).catch(() => null)])
       .then(([shelfPage, health]) => {
         if (cancelled) return;
         const shelf = shelfPage.games;
-        setGames(shelf);
-        setShelfTruncated(shelfPage.truncated);
-        setTotalGames(shelfPage.totalGames);
+        applyShelfPage(shelfPage, requested);
         setHealthRows(health?.games ?? []);
         setHealthDays(health?.days ?? null);
         setTruncated(health?.truncated ?? false);
@@ -255,7 +251,7 @@ export function CreatorStudioView({
     return () => {
       cancelled = true;
     };
-  }, [user, days, t]);
+  }, [user, days, t, applyShelfPage]);
 
   // Keyed on `user` alone, deliberately: a scorecard is the nightly roll-up's fixed window
   // and does not move when the creator switches 7/14/30d. Fetching it in the effect above
@@ -405,7 +401,7 @@ export function CreatorStudioView({
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
-  const missingGame = Boolean(selectedGame) && !loading && !error && shelfGames.length > 0 && !activeGame;
+  const missingGame = Boolean(selectedGame) && !shelfPending && !shelfError && shelfGames.length > 0 && !activeGame;
   const buildingCount = useMemo(
     () => shelfGames.filter((game) => game.lastKnownStatus && STUDIO_LIVE_STATUSES.has(game.lastKnownStatus)).length,
     [shelfGames],
@@ -654,6 +650,7 @@ export function CreatorStudioView({
       });
       setShelfTruncated(shelfPage.truncated);
       setTotalGames(shelfPage.totalGames);
+      setShelfLoadedFor(slug);
     } catch {
       // The invitation is gone either way; the shelf catches up on reload.
     }
@@ -723,7 +720,7 @@ export function CreatorStudioView({
           </aside>
         ) : null}
 
-        {loading ? (
+        {shelfPending ? (
           <>
             {/* Claims the app shell for the length of the shelf fetch so the marketing
               footer (and this panel's lid) do not paint and then vanish the moment a
@@ -732,9 +729,9 @@ export function CreatorStudioView({
             <p className="studio-empty">{t('studioPanel.loading')}</p>
           </>
         ) : null}
-        {error ? <p className="studio-empty studio-error">{error}</p> : null}
+        {shelfError ? <p className="studio-empty studio-error">{shelfError}</p> : null}
 
-        {!loading && !error && shelfGames.length === 0 ? (
+        {!shelfPending && !shelfError && shelfGames.length === 0 ? (
           <div className="studio-empty-state">
             <p>{t('studioPanel.empty')}</p>
             <button type="button" className="primary-btn" onClick={() => onNavigate('/')}>
@@ -744,7 +741,7 @@ export function CreatorStudioView({
           </div>
         ) : null}
 
-        {!loading && shelfGames.length > 0 ? (
+        {!shelfPending && shelfGames.length > 0 ? (
           <div
             className={[
               'studio-layout',
@@ -1173,9 +1170,7 @@ export function CreatorStudioView({
                                     // ceiling is still returned (same deep-link path as
                                     // Open in Studio).
                                     const shelfPage = await fetchStudioGames(abandonedSlug);
-                                    setGames(shelfPage.games);
-                                    setShelfTruncated(shelfPage.truncated);
-                                    setTotalGames(shelfPage.totalGames);
+                                    applyShelfPage(shelfPage, abandonedSlug);
                                     // The creator may have picked another game while this
                                     // awaited.
                                     if (selectedRef.current !== null) return;
@@ -1206,9 +1201,7 @@ export function CreatorStudioView({
                                   setGames((prev) => prev.filter((game) => game.token !== token));
                                   void fetchStudioGames()
                                     .then((shelfPage) => {
-                                      setGames(shelfPage.games);
-                                      setShelfTruncated(shelfPage.truncated);
-                                      setTotalGames(shelfPage.totalGames);
+                                      applyShelfPage(shelfPage);
                                       onNavigate(studioPath());
                                     })
                                     .catch(() => {
