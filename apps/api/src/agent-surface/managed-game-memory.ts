@@ -13,20 +13,25 @@ export async function resolveGameMemory(
   now: () => Date = () => new Date(),
 ): Promise<string | undefined> {
   if (!index || !slug || !provider.createMemoryStore) return undefined;
+  let unclaimed: string | undefined;
   try {
     const existing = await index.getGameMemory(slug, provider.vendor);
     if (existing) return existing.storeId;
     const storeId = await provider.createMemoryStore(slug);
+    unclaimed = storeId;
     const held = await index.claimGameMemory({
       slug,
       vendor: provider.vendor,
       storeId,
       createdAt: now().toISOString(),
     });
+    unclaimed = undefined;
     // A concurrent round claimed the slot first; ours would be orphaned.
     if (held.storeId !== storeId) void provider.deleteMemoryStore?.(storeId).catch(() => undefined);
     return held.storeId;
   } catch (error) {
+    // A store the index never recorded would leak on every retry.
+    if (unclaimed) void provider.deleteMemoryStore?.(unclaimed).catch(() => undefined);
     log?.warn({ err: error, slug }, 'game memory store unavailable; starting the round without it');
     return undefined;
   }

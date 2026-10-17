@@ -29,6 +29,16 @@ describe('resolveGameMemory', () => {
     expect(vendor.deleteMemoryStore).toHaveBeenCalledWith('mem_lost');
   });
 
+  it('deletes a created store when recording it fails', async () => {
+    const vendor = provider(['mem_orphan']);
+    const broken = {
+      getGameMemory: async () => null,
+      claimGameMemory: async () => Promise.reject(new Error('firestore down')),
+    };
+    expect(await resolveGameMemory(vendor, broken, 'rocks')).toBeUndefined();
+    expect(vendor.deleteMemoryStore).toHaveBeenCalledWith('mem_orphan');
+  });
+
   it('starts without memory when unset, slugless, unsupported or failing', async () => {
     const index = new InMemoryGameMemoryStore();
     expect(await resolveGameMemory(provider(['m']), undefined, 'rocks')).toBeUndefined();
