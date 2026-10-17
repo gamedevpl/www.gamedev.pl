@@ -98,6 +98,21 @@ it('preserves concurrent editor changes and refuses changed metadata after histo
   expect(existsSync(join(f.root, '.gamedev/history-pending.json'))).toBe(false);
   preserved(f);
 });
+it.each(['restore', 'revert'])('refuses %s if a delivery lands while historical trees are fetched', async (verb) => {
+  const f = historyFixture();
+  let changed = false;
+  f.control.onRequest = (url) => {
+    if (!changed && url.pathname.endsWith('/tree')) {
+      changed = true;
+      f.versions.unshift({ ...f.versions[0]!, version: 'v4', createdAt: '2026-10-04T00:00:00Z' });
+    }
+  };
+  await expect(f.run(verb, [verb === 'restore' ? 'v1' : 'v2'])).rejects.toThrow('platform changed during');
+  expect(f.calls.filter((path) => path.endsWith('/versions?limit=1'))).toHaveLength(1);
+  expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(2, 3));
+  expect(existsSync(join(f.root, '.gamedev/history-backups'))).toBe(false);
+  preserved(f);
+});
 it('refuses mismatched game identity and historical SPEC identity changes', async () => {
   const f = historyFixture(true);
   await expect(f.run('restore', ['v1'], { slug: 'other' })).rejects.toThrow('does not match');

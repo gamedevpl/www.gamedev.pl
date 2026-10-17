@@ -171,6 +171,8 @@ missing SPEC.md. Refuse recovery over subsequent editor changes and validate its
 Kill a separate writer process and exercise recovery: an in-process rename-failure test
 does not leave the persistent writer lock behind. Reclaim only a demonstrably dead
 history-edit owner, never a live or agent-owned lock; serialize stale-lock cleanup too.
+Recheck the remote tip after fetching trees and computing reverse merges, before writing.
+Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
 Test historical checkout through the real entrypoint as well as slash routing;
 the ordinary checkout branch and global --version handling can bypass the new action.
 

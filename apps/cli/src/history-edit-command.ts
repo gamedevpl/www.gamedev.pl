@@ -189,6 +189,11 @@ export async function historyEditCommand(input: Input): Promise<boolean> {
       }
       const dryRun = flags['dry-run'] === true,
         count = Object.values(changed).reduce((sum, paths) => sum + paths.length, 0);
+      if ((await readHistory(input.api, slug, 1))[0]?.version !== latest.version)
+        throw new CliError(
+          'The platform changed during the history operation. Run gamedevpl pull before retrying.',
+          EXIT_REFUSED,
+        );
       const backup =
         !dryRun && count ? installHistorySources({ root: here.root, source, before: snapshot, after, identity }) : null;
       const result = {

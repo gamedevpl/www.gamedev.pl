@@ -56,6 +56,8 @@ export async function historyCommand(input: {
   const { verb, args, flags, api } = input;
   if (isHistoryEditVerb(verb, flags)) return historyEditCommand(input);
   if (!isHistoryVerb(verb, args, flags)) return false;
+  if (verb === 'blame' && flags.version !== undefined && typeof flags.version !== 'string')
+    throw new CliError('--version needs a delivered version', EXIT_INPUT);
   if (flags.slug !== undefined && typeof flags.slug !== 'string')
     throw new CliError('--slug needs a game slug', EXIT_INPUT);
   const explicit =
