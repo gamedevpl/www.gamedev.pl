@@ -65,6 +65,7 @@ import {
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
+import { FirestoreGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
 import { FirestoreDispatchStore } from './slices/dispatch.js';
@@ -142,6 +143,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
+  private gameMemoryStore: FirestoreGameMemoryStore;
   private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
@@ -182,6 +184,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     this.buildLogStore = new FirestoreBuildLogStore(this.db);
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
+    this.gameMemoryStore = new FirestoreGameMemoryStore(this.db);
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
@@ -662,6 +665,14 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
+  }
+
+  async getGameMemory(slug: string, vendor: string): Promise<GameMemoryRecord | null> {
+    return this.gameMemoryStore.getGameMemory(slug, vendor);
+  }
+
+  async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
+    return this.gameMemoryStore.claimGameMemory(record);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

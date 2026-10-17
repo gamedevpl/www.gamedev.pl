@@ -70,6 +70,7 @@ import {
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
+import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
@@ -193,6 +194,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   );
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
+  private gameMemoryStore = new InMemoryGameMemoryStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private dreamQuotaStore = new InMemoryDreamQuotaStore((uid) =>
@@ -645,6 +647,14 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
+  }
+
+  async getGameMemory(slug: string, vendor: string): Promise<GameMemoryRecord | null> {
+    return this.gameMemoryStore.getGameMemory(slug, vendor);
+  }
+
+  async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
+    return this.gameMemoryStore.claimGameMemory(record);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

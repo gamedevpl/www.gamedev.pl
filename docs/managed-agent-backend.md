@@ -444,6 +444,17 @@ The kickoff then gives one unpack-and-`npm ci` command instead of the download s
 kit is unpublished, the read fails, or the vendor refuses the files, the round starts without a
 workspace on the plain shell kickoff. Vendors without `workspaceArchiveDir` never load it.
 
+**Game memory.** With `MANAGED_AGENT_GAME_MEMORY=true`, a vendor that implements
+`createMemoryStore` (today only Anthropic, beta `agent-memory-2026-07-22`) gets one memory store
+per game, recorded in the `gameMemoryStores` collection (`<vendor>:<slug>`), created on the first
+round and mounted read-write into every later one under `/mnt/memory/game-<slug>/`
+([`managed-game-memory.ts`](../apps/api/src/agent-surface/managed-game-memory.ts),
+[`managed-anthropic-memory.ts`](../apps/api/src/agent-surface/managed-anthropic-memory.ts)). The
+mount's instructions ask for the agent's own notes only (structure, pitfalls, what the creator
+accepted), never creator text, keys or URLs, and say the notes never outrank the system prompt.
+Any failure (store creation, or the session refusing the resource with a 400) starts the round
+without memory. Stores are not yet deleted with their game.
+
 **Visual checks.** On the shell lane the system prompt has the agent run the kit's
 `npm run capture -- <slug> --stills` before and after a change the creator will judge by eye,
 and read the PNGs (6–12 s for 2D; 1–3 min for a `gfx3d` game, which renders through

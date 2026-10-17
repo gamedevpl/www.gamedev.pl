@@ -16,6 +16,11 @@ import {
   uploadAnthropicFiles,
 } from './managed-anthropic-files.js';
 import { ManagedWorkspaceError } from './managed-workspace.js';
+import {
+  createAnthropicMemoryStore,
+  deleteAnthropicMemoryStore,
+  memoryStoreResource,
+} from './managed-anthropic-memory.js';
 
 export const ANTHROPIC_VENDOR = 'anthropic';
 
@@ -209,7 +214,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             : {}),
         },
         environment_id: environmentId,
-        ...(files.length ? { resources: mountedFileResources(files) } : {}),
         ...(sessionVaultIds?.length ? { vault_ids: sessionVaultIds } : {}),
         initial_events: [
           {
@@ -226,10 +230,21 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
               },
             }),
       };
+      const post = (memory: boolean) => {
+        const resources = [
+          ...mountedFileResources(files),
+          ...(memory && request.memoryStoreId ? [memoryStoreResource(request.memoryStoreId)] : []),
+        ];
+        const payload = resources.length ? { ...body, resources } : body;
+        return call(`/v1/sessions${BETA_QUERY}`, { method: 'POST', body: JSON.stringify(payload) });
+      };
       try {
-        const parsed = SessionSchema.safeParse(
-          await call(`/v1/sessions${BETA_QUERY}`, { method: 'POST', body: JSON.stringify(body) }),
-        );
+        // Memory is an extra: a refused store must not cost the round.
+        const raw = await post(true).catch((error: unknown) => {
+          if (!request.memoryStoreId || !(error instanceof ManagedAgentError) || error.status !== 400) throw error;
+          return post(false);
+        });
+        const parsed = SessionSchema.safeParse(raw);
         if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
         return { ...toSession(parsed.data), ...(credentialRef ? { credentialRef } : {}) };
       } catch (error) {
@@ -278,6 +293,9 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
         () => undefined,
       );
     },
+
+    createMemoryStore: (slug: string) => createAnthropicMemoryStore(call, slug),
+    deleteMemoryStore: (storeId: string) => deleteAnthropicMemoryStore(call, storeId),
 
     async releaseCredential(credentialRef: string): Promise<void> {
       await call(`/v1/vaults/${encodeURIComponent(credentialRef)}/archive`, { method: 'POST' });

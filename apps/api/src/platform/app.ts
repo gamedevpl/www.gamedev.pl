@@ -272,7 +272,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       : (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
 
   const betaAllowedUids = csvSet(options.betaAllowedUids ?? process.env.BETA_ALLOWED_UIDS);
-  const betaAllowedEmails = csvSet(options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS, (e) => e.toLowerCase());
+  const betaAllowedEmails = csvSet(options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS, (e) =>
+    e.toLowerCase(),
+  );
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
@@ -507,6 +509,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     }
                   : null;
               },
+              gameMemory: store,
               readCredentialRef: async (jobId: number, sessionRef: string) => {
                 const record = await store.getSubmission(jobId);
                 return record?.dispatch?.credentialRefs?.[sessionRef];

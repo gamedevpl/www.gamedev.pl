@@ -490,6 +490,8 @@ const FILE_BUCKET = {
   'managed-idle': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-anthropic-files': 'agent-surface',
+  'managed-anthropic-memory': 'agent-surface',
+  'managed-game-memory': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',

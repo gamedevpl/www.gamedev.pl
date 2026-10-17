@@ -17,6 +17,7 @@ import type { KitDigestLoader } from './kit-digest.js';
 import type { ManagedWorkspaceLoader } from './managed-workspace.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
+import type { GameMemoryIndex } from './managed-game-memory.js';
 
 interface Logger {
   info: (context: object, message: string) => void;
@@ -57,6 +58,8 @@ export interface ManagedBackendDeps {
   // Channel-side round state; without it a finished round looks stalled.
   readSignals?: (jobId: number) => Promise<ManagedRoundSignals | null>;
   readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
+  // Used only when MANAGED_AGENT_GAME_MEMORY=true.
+  gameMemory?: GameMemoryIndex;
   // N1: catalog's GitHub client, built at the composition root for copilot.
   githubClientFactory?: CopilotGitHubClientFactory;
 }
@@ -216,6 +219,9 @@ function buildManagedBackendForVendor(
     systemPrompt: deps?.systemPrompt ?? (async () => builderSystemPrompt({ shell: provider.shell === true })),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(deps?.workspace ? { workspace: deps.workspace } : {}),
+    ...(deps?.gameMemory && process.env.MANAGED_AGENT_GAME_MEMORY?.trim() === 'true'
+      ? { gameMemory: deps.gameMemory }
+      : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
