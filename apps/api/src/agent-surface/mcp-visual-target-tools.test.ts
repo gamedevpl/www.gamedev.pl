@@ -21,7 +21,13 @@ function png(width = 4, height = 2): Buffer {
 const JOB = 7;
 const FRAME = pngOf(4, 2).toString('base64');
 const CTX = { bearerToken: 'opener' } as unknown as ToolContext;
-const RECORD = { slug: 'rocks', title: 'Rocks', previewVersion: 'v1', roundGeneration: 1 } as SubmissionRecord;
+const RECORD = {
+  slug: 'rocks',
+  title: 'Rocks',
+  previewVersion: 'v1',
+  roundGeneration: 1,
+  dispatch: { backend: 'managed:anthropic', shell: true, refs: ['s'] },
+} as SubmissionRecord;
 const OPENER = { jobId: JOB, roundGeneration: 1, exp: Date.parse('2026-10-18T00:00:00Z') / 1000 };
 
 async function setup(overrides: Partial<VisualTargetToolsDeps> = {}) {
@@ -77,6 +83,13 @@ describe('visual_target', () => {
       { managedOpener: () => ({ ...OPENER, exp: 1 }) },
       { resolveAuth: async () => ({ jobId: JOB, record: { ...RECORD, roundGeneration: 2 }, claims: {} }) },
       { resolveAuth: async () => ({ jobId: JOB, record: { ...RECORD, builder: 'self' as const }, claims: {} }) },
+      {
+        resolveAuth: async () => ({
+          jobId: JOB,
+          record: { ...RECORD, dispatch: { backend: 'b', refs: [] } },
+          claims: {},
+        }),
+      },
     ] satisfies Array<Partial<VisualTargetToolsDeps>>;
     for (const overrides of refused) {
       const { frames, call } = await setup(overrides);

@@ -176,6 +176,7 @@ export function createDispatcher(deps: DispatcherDeps) {
       }
       await store.recordDispatch(input.jobId, {
         backend: selected.name,
+        shell: selected.shell === true,
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,

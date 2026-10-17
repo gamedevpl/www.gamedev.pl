@@ -208,6 +208,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
   return {
     name: backendName,
+    shell: options.provider.shell === true,
 
     seedDelivery(): SeedDelivery {
       return seedSupported ? 'workspace' : 'channel';

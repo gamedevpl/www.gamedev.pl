@@ -69,7 +69,9 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       opener.roundGeneration !== current ||
       (auth.claims.roundGeneration ?? current) !== current ||
       (opener.exp ?? 0) * 1000 <= now() ||
-      (record.builder ?? 'platform') !== 'platform'
+      (record.builder ?? 'platform') !== 'platform' ||
+      // A URL result needs a shell to open it.
+      record.dispatch?.shell !== true
     ) {
       return toolRefusal('visual_target is not available here', 'not_owner');
     }

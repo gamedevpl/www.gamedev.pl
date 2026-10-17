@@ -30,11 +30,12 @@ afterEach(async () => {
   app = undefined;
 });
 
-async function start(): Promise<FastifyInstance> {
+async function start(shell = true): Promise<FastifyInstance> {
   const store = new InMemoryStore();
   await store.createSubmission(JOB, 'g:owner', 'Comet Courier');
   await store.setSubmissionSlug(JOB, 'comet-courier');
   await store.setRoundBuilder(JOB, 'platform');
+  await store.recordDispatch(JOB, { backend: 'managed:test', shell, ref: 'sesn' });
   return buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -69,6 +70,12 @@ describe('visual_target is managed-only', () => {
       'visual_target',
     );
     expect(await listed()).toContain('get_brief');
+  });
+
+  it('is not offered to a managed session without a shell', async () => {
+    app = await start(false);
+    const opener = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1 })}`;
+    expect(await listed(opener)).not.toContain('visual_target');
   });
 
   it('is not offered when the feature is off', async () => {

@@ -92,6 +92,7 @@ export interface DispatchResult {
 export interface AgentBackend {
   /** Stable name, recorded on the job so a build's provenance survives a backend switch. */
   readonly name: string;
+  readonly shell?: boolean;
   /** Starts a fresh build. */
   dispatch(brief: BuildBrief): Promise<DispatchResult>;
   /**

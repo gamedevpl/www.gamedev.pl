@@ -762,6 +762,7 @@ describe('dispatch records', () => {
 
     expect((await store.getSubmission(1))?.dispatch).toEqual({
       backend: 'copilot',
+      shell: false,
       refs: ['task-1', 'task-2'],
       workspace: 'copilot/x',
       seedWorkspace: undefined,

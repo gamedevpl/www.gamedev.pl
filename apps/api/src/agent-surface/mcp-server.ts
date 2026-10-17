@@ -1367,6 +1367,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
 
+  // Managed-only tools answer with URLs, so only shell sessions see them.
+  async function managedSessionHasShell(bearer: string | null): Promise<boolean> {
+    const claims = managedOpenerClaims(bearer);
+    if (!claims || !store) return false;
+    return (await store.getSubmission(claims.jobId))?.dispatch?.shell === true;
+  }
+
   // A managed-session opener's claims; null for every public client.
   function managedOpenerClaims(bearer: string | null): AgentTokenClaims | null {
     if (!bearer || !agentTokenSecret) return null;
@@ -1496,6 +1503,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     if (message.method === 'tools/list') {
+      const offersManaged = await managedSessionHasShell(bearerToken);
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);
@@ -1503,7 +1511,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
             .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
-            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || managedOpenerClaims(bearerToken) !== null)
+            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || offersManaged)
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
