@@ -200,9 +200,9 @@ export const privacyEn: LegalDocument = {
               'illustration for each answer, from your description and the answer options. A Google Gemini model ' +
               'checks each illustration before you see it. We do not store the illustrations; they are not part ' +
               'of your submission and never reach the coding agent.',
-            'An accepted description is handed as a task to a coding agent (GitHub Copilot), which writes the game’s ' +
-              'code in our private repository. The games repository is not public — submitting a description does ' +
-              'not by itself make it publicly visible.',
+            'An accepted description is handed as a task to a coding agent — an Anthropic, Google Gemini or OpenAI ' +
+              'model, whichever we selected — which writes the game’s code in our private repository. That ' +
+              'repository is not public — submitting a description does not by itself make it publicly visible.',
             'A published game is visible to all users of the Service, together with its title and — if you supplied ' +
               'one — your creator name.',
           ],
@@ -294,7 +294,7 @@ export const privacyEn: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderating and refining your game description; checking illustrations of clarifying-question ' +
-                'answers for safety; suggesting code completions in the Code editor',
+                'answers for safety; code completions in the Code editor; writing your game as the coding agent',
               'USA / global — Standard Contractual Clauses',
             ],
             [
@@ -315,7 +315,7 @@ export const privacyEn: LegalDocument = {
                 'standing in for the Gemini classifier when unavailable, so moderation never simply stops',
               'USA — Standard Contractual Clauses',
             ],
-            ['GitHub (Microsoft)', 'Games repository and coding agent', 'USA — Data Privacy Framework'],
+            ['GitHub (Microsoft)', 'Games repository', 'USA — Data Privacy Framework'],
             ['Resend', 'Sending email', 'USA — Standard Contractual Clauses'],
             [
               'Google / Apple / Mozilla',

@@ -205,9 +205,9 @@ export const privacyPl: LegalDocument = {
               'odpowiedzi — na podstawie Twojego opisu i treści odpowiedzi. Każdą ilustrację, zanim ją zobaczysz, ' +
               'sprawdza model Google Gemini. Nie przechowujemy tych ilustracji; nie są częścią Twojego zgłoszenia ' +
               'i nie trafiają do agenta kodującego.',
-            'Zaakceptowany opis trafia jako zadanie do agenta kodującego (GitHub Copilot), który pisze kod gry ' +
-              'w naszym prywatnym repozytorium. Repozytorium gier nie jest publiczne — Twój opis nie staje się ' +
-              'publicznie widoczny w wyniku samego zgłoszenia.',
+            'Zaakceptowany opis trafia jako zadanie do agenta kodującego — modelu Anthropic, Google Gemini lub ' +
+              'OpenAI, zależnie od wyboru — który pisze kod gry w naszym prywatnym repozytorium. Repozytorium nie ' +
+              'jest publiczne — Twój opis nie staje się publicznie widoczny w wyniku samego zgłoszenia.',
             'Opublikowana gra jest widoczna dla wszystkich użytkowników Serwisu wraz z tytułem i — jeśli ją ' +
               'podałeś/podałaś — nazwą twórcy.',
           ],
@@ -304,7 +304,7 @@ export const privacyPl: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderacja i doprecyzowanie opisu gry; sprawdzanie bezpieczeństwa ilustracji do odpowiedzi na pytania ' +
-                'pomocnicze; podpowiedzi uzupełnień kodu w edytorze kodu',
+                'pomocnicze; podpowiedzi kodu w edytorze; pisze grę jako wybrany agent kodujący',
               'USA / globalnie — standardowe klauzule umowne',
             ],
             [
@@ -324,7 +324,7 @@ export const privacyPl: LegalDocument = {
                 'zastępuje klasyfikator Gemini, gdy jest niedostępny, żeby moderacja nigdy nie ustała',
               'USA — standardowe klauzule umowne',
             ],
-            ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],
+            ['GitHub (Microsoft)', 'Repozytorium gier', 'USA — Data Privacy Framework'],
             ['Resend', 'Wysyłka wiadomości e-mail', 'USA — standardowe klauzule umowne'],
             [
               'Google / Apple / Mozilla',
