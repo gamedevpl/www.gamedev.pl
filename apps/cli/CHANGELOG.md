@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.52.0 — 2026-10-17
+
 ### Added
 
 - `pull` and `/pull` merge independent text edits within the same file, preserve local drafts when already up to date, and refuse conflicting changes before writing sources (#1890).
