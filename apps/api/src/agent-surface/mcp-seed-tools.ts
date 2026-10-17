@@ -139,7 +139,7 @@ export function createSeedTools(deps: SeedToolsDeps): Record<string, SeedToolEnt
       description:
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
         'When available/status=available, revise this seed as the opening move. When status=pending, wait and call again before scaffolding. ' +
-        'Only scaffold when status=unavailable; that response explicitly says no seed exists for this round. Then scaffold from a kit starter — read starters/<slug>/ via read_kit_file and stage those files (a local kit checkout also ships a create script for this). ' +
+        'Only scaffold when status=unavailable and get_sources returns no files: unavailable means no generated seed, not no sources. Then scaffold from a kit starter — read starters/<slug>/ via read_kit_file and stage those files (a local kit checkout also ships a create script for this). ' +
         'warnings.code=module_too_large names game/*.ts modules over the soft size budget, best split before they grow.',
       inputSchema: {
         type: 'object',
