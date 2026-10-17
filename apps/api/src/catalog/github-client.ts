@@ -851,13 +851,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     overrides?: Record<string, string>,
     collect?: Map<string, string>,
     options?: GetGameSourcesOptions,
+    entryFile = 'game.ts',
   ): Promise<string> {
     const gameRoot = `/games/${slug}`;
     return bundleTypeScriptGraph(
       entrySource,
       ref,
       gameRoot,
-      `${gameRoot}/game.ts`,
+      `${gameRoot}/${entryFile}`,
       'game',
       overrides,
       collect,
@@ -1397,7 +1398,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
-      const gameJs = await bundleGameTypeScript(publishTs ?? gameTs, ref, slug, overrides, undefined, options);
+      const gameJs = await bundleGameTypeScript(
+        publishTs ?? gameTs,
+        ref,
+        slug,
+        overrides,
+        undefined,
+        options,
+        publishTs === null ? 'game.ts' : 'publish.ts',
+      );
       const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
