@@ -3,7 +3,7 @@
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import type { GamesStore } from '../delivery/games-store.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { carriesPixels, imageSize, isJpeg, isPng } from '../platform/image-size.js';
+import { carriesPixels, imageSize, isJpeg, isPng, sameAspectRatio } from '../platform/image-size.js';
 import { MAX_PROPOSAL_FRAME_BYTES, VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { DreamAvailabilityGate } from '../creation/dream-availability.js';
@@ -63,13 +63,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     if (!direction) return toolRefusal('direction is required', 'invalid_arguments');
 
     const { jobId, record } = auth;
-    const generation = auth.claims.roundGeneration;
-    const issued = (await store.listBuildShots(jobId, { label: VISUAL_TARGET_SHOT_LABEL, limit: 50 })).filter(
-      (shot) => shot.roundGeneration === generation,
-    ).length;
-    if (issued >= VISUAL_TARGETS_PER_ROUND) {
-      return toolRefusal(`this round already used its ${VISUAL_TARGETS_PER_ROUND} visual targets`, 'quota_exhausted');
-    }
+    const generation = auth.claims.roundGeneration ?? record.roundGeneration ?? 0;
 
     const version = record.previewVersion ?? record.deliveredVersion;
     const path = record.slug && version ? gateFrameOf(await gamesStore.getManifest(record.slug, version)) : null;
@@ -79,6 +73,11 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
 
     if (!(await availability.dreamingEnabled())) {
       return toolRefusal('image generation is switched off right now', 'feature_unavailable');
+    }
+    // Attempts, reserved atomically before any spend: failures count too.
+    const used = await store.reserveVisualTarget(jobId, generation, VISUAL_TARGETS_PER_ROUND);
+    if (used === null) {
+      return toolRefusal(`this round already used its ${VISUAL_TARGETS_PER_ROUND} visual targets`, 'quota_exhausted');
     }
     if (!(await availability.spendFrameSlots(new Date(now()).toISOString().slice(0, 10), 1))) {
       return toolRefusal('the daily image allowance is spent', 'quota_exhausted');
@@ -97,7 +96,9 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     // Same checks as Studio concepts: one Firestore doc, renderable pixels.
     const bytes = frame ? Buffer.from(frame.data, 'base64') : Buffer.alloc(0);
     const declared = frame?.mediaType === 'image/jpeg' ? isJpeg(bytes) : isPng(bytes);
-    if (!frame || bytes.length > MAX_PROPOSAL_FRAME_BYTES || !declared || !carriesPixels(bytes)) {
+    const drawn = declared && carriesPixels(bytes) ? imageSize(bytes) : null;
+    // Providers may ignore the size ask; reshaping loses the HUD.
+    if (!frame || bytes.length > MAX_PROPOSAL_FRAME_BYTES || !drawn || !sameAspectRatio(drawn, size)) {
       return toolErr('the image model returned no usable frame; build from the words instead');
     }
 
@@ -117,7 +118,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       url: `${canonicalAppBaseUrl()}${REFERENCE_IMAGE_DOWNLOAD_ROUTE}?t=${encodeURIComponent(minted.token)}`,
       expiresAt: minted.expiresAt,
       sourceVersion: version,
-      remaining: VISUAL_TARGETS_PER_ROUND - issued - 1,
+      remaining: VISUAL_TARGETS_PER_ROUND - used,
     });
   };
 

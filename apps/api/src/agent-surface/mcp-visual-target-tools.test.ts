@@ -95,6 +95,29 @@ describe('visual_target', () => {
     expect(await store.listBuildShots(JOB, { label: VISUAL_TARGET_SHOT_LABEL })).toHaveLength(0);
   });
 
+  it('counts failed generations against the round, before any spend', async () => {
+    const failing = { model: 'img-model', generate: async () => Promise.reject(new Error('429')) };
+    const spend = vi.fn(async () => true);
+    const { call } = await setup({
+      frames: failing,
+      availability: { dreamingEnabled: async () => true, spendFrameSlots: spend },
+    });
+    await call({ direction: 'a' });
+    await call({ direction: 'b' });
+    expect((await call({ direction: 'c' })).structuredContent).toMatchObject({ code: 'quota_exhausted' });
+    expect(spend).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a frame whose shape no longer matches the gate frame', async () => {
+    const square = {
+      model: 'img-model',
+      generate: async () => ({ data: pngOf(4, 4).toString('base64'), mediaType: 'image/png' as const }),
+    };
+    const { store, call } = await setup({ frames: square });
+    expect((await call({ direction: 'x' })).isError).toBe(true);
+    expect(await store.listBuildShots(JOB, { label: VISUAL_TARGET_SHOT_LABEL })).toHaveLength(0);
+  });
+
   it('says so when there is no green gate frame to draw on', async () => {
     const gamesStore = { getManifest: async () => ({}), getDerivedArtifact: async () => null };
     const { frames, call } = await setup({ gamesStore: gamesStore as unknown as GamesStore });

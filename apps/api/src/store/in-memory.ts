@@ -549,6 +549,9 @@ export class InMemoryStore extends OAuthFacade implements Store {
   async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
     return this.roundBudgetStore.incrementRoundSubmitAttempts(jobId, generation);
   }
+  async reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null> {
+    return this.roundBudgetStore.reserveVisualTarget(jobId, generation, max);
+  }
 
   async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number> {
     return this.roundBudgetStore.incrementRoundPreflightRefusal(jobId, kind, generation);

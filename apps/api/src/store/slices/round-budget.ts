@@ -26,6 +26,16 @@ export function gateRepairEligible(
   );
 }
 
+// A new round counts from zero; null once `max` are spent.
+function nextVisualTargetAttempts(
+  sub: Pick<SubmissionRecord, 'visualTargetAttempts'>,
+  generation: number,
+  max: number,
+): { generation: number; count: number } | null {
+  const held = sub.visualTargetAttempts?.generation === generation ? sub.visualTargetAttempts.count : 0;
+  return held < max ? { generation, count: held + 1 } : null;
+}
+
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
   incrementSeedRegenerations(jobId: number, generation?: number): Promise<number>;
@@ -41,6 +51,9 @@ export interface RoundBudgetStore {
 
   // Bumps submit attempts -- every deliver call that reaches preflight.
   incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number>;
+
+  // Reserves one of `max` visual_target attempts for this round, atomically.
+  reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null>;
 
   // Bumps the audio or symbols preflight refusal count.
   incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols', generation?: number): Promise<number>;
@@ -103,6 +116,14 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
       return;
     }
     this.submissions.set(jobId, { ...sub, roundTypecheckPreflightBypassErrors: message });
+  }
+
+  async reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null> {
+    const sub = this.submissions.get(jobId);
+    const next = sub ? nextVisualTargetAttempts(sub, generation, max) : null;
+    if (!sub || !next) return null;
+    this.submissions.set(jobId, { ...sub, visualTargetAttempts: next });
+    return next.count;
   }
 
   async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
@@ -221,6 +242,17 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     await writeAgentRoundDocuments(this.db, jobId, generation, [
       { ref, data: { roundTypecheckPreflightBypassErrors: message }, merge: true },
     ]);
+  }
+
+  async reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null> {
+    const ref = this.ref(jobId);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const next = snap.exists ? nextVisualTargetAttempts(snap.data() as SubmissionRecord, generation, max) : null;
+      if (!next) return null;
+      tx.set(ref, { visualTargetAttempts: next }, { merge: true });
+      return next.count;
+    });
   }
 
   async incrementRoundSubmitAttempts(jobId: number, generation?: number): Promise<number> {
