@@ -55,7 +55,7 @@ import {
   ROUND_SEQUENCE_TEXT,
 } from './mcp-round-guide.js';
 
-export { MCP_VISIBLE_TOOLS };
+export { MCP_MANAGED_ONLY_TOOLS, MCP_VISIBLE_TOOLS };
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import {
