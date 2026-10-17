@@ -75,6 +75,9 @@ describe('visual_target is managed-only', () => {
     app = await start();
     const opener = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1 })}`;
     expect(await listed(opener)).not.toContain('visual_target');
+    // creator_notes needs no shell, only the opener.
+    expect(await listed(opener)).toContain('creator_notes');
+    expect(await listed()).not.toContain('creator_notes');
   });
 
   it('is not offered when the feature is off', async () => {

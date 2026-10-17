@@ -437,7 +437,7 @@
     "apps/api/src/platform/spa-paths.test.ts": 117,
     "apps/api/src/platform/spa-paths.ts": 131,
     "apps/api/src/platform/store.test.ts": 828,
-    "apps/api/src/platform/store.ts": 302,
+    "apps/api/src/platform/store.ts": 305,
     "apps/api/src/platform/submission-status.test.ts": 138,
     "apps/api/src/platform/submission-status.ts": 255,
     "apps/api/src/platform/submission-token.test.ts": 24,

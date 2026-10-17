@@ -71,6 +71,7 @@ import {
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { InMemoryCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
@@ -195,6 +196,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private gameMemoryStore = new InMemoryGameMemoryStore();
+  private creatorNotesStore = new InMemoryCreatorNotesStore((jobId) => this.submissions.get(jobId));
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private dreamQuotaStore = new InMemoryDreamQuotaStore((uid) =>
@@ -327,6 +329,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
     }
     this.agentKeysStore.creatorAgentKeys.delete(uid);
     this.cliChatStore.chats.delete(uid);
+    this.creatorNotesStore.notes.delete(uid);
     for (const [id, suggestion] of [...this.contributionStore.suggestions]) {
       if (suggestion.ownerUid === uid) {
         this.contributionStore.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
@@ -662,6 +665,14 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
     return this.gameMemoryStore.claimGameMemory(record);
+  }
+
+  async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {
+    return this.creatorNotesStore.getCreatorNotes(uid);
+  }
+
+  async setCreatorNotes(record: Omit<CreatorNotesRecord, 'revision'>, basedOn: number): Promise<number> {
+    return this.creatorNotesStore.setCreatorNotes(record, basedOn);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

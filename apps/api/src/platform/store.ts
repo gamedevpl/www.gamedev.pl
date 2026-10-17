@@ -23,6 +23,8 @@ export type { CatalogEnrichmentRecord };
 import type { GameAccessStore } from '../store/slices/game-access.js';
 import type { GameMemoryStore, GameMemoryRecord } from '../store/slices/game-memory.js';
 export type { GameMemoryStore, GameMemoryRecord };
+import type { CreatorNotesStore, CreatorNotesRecord } from '../store/slices/creator-notes.js';
+export type { CreatorNotesStore, CreatorNotesRecord };
 export type { GameAccessStore };
 import type { GameAccessRecord, GameAccessRole } from '../store/records/game-access.js';
 import type { GameTransferStore } from '../store/slices/game-transfer.js';
@@ -286,6 +288,7 @@ export interface Store
     GameAdmissionStore,
     CatalogEnrichmentStore,
     GameMemoryStore,
+    CreatorNotesStore,
     GameAccessStore,
     GameTransferStore,
     GameTransferProposalStore,

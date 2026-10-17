@@ -12,6 +12,7 @@ import {
   withErrorBranch,
   MCP_VISIBLE_TOOLS,
   MCP_MANAGED_ONLY_TOOLS,
+  MCP_SHELL_ONLY_TOOLS,
   channelControlFields,
   pendingMessagesFromChannel,
   CREATOR_TEXT_SAFETY,
@@ -34,6 +35,7 @@ import { createShareDraftTools } from './mcp-share-draft-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
+import { createCreatorNotesTools } from './mcp-creator-notes-tools.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -1350,6 +1352,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
+    ...createCreatorNotesTools({
+      resolveAuth,
+      managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
+      store,
+      now,
+    }),
     // Absent unless configured, so no session is offered a dead tool.
     ...(options.visualTarget
       ? createVisualTargetTools({
@@ -1497,8 +1505,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     if (message.method === 'tools/list') {
-      // Managed-only tools answer with URLs, so only shell sessions see them.
-      const offersManaged = managedOpenerClaims(bearerToken)?.shell === true;
+      const opener = managedOpenerClaims(bearerToken);
+      // Managed-only tools need an opener; URL-only ones also a shell.
+      const offered = (name: string) =>
+        !MCP_MANAGED_ONLY_TOOLS.has(name) || (opener !== null && (!MCP_SHELL_ONLY_TOOLS.has(name) || opener.shell));
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);
@@ -1506,7 +1516,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
             .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
-            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || offersManaged)
+            .filter(([name]) => offered(name))
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
