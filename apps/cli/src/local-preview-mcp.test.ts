@@ -59,10 +59,10 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   expect((await f.rpc('tools/list')).data.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
     'report_progress',
     'preview_status',
-    'capture',
+    'capture_game',
     'capture_status',
   ]);
-  const started = (await f.rpc('tools/call', { name: 'capture', arguments: {} })).data.result;
+  const started = (await f.rpc('tools/call', { name: 'capture_game', arguments: { viewport: 'mobile' } })).data.result;
   const { jobId } = JSON.parse(started.content[0].text);
   await vi.waitFor(() => expect(f.capture).toHaveBeenCalledOnce());
   const result = await vi.waitFor(async () => {
@@ -73,6 +73,7 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   expect(JSON.parse(result.content[0].text).revision).toBe(f.revision());
   expect(result.content[1]).toMatchObject({ type: 'image', mimeType: 'image/png' });
   expect(JSON.parse(result.content[0].text).consoleErrors).toEqual(['test console error']);
+  expect(f.capture).toHaveBeenCalledWith(expect.objectContaining({ viewport: 'mobile' }));
 });
 it('rejects cross-origin, unauthenticated, arbitrary URL and shell requests', async () => {
   const f = await bridge();
@@ -80,6 +81,9 @@ it('rejects cross-origin, unauthenticated, arbitrary URL and shell requests', as
   expect((await f.rpc('tools/list', {}, { Origin: 'https://evil.test' })).response.status).toBe(403);
   for (const request of [
     { name: 'capture', arguments: { url: 'file:///etc/passwd' } },
+    { name: 'capture_game', arguments: { url: 'http://127.0.0.1:1234/' } },
+    { name: 'capture_game', arguments: { command: 'npm run capture' } },
+    { name: 'capture_game', arguments: { game: '../other-game' } },
     { name: 'capture', arguments: { viewport: 'huge' } },
     { name: 'shell', arguments: { command: 'echo hi' } },
     { name: 'capture_status', arguments: { jobId: '../../secret' } },
@@ -124,6 +128,18 @@ it('waits for fresh builds and cancels without launching the browser', async () 
   await f.mcp.close();
   expect(f.capture).not.toHaveBeenCalled();
   await expect(fetch(f.mcp.url)).rejects.toThrow();
+});
+it('reports a failed host capture without returning an image or changing shell permissions', async () => {
+  const f = await bridge();
+  f.capture.mockRejectedValueOnce(new Error('Host browser unavailable'));
+  const started = (await f.rpc('tools/call', { name: 'capture_game', arguments: {} })).data.result;
+  const { jobId } = JSON.parse(started.content[0].text);
+  await vi.waitFor(async () => {
+    const result = (await f.rpc('tools/call', { name: 'capture_status', arguments: { jobId } })).data.result;
+    expect(result.isError).toBe(true);
+    expect(result.content).toHaveLength(1);
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ state: 'failed', error: 'Host browser unavailable' });
+  });
 });
 it('does not capture a failed build or let a game escape srcdoc', async () => {
   const f = await fixture();
@@ -192,3 +208,44 @@ it('retains the capture budget after an approval server is replaced', async () =
   expect(refused.content[0].text).toContain('used its');
   expect(resumed.capture).not.toHaveBeenCalled();
 });
+
+it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
+  'returns a real rendered game image through capture_game',
+  async () => {
+    const f = await fixture();
+    f.state.html = `<!doctype html><body style="margin:0;background:#23aa77"><canvas width="960" height="600"></canvas><script>
+      const context = document.querySelector('canvas').getContext('2d');
+      context.fillStyle = '#23aa77'; context.fillRect(0, 0, 960, 600);
+      console.error('MCP_CAPTURE_GAME_RENDERED');
+    </script></body>`;
+    const mcp = await startLocalPreviewMcp({ previewUrl: f.previewUrl, abort: f.controller.signal, write: vi.fn() });
+    cleanup.push(() => mcp.close());
+    const rpc = async (name: string, args = {}) => {
+      const response = await fetch(mcp.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: mcp.authorization },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+      });
+      return (await response.json()).result;
+    };
+    const started = await rpc('capture_game');
+    const { jobId } = JSON.parse(started.content[0].text);
+    const result = await vi.waitFor(
+      async () => {
+        const result = await rpc('capture_status', { jobId });
+        const status = JSON.parse(result.content[0].text);
+        if (status.state === 'failed') throw new Error(status.error);
+        expect(status.state).toBe('complete');
+        return result;
+      },
+      { timeout: 45_000, interval: 250 },
+    );
+    const status = JSON.parse(result.content[0].text);
+    expect(status.revision).toBe(f.revision());
+    expect(status.consoleErrors.join(' ')).toContain('MCP_CAPTURE_GAME_RENDERED');
+    const png = Buffer.from(result.content[1].data, 'base64');
+    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([960, 600]);
+  },
+  60_000,
+);

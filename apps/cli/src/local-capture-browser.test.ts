@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { expect, it, vi } from 'vitest';
 import { captureBrowser } from './local-capture-browser.js';
 
+const faults = vi.hoisted(() => ({ reader: false }));
 vi.mock('node:fs', async (original) => ({ ...(await original<object>()), existsSync: () => true }));
 vi.mock('node:child_process', () => ({
   spawn: () => {
@@ -14,6 +15,10 @@ vi.mock('node:child_process', () => ({
     writer.on('data', (raw: Buffer) => {
       const message = JSON.parse(raw.toString().replace(/\0$/, ''));
       const { id, method, sessionId } = message;
+      if (faults.reader) {
+        queueMicrotask(() => reader.emit('error', new Error('Browser pipe disconnected')));
+        return;
+      }
       if (method === 'Runtime.enable' || method === 'Log.enable') enabled.add(`${sessionId}:${method}`);
       if (method === 'Page.navigate') {
         emit({ method: 'Target.attachedToTarget', params: { sessionId: 'game', targetInfo: { type: 'iframe' } } });
@@ -60,4 +65,19 @@ it('collects browser and runtime errors from the isolated game frame before capt
   expect(result.errors.join(' ')).toContain('CSP blocked image');
   expect(result.errors.join(' ')).toContain('game failed');
   expect(result.errors.join(' ')).not.toContain('ignore me');
+});
+
+it('returns a browser pipe failure instead of crashing the local MCP host', async () => {
+  faults.reader = true;
+  try {
+    await expect(
+      captureBrowser({
+        url: 'http://127.0.0.1:12345/fixed-capture',
+        viewport: 'desktop',
+        signal: AbortSignal.timeout(5000),
+      }),
+    ).rejects.toThrow('Browser pipe disconnected');
+  } finally {
+    faults.reader = false;
+  }
 });

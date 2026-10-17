@@ -14,6 +14,15 @@ Managed builders (Anthropic, Gemini, OpenAI) use the same session loop; their be
 per-round managed opener (`mcpOpenerToken`), and `start` exchanges it for the round's
 `sessionKey`. GitHub Copilot is no longer a managed vendor and there is no connector secret.
 
+## Local CLI delegation
+
+Local CLI delegation uses a separate, task-scoped `gamedevpl_local` MCP server.
+Its `preview_status`, `capture_game` and `capture_status` tools capture the current
+local game through the CLI host browser and return an image, revision and console
+errors. The former `capture` name remains callable for compatibility. These tools
+need no shell sandbox escalation, execute no checkout npm scripts, and never open
+a platform round or publish. See `apps/cli/README.md` for the local contract.
+
 ## Session loop (what a round usually does)
 
 Source of truth: `ROUND_SEQUENCE` (returned by `start` as `sequence`) and `MCP_INSTRUCTIONS`

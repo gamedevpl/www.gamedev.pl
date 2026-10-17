@@ -22,4 +22,12 @@ runs and capture returns a valid PNG. Repeat the native check with:
 GAMEDEV_CAPTURE_BROWSER_TEST=1 npm test -w @gamedevpl/cli -- src/capture-network-isolation.test.ts
 ```
 
-Protocol mocks alone do not establish network isolation.
+The local MCP render regression also exercises `capture_game` through the real
+browser, checks that the sandboxed canvas fixture ran, and verifies the returned
+PNG dimensions and revision:
+
+```bash
+GAMEDEV_CAPTURE_BROWSER_TEST=1 npm test -w @gamedevpl/cli -- src/local-preview-mcp.test.ts
+```
+
+Protocol mocks alone do not establish network isolation or browser rendering.

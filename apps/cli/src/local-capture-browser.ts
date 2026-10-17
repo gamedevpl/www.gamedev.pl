@@ -106,6 +106,7 @@ export async function captureBrowser(input: {
   input.signal.addEventListener('abort', stop, { once: true });
   const reader = child.stdio[4] as Readable;
   const writer = child.stdio[3] as Writable;
+  reader.on('error', fail);
   writer.on('error', fail);
   reader.on('data', (data: Buffer) => {
     buffer = Buffer.concat([buffer, data]);

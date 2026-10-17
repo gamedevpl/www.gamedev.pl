@@ -331,7 +331,7 @@ export async function runLocalBuild(input: {
             'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
           );
           input.write(
-            'Missing browser access prevents visual verification, not code changes. Retry an implementation task with that limitation noted. /diff shows existing local edits; /push delivers them explicitly.',
+            'Review the agent output for the task result or reported blocker. /diff shows existing local edits; /push delivers them explicitly.',
           );
           return false;
         }

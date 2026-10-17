@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Local delegation advertises `capture_game` and the connected screenshot tools, and directs agents to host-side captures when their shell cannot open a local port. No-change tasks no longer receive an assumed browser-access failure (#1893).
+- A disconnected capture browser reports an error without terminating the local task tools (#1893).
+
 ## 0.52.0 — 2026-10-17
 
 ### Added
