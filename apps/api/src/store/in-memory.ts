@@ -71,6 +71,7 @@ import {
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { InMemoryBuilderNotesStore, type BuilderNotesRecord } from './slices/builder-notes.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
@@ -148,6 +149,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
       }
     },
     (ownerUid, at) => this.shelfGuard.tombstoneAt(ownerUid, at),
+    (slug) => this.builderNotesStore.notes.delete(slug),
   );
   protected gameTransferProposalStore = new InMemoryGameTransferProposalStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
@@ -195,6 +197,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private gameMemoryStore = new InMemoryGameMemoryStore();
+  private builderNotesStore = new InMemoryBuilderNotesStore((jobId) => this.submissions.get(jobId));
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private dreamQuotaStore = new InMemoryDreamQuotaStore((uid) =>
@@ -662,6 +665,18 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
     return this.gameMemoryStore.claimGameMemory(record);
+  }
+
+  async getBuilderNotes(slug: string): Promise<BuilderNotesRecord | null> {
+    return this.builderNotesStore.getBuilderNotes(slug);
+  }
+
+  async setBuilderNotes(record: BuilderNotesRecord): Promise<void> {
+    return this.builderNotesStore.setBuilderNotes(record);
+  }
+
+  async clearBuilderNotes(slug: string): Promise<void> {
+    return this.builderNotesStore.clearBuilderNotes(slug);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

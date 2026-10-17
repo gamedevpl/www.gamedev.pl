@@ -9,6 +9,7 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { DreamAvailabilityGate } from '../creation/dream-availability.js';
 import type { DreamFrameGenerator } from '../creation/dream-frames.js';
 import { gateFrameOf } from './agent-channel-proposal.js';
+import { opensManagedRound, type ManagedOpener } from './mcp-managed-round.js';
 import { mintReferenceImageToken, REFERENCE_IMAGE_DOWNLOAD_ROUTE } from './reference-image-url.js';
 import {
   SESSION_KEY_PROP,
@@ -36,9 +37,7 @@ export interface VisualTargetToolsDeps {
     args: Record<string, unknown>,
   ) => Promise<{ jobId: number; record: SubmissionRecord; claims: { roundGeneration?: number } } | ToolResult>;
   // Claims of a managed-session opener bearer, else null.
-  managedOpener: (
-    ctx: ToolContext,
-  ) => { jobId: number; roundGeneration?: number; exp?: number; shell?: boolean } | null;
+  managedOpener: (ctx: ToolContext) => ManagedOpener | null;
   store: Store | undefined;
   gamesStore: GamesStore | null | undefined;
   frames: DreamFrameGenerator | null | undefined;
@@ -65,16 +64,8 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     const opener = deps.managedOpener(ctx);
     const { jobId, record } = auth;
     const current = record.roundGeneration ?? 1;
-    if (
-      !opener ||
-      opener.jobId !== jobId ||
-      opener.roundGeneration !== current ||
-      (auth.claims.roundGeneration ?? current) !== current ||
-      (opener.exp ?? 0) * 1000 <= now() ||
-      (record.builder ?? 'platform') !== 'platform' ||
-      // A URL result needs a shell to open it.
-      opener.shell !== true
-    ) {
+    // A URL result needs a shell to open it.
+    if (!opensManagedRound(opener, auth, now()) || opener.shell !== true) {
       return toolRefusal('visual_target is not available here', 'not_owner');
     }
     const { store, gamesStore, frames, availability, agentTokenSecret } = deps;

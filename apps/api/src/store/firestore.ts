@@ -66,6 +66,7 @@ import {
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { FirestoreGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { FirestoreBuilderNotesStore, type BuilderNotesRecord } from './slices/builder-notes.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
 import { FirestoreDispatchStore } from './slices/dispatch.js';
@@ -144,6 +145,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
   private gameMemoryStore: FirestoreGameMemoryStore;
+  private builderNotesStore: FirestoreBuilderNotesStore;
   private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
@@ -185,6 +187,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
     this.gameMemoryStore = new FirestoreGameMemoryStore(this.db);
+    this.builderNotesStore = new FirestoreBuilderNotesStore(this.db);
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
@@ -680,6 +683,18 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
     return this.gameMemoryStore.claimGameMemory(record);
+  }
+
+  async getBuilderNotes(slug: string): Promise<BuilderNotesRecord | null> {
+    return this.builderNotesStore.getBuilderNotes(slug);
+  }
+
+  async setBuilderNotes(record: BuilderNotesRecord): Promise<void> {
+    return this.builderNotesStore.setBuilderNotes(record);
+  }
+
+  async clearBuilderNotes(slug: string): Promise<void> {
+    return this.builderNotesStore.clearBuilderNotes(slug);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {
