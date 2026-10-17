@@ -55,6 +55,9 @@ CLI used `wrap-ansi` 9 with declarations in its own `node_modules`, while the ro
 version 7 without declarations. Linking only the root resolved version 7 and produced
 `TS7016` despite identical lockfiles. Run `npm ci` in the verification checkout.
 
+After installing a fresh clone, run `npm run build:packages` before scoped workspace
+tests. Contract and zone-core exports point at `dist`; scoped Vitest does not build them.
+
 **Budget tests can reach a lower-level guard first.** A slow-loop zone fixture sometimes
 hit the VM's 200 ms deadline before the zone counted repeated 8 ms overruns. Check which
 guard fired. Inject the separate monotonic meter for the zone-policy test and keep its
