@@ -23,6 +23,12 @@ import {
 // Per round; each call is one paid image-model frame.
 export const VISUAL_TARGETS_PER_ROUND = 2;
 const MAX_DIRECTION = 400;
+const THROTTLE_RETRY_SECONDS = 30;
+
+function isThrottled(error: unknown): boolean {
+  if ((error as { status?: unknown } | null)?.status === 429) return true;
+  return /\b429\b|RESOURCE_EXHAUSTED/.test(error instanceof Error ? error.message : String(error));
+}
 
 export interface VisualTargetToolsDeps {
   resolveAuth: (
@@ -96,7 +102,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       await store.releaseVisualTarget(jobId, generation).catch(() => undefined);
       return toolRefusal('the daily image allowance is spent', 'quota_exhausted');
     }
-    await store.recordJobCost(jobId, { kind: 'concept', at: new Date(now()).toISOString(), by: frames.model });
+    let throttled = false;
     const frame = await frames
       .generate({
         sourcePng: source.toString('base64'),
@@ -106,7 +112,19 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
         direction,
         hudRegions: [],
       })
-      .catch(() => null);
+      .catch((error: unknown) => {
+        throttled = isThrottled(error);
+        return null;
+      });
+    if (throttled) {
+      // A throttled call bills nothing; the round keeps its attempt.
+      await store.releaseVisualTarget(jobId, generation).catch(() => undefined);
+      return toolRefusal('the image model is busy', 'rate_limited', { retryAfterSeconds: THROTTLE_RETRY_SECONDS });
+    }
+    // Best-effort: a ledger outage must not void a paid call.
+    await store
+      .recordJobCost(jobId, { kind: 'concept', at: new Date(now()).toISOString(), by: frames.model })
+      .catch(() => undefined);
     // Same checks as Studio concepts: one Firestore doc, renderable pixels.
     const bytes = frame ? Buffer.from(frame.data, 'base64') : Buffer.alloc(0);
     const declared = frame?.mediaType === 'image/jpeg' ? isJpeg(bytes) : isPng(bytes);

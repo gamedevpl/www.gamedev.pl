@@ -107,7 +107,7 @@ describe('visual_target', () => {
   });
 
   it('counts failed generations against the round, before any spend', async () => {
-    const failing = { model: 'img-model', generate: async () => Promise.reject(new Error('429')) };
+    const failing = { model: 'img-model', generate: async () => Promise.reject(new Error('500 internal')) };
     const spend = vi.fn(async () => true);
     const { call } = await setup({
       frames: failing,
@@ -117,6 +117,17 @@ describe('visual_target', () => {
     await call({ direction: 'b' });
     expect((await call({ direction: 'c' })).structuredContent).toMatchObject({ code: 'quota_exhausted' });
     expect(spend).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the round attempt when the model throttles or the ledger fails', async () => {
+    const generate = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('busy'), { status: 429 }))
+      .mockResolvedValue({ data: pngOf(4, 2).toString('base64'), mediaType: 'image/png' });
+    const { store, call } = await setup({ frames: { model: 'img-model', generate } });
+    vi.spyOn(store, 'recordJobCost').mockRejectedValue(new Error('ledger down'));
+    expect((await call({ direction: 'a' })).structuredContent).toMatchObject({ code: 'rate_limited' });
+    expect((await call({ direction: 'b' })).structuredContent).toMatchObject({ remaining: 1 });
   });
 
   it('keeps the round attempt when the daily allowance refuses', async () => {
