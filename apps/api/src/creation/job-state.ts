@@ -309,16 +309,7 @@ export interface AgentObservation {
    * round cannot resume the work, it can only start again somewhere else.
    */
   workspace?: string;
-  /**
-   * Credits billed across every session on this task, once usage is known.
-   *
-   * The ledger books a placeholder of 1 credit at dispatch (usage is not on the create
-   * response). Observation is what replaces it with the real figure — which can arrive
-   * after the job has already moved past the agent, so cost reconciliation must not be
-   * gated on job state the way lifecycle reconciliation is.
-   */
-  sessionCredits?: number;
-  // Tokens, for token-billed backends; not convertible to credits.
+  // Session tokens once usage is known; replaces the dispatch placeholder.
   sessionTokens?: AgentSessionTokens;
   sessionUsage?: ManagedSessionUsage;
   stopReason?: string;

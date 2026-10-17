@@ -1,6 +1,5 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
 import { isSettledAgentState, type AgentTaskState } from '../platform/agent-state.js';
-import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 import type { ManagedWorkspaceArchive } from './managed-workspace.js';
 
 // Coarse reasoning budget; vendors name it differently.
@@ -39,18 +38,10 @@ export interface ManagedOpenAiTokenUsage extends ManagedTokenUsageBase {
   cachedTokens: number;
 }
 
-export interface ManagedCreditUsage {
-  unit: 'credits';
-  vendor: string;
-  credits: number;
-  model?: string;
-}
-
-export type ManagedSessionUsage =
-  ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage | ManagedCreditUsage;
+export type ManagedSessionUsage = ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage;
 
 export type ManagedUsageBudget =
-  { unit: 'tokens'; max: number } | { unit: 'credits'; max: number } | { unit: 'cents'; max: number };
+  { unit: 'tokens'; max: number } | { unit: 'cents'; max: number };
 
 export interface ManagedBudgetStop {
   unit: ManagedUsageBudget['unit'];
@@ -189,10 +180,6 @@ export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
   budget?: ManagedUsageBudget;
-  // Copilot: the scratch repo MCP-lane rounds dispatch into.
-  mcpRepo?: string;
-  mcpBaseRef?: string;
-  mcpCustomAgent?: string;
   agentId?: string;
   environmentId?: string;
   maxListCostCents?: number;
@@ -202,8 +189,6 @@ export interface ManagedProviderConfig {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
-  // Copilot: builds the Actions client that cancels a run.
-  githubClientFactory?: CopilotGitHubClientFactory;
 }
 
 export type ManagedProviderFactory = (config: ManagedProviderConfig) => ManagedAgentProvider;

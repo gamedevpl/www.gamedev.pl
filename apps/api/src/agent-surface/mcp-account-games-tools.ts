@@ -12,8 +12,6 @@ import {
   toolOk,
   toolErr,
   RETIRED_GAME_KEY_REASON,
-  PLATFORM_CONNECTOR_ONLY_REASON,
-  matchesPlatformConnectorSecret,
   type ToolHandler,
 } from './mcp-tool-support.js';
 
@@ -36,7 +34,6 @@ export type LoadOwnerGamesFn = (ownerUid: string) => Promise<AccountOwnerGame[]>
 export interface AccountGamesToolsDeps {
   store: Store | undefined;
   agentTokenSecret: string | undefined;
-  platformConnectorSecret: string | undefined;
   now: () => number;
   loadOwnerGames?: LoadOwnerGamesFn;
 }
@@ -51,7 +48,7 @@ export interface AccountGamesToolEntry {
 
 // Lists games belonging to the creator's account.
 export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<string, AccountGamesToolEntry> {
-  const { store, agentTokenSecret, platformConnectorSecret, now, loadOwnerGames } = deps;
+  const { store, agentTokenSecret, now, loadOwnerGames } = deps;
 
   return {
     list_account_games: {
@@ -148,9 +145,6 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
           }
         }
 
-        if (!creatorUid && matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
 
         if (!creatorUid && bearer) {
           if (looksLikeGameAgentKey(bearer)) {

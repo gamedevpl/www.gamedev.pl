@@ -15,8 +15,6 @@ import type { ContentChecker } from '../platform/moderation.js';
 import {
   toolOk,
   toolErr,
-  PLATFORM_CONNECTOR_ONLY_REASON,
-  matchesPlatformConnectorSecret,
   type ToolHandler,
 } from './mcp-tool-support.js';
 
@@ -65,7 +63,6 @@ export interface ProposalToolsDeps {
   store: Store | undefined;
   proposals: ProposalDomain;
   agentTokenSecret: string | undefined;
-  platformConnectorSecret: string | undefined;
   now: () => number;
   missingCredentialHint: string;
   gamesStore: GamesStore | undefined;
@@ -91,7 +88,6 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
   const {
     store,
     agentTokenSecret,
-    platformConnectorSecret,
     now,
     missingCredentialHint,
     gamesStore,
@@ -108,9 +104,6 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
   ): Promise<{ ok: true; uid: string } | { ok: false; reason: string }> {
     if (!store || !agentTokenSecret) return { ok: false, reason: 'the MCP endpoint is not configured' };
     if (!bearer) return { ok: false, reason: missingCredentialHint };
-    if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-      return { ok: false, reason: PLATFORM_CONNECTOR_ONLY_REASON };
-    }
 
     if (looksLikeCreatorAgentKey(bearer)) {
       const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());

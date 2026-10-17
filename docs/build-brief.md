@@ -40,8 +40,8 @@ return, and `build-prompt.test.ts` pins that the last message stays out of the p
 
 `buildPrompt` used to take a `DeliveryContract` and render different instructions for a
 Copilot round with a full repository checkout, a fast MCP-only round, and a pulled round
-written to an output directory nobody could watch. All three managed vendors — Anthropic,
-Gemini, and Copilot — now dispatch the same way, so there is exactly one contract left:
+written to an output directory nobody could watch. Every managed vendor —
+Anthropic, Gemini and OpenAI — now dispatches the same way, so there is exactly one contract left:
 `stage_source_file` and `submit_sources` over MCP, roughly two minutes of wall clock, no
 bash, no repository checkout. An agent told to run a shell command that does not exist in
 its sandbox spends the round discovering that; there is no longer a second shape it could

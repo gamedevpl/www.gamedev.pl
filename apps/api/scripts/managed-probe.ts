@@ -5,7 +5,6 @@ import { mintManagedMcpOpener } from '../src/platform/agent-token.js';
 import { buildPrompt } from '../src/agent-surface/build-prompt.js';
 import { createManagedProvider } from '../src/agent-surface/managed-agent.js';
 import '../src/agent-surface/managed-provider-anthropic.js';
-import '../src/agent-surface/managed-provider-copilot.js';
 import '../src/agent-surface/managed-provider-gemini.js';
 import '../src/agent-surface/managed-provider-openai.js';
 import { createManagedBackend } from '../src/agent-surface/managed-backend.js';
@@ -26,7 +25,7 @@ const CREATE_CONCEPT =
 const digestPath = value('digest-file');
 const vendor = value('vendor');
 if (!vendor) {
-  console.error('--vendor anthropic|gemini|copilot|openai is required — every managed round dispatches over MCP.');
+  console.error('--vendor anthropic|gemini|openai is required — every managed round dispatches over MCP.');
   process.exit(1);
 }
 const apiBaseUrl = (
@@ -40,7 +39,6 @@ const apiBaseUrl = (
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const budgetUsd = Number(value('budget-usd') ?? process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
-const budgetCredits = Number(value('budget-credits') ?? process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
 const budgetTokens = Number(value('budget-tokens') ?? process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS ?? '');
 const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
   ?.split(',')
@@ -64,10 +62,6 @@ if (!Number.isSafeInteger(ISSUE) || ISSUE <= 0) {
 }
 if (!Number.isSafeInteger(roundGeneration) || roundGeneration < 1) {
   console.error('--round-generation must be a positive integer');
-  process.exit(1);
-}
-if (vendor === 'copilot' && flag('override-tools')) {
-  console.error('Copilot does not accept --override-tools');
   process.exit(1);
 }
 
@@ -95,35 +89,25 @@ const apiKey =
   process.env.MANAGED_AGENT_API_KEY?.trim() ??
   (vendor === 'anthropic'
     ? process.env.ANTHROPIC_API_KEY?.trim()
-    : vendor === 'copilot'
-      ? process.env.AGENT_TASKS_TOKEN?.trim()
-      : vendor === 'gemini'
-        ? process.env.GEMINI_API_KEY?.trim()
-        : vendor === 'openai'
-          ? process.env.OPENAI_API_KEY?.trim()
-          : undefined);
+    : vendor === 'gemini'
+      ? process.env.GEMINI_API_KEY?.trim()
+      : vendor === 'openai'
+        ? process.env.OPENAI_API_KEY?.trim()
+        : undefined);
 const model =
   value('model') ??
-  (vendor === 'copilot'
-    ? process.env.AGENT_TASKS_MODEL?.trim()
-    : vendor === 'openai'
-      ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
-      : vendor === 'gemini'
-        ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim()
-        : process.env.MANAGED_AGENT_MODEL?.trim()) ??
+  (vendor === 'openai'
+    ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
+    : vendor === 'gemini'
+      ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim()
+      : process.env.MANAGED_AGENT_MODEL?.trim()) ??
   (vendor === 'anthropic'
     ? 'claude-sonnet-5-5'
-    : vendor === 'copilot'
-      ? 'claude-sonnet-4.6'
-      : vendor === 'gemini'
-        ? 'gemini-3.8-flash'
-        : undefined);
+    : vendor === 'gemini'
+      ? 'gemini-3.8-flash'
+      : undefined);
 if (!apiKey || !model) {
   console.error(`--vendor ${vendor} needs an API key and model`);
-  process.exit(1);
-}
-if (vendor === 'copilot' && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
-  console.error('--vendor copilot needs MANAGED_AGENT_COPILOT_MCP_REPO (the scratch repo it dispatches into)');
   process.exit(1);
 }
 const usesTokenBudget = vendor === 'gemini' || vendor === 'openai';
@@ -131,37 +115,20 @@ if (
   wait &&
   (!Number.isInteger(waitSeconds) ||
     waitSeconds <= 0 ||
-    (vendor === 'copilot'
-      ? !Number.isFinite(budgetCredits) || budgetCredits <= 0
-      : usesTokenBudget
-        ? !Number.isSafeInteger(budgetTokens) || budgetTokens <= 0
-        : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
+    (usesTokenBudget
+      ? !Number.isSafeInteger(budgetTokens) || budgetTokens <= 0
+      : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
 ) {
   console.error(
-    vendor === 'copilot'
-      ? '--wait requires positive --wait-seconds and --budget-credits values'
-      : usesTokenBudget
-        ? '--wait requires positive --wait-seconds and --budget-tokens values'
-        : '--wait requires positive --wait-seconds and --budget-usd values',
+    usesTokenBudget
+      ? '--wait requires positive --wait-seconds and --budget-tokens values'
+      : '--wait requires positive --wait-seconds and --budget-usd values',
   );
   process.exit(1);
 }
-// Every round overrides the agent's own tool list, like production.
-const overrideTools = vendor !== 'copilot' || flag('override-tools');
 const provider = createManagedProvider(vendor, {
   apiKey,
   model,
-  ...(vendor === 'copilot'
-    ? {
-        mcpRepo: process.env.MANAGED_AGENT_COPILOT_MCP_REPO!.trim(),
-        ...(process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF?.trim()
-          ? { mcpBaseRef: process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF.trim() }
-          : {}),
-        ...(process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT?.trim()
-          ? { mcpCustomAgent: process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT.trim() }
-          : {}),
-      }
-    : {}),
   ...(process.env.MANAGED_AGENT_ID ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
   ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
     ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
@@ -173,20 +140,16 @@ const provider = createManagedProvider(vendor, {
     ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
     : {}),
   ...(vaultIds?.length ? { vaultIds } : {}),
-  ...(overrideTools ? { overrideTools: true } : {}),
+  // Every round overrides the agent's own tool list, like production.
+  overrideTools: true,
   baseUrl: apiBaseUrl,
 });
 
 const backend = createManagedBackend({
   provider,
   tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
-  ...(vendor === 'copilot'
-    ? {}
-    : {
-        // Per-round vault holds the opener, as in production.
-        mcpBearerCredential: (input) =>
-          input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
-      }),
+  // Per-round vault holds the opener, as in production.
+  mcpBearerCredential: (input) => (input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined),
   log: {
     warn: (context, message) => console.warn('WARN ', message, context),
     info: (context, message) => console.log('INFO ', message, context),
@@ -194,9 +157,6 @@ const backend = createManagedBackend({
   systemPrompt: async () => builderSystemPrompt({ shell: provider.shell === true }),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
-  ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
-    ? { budget: { unit: 'credits' as const, max: budgetCredits } }
-    : {}),
   ...(usesTokenBudget && Number.isSafeInteger(budgetTokens) && budgetTokens > 0
     ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
     : {}),

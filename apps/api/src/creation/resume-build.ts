@@ -1,4 +1,4 @@
-import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js';
+import { isRetiredBackend, type AgentBackend, type SeedFiles } from '../agent-surface/agent-backend.js';
 import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -146,7 +146,9 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         });
         builderActivated = true;
       }
-      const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
+      const previousBackend = isRetiredBackend(previous?.backend)
+        ? undefined
+        : (backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder)));
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
         if (previousBackend && previousRef) {

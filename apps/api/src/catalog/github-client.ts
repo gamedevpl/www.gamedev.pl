@@ -36,13 +36,12 @@ import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } fr
 import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 import { parseSpecFrontmatter, parseSpecTitle } from '../platform/spec-frontmatter.js';
 import { parseGameMedia } from '../platform/game-media.js';
-import { IN_FLIGHT_RUN_STATUSES } from '../platform/github-run-status.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 
 // Pure vocabulary, re-exported for this bucket's own callers.
-export { IN_FLIGHT_RUN_STATUSES, parseGameMedia };
+export { parseGameMedia };
 
 export interface PullRequestCommit {
   /** First line of the commit message — a human-readable step in the build. */
@@ -56,15 +55,6 @@ export interface PullRequestComment {
   body: string;
   /** ISO-8601 timestamp the comment was posted. */
   createdAt: string;
-}
-
-export interface WorkflowRun {
-  id: number;
-  // Synthetic for agent runs; CI paths differ.
-  path: string;
-  status: string;
-  headBranch?: string;
-  createdAt?: string;
 }
 
 export interface LinkedPullRequest {
@@ -317,10 +307,6 @@ export interface GitHubClient {
    * branch: it is in the store, which is what makes the branch disposable at all.
    */
   deleteBranch(ref: string): Promise<void>;
-  // Runs on `branch`, newest first.
-  listWorkflowRuns(input: { branch: string; perPage?: number }): Promise<WorkflowRun[]>;
-  // Accepted asynchronously; needs `actions: write`.
-  cancelWorkflowRun(runId: number): Promise<void>;
   /**
    * Creates a branch off `baseRef` carrying `files`, in one commit.
    *
@@ -995,28 +981,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       await requestJson(`https://api.github.com/repos/${repo}/git/refs/heads/${encodeURIComponent(ref)}`, {
         method: 'DELETE',
       });
-    },
-
-    async listWorkflowRuns(input) {
-      const params = new URLSearchParams({
-        branch: input.branch,
-        per_page: String(input.perPage ?? 30),
-      });
-      const payload = await requestJson<{ workflow_runs?: Array<Record<string, unknown>> }>(
-        `https://api.github.com/repos/${repo}/actions/runs?${params.toString()}`,
-      );
-      const runs = Array.isArray(payload?.workflow_runs) ? payload.workflow_runs : [];
-      return runs.map((run) => ({
-        id: Number(run.id),
-        path: typeof run.path === 'string' ? run.path : '',
-        status: typeof run.status === 'string' ? run.status : '',
-        ...(typeof run.head_branch === 'string' ? { headBranch: run.head_branch } : {}),
-        ...(typeof run.created_at === 'string' ? { createdAt: run.created_at } : {}),
-      }));
-    },
-
-    async cancelWorkflowRun(runId) {
-      await requestJson(`https://api.github.com/repos/${repo}/actions/runs/${runId}/cancel`, { method: 'POST' });
     },
 
     async createBranchWithFiles(input) {

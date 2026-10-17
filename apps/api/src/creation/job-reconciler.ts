@@ -189,13 +189,6 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           log.error({ err: error, jobId: record.jobId }, 'could not reconcile agent session tokens');
         }
       }
-      if (observation.sessionCredits !== undefined) {
-        try {
-          await store.setJobCostCredits(record.jobId, lastRef, observation.sessionCredits);
-        } catch (error) {
-          log.error({ err: error, jobId: record.jobId }, 'could not reconcile agent session cost');
-        }
-      }
       // Stamped once, by whichever poll first sees the session settled.
       if (isSettledAgentState(observation.state)) {
         try {

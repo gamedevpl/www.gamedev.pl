@@ -83,7 +83,7 @@ import { createBuildStatusAssembler } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
-import type { AgentBackend, SeedFiles } from './agent-surface/agent-backend.js';
+import { isRetiredBackend, type AgentBackend, type SeedFiles } from './agent-surface/agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,
@@ -605,6 +605,8 @@ export async function registerSubmissionRoutes(
     return undefined;
   }
   async function backendForRecord(record: SubmissionRecord): Promise<AgentBackend | undefined> {
+    // Another vendor cannot observe, cancel or clean a retired one's session.
+    if (isRetiredBackend(record.dispatch?.backend)) return undefined;
     return backendByStoredName(record.dispatch?.backend) ?? (await backendFor(builderOf(record)));
   }
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
@@ -1010,7 +1012,8 @@ export async function registerSubmissionRoutes(
     // Vendor that built this workspace; unknown falls back to every vendor.
     backendName?: string,
   ): Promise<void> {
-    // Workspace cleanup is a platform (Copilot) concern — self rounds have none.
+    if (isRetiredBackend(backendName)) return;
+    // Workspace cleanup is a platform concern — self rounds have none.
     const matched = backendName
       ? [...agentBackends.platformByVendor.values()].filter((backend) => backend.name === backendName)
       : [];

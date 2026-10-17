@@ -17,9 +17,7 @@ import type { Store } from '../platform/store.js';
 import {
   toolOk,
   toolErr,
-  PLATFORM_CONNECTOR_ONLY_REASON,
   RETIRED_GAME_KEY_REASON,
-  matchesPlatformConnectorSecret,
   type ToolHandler,
 } from './mcp-tool-support.js';
 
@@ -32,7 +30,6 @@ const CREATOR_KEYS_DISABLED = 'creator API keys cannot use ownership tools';
 
 export interface OwnershipToolsDeps {
   store: Store | undefined;
-  platformConnectorSecret: string | undefined;
   now: () => number;
 }
 
@@ -54,9 +51,6 @@ async function requireOwnershipAccount(
   }
   if (!deps.store) return { error: 'the MCP build endpoint is not configured' };
   if (!bearer) return { error: OWNERSHIP_SCOPE_REQUIRED };
-  if (matchesPlatformConnectorSecret(bearer, deps.platformConnectorSecret)) {
-    return { error: PLATFORM_CONNECTOR_ONLY_REASON };
-  }
   if (looksLikeGameAgentKey(bearer) || looksLikeMcpSessionKey(bearer)) {
     return { error: looksLikeGameAgentKey(bearer) ? RETIRED_GAME_KEY_REASON : OWNERSHIP_SCOPE_REQUIRED };
   }

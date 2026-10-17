@@ -250,25 +250,6 @@ else
   echo "==> Submission secrets not found; deploying browse/play-only (submissions return 503)."
 fi
 
-# Dispatch credential for GitHub's agent tasks API. Deliberately a secret of its own
-# rather than a reuse of github-token: the tasks API needs a user-to-server token, and
-# separating them means dispatch and serving fail independently — a dispatch PAT expiring
-# must not take the catalog down with it. Absent means builds are never handed to an
-# agent; submissions are still accepted and sit queued, visibly, in the operator queue.
-# Necessary but not sufficient since MP-04: MANAGED_AGENT_VENDOR=copilot (below) still
-# has to select it, or this token dispatches nothing.
-if gcloud secrets describe agent-tasks-token --project "$PROJECT_ID" >/dev/null 2>&1; then
-  SECRET_MAPPINGS+=("AGENT_TASKS_TOKEN=agent-tasks-token:latest")
-  echo "==> agent-tasks-token found; enables Copilot dispatch once MANAGED_AGENT_VENDOR=copilot is set."
-else
-  echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
-fi
-
-if gcloud secrets describe copilot-mcp-connector --project "$PROJECT_ID" >/dev/null 2>&1; then
-  SECRET_MAPPINGS+=("COPILOT_MCP_CONNECTOR_SECRET=copilot-mcp-connector:latest")
-  echo "==> Copilot MCP connector configured."
-fi
-
 if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("MANAGED_AGENT_API_KEY=anthropic-api-key:latest")
   echo "==> anthropic-api-key found; managed agent API access enabled."
@@ -450,15 +431,11 @@ for MANAGED_VAR in \
   MANAGED_VISUAL_TARGET \
   MANAGED_AGENT_MAX_SECONDS \
   MANAGED_AGENT_MAX_LIST_COST_CENTS \
-  MANAGED_AGENT_COPILOT_MAX_CREDITS \
   MANAGED_AGENT_MAX_TOTAL_TOKENS \
   MANAGED_AGENT_VAULT_IDS \
   MANAGED_AGENT_MCP_URL \
   MANAGED_AGENT_DELIVERY_MODE \
-  MANAGED_SESSION_RETENTION_DAYS \
-  MANAGED_AGENT_COPILOT_MCP_REPO \
-  MANAGED_AGENT_COPILOT_MCP_BASE_REF \
-  MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
+  MANAGED_SESSION_RETENTION_DAYS; do
   eval "MANAGED_VAL=\${${MANAGED_VAR}:-}"
   if [ -n "${MANAGED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"

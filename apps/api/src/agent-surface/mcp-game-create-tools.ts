@@ -8,8 +8,6 @@ import {
   toolOk,
   toolErr,
   RETIRED_GAME_KEY_REASON,
-  PLATFORM_CONNECTOR_ONLY_REASON,
-  matchesPlatformConnectorSecret,
   type ToolHandler,
 } from './mcp-tool-support.js';
 
@@ -23,7 +21,6 @@ const WRITES = {
 export interface GameCreateToolsDeps {
   store: Store | undefined;
   agentTokenSecret: string | undefined;
-  platformConnectorSecret: string | undefined;
   now: () => number;
   createGame:
     | ((input: {
@@ -49,7 +46,7 @@ export interface GameCreateToolEntry {
 
 // Creates a game and opens its first round, same as Studio.
 export function createGameCreateTools(deps: GameCreateToolsDeps): Record<string, GameCreateToolEntry> {
-  const { store, agentTokenSecret, platformConnectorSecret, now, createGame } = deps;
+  const { store, agentTokenSecret, now, createGame } = deps;
 
   return {
     create_game: {
@@ -88,9 +85,6 @@ export function createGameCreateTools(deps: GameCreateToolsDeps): Record<string,
       },
       handler: async (args, ctx) => {
         const bearer = ctx.bearerToken;
-        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
-        }
         if (!createGame || !store || !agentTokenSecret) {
           return toolErr('creating games is not available on this deployment');
         }
