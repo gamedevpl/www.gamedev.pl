@@ -167,6 +167,55 @@ describe('FeaturedGame hero preview', () => {
     });
   }
 
+  it('shows a game description instead of its full controls and updates when the language changes', async () => {
+    renderHero({
+      ...withVideo,
+      controls: 'Shift+click selects squads; Q calls artillery; U digs tunnels.',
+      tagline: {
+        en: 'Break through enemy trenches with artillery, sappers and tunnels.',
+        pl: 'Przełam front artylerią, saperami i podziemnymi tunelami.',
+      },
+    });
+
+    expect(container.querySelector('.featured-game-meta')?.textContent).toBe(
+      'Break through enemy trenches with artillery, sappers and tunnels.',
+    );
+    expect(container.textContent).not.toContain('Shift+click');
+
+    await act(async () => {
+      await i18n.changeLanguage('pl');
+    });
+
+    expect(container.querySelector('.featured-game-meta')?.textContent).toBe(
+      'Przełam front artylerią, saperami i podziemnymi tunelami.',
+    );
+  });
+
+  it('uses the English description when the Polish translation is blank', async () => {
+    await i18n.changeLanguage('pl');
+    renderHero({ ...withVideo, tagline: { en: 'Deliver packages through neon streets.', pl: '   ' } });
+    expect(container.querySelector('.featured-game-meta')?.textContent).toBe('Deliver packages through neon streets.');
+  });
+
+  it.each([undefined, null, { en: '  ', pl: '  ' }])(
+    'omits missing descriptions without falling back to controls (%j)',
+    (tagline) => {
+      renderHero({ ...withVideo, tagline });
+      expect(container.querySelector('.featured-game-meta')).toBeNull();
+      expect(container.textContent).not.toContain(withVideo.controls);
+      expect(container.querySelector('.featured-game-actions button')).not.toBeNull();
+    },
+  );
+
+  it('bounds lengthy descriptions at a word boundary and normalizes whitespace', () => {
+    renderHero({ ...withVideo, tagline: { en: 'Command\n\t squads. ' + 'Break through enemy trenches. '.repeat(30) } });
+    const description = container.querySelector('.featured-game-meta')?.textContent ?? '';
+    expect(description.length).toBeLessThanOrEqual(180);
+    expect(description).toMatch(/^Command squads\. /);
+    expect(description).toMatch(/…$/);
+    expect(description.slice(0, -1)).toMatch(/[\w.]$/);
+  });
+
   it('starts on the poster and swaps in the trailer on tap, without autoplaying', () => {
     // Regression guard: play must fire from an effect, after the video mounts.
     const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);

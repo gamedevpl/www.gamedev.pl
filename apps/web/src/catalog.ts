@@ -195,6 +195,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     return null;
   }
   const effort = parseCatalogEffort(entry.effort);
+  const tagline = parseCatalogTagline(entry.tagline);
   return {
     slug: entry.slug,
     title: entry.title,
@@ -220,7 +221,16 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
           .filter((handle): handle is string => handle !== null)
       : undefined,
     ...(effort !== undefined ? { effort } : {}),
+    ...(tagline ? { tagline } : {}),
   };
+}
+
+function parseCatalogTagline(value: unknown): CatalogEntry['tagline'] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const localized = value as Record<string, unknown>;
+  const en = typeof localized.en === 'string' ? localized.en.trim() : '';
+  const pl = typeof localized.pl === 'string' ? localized.pl.trim() : '';
+  return en || pl ? { ...(en ? { en } : {}), ...(pl ? { pl } : {}) } : undefined;
 }
 
 // Offered only when the game declares an editor and remix is on.
