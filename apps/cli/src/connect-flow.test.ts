@@ -77,9 +77,7 @@ it('creates a standard checkout in cwd when the destination picker chooses dot',
   expect(result?.workshop?.root).toBe(root);
   expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
   expect(existsSync(join(root, 'sky'))).toBe(false);
-  expect(execFileSync('git', ['-C', root, 'remote', 'get-url', 'origin'], { encoding: 'utf8' }).trim()).toBe(
-    'gamedevpl://sky',
-  );
+  expect(existsSync(join(root, '.git'))).toBe(false);
 });
 
 it('cancels destination selection without downloading or writing files', async () => {

@@ -328,19 +328,68 @@ one. Recovery refuses to overwrite edits made after interruption and retains bot
 Recovery may reclaim a dead writer explicitly marked as a history edit; live writers
 and agent-owned writer locks remain protected.
 
-A standard checkout initializes Git and configures `origin`; it does not populate
-the current branch's commit history. With `git-remote-gamedevpl` on `PATH`:
+### Optional local Git
+
+The default environment has no local repository: gamedev.pl stores delivered history.
+`checkout`, `connect`, native history commands and `pull`/`push` do not require local
+commits. Text merging and history patch/blame/revert operations still use Git as an
+implementation tool, without creating a repository in your checkout.
+
+Opt into a local repository explicitly:
+
+```sh
+gamedevpl checkout tabletop-turbos --git
+# Or, inside an existing checkout:
+gamedevpl git init
+# The interactive equivalents are /checkout <slug> --git and /git init.
+```
+
+A new or empty repository gets the delivered history on its current branch and an
+upstream at `origin/main`, so ordinary `git log` and `git blame` work immediately.
+The branch starts at the checkout's recorded base when the platform is ahead; local
+drafts remain unstaged changes. An empty delivered history stays unborn until you
+make a local commit. Creator Kit scaffolding and synchronization metadata stay outside
+new repositories' tracked sources, so `git stash -u` keeps the installed toolchain.
+
+For a repository that already has commits, setup preserves HEAD, the index, files and
+existing remotes. It adds `gamedevpl` by default; use `--remote <name>` if occupied.
+Read platform history with `git log gamedevpl/main`. Setup does not merge unrelated
+histories or change your existing branch's upstream. Existing empty repositories with
+staged files are refused until you commit or unstage those files. Repeating setup
+reuses imported commits.
+
+With `git-remote-gamedevpl` on `PATH`, the optional Git workflow is:
 
 ```sh
 git fetch origin
-git log origin/main --oneline
-git blame origin/main -- games/tabletop-turbos/game/ai.ts
+git log --oneline
+git stash push -u
+git pull --no-rebase
+git stash pop
+# Review changes, then git add / git commit.
+git push origin HEAD:main
 ```
+
+Use your configured remote name in an existing repository. Git push delivers only
+the selected commit, leaving uncommitted editor changes local. Its synchronization
+base follows imported ancestors and previously delivered commits, so a Git pull or
+another branch cannot silently borrow a newer working-copy base. A branch without
+known platform ancestry is refused; merge the platform history explicitly or use
+native `gamedevpl push` for your local files. Git pushes deliver source snapshots,
+not your local commit graph; local commit messages and authors remain in your repository.
+
+Native `gamedevpl pull`, `push`, `restore` and `revert` continue to operate on local
+sources and platform history. They do not create commits or move your Git branch/index.
+When mixing workflows, inspect `git diff` and commit source changes yourself before
+using Git pull. Git stash belongs to the optional Git workflow; no-repository sessions
+continue using the platform's history and local files.
 
 The helper imports a deterministic commit per version into `refs/gamedevpl/`,
 which Git maps to `origin/main`. It never updates a local branch. Repeated fetches
 reuse imported commits and fetch only new source trees; PNG/WebP files retain
-their bytes. Cold imports stream one version at a time. Private refs are separated
+the checkout's representation: base64 text in standard workspaces, raw bytes in source
+repositories (`src/`). Manually configured legacy remotes retain raw raster imports.
+Layouts and platform origins have separate caches. Cold imports stream one version at a time. Private refs are separated
 by platform origin and game. These commits use `gamedevpl` as author and the version ID as their
 message. API pagination includes history beyond 100 versions; rate-limited reads
 retry with the server's retry interval, up to three retries per request.

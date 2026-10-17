@@ -37,6 +37,7 @@ export const BLURB: Record<SlashVerb, string> = {
   connect: 'open a game session — connect <slug>; --manual for MCP setup',
   delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
   checkout: 'download and open local files — checkout [slug]; --version <version> restores sources in this checkout',
+  git: 'opt into local Git history — git init [--remote <name>]; checkout --git enables it when downloading',
   quota: "today's submission budget",
   notifications: 'unread notifications',
   help: 'this list',

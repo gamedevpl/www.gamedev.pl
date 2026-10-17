@@ -40,6 +40,7 @@ export type HelperIo = {
   knownCommits?: () => Map<string, string>;
   scope?: string;
   pushReconcile: (src: string) => Promise<PushResult>;
+  sourceRoot?: string;
 };
 
 export function pushSrcRef(rest: string[]): string | null {
@@ -89,6 +90,7 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
             parent,
             markOffset,
             finish: false,
+            sourceRoot: io.sourceRoot,
           }),
         );
         markOffset++;

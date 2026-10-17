@@ -23,7 +23,7 @@ import { memoryStore } from './keychain.js';
 import { CliError } from './exit-codes.js';
 
 describe('checkout', () => {
-  it('always inits git with a gamedevpl:// remote', async () => {
+  it('downloads a native checkout without initializing or requiring Git', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-co-'));
     const commands: string[] = [];
     const result = await checkoutGame({
@@ -41,8 +41,8 @@ describe('checkout', () => {
     });
     expect(result.remote).toBe('gamedevpl://ghost-roads');
     expect(commands).toContain('tar -xzf .gamedev-workspace.tgz');
-    expect(commands).toContain('git init');
-    expect(commands).toContain('git remote add origin gamedevpl://ghost-roads');
+    expect(commands.every((command) => !command.startsWith('git '))).toBe(true);
+    expect(existsSync(join(dest, '.git'))).toBe(false);
     expect(existsSync(join(dest, '.gamedev-workspace.tgz'))).toBe(false);
   });
 

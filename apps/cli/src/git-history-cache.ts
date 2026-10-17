@@ -1,19 +1,19 @@
-import { spawnSync } from 'node:child_process';
 import { remoteImportRef } from './git-history-import.js';
+import { checkoutGit } from './git-checkout-layout.js';
 
 export function knownHistoryCommits(slug: string, cwd = process.cwd(), scope?: string): Map<string, string> {
-  const result = spawnSync(
-    'git',
-    ['for-each-ref', '--format=%(refname) %(objectname)', `${remoteImportRef(slug, scope).slice(0, -4)}versions/`],
-    {
-      cwd,
-      encoding: 'utf8',
-      maxBuffer: 8 * 1024 * 1024,
-    },
-  );
-  if (result.status !== 0) return new Map();
+  let output: string;
+  try {
+    output = checkoutGit(cwd)([
+      'for-each-ref',
+      '--format=%(refname) %(objectname)',
+      `${remoteImportRef(slug, scope).slice(0, -4)}versions/`,
+    ]).toString();
+  } catch {
+    return new Map();
+  }
   return new Map(
-    result.stdout
+    output
       .trim()
       .split('\n')
       .flatMap((line) => {

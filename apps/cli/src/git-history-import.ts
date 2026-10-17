@@ -22,9 +22,12 @@ export function fastImportScript(input: {
   parent?: string;
   markOffset?: number;
   finish?: boolean;
+  sourceRoot?: string;
 }): Buffer {
   historySlug(input.slug);
   const ref = input.ref ?? remoteImportRef(input.slug, input.scope);
+  const sourceRoot = input.sourceRoot ?? `games/${input.slug}`;
+  if (!['src', `games/${input.slug}`].includes(sourceRoot)) throw new Error('invalid Git source root');
   const chronological = [...input.versions].sort(
     (a, b) => a.createdAt.localeCompare(b.createdAt) || a.version.localeCompare(b.version),
   );
@@ -62,7 +65,7 @@ export function fastImportScript(input: {
       )
         throw new Error('invalid version source path');
       const bytes = sourceBytes(file);
-      emit(`M 100644 inline ${JSON.stringify(`games/${input.slug}/${file.path}`)}`);
+      emit(`M 100644 inline ${JSON.stringify(`${sourceRoot}/${file.path}`)}`);
       emit(`data ${bytes.length}`);
       chunks.push(bytes, Buffer.from('\n'));
     }
