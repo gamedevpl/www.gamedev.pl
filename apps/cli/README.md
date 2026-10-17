@@ -267,6 +267,52 @@ Plain `gamedevpl diff` still compares platform sources with local edits. Two
 timestamp version IDs (`v...`) select the version comparison; use `--from` and
 `--to` for other version ID formats or to avoid ambiguous positional arguments.
 
+### Restore and revert delivered sources
+
+```sh
+gamedevpl restore <version> --dry-run --json  # inspect the complete local change plan
+gamedevpl restore <version>                 # replace sources with that delivery
+gamedevpl checkout --version <version>      # the same restore, in an existing checkout
+gamedevpl revert <version>                  # undo only the changes in one delivery
+gamedevpl diff
+gamedevpl push                              # deliver the reviewed result as a new preview
+```
+
+These commands operate on local sources only. Plain `checkout <slug>` still downloads
+a game into a new directory. Both standard `games/<slug>/` checkouts and Creator Kit
+source repositories (`src/`) support history edits and their `/restore`, `/checkout
+--version` and `/revert` forms. `restore --version <version>` and `revert --version
+<version>` are also accepted.
+
+`restore` replaces the complete delivered source tree, including file additions and
+deletions. `revert` applies the inverse of the selected delivery against your current
+sources, preserving later changes through Git's three-way merge. It requires Git on
+`PATH`; overlapping text/binary changes or modify/delete conflicts refuse the operation
+before any local source writes. It does not reset the game to the preceding snapshot.
+
+The checkout must have a valid synchronization base matching the latest delivery;
+run `pull` first if the platform has moved. Local source edits are refused by default.
+`restore --force` permits replacing them and saves a recovery copy; `revert` never
+discards drafts with `--force`. Ignored and non-deliverable files are preserved. An
+incoming source that would replace an ignored file is refused, even with `--force`.
+Historical paths must satisfy the current delivery allowlist. Source repository edits
+must retain `SPEC.md` and its bound game slug. Synchronization metadata and the caller's
+Git branch, refs and index remain unchanged, so a later `push` creates a new delivery.
+
+`--dry-run` checks the operation and prints the added/modified/deleted paths without
+changing the checkout; `--json` returns that plan and, after applying, the recovery path.
+Applied changes keep a complete pre-edit copy under `.gamedev/history-backups/`.
+Sources and metadata are rechecked after fetching to preserve concurrent editor changes.
+History edits reject symlinks and special files in the game source directory; the full
+snapshot, including ignored files, is limited to 32 MB, 2,000 files and 2,000 directories.
+
+Ordinary write failures roll back the directory replacement. If the process is
+interrupted, run `gamedevpl restore --recover` from the checkout root before another
+history edit. It rolls back an unfinished replacement or completes cleanup of a committed
+one. Recovery refuses to overwrite edits made after interruption and retains both copies.
+Recovery may reclaim a dead writer explicitly marked as a history edit; live writers
+and agent-owned writer locks remain protected.
+
 A standard checkout initializes Git and configures `origin`; it does not populate
 the current branch's commit history. With `git-remote-gamedevpl` on `PATH`:
 

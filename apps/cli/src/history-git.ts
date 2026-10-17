@@ -6,7 +6,10 @@ import type { HistorySourceFile, HistoryVersion } from '@gamedevpl/contract';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { fastImportScript, versionImportRef } from './git-history-import.js';
 
-export type HistoryGit = (args: string[], input?: Buffer) => string;
+export type HistoryGit = {
+  (args: string[], input?: Buffer): string;
+  bytes: (args: string[], input?: Buffer) => Buffer;
+};
 export async function withHistoryGit<T>(
   input: {
     slug: string;
@@ -20,17 +23,20 @@ export async function withHistoryGit<T>(
   const config = join(cwd, 'empty-config');
   writeFileSync(config, '');
   Object.assign(env, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: config, GIT_TERMINAL_PROMPT: '0' });
-  const git: HistoryGit = (args, bytes) => {
+  const bytes = (args: string[], input?: Buffer): Buffer => {
     const result = spawnSync('git', ['--no-pager', ...args], {
       cwd,
       env,
-      input: bytes,
-      encoding: 'utf8',
+      input,
       maxBuffer: 64 * 1024 * 1024,
     });
-    if (result.status !== 0) throw new CliError(result.stderr?.trim() || 'history requires Git on PATH', EXIT_REFUSED);
+    if (result.status !== 0)
+      throw new CliError(result.stderr?.toString().trim() || 'history requires Git on PATH', EXIT_REFUSED);
     return result.stdout;
   };
+  const git: HistoryGit = Object.assign((args: string[], input?: Buffer) => bytes(args, input).toString('utf8'), {
+    bytes,
+  });
   try {
     git(['init', '--quiet', '--template=']);
     git(['fast-import', '--quiet'], fastImportScript(input));

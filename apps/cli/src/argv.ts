@@ -6,6 +6,8 @@ export const SLASH_VERBS = [
   'log',
   'show',
   'blame',
+  'restore',
+  'revert',
   'kit',
   'play',
   'stop',
@@ -73,6 +75,7 @@ export function suggestVerb(command: string): (typeof CLI_VERBS)[number] | undef
   return suggestCommand(command, CLI_VERBS);
 }
 
+export const VERSION_VALUE_VERBS = new Set(['blame', 'checkout', 'restore', 'revert']);
 const BOOLEAN_FLAGS = new Set([
   'play',
   'edit',
@@ -93,6 +96,8 @@ const BOOLEAN_FLAGS = new Set([
   'no-pager',
   'ignore-case',
   'force',
+  'dry-run',
+  'recover',
   'publish',
   'handoff',
   'takeover',
@@ -164,7 +169,8 @@ export function parseArgv(argv: string[] | string): {
           value = body.slice(eq + 1);
         flags[name] = BOOLEAN_FLAGS.has(name) && (value === 'true' || value === 'false') ? value === 'true' : value;
       } else {
-        const versionValue = body === 'version' && verb === 'blame' && tokens[i + 1] && !tokens[i + 1]!.startsWith('-');
+        const versionValue =
+          body === 'version' && VERSION_VALUE_VERBS.has(verb) && tokens[i + 1] && !tokens[i + 1]!.startsWith('-');
         if (BOOLEAN_FLAGS.has(body) && !versionValue) {
           flags[body] = true;
           continue;

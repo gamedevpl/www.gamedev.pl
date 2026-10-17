@@ -1,8 +1,13 @@
 import { CLI_BIN } from './bin-name.js';
 import { CLI_VERSION } from './update.js';
-import { jsonMode, SLASH_VERBS, type SlashVerb } from './argv.js';
+import { jsonMode, SLASH_VERBS, VERSION_VALUE_VERBS, type SlashVerb } from './argv.js';
 
-export function printVersion(flags: Record<string, string | boolean>, write: (line: string) => void): boolean {
+export function printVersion(
+  flags: Record<string, string | boolean>,
+  write: (line: string) => void,
+  verb?: string,
+): boolean {
+  if (verb && VERSION_VALUE_VERBS.has(verb) && flags.version === true && flags.V !== true) return false;
   if (flags.version !== true && flags.V !== true) return false;
   write(`${jsonMode(flags) ? JSON.stringify({ version: CLI_VERSION }) : CLI_VERSION}\n`);
   return true;
@@ -17,6 +22,9 @@ export const BLURB: Record<SlashVerb, string> = {
   log: 'delivered history in a pager — log [slug] [--limit N] [--since DATE] [--until DATE] [--grep REGEX] [-i] [--oneline] [--no-pager] [-- paths…]',
   show: 'version metadata and patch — show <version> [--slug <slug>]',
   blame: 'last version changing each line — blame <file> [--version <version>] [--slug <slug>]',
+  restore:
+    'restore delivered sources locally — restore <version> [--dry-run] [--force]; --recover repairs an interrupted edit',
+  revert: 'undo one delivery while preserving later changes — revert <version> [--dry-run]',
   model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
   permissions: 'agent approvals — permissions [ask|auto|yolo]; default Auto with a sandbox, Ask for other agents',
@@ -28,7 +36,7 @@ export const BLURB: Record<SlashVerb, string> = {
   builder: 'who builds — builder <slug> globally; choose [self|platform] in a checkout',
   connect: 'open a game session — connect <slug>; --manual for MCP setup',
   delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
-  checkout: 'download and open local files — checkout [slug]',
+  checkout: 'download and open local files — checkout [slug]; --version <version> restores sources in this checkout',
   quota: "today's submission budget",
   notifications: 'unread notifications',
   help: 'this list',

@@ -41,7 +41,11 @@ export async function dispatchReadVerb(input: {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
   if (isHistoryVerb(verb, args, flags)) {
-    const output = historyOutput({ io, env: input.env, disabled: asJson || flags['no-pager'] === true });
+    const output = historyOutput({
+      io,
+      env: input.env,
+      disabled: verb !== 'log' || asJson || flags['no-pager'] === true,
+    });
     let failed = false;
     try {
       await historyCommand({

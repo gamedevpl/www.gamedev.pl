@@ -10,16 +10,33 @@ import { sourceBytes } from './git-history-import.js';
 import { versionBlame, versionPatch, withHistoryGit } from './history-git.js';
 import { formatHistoryLog, formatHistoryVersion, type HistoryFormat } from './history-format.js';
 import { filteredHistory, logOptions } from './history-log.js';
+import { historyEditCommand, isHistoryEditVerb } from './history-edit-command.js';
+import { getStatus } from './turn.js';
 export { historyTerminalFormat } from './history-format.js';
 
 type Flags = Record<string, string | boolean>;
 export function isHistoryVerb(verb: string, args: string[], flags: Flags): boolean {
   return (
+    isHistoryEditVerb(verb, flags) ||
     ['log', 'show', 'blame'].includes(verb) ||
     (verb === 'diff' &&
       (flags.from !== undefined ||
         flags.to !== undefined ||
         (args.length === 2 && args.every((arg) => /^v-?\d/.test(arg)))))
+  );
+}
+
+export async function historyContextSlug(
+  input: { workshop?: { slug: string; root: string }; cwd?: string; token?: string | null; api: ApiClient },
+  parsed: { verb: string; args: string[]; flags: Flags },
+): Promise<string | undefined> {
+  if (isHistoryEditVerb(parsed.verb, parsed.flags)) return input.workshop?.slug;
+  return (
+    input.workshop?.slug ??
+    findCheckout(input.workshop?.root ?? input.cwd ?? process.cwd())?.slug ??
+    (input.token && typeof parsed.flags.slug !== 'string' && !(parsed.verb === 'log' && parsed.args[0])
+      ? (await getStatus(input.api, input.token)).slug
+      : undefined)
   );
 }
 
@@ -37,6 +54,7 @@ export async function historyCommand(input: {
   writeLog?: (text: string) => Promise<boolean>;
 }): Promise<boolean> {
   const { verb, args, flags, api } = input;
+  if (isHistoryEditVerb(verb, flags)) return historyEditCommand(input);
   if (!isHistoryVerb(verb, args, flags)) return false;
   if (flags.slug !== undefined && typeof flags.slug !== 'string')
     throw new CliError('--slug needs a game slug', EXIT_INPUT);

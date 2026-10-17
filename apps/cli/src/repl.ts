@@ -1,5 +1,5 @@
 import { splitEvidence, withEvidence } from './workbench-evidence.js';
-import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
+import { historyCommand, historyContextSlug, historyTerminalFormat, isHistoryVerb } from './history-command.js';
 import { runReplShell } from './repl-shell.js';
 import { workbenchPlatformAction } from './workbench-platform-actions.js';
 import { workbenchLocalAction } from './workbench-checkpoints.js';
@@ -179,18 +179,13 @@ export async function handleReplLine(input: {
     const parsed = parseArgv(['node', 'cli', cmd ?? '', ...rest]);
     if (cmd && isHistoryVerb(cmd, parsed.args, parsed.flags)) {
       try {
-        if (cmd === 'log') Object.assign(parsed, parseArgv(trimmed));
+        if (['log', 'restore', 'revert', 'checkout'].includes(cmd)) Object.assign(parsed, parseArgv(trimmed));
         await historyCommand({
           ...parsed,
           api: input.api,
           cwd: input.workshop?.root ?? input.cwd,
           format: historyTerminalFormat(input.env, undefined, input.columns),
-          slug:
-            input.workshop?.slug ??
-            findCheckout(input.workshop?.root ?? input.cwd ?? process.cwd())?.slug ??
-            (input.token && typeof parsed.flags.slug !== 'string' && !(cmd === 'log' && parsed.args[0])
-              ? (await getStatus(input.api, input.token)).slug
-              : undefined),
+          slug: await historyContextSlug(input, parsed),
           write: input.write,
         });
       } catch (error) {
