@@ -1,14 +1,18 @@
 import type { GenAIClient } from 'genaicode';
 import { describe, expect, it } from 'vitest';
-import { NextIdeaModelGenerator } from './next-ideas.js';
+import { NEXT_IDEAS_JSON_SCHEMA, NextIdeaModelGenerator } from './next-ideas.js';
 
 // A client that answers every draw with one fixed JSON value.
-function answering(value: unknown, prompts: string[] = []): () => GenAIClient {
+function answering(value: unknown, prompts: string[] = [], formats: unknown[] = []): () => GenAIClient {
   const client = ((request: unknown) => {
     prompts.push(typeof request === 'string' ? request : JSON.stringify(request));
     const chain = {
       temperature: () => chain,
       thinking: () => chain,
+      responseFormat: (format: unknown) => {
+        formats.push(format);
+        return chain;
+      },
       signal: () => chain,
       json: async (parse: (raw: unknown) => unknown) => parse(value),
     };
@@ -38,5 +42,15 @@ describe('NextIdeaModelGenerator answer shape', () => {
     const nested = { ideas: [{ label: { en: 'Fog', pl: 'Mgła' }, prompt: { en: 'Add fog.', pl: 'Dodaj mgłę.' } }] };
     const ideas = await new NextIdeaModelGenerator({ clientFor: answering(nested), env: {} }).generate(params);
     expect(ideas.map((idea) => idea.label.en)).toEqual(['Fog']);
+  });
+
+  it('has the provider enforce the flat schema', async () => {
+    const formats: unknown[] = [];
+    await new NextIdeaModelGenerator({ clientFor: answering({ ideas: [] }, [], formats), env: {} }).generate(params);
+    expect(formats).toEqual([
+      { type: 'json_schema', name: 'next_ideas', schema: NEXT_IDEAS_JSON_SCHEMA, strict: true },
+    ]);
+    const item = NEXT_IDEAS_JSON_SCHEMA.properties.ideas.items;
+    expect(item.required).toEqual(['label_en', 'label_pl', 'prompt_en', 'prompt_pl']);
   });
 });

@@ -11,6 +11,7 @@ function fakeClients(fail: Record<string, unknown> = {}) {
     const chain = {
       temperature: () => chain,
       thinking: () => chain,
+      responseFormat: () => chain,
       signal: () => chain,
       json: async (parse: (value: unknown) => unknown) => {
         calls.push(model);

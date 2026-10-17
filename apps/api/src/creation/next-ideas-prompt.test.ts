@@ -8,6 +8,7 @@ function fakeClient() {
   const chain = {
     temperature: () => chain,
     thinking: () => chain,
+    responseFormat: () => chain,
     signal: () => chain,
     json: async (parse: (value: unknown) => unknown) =>
       parse({ ideas: [{ label: { en: 'Craters', pl: 'Leje' }, prompt: { en: 'Add craters.', pl: 'Dodaj leje.' } }] }),
@@ -51,6 +52,7 @@ describe('NextIdeaModelGenerator prompt', () => {
     const chain = {
       temperature: () => chain,
       thinking: () => chain,
+      responseFormat: () => chain,
       signal: () => chain,
       json: async (parse: (value: unknown) => unknown) => {
         calls += 1;
@@ -73,6 +75,7 @@ describe('NextIdeaModelGenerator prompt', () => {
     const chain = {
       temperature: () => chain,
       thinking: () => chain,
+      responseFormat: () => chain,
       signal: (signal: AbortSignal) => {
         void signal;
         return chain;
