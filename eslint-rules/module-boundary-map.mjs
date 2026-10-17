@@ -284,7 +284,6 @@ const FILE_BUCKET = {
   // GitHub's in-flight run statuses, transcript window caps, the unified-diff
   // patcher, and the deliverable-path refusals a delivery and a proposal share.
   'game-media': 'platform',
-  'github-run-status': 'platform',
   'transcript-window': 'platform',
   'source-patch': 'platform',
   'delivery-path-guard': 'platform',
@@ -500,7 +499,6 @@ const FILE_BUCKET = {
   'mcp-creator-notes-tools': 'agent-surface',
   'mcp-managed-round': 'agent-surface',
   'managed-workspace': 'agent-surface',
-  'managed-provider-copilot': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',
   'managed-provider-openai': 'agent-surface',
   'self-build-backend': 'agent-surface',
@@ -519,7 +517,6 @@ const FILE_BUCKET = {
   // client, the build brief every backend renders, and the gate verdict the channel
   // route and MCP `start` share -- none is read by the bucket it used to live in.
   'example-files': 'agent-surface',
-  'agent-tasks': 'agent-surface',
   'build-prompt': 'agent-surface',
   'build-prompt-opening': 'agent-surface',
   'builder-system-prompt': 'agent-surface',
