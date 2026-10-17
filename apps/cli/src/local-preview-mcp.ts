@@ -25,8 +25,8 @@ const TOOLS = [
     'Get current local game build status. Build errors mean screenshots cannot verify current edits.',
   ),
   tool(
-    'capture',
-    'Capture this game only. Returns a job ID; call capture_status to receive its PNG image and rendered revision. No source or published media is changed.',
+    'capture_game',
+    'Capture the current local game using the CLI host browser, without running npm scripts or opening a server in the agent sandbox. Returns a job ID; call capture_status to receive its PNG image, console errors and rendered revision. Captures the initial state, not the Creator Kit capture plan. No source or published media is changed.',
     { viewport: { type: 'string', enum: ['desktop', 'mobile'] } },
   ),
   tool(
@@ -122,7 +122,7 @@ export async function startLocalPreviewMcp(input: {
     if (name === 'report_progress') return { content: [text(report(value))] };
     if (!source) throw new Error('No local preview is available.');
     if (name === 'preview_status' && keys.length === 0) return { content: [text(await source.status())] };
-    if (name === 'capture' && keys.every((item) => item === 'viewport')) {
+    if ((name === 'capture_game' || name === 'capture') && keys.every((item) => item === 'viewport')) {
       const viewport = value.viewport ?? 'desktop';
       if (viewport !== 'desktop' && viewport !== 'mobile') throw new Error('Unknown viewport.');
       if (current) throw new Error('A capture is already running. Use capture_status.');
@@ -162,6 +162,13 @@ export async function startLocalPreviewMcp(input: {
     }
     throw new Error('Unknown local tool or unexpected arguments.');
   }
+  const availableTools = [
+    progressTool,
+    ...(source ? TOOLS : []),
+    ...(approval
+      ? [{ name: approval.name, description: approval.description, inputSchema: approval.inputSchema }]
+      : []),
+  ];
   const server = createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -216,13 +223,7 @@ export async function startLocalPreviewMcp(input: {
       } else if (message.method === 'ping') result = {};
       else if (message.method === 'tools/list')
         result = {
-          tools: [
-            progressTool,
-            ...(source ? TOOLS : []),
-            ...(approval
-              ? [{ name: approval.name, description: approval.description, inputSchema: approval.inputSchema }]
-              : []),
-          ],
+          tools: availableTools,
         };
       else if (message.method === 'tools/call') {
         const params = message.params as { name?: unknown; arguments?: unknown } | undefined;
@@ -273,6 +274,7 @@ export async function startLocalPreviewMcp(input: {
   return {
     url: `${origin}/mcp`,
     authorization: `Bearer ${key}`,
+    tools: availableTools.map((item) => item.name),
     async close() {
       input.abort.removeEventListener('abort', stop);
       stop();
