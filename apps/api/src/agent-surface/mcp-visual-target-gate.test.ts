@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
 import type { GitHubClient } from '../catalog/github-client.js';
@@ -23,7 +23,9 @@ const github = {
 } as unknown as GitHubClient;
 
 let app: FastifyInstance | undefined;
+beforeEach(() => vi.stubEnv('MANAGED_VISUAL_TARGET', 'true'));
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await app?.close();
   app = undefined;
 });
@@ -67,6 +69,13 @@ describe('visual_target is managed-only', () => {
       'visual_target',
     );
     expect(await listed()).toContain('get_brief');
+  });
+
+  it('is not offered when the feature is off', async () => {
+    vi.stubEnv('MANAGED_VISUAL_TARGET', '');
+    app = await start();
+    const opener = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1 })}`;
+    expect(await listed(opener)).not.toContain('visual_target');
   });
 
   it('does not exist for a public client that guesses its name', async () => {

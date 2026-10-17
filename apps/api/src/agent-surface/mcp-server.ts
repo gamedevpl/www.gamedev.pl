@@ -1349,16 +1349,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
     ...createGateMediaTools({ resolveAuth, injectChannel }),
     ...createConceptTools({ resolveAuth, injectChannel }),
-    ...createVisualTargetTools({
-      resolveAuth,
-      managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
-      store,
-      gamesStore: options.gamesStore,
-      frames: options.visualTarget?.frames,
-      availability: options.visualTarget?.availability,
-      agentTokenSecret,
-      now,
-    }),
+    // Absent unless configured, so no session is offered a dead tool.
+    ...(options.visualTarget
+      ? createVisualTargetTools({
+          resolveAuth,
+          managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
+          store,
+          gamesStore: options.gamesStore,
+          frames: options.visualTarget.frames,
+          availability: options.visualTarget.availability,
+          agentTokenSecret,
+          now,
+        })
+      : {}),
 
     ...createInboxTools({ resolveAuth, injectChannel, writePiggyback }),
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
