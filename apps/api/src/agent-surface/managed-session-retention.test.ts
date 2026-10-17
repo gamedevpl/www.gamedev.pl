@@ -82,8 +82,8 @@ describe('createAnthropicSessionJanitor', () => {
 
     const result = await janitor(api.fetchImpl).prune({ olderThan: CUTOFF, maxDeletes: 100 });
 
-    expect(deletedIds(api.calls)).toEqual(['s_idle', 's_terminated', 's_env_match', 's_string_agent']);
-    expect(result).toEqual({ scanned: 12, deleted: 4, failed: 0, pages: 1 });
+    expect(deletedIds(api.calls)).toEqual(['s_idle', 's_terminated', 's_string_agent']);
+    expect(result).toEqual({ scanned: 12, deleted: 3, failed: 0, pages: 1 });
   });
 
   it('follows next_page and sends the beta headers', async () => {

@@ -71,7 +71,8 @@ export function isDeletableSession(
 ): boolean {
   const createdAt = session.created_at ? Date.parse(session.created_at) : Number.NaN;
   if (!Number.isFinite(createdAt) || createdAt >= scope.olderThan.getTime()) return false;
-  const ours = agentIdOf(session) === scope.agentId || session.environment_id === scope.environmentId;
+  // The agent alone: the environment may also host hand-run sessions.
+  const ours = agentIdOf(session) === scope.agentId;
   return ours && DELETABLE_STATUSES.has(session.status ?? '');
 }
 

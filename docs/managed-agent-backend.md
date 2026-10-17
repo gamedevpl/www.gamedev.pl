@@ -461,8 +461,8 @@ scheduler job calls `/api/internal/managed-session-retention`
 ([`managed-session-retention.ts`](../apps/api/src/agent-surface/managed-session-retention.ts)),
 which deletes sessions older than `MANAGED_SESSION_RETENTION_DAYS` (default 30, minimum 7, so
 recent rounds stay available for debugging), at most 200 per run. It only deletes `idle` or
-`terminated` sessions of our own `MANAGED_AGENT_ID` / `MANAGED_AGENT_ENVIRONMENT_ID`, never a
-running one. Vaults need no sweep: they are already archived per round.
+`terminated` sessions created with our own `MANAGED_AGENT_ID` (the environment may also host
+hand-run sessions, and sessions of a rotated-out agent are left alone), never a running one. Vaults need no sweep: they are already archived per round.
 
 **Visual checks.** On the shell lane the system prompt has the agent run the kit's
 `npm run capture -- <slug> --stills` before and after a change the creator will judge by eye,
