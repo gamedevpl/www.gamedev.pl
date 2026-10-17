@@ -1,7 +1,7 @@
 import { isBuildLive } from './buildLive.js';
 import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
-export type BuildBarState = 'running' | 'green' | 'red' | 'starting';
+export type BuildBarState = 'running' | 'green' | 'red' | 'starting' | 'waiting';
 
 export interface BuildBarModel {
   state: BuildBarState;
@@ -72,11 +72,12 @@ export function buildBarModel(
     const gate = status?.gateProgress;
     const total = gate?.total ?? latest.total ?? null;
     if (!gate || !total) {
+      const waiting = status && !isBuildLive(status);
       return {
-        state: 'starting',
-        fraction: null,
-        label: t('studioPanel.buildBar.starting'),
-        etaMinutes: eta,
+        state: waiting ? 'waiting' : 'starting',
+        fraction: waiting ? 0 : null,
+        label: t(`studioPanel.buildBar.${waiting ? 'waiting' : 'starting'}`),
+        etaMinutes: waiting ? null : eta,
         ...tags,
       };
     }

@@ -46,6 +46,10 @@ Fetch that branch into an explicit tracking ref, or verify its remote SHA and us
 `--force-with-lease=refs/heads/<branch>:<verified-sha>`. Never replace the lease with
 an unprotected force push.
 
+For a shallow clone, fetching master alone may still leave no merge base because the
+PR head remains shallow. Deepen the PR branch too and confirm `git merge-base HEAD
+origin/master` succeeds. A changelog guard that skips its diff is not that check passing.
+
 **Back up uncommitted work before any risky git operation**, and commit early — an
 in-progress checkpoint commit is cheap insurance against another process resetting the tree.
 
@@ -200,6 +204,11 @@ npm run type-check && npm run lint && npm run test && npm run build
 Treat a passing gate as the **minimum**, not proof of correctness. And note: a CI check that
 shows as pending, skipped, or `action_required` is **not** a pass. Absence of signal is not
 signal.
+
+A stored candidate with a pending verdict is not evidence of a running gate. Exercise
+Cloud Build refusing creation and the agent subsequently ending or going quiet: neither
+Studio surface should animate a check indefinitely. Actual gate progress outranks the
+agent stall; acceptance without a build ID must remain a supported outcome too.
 
 Two concrete instances of that (observed 2026-07-23):
 

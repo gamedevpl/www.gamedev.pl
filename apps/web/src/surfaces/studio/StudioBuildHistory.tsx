@@ -44,18 +44,17 @@ export function StudioBuildHistory({
   const [sealError, setSealError] = useState<string | null>(null);
   const [sealSuccess, setSealSuccess] = useState(false);
 
-  const statusBuilds = status.recentBuilds ?? [];
-  const builds = mergeBuildHistory(statusBuilds, extraBuilds ?? []);
-  const headVersion = builds[0]?.version;
+  const builds = mergeBuildHistory(status.recentBuilds ?? [], extraBuilds ?? []);
+  const head = builds[0];
 
   useEffect(() => {
     setExtraBuilds(null);
   }, [status.slug]);
 
   const live = isBuildLive(status);
-  const head = builds[0];
   const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
-  const liveKey = !live ? 'idle' : playingPending ? 'livePlaying' : 'live';
+  const waiting = !live && head?.verdict === 'pending' && newestBuildIsCurrentRound(builds, status);
+  const liveKey = live ? (playingPending ? 'livePlaying' : 'live') : waiting ? 'waiting' : 'idle';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
@@ -165,9 +164,13 @@ export function StudioBuildHistory({
       <ul className="studio-build-history-list">
         {showLiveRoundRow ? <StudioLiveRoundRow status={status} emptyLabel={t('studioPanel.rail.buildEmpty')} /> : null}
         {displayedBuilds.map((build, index) => {
+          const verdict = build.verdict === 'pending' && !live ? 'waiting' : build.verdict;
           const isExpanded = expandedBuildVersion === build.version;
           const isPreviewing = activePreviewVersion === build.version;
-          const canPreview = Boolean(onSelectPreviewVersion && build.verdict !== 'pending');
+          const canPreview = Boolean(
+            onSelectPreviewVersion &&
+            (build.verdict !== 'pending' || (status.preview && status.progress?.headSha === build.version)),
+          );
           const isReverting = revertingVersion === build.version;
 
           return (
@@ -207,7 +210,7 @@ export function StudioBuildHistory({
                     ? t('studioPanel.buildHistory.kitOutdated')
                     : build.status === 'timed_out' || build.status === 'crashed'
                       ? t(`studioPanel.buildHistory.${build.status === 'timed_out' ? 'timedOut' : 'crashed'}`)
-                      : t(`studioPanel.buildHistory.verdict.${build.verdict}`)}
+                      : t(`studioPanel.buildHistory.verdict.${verdict}`)}
                 </span>
                 <time className="studio-build-history-time" dateTime={build.createdAt}>
                   {formatRelativeTime(build.createdAt, i18n.language)}
@@ -271,7 +274,7 @@ export function StudioBuildHistory({
                       <button
                         type="button"
                         className="studio-build-action-btn is-revert"
-                        disabled={isReverting || build.version === headVersion}
+                        disabled={isReverting || build.version === head?.version}
                         onClick={() => void handleRevert(build)}
                       >
                         <PixelIcon name="undo" size={12} />
