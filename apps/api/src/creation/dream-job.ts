@@ -15,7 +15,7 @@ import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream-frames.js';
-import { fitDreamSource } from './dream-source.js';
+import { fitDreamSource, scaleHudRegions } from './dream-source.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import { dreamHistory } from './dream-history.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
@@ -220,13 +220,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const fitted = fitDreamSource(await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath));
     if ('refused' in fitted) log.warn({ jobId, reason: fitted.refused }, 'dream source refused');
     if ('refused' in fitted) return 'no_screenshot';
-    const source = fitted.png;
-    const size = imageSize(source);
-    if (!size) return 'no_screenshot';
+    const { png: source, size, original } = fitted;
 
     // Undeclared means the model finds the UI itself.
-    const hudRegions =
-      (await readHudRegions({ slug: record.slug, version, width: size.width, height: size.height })) ?? [];
+    const declared = await readHudRegions({ slug: record.slug, version, ...original });
+    const hudRegions = scaleHudRegions(declared ?? [], fitted.scale);
     if (hudCoverage(hudRegions, size.width, size.height) >= PURE_UI_COVERAGE) return 'pure_ui';
 
     if (!record.spec?.trim()) return 'no_ideas';
