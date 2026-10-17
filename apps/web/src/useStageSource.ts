@@ -52,9 +52,9 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
-  const deliveredPreviewVersion = status?.recentBuilds?.find(
-    (build) => build.version === status.progress?.headSha,
-  )?.version;
+  const deliveredPreview = status?.recentBuilds?.find((build) => build.version === status.progress?.headSha);
+  const deliveredPreviewVersion = deliveredPreview?.version;
+  const deliveredPreviewVerdict = deliveredPreview?.verdict;
   const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
@@ -141,7 +141,7 @@ export function useStageSource(
     const previewSlug = status?.preview?.slug;
     const headSha = status?.progress?.headSha;
     const gateRunAt = status?.previewGate?.ranAt;
-    const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}`;
+    const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}:${deliveredPreviewVerdict ?? ''}`;
     if (!previewSlug) return;
     if (headSha && previewKey === loadedPreviewKeyRef.current) return;
     if (!headSha && loadedPreviewKeyRef.current !== null) return;
@@ -162,9 +162,7 @@ export function useStageSource(
         if (cancelled || activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
         previewRetryRef.current = 0;
-        // Prefer the gate's own "produced at" over the client's fetch time — the
-        // latter is only comparable to a channel build's `createdAt` while the page
-        // stays open (see the CE-12 note above).
+        // Server timestamps keep preview and channel freshness comparable across reloads.
         const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
         setPreview({
           html: result.html,
@@ -193,6 +191,7 @@ export function useStageSource(
     status?.progress?.headSha,
     status?.previewGate?.ranAt,
     deliveredPreviewVersion,
+    deliveredPreviewVerdict,
     token,
     previewRetryTick,
   ]);

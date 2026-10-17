@@ -793,6 +793,12 @@ supersedes requests for older heads, including late responses. Each new head get
 bounded retry budget. A pending current-round preview remains live after agent `end`,
 even though preview delivery leaves the phase at `building` rather than `submitted`.
 
+Selecting a historical build lasts until the newest successful version changes. When a
+new delivery passes, Studio returns to the live preview automatically; choosing history
+after that still works until another build passes. Failed checks do not clear the choice.
+The live-preview fetch key includes the delivery's verdict, so completion retries a preview
+whose earlier pending fetches failed, even when no `previewGate.ranAt` accompanies the poll.
+
 - Fires from the channel’s `PUT …/sources/stage` via `onSourcesStaged`, **off** the
   response path — a staging receipt never waits on an assembly.
 - Debounced (~6s) with a per-job floor (~25s) so a staging burst costs one assembly.

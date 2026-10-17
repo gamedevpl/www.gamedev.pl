@@ -127,4 +127,35 @@ describe('Studio preview delivery', () => {
       vi.useRealTimers();
     }
   });
+
+  it('loads the finished build after exhausting its pending-preview retries, without a gate timestamp', async () => {
+    vi.useFakeTimers();
+    const { render, latest, root } = probe();
+    try {
+      mockedGetSubmissionPreview.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>old</p>' });
+      await render('token-a', statusFor('sky-dodge', 'old'));
+      mockedGetSubmissionPreview.mockRejectedValue(new Error('preview not ready'));
+      const pending: SubmissionStatus = {
+        ...statusFor('sky-dodge', 'new'),
+        recentBuilds: [{ version: 'new', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'pending' }],
+      };
+      await render('token-a', pending);
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(4_000);
+        });
+      }
+      expect(latest().rawHtml).toBe('<p>old</p>');
+      mockedGetSubmissionPreview.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>finished</p>' });
+      await render('token-a', {
+        ...pending,
+        recentBuilds: [{ ...pending.recentBuilds![0]!, verdict: 'green' }],
+      });
+      expect(latest().rawHtml).toBe('<p>finished</p>');
+      expect(latest().origin.version).toBe('new');
+    } finally {
+      await act(async () => root.unmount());
+      vi.useRealTimers();
+    }
+  });
 });
