@@ -150,7 +150,7 @@ export async function runCli(
   if (isGitRemoteHelper(argv)) {
     return runGitRemoteHelper(argv, env);
   }
-  const { verb, args, flags } = parseArgv(argv);
+  const { verb, args, flags, paths } = parseArgv(argv);
   const asJson = jsonMode(flags);
   if (printVersion(flags, (line) => io.stdout.write(line))) return EXIT_GREEN;
   const origin = originFromEnv(env);
@@ -458,7 +458,7 @@ export async function runCli(
         telemetry,
       });
     }
-    const read = await dispatchReadVerb({ verb, args, flags, api, io, env, currentPath: argv[1] });
+    const read = await dispatchReadVerb({ verb, args, flags, paths, api, io, env, currentPath: argv[1] });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);

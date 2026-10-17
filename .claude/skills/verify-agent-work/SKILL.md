@@ -115,6 +115,23 @@ Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrappin
 stripping all controls after formatting removes intended colors as well.
 History summaries need separate paragraphs; dense rows can pass semantic tests
 while remaining unreadable in a terminal.
+Exercise a real pager subprocess: early quit must cancel pending API reads and
+rate-limit waits, not merely stop printing an already-buffered history. Check
+missing default pagers, failing configured commands, backpressure and JSON/pipes.
+Inject API failure after output starts, with a real configured `less`: killing
+only its shell left the pager owning the terminal after the CLI returned. Finish
+the pager's input and wait for it to release the terminal before returning errors.
+Exercise unpaged stdout with a real Writable that returns false, plus an early
+exiting pipe reader. Waiting for pager stdin alone leaves piped output buffering
+unbounded history and can emit unhandled EPIPE; stop reads on either stream closing.
+Run a JSON-producing CLI process against a delayed pipe reader with output larger
+than the pipe buffer. Returning from a raw stdout write before process.exit can
+truncate valid JSON; display-mode branches must use the guarded writer too.
+For path-filtered history, compare adjacent unfiltered deliveries, including deleted
+and binary files. Apply limits after matching; test beyond the first API page and
+quote-containing slash arguments as well as shell argv.
+Keep generated test scripts static and pass fixture paths as arguments: embedding
+even a JSON-quoted temporary path triggered CodeQL's code-construction sanitizer check.
 For Ink slash output, use the transcript's width after sidebar and label columns,
 not the terminal width. Exercise sidebar toggles and resizing in the actual Ink
 component, plus widths below twenty columns; a minimum-width clamp can hide overflow.

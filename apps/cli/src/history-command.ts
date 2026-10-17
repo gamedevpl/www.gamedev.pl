@@ -1,4 +1,4 @@
-import type { HistorySourceFile } from '@gamedevpl/contract';
+import type { HistorySourceFile, HistoryVersion } from '@gamedevpl/contract';
 import type { ApiClient } from './api.js';
 import { findCheckout } from './checkout.js';
 import { sourceProject } from './source-project.js';
@@ -9,6 +9,7 @@ import { historyVersion, historySlug, readHistory, readHistoryTree } from './his
 import { sourceBytes } from './git-history-import.js';
 import { versionBlame, versionPatch, withHistoryGit } from './history-git.js';
 import { formatHistoryLog, formatHistoryVersion, type HistoryFormat } from './history-format.js';
+import { filteredHistory, logOptions } from './history-log.js';
 export { historyTerminalFormat } from './history-format.js';
 
 type Flags = Record<string, string | boolean>;
@@ -31,6 +32,9 @@ export async function historyCommand(input: {
   slug?: string;
   write: (text: string) => void;
   format?: HistoryFormat;
+  paths?: string[];
+  signal?: AbortSignal;
+  writeLog?: (text: string) => Promise<boolean>;
 }): Promise<boolean> {
   const { verb, args, flags, api } = input;
   if (!isHistoryVerb(verb, args, flags)) return false;
@@ -49,17 +53,53 @@ export async function historyCommand(input: {
   const slug = historySlug(chosen);
   const emit = (data: unknown, text: string) => input.write(jsonMode(flags) ? JSON.stringify(data) : text);
   if (verb === 'log') {
-    if (args.length > 1) throw new CliError('usage: gamedevpl log [slug] [--limit N | --all] [--oneline]', EXIT_INPUT);
-    const limit = flags.all ? Infinity : Number(flags.limit ?? 20);
-    if (flags.limit !== undefined && typeof flags.limit !== 'string')
-      throw new CliError('--limit needs a number', EXIT_INPUT);
-    if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1))
-      throw new CliError('--limit must be a positive integer', EXIT_INPUT);
-    const versions = await readHistory(api, slug, limit);
-    emit(
-      { slug, versions },
-      formatHistoryLog(versions, { ...input.format, oneline: flags.oneline === true || flags.oneline === 'true' }),
-    );
+    if (args.length > 1)
+      throw new CliError(
+        'usage: gamedevpl log [slug] [--limit N] [--since DATE] [--until DATE] [--grep REGEX] [-i] [--oneline] [--no-pager] [-- paths…]',
+        EXIT_INPUT,
+      );
+    const paths = (input.paths ?? []).map((path) => {
+      let normalized = path.replace(/^\.\//, '');
+      if (normalized.startsWith(`games/${slug}/`)) normalized = normalized.slice(`games/${slug}/`.length);
+      else if (here && sourceProject(here.root) && normalized.startsWith('src/')) normalized = normalized.slice(4);
+      normalized = normalized.replace(/\/$/, '');
+      if (
+        !normalized ||
+        normalized.startsWith('/') ||
+        normalized.includes('\\') ||
+        normalized.length > 512 ||
+        normalized.split('/').some((part) => !part || part === '..' || part === '.' || part.toLowerCase() === '.git') ||
+        [...normalized].some((char) => char.charCodeAt(0) < 32)
+      )
+        throw new CliError('invalid history source path', EXIT_INPUT);
+      return normalized;
+    });
+    const options = logOptions(flags, paths);
+    const versions: HistoryVersion[] = [];
+    let count = 0;
+    const oneline = flags.oneline === true || flags.oneline === 'true';
+    const write =
+      input.writeLog ??
+      (async (text: string) => {
+        input.write(text);
+        return true;
+      });
+    for await (const row of filteredHistory(api, slug, options, input.signal)) {
+      if (jsonMode(flags) || !input.writeLog) versions.push(row);
+      else if (
+        !(await write((count && !oneline ? '\n' : '') + formatHistoryVersion(row, { ...input.format, oneline })))
+      )
+        return true;
+      count++;
+    }
+    if (jsonMode(flags)) await write(JSON.stringify({ slug, versions }));
+    else if (count && !input.writeLog) emit({}, formatHistoryLog(versions, { ...input.format, oneline }));
+    else if (!count)
+      await write(
+        paths.length || flags.since || flags.until || flags.grep
+          ? 'No matching delivered versions.'
+          : 'No delivered versions yet.',
+      );
     return true;
   }
   if (verb === 'diff') {
