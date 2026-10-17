@@ -1351,7 +1351,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createConceptTools({ resolveAuth, injectChannel }),
     ...createVisualTargetTools({
       resolveAuth,
-      managedJobId: (ctx) => managedOpenerJobId(ctx.bearerToken),
+      managedOpener: (ctx) => managedOpenerClaims(ctx.bearerToken),
       store,
       gamesStore: options.gamesStore,
       frames: options.visualTarget?.frames,
@@ -1364,11 +1364,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
 
-  // The job a managed-session opener names; null for every public client.
-  function managedOpenerJobId(bearer: string | null): number | null {
+  // A managed-session opener's claims; null for every public client.
+  function managedOpenerClaims(bearer: string | null): AgentTokenClaims | null {
     if (!bearer || !agentTokenSecret) return null;
     try {
-      return verifyManagedMcpOpener(bearer, agentTokenSecret).jobId;
+      return verifyManagedMcpOpener(bearer, agentTokenSecret);
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) return null;
       throw error;
@@ -1500,7 +1500,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
             .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
-            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || managedOpenerJobId(bearerToken) !== null)
+            .filter(([name]) => !MCP_MANAGED_ONLY_TOOLS.has(name) || managedOpenerClaims(bearerToken) !== null)
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
@@ -1579,7 +1579,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       // Managed-only tools do not exist for public clients.
-      if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerJobId(bearerToken) === null) {
+      if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerClaims(bearerToken) === null) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};

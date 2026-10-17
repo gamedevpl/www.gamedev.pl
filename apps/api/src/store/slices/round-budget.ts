@@ -120,6 +120,7 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
 
   async reserveVisualTarget(jobId: number, generation: number, max: number): Promise<number | null> {
     const sub = this.submissions.get(jobId);
+    assertAgentRound(sub, generation);
     const next = sub ? nextVisualTargetAttempts(sub, generation, max) : null;
     if (!sub || !next) return null;
     this.submissions.set(jobId, { ...sub, visualTargetAttempts: next });
@@ -248,7 +249,9 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const next = snap.exists ? nextVisualTargetAttempts(snap.data() as SubmissionRecord, generation, max) : null;
+      const sub = snap.exists ? (snap.data() as SubmissionRecord) : undefined;
+      assertAgentRound(sub, generation);
+      const next = sub ? nextVisualTargetAttempts(sub, generation, max) : null;
       if (!next) return null;
       tx.set(ref, { visualTargetAttempts: next }, { merge: true });
       return next.count;

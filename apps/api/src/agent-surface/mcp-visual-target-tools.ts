@@ -29,8 +29,8 @@ export interface VisualTargetToolsDeps {
     ctx: ToolContext,
     args: Record<string, unknown>,
   ) => Promise<{ jobId: number; record: SubmissionRecord; claims: { roundGeneration?: number } } | ToolResult>;
-  // The job a managed-session opener bearer names, else null.
-  managedJobId: (ctx: ToolContext) => number | null;
+  // Claims of a managed-session opener bearer, else null.
+  managedOpener: (ctx: ToolContext) => { jobId: number; roundGeneration?: number; exp?: number } | null;
   store: Store | undefined;
   gamesStore: GamesStore | null | undefined;
   frames: DreamFrameGenerator | null | undefined;
@@ -53,8 +53,20 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
   const handler: ToolHandler = async (args, ctx) => {
     const auth = await deps.resolveAuth(ctx, args);
     if (!('jobId' in auth)) return auth;
-    // Platform builder sessions only; the opener must name this job.
-    if (deps.managedJobId(ctx) !== auth.jobId) return toolRefusal('visual_target is not available here', 'not_owner');
+    // Platform builder sessions only; the opener must name this round.
+    const opener = deps.managedOpener(ctx);
+    const { jobId, record } = auth;
+    const current = record.roundGeneration ?? 1;
+    if (
+      !opener ||
+      opener.jobId !== jobId ||
+      opener.roundGeneration !== current ||
+      (auth.claims.roundGeneration ?? current) !== current ||
+      (opener.exp ?? 0) * 1000 <= now() ||
+      (record.builder ?? 'platform') !== 'platform'
+    ) {
+      return toolRefusal('visual_target is not available here', 'not_owner');
+    }
     const { store, gamesStore, frames, availability, agentTokenSecret } = deps;
     if (!store || !gamesStore || !frames || !availability || !agentTokenSecret) {
       return toolRefusal('visual targets are not configured', 'feature_unavailable');
@@ -62,8 +74,7 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
     const direction = typeof args.direction === 'string' ? args.direction.trim().slice(0, MAX_DIRECTION) : '';
     if (!direction) return toolRefusal('direction is required', 'invalid_arguments');
 
-    const { jobId, record } = auth;
-    const generation = auth.claims.roundGeneration ?? record.roundGeneration ?? 0;
+    const generation = current;
 
     const version = record.previewVersion ?? record.deliveredVersion;
     const path = record.slug && version ? gateFrameOf(await gamesStore.getManifest(record.slug, version)) : null;
@@ -75,7 +86,8 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
       return toolRefusal('image generation is switched off right now', 'feature_unavailable');
     }
     // Attempts, reserved atomically before any spend: failures count too.
-    const used = await store.reserveVisualTarget(jobId, generation, VISUAL_TARGETS_PER_ROUND);
+    const used = await store.reserveVisualTarget(jobId, generation, VISUAL_TARGETS_PER_ROUND).catch(() => undefined);
+    if (used === undefined) return toolErr('this round is no longer current');
     if (used === null) {
       return toolRefusal(`this round already used its ${VISUAL_TARGETS_PER_ROUND} visual targets`, 'quota_exhausted');
     }

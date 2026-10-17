@@ -21,7 +21,8 @@ function png(width = 4, height = 2): Buffer {
 const JOB = 7;
 const FRAME = pngOf(4, 2).toString('base64');
 const CTX = { bearerToken: 'opener' } as unknown as ToolContext;
-const RECORD = { slug: 'rocks', title: 'Rocks', previewVersion: 'v1' } as SubmissionRecord;
+const RECORD = { slug: 'rocks', title: 'Rocks', previewVersion: 'v1', roundGeneration: 1 } as SubmissionRecord;
+const OPENER = { jobId: JOB, roundGeneration: 1, exp: Date.parse('2026-10-18T00:00:00Z') / 1000 };
 
 async function setup(overrides: Partial<VisualTargetToolsDeps> = {}) {
   const store = new InMemoryStore();
@@ -37,7 +38,7 @@ async function setup(overrides: Partial<VisualTargetToolsDeps> = {}) {
   } as unknown as GamesStore;
   const deps: VisualTargetToolsDeps = {
     resolveAuth: async () => ({ jobId: JOB, record: RECORD, claims: { roundGeneration: 1 } }),
-    managedJobId: () => JOB,
+    managedOpener: () => OPENER,
     store,
     gamesStore,
     frames,
@@ -68,10 +69,20 @@ describe('visual_target', () => {
     expect(shot).toMatchObject({ label: VISUAL_TARGET_SHOT_LABEL, roundGeneration: 1, platformDrawn: true });
   });
 
-  it('refuses a session whose opener does not name this job', async () => {
-    const { frames, call } = await setup({ managedJobId: () => null });
-    expect((await call({ direction: 'x' })).structuredContent).toMatchObject({ code: 'not_owner' });
-    expect(frames.generate).not.toHaveBeenCalled();
+  it('refuses an opener that does not name this job, round or builder', async () => {
+    const refused = [
+      { managedOpener: () => null },
+      { managedOpener: () => ({ ...OPENER, jobId: JOB + 1 }) },
+      { managedOpener: () => ({ ...OPENER, roundGeneration: 0 }) },
+      { managedOpener: () => ({ ...OPENER, exp: 1 }) },
+      { resolveAuth: async () => ({ jobId: JOB, record: { ...RECORD, roundGeneration: 2 }, claims: {} }) },
+      { resolveAuth: async () => ({ jobId: JOB, record: { ...RECORD, builder: 'self' as const }, claims: {} }) },
+    ] satisfies Array<Partial<VisualTargetToolsDeps>>;
+    for (const overrides of refused) {
+      const { frames, call } = await setup(overrides);
+      expect((await call({ direction: 'x' })).structuredContent).toMatchObject({ code: 'not_owner' });
+      expect(frames.generate).not.toHaveBeenCalled();
+    }
   });
 
   it('stops after the per-round allowance and when unconfigured or switched off', async () => {

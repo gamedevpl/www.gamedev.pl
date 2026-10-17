@@ -17,12 +17,14 @@ for (const [name, makeStore] of IMPLEMENTATIONS) {
       expect(await store.reserveVisualTarget(7, 1, 2)).toBeNull();
     });
 
-    it('starts a new round from zero and refuses an unknown job', async () => {
+    it('starts a new round from zero and refuses a stale round or unknown job', async () => {
       const store = makeStore();
       await store.createSubmission(7, 'g:owner', 'Rocks');
       await store.reserveVisualTarget(7, 1, 1);
+      await store.bumpRoundGeneration(7);
       expect(await store.reserveVisualTarget(7, 2, 1)).toBe(1);
-      expect(await store.reserveVisualTarget(99, 1, 1)).toBeNull();
+      await expect(store.reserveVisualTarget(7, 1, 1)).rejects.toThrow(/no longer current/);
+      await expect(store.reserveVisualTarget(99, 1, 1)).rejects.toThrow(/no longer current/);
     });
   });
 }
