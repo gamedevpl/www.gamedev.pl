@@ -84,8 +84,18 @@ export async function gitPushBase(input: {
   if (!versions.length) return { version: 'undelivered', files: {} };
   for (const row of versions) {
     const cached = candidates.get(row.version);
-    if (cached) return cached;
     const commit = known.get(row.version);
+    if ((cached || (commit && ancestors.has(commit))) && row.version !== versions[0]!.version)
+      throw new CliError(
+        'Platform history is ahead of this commit. Fetch and merge it with git pull before pushing.',
+        EXIT_REFUSED,
+      );
+    if (cached && (!commit || !ancestors.has(commit)))
+      throw new CliError(
+        'Platform history is ahead of this commit. Fetch and merge it with git pull before pushing.',
+        EXIT_REFUSED,
+      );
+    if (cached) return cached;
     if (commit && ancestors.has(commit))
       return { version: row.version, files: hashesOf(commitFiles(input.cwd, commit, input.layout)) };
   }

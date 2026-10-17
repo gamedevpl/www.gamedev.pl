@@ -22,10 +22,9 @@ import {
   projectGitFiles,
   type GitLayout,
 } from './git-checkout-layout.js';
-import { gitPushBase, rememberGitDelivery } from './git-push-base.js';
-import { bindGitDelivery } from './git-delivery-ref.js';
-import { historyTree } from './history-edit-tree.js';
-import { isRasterSourcePath } from '@gamedevpl/contract';
+import { gitPushBase } from './git-push-base.js';
+import { synchronizeGitDelivery } from './git-delivery-sync.js';
+import { sameGitSources } from './git-delivery-ref.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { readHistory, readHistoryTree, historySlug } from './history-api.js';
 import { knownHistoryCommits } from './git-history-cache.js';
@@ -89,29 +88,22 @@ export async function reconcilePush(input: {
     const pushed = localGameFiles(dest, input.slug);
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
     try {
-      if (input.scope) {
+      if (input.scope && input.layout) {
         const version = result.kind === 'delivered' ? result.version : result.sync.version;
-        let files = result.kind === 'delivered' ? result.files : localGameFiles(dest, input.slug);
-        if (result.kind === 'nothing') {
-          const tree = await readHistoryTree(input.api, input.slug, version);
-          if (tree.slug !== input.slug || tree.version !== version)
-            throw Error('History response identity does not match this Git delivery.');
-          files = [...historyTree(tree)].map(([path, bytes]) => ({
-            path,
-            content: bytes.toString(isRasterSourcePath(path) ? 'base64' : 'utf8'),
-          }));
-        }
-        rememberGitDelivery({
+        const synced = await synchronizeGitDelivery({
           ...input,
           commit,
-          scope: input.scope,
           version,
-          files,
+          pushed,
+          scope: input.scope,
+          layout: input.layout,
         });
-        if (input.layout)
-          bindGitDelivery({ ...input, commit, scope: input.scope, layout: input.layout, version, files, pushed });
-      }
-      adoptCheckoutBase(input.cwd, input.slug, dest, result);
+        if (
+          checkoutGit(input.cwd)(['rev-parse', 'HEAD']).toString().trim() === commit &&
+          sameGitSources(pushed, synced.files)
+        )
+          writeBase(input.cwd, synced.version, trackedTree(input.cwd, input.slug, synced.files));
+      } else adoptCheckoutBase(input.cwd, input.slug, dest, result);
     } catch {
       stderr.write(
         'Delivery succeeded, but local synchronization metadata could not be recorded. Review gamedevpl status before another delivery.\n',

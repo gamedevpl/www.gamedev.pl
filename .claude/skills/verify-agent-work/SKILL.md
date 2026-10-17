@@ -178,6 +178,8 @@ Verify real Git pull/stash/push across both source layouts and raster representa
 Derive delivery bases from pushed commit ancestry, not a mutable working-copy base.
 Exercise push followed by fetch and fast-forward pull; cache-only receipts leave sibling commits.
 Preserve repository context outside the platform manifest when importing later source versions.
+Test intervening deliveries during verification and retain them in projection ancestry.
+Do not advance a working-copy base for another branch or unmerged canonical sources.
 Record the remote tree as the new base; merged drafts must remain local differences.
 Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
 Test historical checkout through the real entrypoint as well as slash routing;

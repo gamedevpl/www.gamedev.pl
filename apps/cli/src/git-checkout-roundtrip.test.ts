@@ -141,19 +141,12 @@ it.each([false, true])(
           expect(delivered.find((file) => file.path === 'images/test.png')?.content).toBe(
             Buffer.from([0, 255, 2]).toString('base64'),
           );
-          return { kind: 'delivered', version, files: delivered, staged: [], ignored: [] };
+          return f.deliver(version, delivered);
         },
       });
     writeFileSync(join(f.game, 'game.ts'), 'uncommitted draft\n');
     expect(await push('v5', 'v4', sourceLines(2, 8), sourceLines(9, 8))).toEqual({ ok: true });
     expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe('uncommitted draft\n');
-    f.trees.v5 = delivered;
-    f.versions.unshift({
-      ...f.versions[0]!,
-      version: 'v5',
-      createdAt: '2026-10-05T00:00:00Z',
-      sourceFiles: delivered.map((file) => file.path),
-    });
     writeFileSync(join(f.game, 'game.ts'), sourceLines(10, 8));
     f.git('add', `${f.prefix}/game.ts`);
     f.commit('next local change');
@@ -196,11 +189,9 @@ it('remembers a confirmed no-change push before the next local revision', async 
   const f = await fixture(false),
     layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin');
   const scope = historyScope(f.api.origin, 'probe', layout);
-  f.trees.v4 = f.trees.v3!.map((file) => (file.path === 'game.ts' ? { ...file, content: sourceLines(9, 3) } : file));
-  f.versions.unshift({ ...f.versions[0]!, version: 'v4', createdAt: '2026-10-04T00:00:00Z' });
-  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
-  f.git('add', `${f.prefix}/game.ts`);
-  f.commit('same as platform');
+  writeFileSync(join(f.root, 'README.md'), 'local metadata change\n');
+  f.git('add', '-f', 'README.md');
+  f.commit('same game sources as platform');
   expect(
     await reconcilePush({
       api: f.api,
@@ -212,8 +203,8 @@ it('remembers a confirmed no-change push before the next local revision', async 
       submit: async ({ dest }) => {
         const sync = classify({
           local: localGameFiles(dest, 'probe'),
-          remote: f.trees.v4!,
-          remoteVersion: 'v4',
+          remote: f.trees.v3!,
+          remoteVersion: 'v3',
           base: readBase(dest),
         });
         expect(sync.kind).toBe('clean');
@@ -233,8 +224,8 @@ it('remembers a confirmed no-change push before the next local revision', async 
       layout,
       scope,
       submit: async ({ dest }) => {
-        expect(readBase(dest)?.version).toBe('v4');
-        return { kind: 'delivered', version: 'v5', files: localGameFiles(dest, 'probe'), staged: [], ignored: [] };
+        expect(readBase(dest)?.version).toBe('v3');
+        return f.deliver('v4', localGameFiles(dest, 'probe'));
       },
     }),
   ).toEqual({ ok: true });
@@ -284,4 +275,129 @@ it('fetches a direct helper URL using the legacy projection without moving the l
   f.commit('direct URL delivery');
   f.git('push', 'gamedevpl://probe', 'HEAD:main');
   expect(JSON.parse(readFileSync(f.delivery, 'utf8')).base.version).toBe('v3');
+});
+
+it('refuses a stale Git push even when native synchronization could combine independent files', async () => {
+  const f = await fixture(false),
+    layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin');
+  const scope = historyScope(f.api.origin, 'probe', layout);
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('local change before platform update');
+  f.trees.v4 = [...f.trees.v3!, { path: 'remote.ts', content: 'independent platform change\n' }];
+  f.versions.unshift({
+    ...f.versions[0]!,
+    version: 'v4',
+    createdAt: '2026-10-04T00:00:00Z',
+    sourceFiles: f.trees.v4.map((file) => file.path),
+  });
+  expect(
+    classify({
+      local: localGameFiles(f.root, 'probe'),
+      remote: f.trees.v4,
+      remoteVersion: 'v4',
+      base: readBase(f.root),
+    }).kind,
+  ).toBe('both');
+  const request = { api: f.api, slug: 'probe', cwd: f.root, srcRef: 'HEAD', layout, scope };
+  expect(
+    await reconcilePush({
+      ...request,
+      submit: async () => {
+        throw Error('must not deliver a stale Git branch');
+      },
+    }),
+  ).toMatchObject({ ok: false, message: expect.stringContaining('Platform history is ahead') });
+  writeFileSync(f.data, JSON.stringify({ versions: f.versions, trees: f.trees }));
+  f.git(
+    '-c',
+    'user.name=fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    '-c',
+    'commit.gpgsign=false',
+    'pull',
+    '--no-rebase',
+    '--no-edit',
+  );
+  expect(
+    await reconcilePush({
+      ...request,
+      submit: async ({ dest }) => {
+        expect(readBase(dest)?.version).toBe('v4');
+        return f.deliver('v5', localGameFiles(dest, 'probe'));
+      },
+    }),
+  ).toEqual({ ok: true });
+});
+
+it.each([false, true])(
+  'retains a platform delivery that lands during verification, source repository=%s',
+  async (project) => {
+    const f = await fixture(project),
+      layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin');
+    const scope = historyScope(f.api.origin, 'probe', layout);
+    writeFileSync(join(f.root, 'README.md'), 'local repository context\n');
+    writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+    f.git('add', '-f', 'README.md');
+    f.git('add', `${f.prefix}/game.ts`);
+    f.commit('concurrent local work');
+    const local = f.git('rev-parse', 'HEAD');
+    expect(
+      await reconcilePush({
+        api: f.api,
+        slug: 'probe',
+        cwd: f.root,
+        srcRef: 'HEAD',
+        layout,
+        scope,
+        submit: async ({ dest }) => {
+          const platform = [
+            ...f.trees.v3!.filter((file) => file.path !== 'later.ts'),
+            { path: 'remote.ts', content: 'other platform delivery\n' },
+          ];
+          f.deliver('v4', platform);
+          return f.deliver('v5', [
+            ...localGameFiles(dest, 'probe').filter((file) => file.path !== 'later.ts'),
+            { path: 'remote.ts', content: 'other platform delivery\n' },
+          ]);
+        },
+      }),
+    ).toEqual({ ok: true });
+    expect(f.git('rev-parse', 'HEAD')).toBe(local);
+    expect(readFileSync(join(f.root, '.gamedev-base.json'), 'utf8')).toBe(f.originalBase);
+    writeFileSync(f.data, JSON.stringify({ versions: f.versions, trees: f.trees }));
+    f.git('fetch', 'origin');
+    f.git('pull', '--ff-only');
+    expect(f.git('log', '--format=%s')).toContain('v4');
+    expect(f.git('rev-parse', 'HEAD^')).toBe(local);
+    expect(readFileSync(join(f.root, 'README.md'), 'utf8')).toBe('local repository context\n');
+    expect(readFileSync(join(f.game, 'remote.ts'), 'utf8')).toBe('other platform delivery\n');
+    expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(9, 3));
+  },
+);
+
+it('keeps the current native base when Git pushes a different local branch', async () => {
+  const f = await fixture(false),
+    layout = remoteLayout(checkoutGit(f.root), 'probe', 'origin');
+  const scope = historyScope(f.api.origin, 'probe', layout);
+  f.git('checkout', '-b', 'publish');
+  writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
+  f.git('add', `${f.prefix}/game.ts`);
+  f.commit('another branch');
+  f.git('checkout', 'main');
+  expect(
+    await reconcilePush({
+      api: f.api,
+      slug: 'probe',
+      cwd: f.root,
+      srcRef: 'publish',
+      layout,
+      scope,
+      submit: async ({ dest }) => f.deliver('v4', localGameFiles(dest, 'probe')),
+    }),
+  ).toEqual({ ok: true });
+  expect(readFileSync(join(f.root, '.gamedev-base.json'), 'utf8')).toBe(f.originalBase);
+  expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(2, 3));
+  expect(f.git('branch', '--show-current')).toBe('main');
 });

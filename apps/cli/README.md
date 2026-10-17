@@ -375,12 +375,19 @@ the selected commit, leaving uncommitted editor changes local. Its synchronizati
 base follows imported ancestors and previously delivered commits, so a Git pull or
 another branch cannot silently borrow a newer working-copy base. A branch without
 known platform ancestry is refused; merge the platform history explicitly or use
-native `gamedevpl push` for your local files. Git pushes deliver source snapshots,
-not your local commit graph; local commit messages and authors remain in your repository.
+native `gamedevpl push` for your local files.
+Git pushes from an older platform base are refused until you fetch and merge the
+latest delivery, including when native synchronization could combine different files.
+If another delivery lands during verification, the resulting projection retains it as
+a merge parent. The bridge reads the accepted version's immutable source tree rather
+than assigning a later platform snapshot to an older delivered version.
+Git pushes deliver source snapshots; local commit messages and authors remain in your repository.
 The local bridge maps an accepted version to the pushed commit when its sources match.
 If the platform canonicalizes sources, a projection commit follows that commit instead.
 Later fetches preserve repository files outside the platform's source manifest, allowing
 fast-forward pulls after a push without dropping your README or project configuration.
+Pushing another local branch or receiving canonical changes leaves the current native
+synchronization base untouched until that working copy is reconciled.
 
 Native `gamedevpl pull`, `push`, `restore` and `revert` continue to operate on local
 sources and platform history. They do not create commits or move your Git branch/index.

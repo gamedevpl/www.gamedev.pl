@@ -286,11 +286,6 @@ export function writeGameFiles(
   }
 }
 
-export function initializeCheckoutGit(dest: string, slug: string, run = defaultRun): void {
-  run('git', ['init'], dest);
-  run('git', ['remote', 'add', 'origin', gitRemoteUrl(slug)], dest);
-}
-
 export function assertCheckoutDestination(dest: string, slug: string): void {
   if (
     existsSync(dest) &&

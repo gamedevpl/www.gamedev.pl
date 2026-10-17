@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -72,7 +72,7 @@ it('preserves metadata and retries using one key when staging fails', async () =
   expect(pending).toContain('key');
   expect(existsSync(join(f.cwd, '.gamedev-recovery.json'))).toBe(false);
 });
-it('copies a changed slug into a new checkout, preserving the original', async () => {
+it('recovers a renamed checkout without Git, preserving the original repository', async () => {
   const f = fixture();
   execFileSync('git', ['init'], { cwd: f.cwd, stdio: 'ignore' });
   execFileSync('git', ['remote', 'add', 'origin', 'gamedevpl::sky'], { cwd: f.cwd });
@@ -82,12 +82,8 @@ it('copies a changed slug into a new checkout, preserving the original', async (
   expect(readFileSync(join(f.cwd, '.gamedev-base.json'), 'utf8')).toBe('old-base');
   expect(readFileSync(join(next, '.gamedev-slug'), 'utf8')).toBe('new-sky\n');
   expect(readFileSync(join(next, 'games/new-sky/SPEC.md'), 'utf8')).toContain('slug: new-sky');
-  expect(execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: next, encoding: 'utf8' }).trim()).toBe(
-    realpathSync(next),
-  );
-  expect(execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: next, encoding: 'utf8' }).trim()).toBe(
-    'gamedevpl://new-sky',
-  );
+  expect(existsSync(join(next, '.git'))).toBe(false);
+  expect(readFileSync(join(next, 'games/new-sky/game.ts'), 'utf8')).toBe('local edits');
   expect(execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: f.cwd, encoding: 'utf8' }).trim()).toBe(
     'gamedevpl::sky',
   );

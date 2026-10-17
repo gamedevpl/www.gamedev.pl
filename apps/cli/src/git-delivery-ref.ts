@@ -3,6 +3,15 @@ import { checkoutGit, projectGitFiles, type GitLayout } from './git-checkout-lay
 import { hashesOf, type TreeFile } from './checkout-sync.js';
 import { fastImportScript, versionImportRef } from './git-history-import.js';
 
+export function sameGitSources(left: TreeFile[], right: TreeFile[]): boolean {
+  const before = hashesOf(left),
+    after = hashesOf(right);
+  return (
+    Object.keys(before).length === Object.keys(after).length &&
+    Object.entries(before).every(([path, hash]) => after[path] === hash)
+  );
+}
+
 export function bindGitDelivery(input: {
   cwd: string;
   slug: string;
@@ -12,14 +21,12 @@ export function bindGitDelivery(input: {
   files: TreeFile[];
   pushed: TreeFile[];
   layout: GitLayout;
+  mergeParents?: string[];
 }): void {
   const git = checkoutGit(input.cwd),
-    before = hashesOf(input.pushed),
-    after = hashesOf(input.files);
-  const same =
-    Object.keys(before).length === Object.keys(after).length &&
-    Object.entries(before).every(([path, hash]) => after[path] === hash);
-  if (same) git(['update-ref', versionImportRef(input.slug, input.version, input.scope), input.commit]);
+    same = sameGitSources(input.pushed, input.files);
+  if (same && !input.mergeParents?.length)
+    git(['update-ref', versionImportRef(input.slug, input.version, input.scope), input.commit]);
   else
     git(
       ['fast-import', '--quiet'],
@@ -29,6 +36,7 @@ export function bindGitDelivery(input: {
         parent: input.commit,
         sourceRoot: input.layout.root,
         preserveOutsideSources: true,
+        mergeParents: input.mergeParents,
         parentSourceFiles: input.pushed.map((file) => file.path),
         versions: [{ version: input.version, createdAt: new Date().toISOString() }],
         trees: new Map([

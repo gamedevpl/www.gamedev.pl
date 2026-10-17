@@ -7,6 +7,7 @@ import { localGameFiles } from './checkout.js';
 import { checkoutGit, remoteLayout, historyScope } from './git-checkout-layout.js';
 import { bindGitDelivery } from './git-delivery-ref.js';
 import { versionImportRef } from './git-history-import.js';
+import { gitPushBase, rememberGitDelivery } from './git-push-base.js';
 
 afterEach(cleanupHistoryFixtures);
 it.each([false, true])(
@@ -38,5 +39,15 @@ it.each([false, true])(
     expect(f.git('rev-parse', 'HEAD')).toBe(commit);
     expect(f.git('status', '--porcelain', '--untracked-files=no')).toBe('');
     expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(2, 3));
+    rememberGitDelivery({ cwd: f.root, slug: 'probe', scope, commit, version: 'v4', files });
+    f.versions.unshift({ ...f.versions[0]!, version: 'v4', createdAt: '2026-10-04T00:00:00Z' });
+    await expect(gitPushBase({ cwd: f.root, slug: 'probe', scope, commit, layout, api: f.api })).rejects.toThrow(
+      'Platform history is ahead',
+    );
+    f.git('merge', '--ff-only', ref);
+    expect(
+      (await gitPushBase({ cwd: f.root, slug: 'probe', scope, commit: f.git('rev-parse', 'HEAD'), layout, api: f.api }))
+        .version,
+    ).toBe('v4');
   },
 );

@@ -25,6 +25,7 @@ export function fastImportScript(input: {
   sourceRoot?: string;
   preserveOutsideSources?: boolean;
   parentSourceFiles?: string[];
+  mergeParents?: string[];
 }): Buffer {
   historySlug(input.slug);
   const ref = input.ref ?? remoteImportRef(input.slug, input.scope);
@@ -59,6 +60,10 @@ export function fastImportScript(input: {
     emit(`data ${Buffer.byteLength(row.version)}`);
     emit(row.version);
     if (parent) emit(`from ${parent}`);
+    for (const commit of input.mergeParents ?? []) {
+      if (!/^[a-f0-9]{40,64}$/.test(commit)) throw new Error('invalid Git merge parent');
+      emit(`merge ${commit}`);
+    }
     if (input.preserveOutsideSources) {
       for (const path of previousFiles) {
         if (
