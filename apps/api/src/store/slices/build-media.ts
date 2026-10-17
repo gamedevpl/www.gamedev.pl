@@ -285,7 +285,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       // Equality only: the single-field index serves it, no composite needed.
       const snap = await this.shotsCollection(jobId)
         .where('label', '==', opts.label)
-        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt', 'roundGeneration')
         .get();
       return snap.docs
         .map((doc) => doc.data() as BuildShotSummary)

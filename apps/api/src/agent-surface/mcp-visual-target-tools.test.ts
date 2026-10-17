@@ -4,6 +4,7 @@ import { VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
 import { InMemoryStore, type SubmissionRecord } from '../platform/store.js';
 import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
 import { verifyReferenceImageToken } from './reference-image-url.js';
+import { pngOf } from '../platform/image-size.test.js';
 import type { ToolContext } from './mcp-tool-support.js';
 
 // A 4x2 PNG header is all imageSize and isPng read.
@@ -18,6 +19,7 @@ function png(width = 4, height = 2): Buffer {
 }
 
 const JOB = 7;
+const FRAME = pngOf(4, 2).toString('base64');
 const CTX = { bearerToken: 'opener' } as unknown as ToolContext;
 const RECORD = { slug: 'rocks', title: 'Rocks', previewVersion: 'v1' } as SubmissionRecord;
 
@@ -27,7 +29,7 @@ async function setup(overrides: Partial<VisualTargetToolsDeps> = {}) {
   const recordJobCost = vi.spyOn(store, 'recordJobCost');
   const frames = {
     model: 'img-model',
-    generate: vi.fn(async () => ({ data: 'AAAA', mediaType: 'image/jpeg' as const })),
+    generate: vi.fn(async () => ({ data: FRAME, mediaType: 'image/png' as const })),
   };
   const gamesStore = {
     getManifest: async () => ({ previewGate: { green: true, screenshot: 'media/shot.png' } }),
@@ -55,7 +57,7 @@ describe('visual_target', () => {
     expect(result.isError).toBeUndefined();
     const out = result.structuredContent as { url: string; remaining: number };
     expect(out.remaining).toBe(1);
-    expect(JSON.stringify(result)).not.toContain('AAAA');
+    expect(JSON.stringify(result)).not.toContain(FRAME);
     expect(frames.generate).toHaveBeenCalledWith(
       expect.objectContaining({ width: 4, height: 2, direction: 'warmer torches on the side walls' }),
     );
@@ -84,6 +86,13 @@ describe('visual_target', () => {
       availability: { dreamingEnabled: async () => false, spendFrameSlots: async () => true },
     });
     expect((await off.call({ direction: 'a' })).structuredContent).toMatchObject({ code: 'feature_unavailable' });
+  });
+
+  it('stores nothing when the model returns bytes that are not a usable image', async () => {
+    const broken = { model: 'img-model', generate: async () => ({ data: 'AAAA', mediaType: 'image/png' as const }) };
+    const { store, call } = await setup({ frames: broken });
+    expect((await call({ direction: 'x' })).isError).toBe(true);
+    expect(await store.listBuildShots(JOB, { label: VISUAL_TARGET_SHOT_LABEL })).toHaveLength(0);
   });
 
   it('says so when there is no green gate frame to draw on', async () => {

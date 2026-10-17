@@ -3,8 +3,8 @@
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import type { GamesStore } from '../delivery/games-store.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { imageSize, isPng } from '../platform/image-size.js';
-import { VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
+import { carriesPixels, imageSize, isJpeg, isPng } from '../platform/image-size.js';
+import { MAX_PROPOSAL_FRAME_BYTES, VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { DreamAvailabilityGate } from '../creation/dream-availability.js';
 import type { DreamFrameGenerator } from '../creation/dream-frames.js';
@@ -94,7 +94,12 @@ export function createVisualTargetTools(deps: VisualTargetToolsDeps): Record<str
         hudRegions: [],
       })
       .catch(() => null);
-    if (!frame) return toolErr('the image model returned no frame; build from the words instead');
+    // Same checks as Studio concepts: one Firestore doc, renderable pixels.
+    const bytes = frame ? Buffer.from(frame.data, 'base64') : Buffer.alloc(0);
+    const declared = frame?.mediaType === 'image/jpeg' ? isJpeg(bytes) : isPng(bytes);
+    if (!frame || bytes.length > MAX_PROPOSAL_FRAME_BYTES || !declared || !carriesPixels(bytes)) {
+      return toolErr('the image model returned no usable frame; build from the words instead');
+    }
 
     const shot = await store.appendBuildShot(
       jobId,
