@@ -471,12 +471,12 @@ export function CodeSurface({
     if (pendingJump && pendingJump.path === selected) setPendingJump(null);
   }, [pendingJump, selected]);
 
-  /** Owner-staged paths, staged deletions, and local drafts that still differ. */
+  // Closed rounds also expose agent staging for explicit discard.
   const changedPaths = useMemo(() => {
     if (!sources) return [] as string[];
     const paths = new Set<string>();
     for (const entry of sources.files) {
-      if (entry.stagedBy === 'owner') paths.add(entry.path);
+      if (entry.stagedBy && (sources.agentRound === false || entry.stagedBy === 'owner')) paths.add(entry.path);
     }
     for (const path of sources.deleted) paths.add(path);
     for (const [path, draft] of Object.entries(drafts)) {

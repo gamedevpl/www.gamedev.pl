@@ -3,7 +3,8 @@ import type { BuildBrief } from './agent-backend.js';
 const CLEAR_STAGED =
   'Call `clear_staged_sources` before your first edit: files staged earlier in this round survive, and `fromStaged` would submit them unseen.';
 
-export function buildPromptOpening(brief: BuildBrief, slug: string, creating: boolean): string {
+export function buildPromptOpening(brief: BuildBrief, slug: string, creating: boolean, mounted = false): string {
+  const base = mounted ? `the files already in \`games/${slug}/\`` : 'what `get_sources` returns';
   if (creating) return 'Create a new browser game through gamedev.pl; the game slug does not exist yet.';
   if (brief.seed)
     return `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`;
@@ -11,9 +12,9 @@ export function buildPromptOpening(brief: BuildBrief, slug: string, creating: bo
     return `The gate rejected version ${brief.gateRepair.version} of \`${slug}\`. Repair that delivered game and submit it again.`;
   // Operator retries carry no feedback; only creator notes get this.
   if (brief.undelivered && brief.previewVersion && brief.feedback)
-    return `Your latest preview of \`${slug}\` (version ${brief.previewVersion}) was delivered and the creator has written since; this continues the same round. Revise that version, do not rebuild it: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
+    return `Your latest preview of \`${slug}\` (version ${brief.previewVersion}) was delivered and the creator has written since; this continues the same round. Revise that version, do not rebuild it: start from ${base}, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
   if (brief.undelivered)
-    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from what \`get_sources\` returns, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
+    return `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round: start from ${base}, and ${undeliveredRequest(brief)}. ${CLEAR_STAGED}`;
   if (brief.feedback)
     return `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`;
   return `Build a new browser game in \`games/${slug}/\`.`;

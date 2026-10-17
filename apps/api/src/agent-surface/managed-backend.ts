@@ -4,6 +4,7 @@ import { withoutRetiredPaths } from '@gamedevpl/contract';
 import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
 import { startWithWorkspace, type ManagedWorkspaceLoader } from './managed-workspace.js';
+import { resolveGameMemory, type GameMemoryIndex } from './managed-game-memory.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
@@ -29,6 +30,8 @@ export interface ManagedBackendOptions {
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   workspace?: ManagedWorkspaceLoader;
+  // Per-game memory store index; unset keeps rounds memoryless.
+  gameMemory?: GameMemoryIndex;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
   budget?: ManagedUsageBudget;
@@ -150,6 +153,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     // Set at the vendor call, after workspace assembly; vendors may end early.
     let requestedAt = Date.now();
     const shell = options.provider.shell === true;
+    const memoryStoreId = await resolveGameMemory(options.provider, options.gameMemory, brief.slug, options.log);
     const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
@@ -167,9 +171,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.maxDurationSeconds ? { maxDurationSeconds: options.maxDurationSeconds } : {}),
       tools: options.tools,
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
+      ...(memoryStoreId ? { memoryStoreId } : {}),
     };
     const load = options.workspace ? () => options.workspace!(brief) : undefined;
-    const withWorkspace = (lines: string[]) => buildPrompt(effectiveBrief, { shell, workspace: lines });
+    const withWorkspace = (lines: string[], mountedSources: boolean) =>
+      buildPrompt(effectiveBrief, { shell, workspace: lines, mountedSources });
     const vendor = {
       workspaceArchiveDir: options.provider.workspaceArchiveDir,
       startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),
@@ -202,6 +208,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
   return {
     name: backendName,
+    shell: options.provider.shell === true,
 
     seedDelivery(): SeedDelivery {
       return seedSupported ? 'workspace' : 'channel';

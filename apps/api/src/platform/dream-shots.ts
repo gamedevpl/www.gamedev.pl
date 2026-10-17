@@ -6,8 +6,15 @@ export const DREAM_SOURCE_SHOT_LABEL = 'Dream source';
 // An AI-edited concept frame; the studio must always say so.
 export const DREAM_FRAME_SHOT_LABEL = 'AI concept';
 
-// Both reserved captions, for store reads that must skip proposal shots.
-export const DREAM_SHOT_LABELS: readonly string[] = [DREAM_SOURCE_SHOT_LABEL, DREAM_FRAME_SHOT_LABEL];
+// A managed builder's private visual_target frame; never in the strip.
+export const VISUAL_TARGET_SHOT_LABEL = 'Visual target';
+
+// Reserved captions, for store reads that must skip platform image shots.
+export const DREAM_SHOT_LABELS: readonly string[] = [
+  DREAM_SOURCE_SHOT_LABEL,
+  DREAM_FRAME_SHOT_LABEL,
+  VISUAL_TARGET_SHOT_LABEL,
+];
 
 // True for shots that belong to a proposal, not the media strip.
 export function isDreamShotLabel(label: string | undefined): boolean {

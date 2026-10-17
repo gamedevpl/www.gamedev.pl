@@ -102,11 +102,15 @@ function signRoundScoped(
   return createHmac('sha256', secret).update(payload).digest('hex');
 }
 
-function signManagedMcpOpener(jobId: number, roundGeneration: number, exp: number, secret: string): string {
+function signManagedMcpOpener(jobId: number, roundGeneration: number, exp: number, secret: string, shell = false) {
+  const base = `${MANAGED_MCP_OPENER_SCOPE}:${jobId}:${roundGeneration}:${exp}`;
   return createHmac('sha256', secret)
-    .update(`${MANAGED_MCP_OPENER_SCOPE}:${jobId}:${roundGeneration}:${exp}`)
+    .update(shell ? `${base}:shell` : base)
     .digest('hex');
 }
+
+// A managed opener also says whether its session has a shell.
+export type ManagedOpenerClaims = AgentTokenClaims & { roundGeneration: number; exp: number; shell: boolean };
 
 function safeEqualHex(actual: string, expected: string): boolean {
   const actualBuffer = Buffer.from(actual, 'utf8');
@@ -143,7 +147,11 @@ export function mintAgentToken(jobId: number, secret: string, options: MintAgent
   );
 }
 
-export function mintManagedMcpOpener(jobId: number, secret: string, options: MintAgentTokenOptions): string {
+export function mintManagedMcpOpener(
+  jobId: number,
+  secret: string,
+  options: MintAgentTokenOptions & { shell?: boolean },
+): string {
   if (!Number.isSafeInteger(jobId) || jobId <= 0) throw new InvalidAgentTokenError('invalid job id');
   if (!Number.isSafeInteger(options.roundGeneration) || options.roundGeneration < 1) {
     throw new InvalidAgentTokenError('invalid round generation');
@@ -151,15 +159,19 @@ export function mintManagedMcpOpener(jobId: number, secret: string, options: Min
   const nowMs = options.now ?? Date.now();
   const ttlDays = options.ttlDays ?? selfBuildKeyTtlDays();
   const exp = Math.floor(nowMs / 1000) + ttlDays * 24 * 60 * 60;
-  const signature = signManagedMcpOpener(jobId, options.roundGeneration, exp, secret);
-  return Buffer.from(`${jobId}.${options.roundGeneration}.${exp}.${signature}`, 'utf8').toString('base64url');
+  const shell = options.shell === true;
+  const signature = signManagedMcpOpener(jobId, options.roundGeneration, exp, secret, shell);
+  const body = `${jobId}.${options.roundGeneration}.${exp}${shell ? '.shell' : ''}.${signature}`;
+  return Buffer.from(body, 'utf8').toString('base64url');
 }
 
-export function verifyManagedMcpOpener(token: string, secret: string): AgentTokenClaims {
+export function verifyManagedMcpOpener(token: string, secret: string): ManagedOpenerClaims {
   try {
-    const [jobIdRaw, generationRaw, expRaw, signature, ...extra] = Buffer.from(token, 'base64url')
-      .toString('utf8')
-      .split('.');
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    // Five parts carry the shell marker before the signature.
+    const shell = parts.length === 5 && parts[3] === 'shell';
+    if (shell) parts.splice(3, 1);
+    const [jobIdRaw, generationRaw, expRaw, signature, ...extra] = parts;
     if (
       extra.length ||
       !jobIdRaw ||
@@ -183,11 +195,11 @@ export function verifyManagedMcpOpener(token: string, secret: string): AgentToke
       roundGeneration < 1 ||
       !Number.isSafeInteger(exp) ||
       exp <= 0 ||
-      !safeEqualHex(signature, signManagedMcpOpener(jobId, roundGeneration, exp, secret))
+      !safeEqualHex(signature, signManagedMcpOpener(jobId, roundGeneration, exp, secret, shell))
     ) {
       throw new InvalidAgentTokenError();
     }
-    return { jobId, roundGeneration, exp };
+    return { jobId, roundGeneration, exp, shell };
   } catch (error) {
     if (error instanceof InvalidAgentTokenError) throw error;
     throw new InvalidAgentTokenError();

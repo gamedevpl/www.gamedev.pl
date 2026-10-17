@@ -104,6 +104,11 @@ import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from
 import { registerSeedDispatchRoute, type SeedDispatchRouteOptions } from '../creation/seed-dispatch.js';
 import { registerDispatchReaperRoutes, type DispatchReaperRoutesOptions } from '../creation/dispatch-reaper.js';
 import {
+  createManagedSessionRetentionFromEnv,
+  registerManagedSessionRetentionRoutes,
+  type ManagedSessionRetentionRoutesOptions,
+} from '../agent-surface/managed-session-retention-routes.js';
+import {
   buildImprovementBrief,
   registerSuggestionInboxRoutes,
   type SuggestionInboxRoutesOptions,
@@ -118,6 +123,7 @@ import type { OptionImageGenerator } from '../creation/option-images.js';
 import { InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
+import { createVisualTargetFromEnv } from '../creation/dream-job-env.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
 import { mintToken } from './submission-token.js';
 import { loadReviewCandidate } from '../community/review-candidate.js';
@@ -186,6 +192,7 @@ export interface BuildAppOptions {
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
   seedDispatchRoutes?: Partial<Omit<SeedDispatchRouteOptions, 'dispatchQueuedJob'>>;
   dispatchReaperRoutes?: Partial<Omit<DispatchReaperRoutesOptions, 'store' | 'redispatchQueuedJob'>>;
+  managedSessionRetentionRoutes?: Partial<ManagedSessionRetentionRoutesOptions>;
   /** Seams for the published-shelf health sweep; defaults to OIDC-or-deny-all from env. */
   healthSweepRoutes?: Partial<HealthSweepRoutesOptions>;
   /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
@@ -272,7 +279,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       : (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
 
   const betaAllowedUids = csvSet(options.betaAllowedUids ?? process.env.BETA_ALLOWED_UIDS);
-  const betaAllowedEmails = csvSet(options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS, (e) => e.toLowerCase());
+  const betaAllowedEmails = csvSet(options.betaAllowedEmails ?? process.env.BETA_ALLOWED_EMAILS, (e) =>
+    e.toLowerCase(),
+  );
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
@@ -507,6 +516,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     }
                   : null;
               },
+              gameMemory: store,
               readCredentialRef: async (jobId: number, sessionRef: string) => {
                 const record = await store.getSubmission(jobId);
                 return record?.dispatch?.credentialRefs?.[sessionRef];
@@ -555,6 +565,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       proposalDiffPage,
     },
     assertDeliverableSourcePath,
+    visualTarget: createVisualTargetFromEnv({ store, log: app.log }),
   });
 
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
@@ -774,6 +785,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     redispatchQueuedJob: submissionSeams.redispatchQueuedJob,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'dispatchReaper'),
     ...options.dispatchReaperRoutes,
+  });
+  await registerManagedSessionRetentionRoutes(app, {
+    ...createManagedSessionRetentionFromEnv(process.env),
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'managedSessionRetention'),
+    ...options.managedSessionRetentionRoutes,
   });
 
   // The service calling itself so round-0 seeding runs inside a request (seed-dispatch.ts).

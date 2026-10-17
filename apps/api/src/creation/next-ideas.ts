@@ -55,10 +55,18 @@ export const NEXT_IDEAS_GEMINI_MODEL = 'gemini-3.8-flash';
 const NextIdeaResultSchema = z.object({
   ideas: z
     .array(
-      z.object({
-        label: z.object({ en: z.string(), pl: z.string() }).partial(),
-        prompt: z.object({ en: z.string(), pl: z.string() }).partial(),
-      }),
+      // Flat: Sonnet drops `{"en":` from nested pairs most draws.
+      z
+        .object({
+          label_en: z.string(),
+          label_pl: z.string(),
+          prompt_en: z.string(),
+          prompt_pl: z.string(),
+          // The old nested shape, still read from a model that sends it.
+          label: z.object({ en: z.string(), pl: z.string() }).partial(),
+          prompt: z.object({ en: z.string(), pl: z.string() }).partial(),
+        })
+        .partial(),
     )
     .optional(),
 });
@@ -179,7 +187,7 @@ Write both a short "label" (what a button says, at most 8 words) and a fuller "p
 Respond STRICTLY with a JSON object following this schema:
 {
   "ideas": [
-    { "label": { "en": "...", "pl": "..." }, "prompt": { "en": "...", "pl": "..." } }
+    { "label_en": "...", "label_pl": "...", "prompt_en": "...", "prompt_pl": "..." }
   ]
 }
 
@@ -222,8 +230,14 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
 
       const ideas: NextIdea[] = [];
       for (const [idx, raw] of (parsed.ideas ?? []).entries()) {
-        const label = cleanBilingual(raw.label, MAX_LABEL_LENGTH);
-        const prompt = cleanBilingual(raw.prompt, MAX_PROMPT_LENGTH);
+        const label = cleanBilingual(
+          { en: raw.label_en ?? raw.label?.en, pl: raw.label_pl ?? raw.label?.pl },
+          MAX_LABEL_LENGTH,
+        );
+        const prompt = cleanBilingual(
+          { en: raw.prompt_en ?? raw.prompt?.en, pl: raw.prompt_pl ?? raw.prompt?.pl },
+          MAX_PROMPT_LENGTH,
+        );
         if (!label || !prompt) continue;
         ideas.push({ id: `idea_${idx}`, label, prompt });
         if (ideas.length >= MAX_NEXT_IDEAS) break;

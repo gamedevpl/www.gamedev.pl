@@ -267,6 +267,8 @@ export interface SubmissionRecord {
   roundStartedAt?: string;
   // Submit attempts this round (refusals + accepts).
   roundSubmitAttempts?: number;
+  // visual_target attempts, keyed to the round that spent them.
+  visualTargetAttempts?: { generation: number; count: number };
   // Audio / symbol preflight refusals this round.
   roundPreflightRefusalsAudio?: number;
   roundPreflightRefusalsSymbols?: number;

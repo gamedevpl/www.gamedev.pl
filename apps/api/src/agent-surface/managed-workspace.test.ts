@@ -39,6 +39,7 @@ describe('managed workspace loader', () => {
     const workspace = await load(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
     expect(workspace?.slug).toBe('rocks');
+    expect(workspace?.delivered).toBe(true);
     expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
     expect(gunzipSync(workspace!.archives[1]!.bytes).toString('latin1')).toContain('rocks/game.ts');
@@ -86,6 +87,7 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('npm config set update-notifier false && mkdir -p /workspace');
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('`games/rocks/`');
+    expect(lines).not.toContain('do not call `get_sources`');
     expect(lines).toContain('If it is not eng_new');
     expect(lines).toMatch(/delete the kit directory.*npm ci --ignore-scripts` again/);
   });
@@ -97,6 +99,22 @@ describe('workspace kickoff', () => {
     expect(prompt).not.toContain('GET its `archive` once');
     expect(prompt).not.toContain('Unpack `get_kit`’s kitUrl once');
     expect(buildPrompt(BRIEF, { shell: true })).toContain('Unpack `get_kit`’s kitUrl once');
+  });
+
+  it('drops the get_sources steps when the game’s files are mounted', () => {
+    const workspace = workspaceKickoff('/mnt/session/uploads', {
+      engineRef: 'e',
+      slug: 'rocks',
+      delivered: true,
+      archives: [],
+    });
+    const brief = { ...BRIEF, undelivered: true, previewVersion: 'v3', feedback: 'faster' } as BuildBrief;
+    const prompt = buildPrompt(brief, { shell: true, workspace, mountedSources: true });
+    expect(prompt).toContain('start from the files already in `games/rocks/`');
+    expect(prompt).toContain('do not call `get_sources`');
+    expect(prompt).toContain('then call `get_brief`, `read_inbox`, and `get_kit`');
+    expect(prompt).not.toContain('Call `get_sources` before deciding anything');
+    expect(buildPrompt(brief, { shell: true, workspace })).toContain('Call `get_sources` before deciding anything');
   });
 });
 
@@ -115,12 +133,14 @@ describe('startWithWorkspace', () => {
   it('mounts the archives with the workspace kickoff', async () => {
     const startSession = vi.fn(async () => ({ id: 's', state: 'queued' as const }));
     const provider = { startSession, workspaceArchiveDir: '/mnt/session/uploads' } as unknown as ManagedAgentProvider;
+    const promptWith = vi.fn(() => 'ws');
     await startWithWorkspace(
       provider,
-      async () => WORKSPACE,
+      async () => ({ ...WORKSPACE, slug: 'rocks', delivered: true }),
       REQUEST,
-      () => 'ws',
+      promptWith,
     );
+    expect(promptWith).toHaveBeenCalledWith(expect.any(Array), true);
     expect(startSession).toHaveBeenCalledWith({ ...REQUEST, prompt: 'ws', workspaceArchives: WORKSPACE.archives });
   });
 

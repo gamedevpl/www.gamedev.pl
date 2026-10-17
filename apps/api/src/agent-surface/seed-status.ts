@@ -23,7 +23,7 @@ export function seedNoticeFor(status: SeedStatus): string | null {
     case 'pending':
       return "This game's round-0 draft is still generating. Browse the kit if needed, then call get_sources again before scaffolding.";
     default:
-      return 'This round has no draft to continue; scaffold from a kit starter — read starters/<slug>/ via read_kit_file and stage those files (a local kit checkout also ships a create script for this).';
+      return 'This game has no generated round-0 draft. get_sources returns the files this round builds on (a previous delivery, when one exists); only when it returns none does the game start from a kit starter — starters/<slug>/ via read_kit_file, or the create script in a local kit checkout.';
   }
 }
 

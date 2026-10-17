@@ -54,6 +54,7 @@ JOBS=(
   "suggestion-sweep|/api/internal/suggestion-sweep|30 3 * * *|IL-3 router over the scorecards; must follow scorecard-sweep"
   "digest-sweep|/api/internal/digest-sweep|0 9 * * 1|weekly creator digest, Monday morning"
   "health-sweep|/api/internal/health-sweep|50 3 * * *|daily re-check of the published shelf against today's engine (game-health.ts)"
+  "managed-session-retention|/api/internal/managed-session-retention|10 4 * * *|nightly delete of platform builder sessions older than MANAGED_SESSION_RETENTION_DAYS (default 30)"
 )
 
 selected=("$@")
