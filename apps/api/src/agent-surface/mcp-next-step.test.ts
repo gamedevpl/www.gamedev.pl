@@ -296,6 +296,8 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
       mode: 'preview',
     });
     expect(refused.data.retry).toMatch(/paused gate runs.*stay staged/);
+    const inline = await call('submit_sources', { files: FILES, mode: 'preview', kitEngineRef: NEW_ENGINE });
+    expect(inline.data.retry).toMatch(/sent inline were not kept/);
   });
 
   it('G: a successful delivery points at end, and end closes the session', async () => {

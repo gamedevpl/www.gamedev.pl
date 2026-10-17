@@ -1,7 +1,9 @@
 import type { SourceDeliveryRejected } from '../delivery/source-delivery.js';
 
 // What a refused delivery tells the builder, per refusal.
-export function deliveryRefusalFields(delivery: SourceDeliveryRejected): Record<string, unknown> {
+export function deliveryRefusalFields(delivery: SourceDeliveryRejected, fromStaged: boolean): Record<string, unknown> {
+  // Inline files are never copied into staging on a refusal.
+  const kept = fromStaged ? 'Your staged sources stay staged' : 'Files sent inline were not kept; send them again';
   switch (delivery.rejected) {
     case 'stopped':
       return {
@@ -9,8 +11,7 @@ export function deliveryRefusalFields(delivery: SourceDeliveryRejected): Record<
       };
     case 'rate_limited':
       return {
-        retry:
-          'Too many deliveries for this job in the last hour. Your sources stay staged; the limit frees up as that hour passes.',
+        retry: `Too many deliveries for this job in the last hour. ${kept}; the limit frees up as that hour passes.`,
       };
     case 'delivery_cap':
     case 'job_delivery_cap':
@@ -25,8 +26,8 @@ export function deliveryRefusalFields(delivery: SourceDeliveryRejected): Record<
         reason: 'gate_capacity',
         retry:
           delivery.gateCapacity === 'paused'
-            ? 'An operator has paused gate runs. Your sources stay staged; every submit_sources is refused the same way until gate runs resume.'
-            : 'The platform’s gate runs for today are spent; the allowance resets at 00:00 UTC. Your sources stay staged; every submit_sources before then is refused the same way.',
+            ? `An operator has paused gate runs. ${kept}; every submit_sources is refused the same way until gate runs resume.`
+            : `The platform’s gate runs for today are spent; the allowance resets at 00:00 UTC. ${kept}; every submit_sources before then is refused the same way.`,
       };
     case 'content_rejected':
       return {
@@ -37,7 +38,7 @@ export function deliveryRefusalFields(delivery: SourceDeliveryRejected): Record<
     case 'moderation_unavailable':
       return {
         reason: 'moderation_unavailable',
-        retry: 'the content check could not run — your sources are staged, deliver again shortly',
+        retry: `The content check could not run. ${kept}; deliver again shortly.`,
       };
   }
 }

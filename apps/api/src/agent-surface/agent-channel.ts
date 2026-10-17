@@ -2084,7 +2084,7 @@ export async function registerAgentChannelRoutes(
           return reply.send({
             accepted: false,
             rejected: delivery.rejected,
-            ...deliveryRefusalFields(delivery),
+            ...deliveryRefusalFields(delivery, Boolean(parsed.data.fromStaged)),
             ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
           });
         }
