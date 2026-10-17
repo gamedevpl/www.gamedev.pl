@@ -1,4 +1,5 @@
-import { isRetiredBackend, type AgentBackend, type SeedFiles } from '../agent-surface/agent-backend.js';
+import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js';
+import { isRetiredBackend } from './retired-backends.js';
 import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';

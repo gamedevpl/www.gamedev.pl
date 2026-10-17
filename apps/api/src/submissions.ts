@@ -83,7 +83,8 @@ import { createBuildStatusAssembler } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
-import { isRetiredBackend, type AgentBackend, type SeedFiles } from './agent-surface/agent-backend.js';
+import type { AgentBackend, SeedFiles } from './agent-surface/agent-backend.js';
+import { isRetiredBackend } from './creation/retired-backends.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,

@@ -67,7 +67,6 @@ async function setup(owner: 'creator' | 'platform', base: ProposalBase = { kind:
       toPublicProposalState,
     },
     agentTokenSecret: SECRET,
-    platformConnectorSecret: undefined,
     now: () => NOW,
     missingCredentialHint: 'no key',
     gamesStore: gamesStore as unknown as GamesStore,

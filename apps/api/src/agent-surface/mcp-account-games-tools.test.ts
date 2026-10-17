@@ -6,7 +6,7 @@ import { mintCreatorAgentKey } from './agent-creator-key.js';
 import { createAccountGamesTools } from './mcp-account-games-tools.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
-import { PLATFORM_CONNECTOR_ONLY_REASON, RETIRED_GAME_KEY_REASON } from './mcp-tool-support.js';
+import { RETIRED_GAME_KEY_REASON } from './mcp-tool-support.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import type { GitHubClient } from '../github.js';
 import type { LinkedPullRequest } from '../pr-monitor.js';
@@ -14,7 +14,7 @@ import type { CatalogGameEntry, GameSources } from '../catalog/catalog-types.js'
 
 const secret = 'test-token-secret-must-be-32-chars-long';
 const sessionSecret = 'dev-session-secret-change-me';
-const connectorSecret = 'test-connector-secret-32-chars-min';
+const strayBearer = 'not-a-gamedevpl-key';
 
 const OWNER = 'g:owner';
 const OTHER = 'g:other';
@@ -42,7 +42,6 @@ async function createApp(store: InMemoryStore) {
   return buildApp({
     store,
     sessionSecret,
-    platformConnectorSecret: connectorSecret,
     submissionRoutes: {
       githubClient: stubGitHub(),
       githubToken: 'gh',
@@ -124,7 +123,7 @@ describe('list_account_games MCP tool', () => {
     expect(JSON.stringify(structured)).toMatch(/creator key or OAuth access/i);
   });
 
-  it('refuses platform connector secret', async () => {
+  it('refuses an unrecognised bearer', async () => {
     const store = new InMemoryStore();
     const app = await createApp(store);
 
@@ -132,11 +131,11 @@ describe('list_account_games MCP tool', () => {
       app,
       {},
       {
-        authorization: `Bearer ${connectorSecret}`,
+        authorization: `Bearer ${strayBearer}`,
       },
     );
     expect(isError).toBe(true);
-    expect(JSON.stringify(structured)).toContain(PLATFORM_CONNECTOR_ONLY_REASON);
+    expect(JSON.stringify(structured)).toContain('creator key or OAuth');
   });
 
   it('refuses retired game keys', async () => {
@@ -404,7 +403,7 @@ describe('list_account_games MCP tool', () => {
     expect(body.games).toHaveLength(1);
   });
 
-  it('allows platform connector bearer when valid sessionKey is supplied', async () => {
+  it('lets a valid sessionKey argument win over an unrelated bearer', async () => {
     const store = new InMemoryStore();
     const app = await createApp(store);
 
@@ -422,7 +421,7 @@ describe('list_account_games MCP tool', () => {
     const { structured, isError } = await callListAccountGames(
       app,
       { sessionKey },
-      { authorization: `Bearer ${connectorSecret}` },
+      { authorization: `Bearer ${strayBearer}` },
     );
     expect(isError).toBe(false);
     const body = structured as { total: number; games: Array<{ slug: string }> };
@@ -484,7 +483,6 @@ describe('list_account_games MCP tool', () => {
     const tools = createAccountGamesTools({
       store,
       agentTokenSecret: secret,
-      platformConnectorSecret: connectorSecret,
       now: () => Date.now(),
     });
     const creatorKey = mintCreatorAgentKey(secret, { creatorUid: OWNER, keyGeneration: 1, now: Date.now() });

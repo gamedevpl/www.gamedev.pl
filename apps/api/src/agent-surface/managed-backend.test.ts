@@ -127,7 +127,16 @@ describe('managed backend', () => {
     });
 
     await backend.dispatch(
-      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }, { path: 'EDITOR.ts', content: '' }], references: [] } }),
+      brief({
+        seed: {
+          slug: SLUG,
+          files: [
+            { path: 'game.ts', content: 'export {};' },
+            { path: 'EDITOR.ts', content: '' },
+          ],
+          references: [],
+        },
+      }),
     );
 
     expect(started).toHaveLength(1);
@@ -142,7 +151,16 @@ describe('managed backend', () => {
     const backend = createManagedBackend({ provider, tools: TOOLS });
 
     await backend.dispatch(
-      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }, { path: 'EDITOR.ts', content: '' }], references: [] } }),
+      brief({
+        seed: {
+          slug: SLUG,
+          files: [
+            { path: 'game.ts', content: 'export {};' },
+            { path: 'EDITOR.ts', content: '' },
+          ],
+          references: [],
+        },
+      }),
     );
 
     expect(started).toHaveLength(1);
@@ -200,6 +218,7 @@ describe('managed backend', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(first).toMatchObject({
       state: 'cancelled',
+      stopReason: 'budget_reached',
       hasCandidate: false,
       sessionTokens: { vendor: 'gemini', total: 110 },
       budgetStop: { unit: 'tokens', observed: 110, max: 100, enforced: true },
@@ -248,42 +267,6 @@ describe('managed backend', () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('stops a Copilot round once summed credits exceed its ceiling', async () => {
-    const cancel = vi.fn(async () => ({ enforced: false }));
-    const start = vi.fn();
-    const { provider } = fakeProvider({
-      startSession: async (request) => {
-        start(request);
-        return { id: 'copilot-task', state: 'queued' };
-      },
-      getSession: async () => ({
-        id: 'copilot-task',
-        state: 'in_progress',
-        usage: { unit: 'credits', vendor: 'copilot', credits: 3.5, model: 'gpt-5.4' },
-      }),
-      cancelSession: cancel,
-    });
-    const backend = createManagedBackend({
-      provider,
-      budget: { unit: 'credits', max: 3 },
-      tools: TOOLS,
-    });
-
-    await backend.dispatch(brief());
-    const first = await backend.observe('copilot-task', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
-    const second = await backend.observe('copilot-task', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
-
-    expect(first).toMatchObject({
-      state: 'cancelled',
-      stopReason: 'budget_reached',
-      sessionCredits: 3.5,
-      budgetStop: { unit: 'credits', observed: 3.5, max: 3, enforced: false },
-    });
-    expect(second).toMatchObject({ state: 'cancelled', stopReason: 'budget_reached' });
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(start).toHaveBeenCalledTimes(1);
   });
 
   it('nudges an idle session once, then spends the round if still idle without delivery', async () => {

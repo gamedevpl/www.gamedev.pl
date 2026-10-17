@@ -862,7 +862,7 @@ describe('submission routes', () => {
   });
 
   it('queues feedback to the inbox without starting a second session on an in-flight round', async () => {
-    // The agent-tasks API cannot steer or cancel a running Copilot session. Spawning a
+    // A running vendor session cannot be relied on to steer or cancel. Spawning a
     // second task on top of an in-flight round is what produced concurrent builds of the
     // same game; the inbox is the steering path the brief already tells the agent to poll.
     const { githubClient, createIssueComment } = createGithubClientStub({ jobId: 77 });
@@ -6344,7 +6344,7 @@ describe('what a build costs', () => {
     const observe = vi.fn(async () => ({
       state: 'completed' as const,
       hasCandidate: true,
-      sessionCredits: 403.45,
+      sessionTokens: { input: 120_000, output: 8_000 },
     }));
     const clock = { t: Date.now() };
     const { app, store, authHeaders } = await createApp({
@@ -6375,8 +6375,7 @@ describe('what a build costs', () => {
         at: expect.any(String),
         by: 'stub',
         ref: 'task-1',
-        credits: 403.45,
-        creditsMeasured: true,
+        tokens: { input: 120_000, output: 8_000 },
         finishedAt: expect.any(String),
         state: 'completed',
       },
@@ -7009,7 +7008,7 @@ describe('operator cancel and retry', () => {
   });
 
   it('names an exhausted agent allowance rather than calling it a dispatch failure', async () => {
-    // 412 from the agent-tasks API means the coding-agent account has no premium requests
+    // A 412 dispatch error means the coding-agent account has no premium requests
     // left. Every job on the site is equally stuck and the button will not fix any of
     // them, so the operator has to be sent to billing rather than back to the button.
     const { backend } = createBackendStub();

@@ -40,25 +40,6 @@ describe('InMemoryStore', () => {
     expect(entry.credits).toBeUndefined();
   });
 
-  it('keeps a measured credit figure, which is real', async () => {
-    const store = new InMemoryStore();
-    await store.createSubmission(1, 'g:123', 'A game');
-    await store.recordJobCost(1, {
-      kind: 'agent_session',
-      at: '2026-08-08T10:00:00Z',
-      by: 'copilot',
-      ref: 's1',
-      credits: 1,
-    });
-    await store.setJobCostCredits(1, 's1', 212);
-
-    await store.setJobCostTokens(1, 's1', { input: 10, output: 2 });
-
-    const [entry] = (await store.getSubmission(1))?.costs ?? [];
-    expect(entry.credits).toBe(212);
-    expect(entry.tokens).toEqual({ input: 10, output: 2 });
-  });
-
   it('stamps a session as finished once, and only once', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:123', 'A game');

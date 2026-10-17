@@ -304,6 +304,7 @@ const FILE_BUCKET = {
   'dispatch-build': 'creation',
   'retry-undispatched': 'creation',
   'resume-build': 'creation',
+  'retired-backends': 'creation',
   'seed-pipeline': 'creation',
   'seed-regeneration': 'creation',
   'seed-regeneration-takeover.test': 'creation',

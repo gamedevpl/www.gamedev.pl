@@ -128,7 +128,6 @@ describe('createCloudBuildGateTrigger', () => {
 
     const secrets = calls[0]!.body.availableSecrets as { secretManager: Array<{ versionName: string; env: string }> };
     expect(secrets.secretManager[0]!.versionName).toContain('secrets/github-token');
-    expect(JSON.stringify(calls[0]!.body)).not.toContain('agent-tasks-token');
   });
 
   it('runs as the least-privilege gate-runner SA with hard machine and time caps', async () => {

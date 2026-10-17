@@ -9,11 +9,10 @@ import { mintGameAgentKey } from './agent-game-key.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { GAME_UNAVAILABLE, OWNERSHIP_SCOPE_REQUIRED } from './mcp-ownership-tools.js';
-import { PLATFORM_CONNECTOR_ONLY_REASON, RETIRED_GAME_KEY_REASON } from './mcp-tool-support.js';
+import { RETIRED_GAME_KEY_REASON } from './mcp-tool-support.js';
 import { memberKey } from '../platform/game-access-permissions.js';
 
 const SECRET = 'oauth-cli-mcp-secret';
-const CONNECTOR = 'test-connector-secret-32-chars-min';
 const AT = '2026-01-01T00:00:00.000Z';
 const OWNER = 'g:ada';
 const EDITOR = 'g:bea';
@@ -31,7 +30,6 @@ async function createApp(store: InMemoryStore) {
   return buildApp({
     store,
     sessionSecret: SESSION_SECRET,
-    platformConnectorSecret: CONNECTOR,
     submissionRoutes: {
       githubClient: { createIssue: async () => ({ number: 42 }) } as never,
       githubToken: 'gh',
@@ -141,7 +139,6 @@ describe('MCP ownership tools', () => {
     expect(sessionOnly.isError).toBe(true);
     expect(JSON.stringify(sessionOnly.structured)).toContain(OWNERSHIP_SCOPE_REQUIRED);
     const cases: Array<[Record<string, string>, Record<string, unknown>, string]> = [
-      [{ authorization: `Bearer ${CONNECTOR}` }, { slug: SLUG }, PLATFORM_CONNECTOR_ONLY_REASON],
       [{ authorization: `Bearer ${gameKey}` }, { slug: SLUG }, RETIRED_GAME_KEY_REASON],
       [{ authorization: `Bearer ${sessionKey}` }, { slug: SLUG }, OWNERSHIP_SCOPE_REQUIRED],
       [{ authorization: `Bearer ${roundKey}` }, { slug: SLUG }, OWNERSHIP_SCOPE_REQUIRED],

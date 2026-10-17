@@ -76,13 +76,6 @@ export interface SeedFiles {
   notes?: string;
 }
 
-// Backends removed from the platform; their stored jobs resolve to none.
-const RETIRED_BACKEND_NAMES: ReadonlySet<string> = new Set(['managed:copilot', 'copilot']);
-
-export function isRetiredBackend(name: string | undefined): boolean {
-  return name !== undefined && RETIRED_BACKEND_NAMES.has(name);
-}
-
 /** What a backend hands back after starting work, recorded on the job. */
 export interface DispatchResult {
   /** Backend-specific session/task id. Opaque to everything but the backend. */
