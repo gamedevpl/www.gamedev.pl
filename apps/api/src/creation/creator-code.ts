@@ -999,15 +999,7 @@ export async function registerCreatorCodeRoutes(
     summary: z.string().trim().max(1024).optional(),
   });
 
-  /**
-   * POST /api/me/studio/games/:slug/sources/deliver (CE-18) — the manual round's
-   * delivery, through the same `createSourceDeliveryService` the agent channel uses:
-   * same allowlist, same typecheck preflight, same rate limits. Requires an *active*
-   * round — a slug whose newest round has already published or otherwise closed needs
-   * a new round opened from the thread first (CE-17's round-open-on-first-write is not
-   * implemented by this route; see the execution plan's own note that this is the
-   * scoped-down half of Wave D).
-   */
+  // Unchanged sources need a fresh round too; staging normally opens it.
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/deliver',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
@@ -1024,17 +1016,6 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      // Same "unset means queued" reading `nativeJobStatus` uses — a job that has
-      // never transitioned (the common case for one nobody has touched since
-      // creation) is not the same thing as a closed one.
-      const resolvedState = resolveJobState(record) ?? 'queued';
-      if (!isActiveBuildRound({ state: resolvedState, transitions: record.transitions })) {
-        return reply.status(409).send({
-          error: 'no_active_round',
-          message: 'this game has no round open to deliver into — start a new round from the thread first',
-        });
-      }
-
       const parsed = DeliverInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
@@ -1053,6 +1034,7 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration = record.roundGeneration ?? 1;
+      const closed = roundIsClosed(record);
       const version = await resolveVersion(store, record, slug);
       const baseFiles = new Map<string, string>();
       const baseManifest = version ? await gamesStore.getManifest(slug, version) : null;
@@ -1067,12 +1049,12 @@ export async function registerCreatorCodeRoutes(
           if (entry.content !== null) baseFiles.set(entry.path, entry.content);
         }
       }
-      const staged = await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
-      const stagedEntries = await gamesStore.listStagedSources({
-        slug,
-        jobId: record.jobId,
-        roundGeneration,
-      });
+      const staged = closed
+        ? []
+        : await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
+      const stagedEntries = closed
+        ? { files: [] }
+        : await gamesStore.listStagedSources({ slug, jobId: record.jobId, roundGeneration });
       for (const entry of staged) {
         if (entry.deleted) baseFiles.delete(entry.path);
         else baseFiles.set(entry.path, entry.content);
@@ -1081,6 +1063,8 @@ export async function registerCreatorCodeRoutes(
       if (files.length === 0) {
         return reply.status(400).send({ error: 'nothing to deliver — stage at least one file first' });
       }
+
+      const activeRecord = closed ? await openManualRound(store, record, slug, request.user!.uid) : record;
 
       // CE-20: authorship from the staged set's own stamps. A file the buffer never
       // touched (unchanged since the last delivery) says nothing about who wrote
@@ -1106,7 +1090,7 @@ export async function registerCreatorCodeRoutes(
           const registryBody = await options.objectStore.readObject('kits/current.json');
           if (registryBody) {
             const currentRef = parseKitRegistry(registryBody.toString('utf8')).current;
-            kitEngineRef = (await store.pinRoundKitEngineRef(record.jobId, currentRef)) ?? currentRef;
+            kitEngineRef = (await store.pinRoundKitEngineRef(activeRecord.jobId, currentRef)) ?? currentRef;
           }
         } catch (error) {
           request.log.warn({ err: error, slug }, 'code surface deliver: could not pin the kit engine ref');
@@ -1114,13 +1098,13 @@ export async function registerCreatorCodeRoutes(
       }
 
       request.log.info?.(
-        { jobId: record.jobId, slug, uid: request.user!.uid, attestedAt: new Date(nowMs).toISOString() },
+        { jobId: activeRecord.jobId, slug, uid: request.user!.uid, attestedAt: new Date(nowMs).toISOString() },
         'code surface: IP attestation recorded for manual delivery',
       );
 
       try {
         const outcome = await sourceDelivery.deliver({
-          jobId: record.jobId,
+          jobId: activeRecord.jobId,
           slug,
           files,
           mode: parsed.data.mode,
@@ -1134,16 +1118,19 @@ export async function registerCreatorCodeRoutes(
           lastDeliverAt.set(slug, nowMs);
           // Publish consumes the buffer, like agent fromStaged submit.
           await gamesStore
-            .clearStagedSources({ slug, jobId: record.jobId, roundGeneration })
+            .clearStagedSources({ slug, jobId: activeRecord.jobId, roundGeneration: activeRecord.roundGeneration ?? 1 })
             .catch((error: unknown) => {
               request.log.warn(
-                { err: error, jobId: record.jobId, slug },
+                { err: error, jobId: activeRecord.jobId, slug },
                 'code surface deliver: could not clear working copy after publish',
               );
             });
         }
-        options.invalidateStatusCache?.(record.jobId);
-        return reply.send(outcome);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        return reply.send({
+          ...outcome,
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
+        });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
           // `error` stays the sentence; `code`/`missing` drive the fixit.

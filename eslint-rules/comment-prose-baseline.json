@@ -126,7 +126,7 @@
     "apps/api/src/creation/creation-limits.test.ts": 208,
     "apps/api/src/creation/creation-limits.ts": 1037,
     "apps/api/src/creation/creator-code.test.ts": 107,
-    "apps/api/src/creation/creator-code.ts": 949,
+    "apps/api/src/creation/creator-code.ts": 819,
     "apps/api/src/creation/creator-profile-routes.test.ts": 42,
     "apps/api/src/creation/creator-profile-routes.ts": 284,
     "apps/api/src/creation/creator-studio.test.ts": 141,

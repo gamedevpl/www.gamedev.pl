@@ -79,6 +79,12 @@ platform file unwritten when it only matches an ignore rule and is not already i
 `/api/me/studio/games/:slug/sources/deliver` — the same Code-surface path Studio uses.
 Accepted sources, a started gate, a gate verdict, and publish are four different events.
 
+Staging or delivering from the CLI opens a fresh manual round when the previous round
+has closed. `gamedevpl publish` can therefore deliver unchanged sources without a separate
+round-opening step. That delivery uses the existing source version and preserves its
+authorship; staging left over from a closed round is excluded. `--takeover` only disconnects
+an active own-agent session so local files can be delivered; it is not needed to open a round.
+
 ## One delivery allowlist, not two
 
 Which files a game may deliver used to be a literal here and a second literal in the games

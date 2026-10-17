@@ -1112,7 +1112,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(res.statusCode).toBe(400);
       }));
 
-    it('refuses a game with no active round to deliver into', async () =>
+    it('refuses a closed round without sources and leaves it closed', async () =>
       withApp(async (app) => {
         await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
         const res = await app.inject({
@@ -1121,8 +1121,9 @@ describe('the Code surface routes (creator-code.ts)', () => {
           headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
           payload: { mode: 'preview', attestation: true },
         });
-        expect(res.statusCode).toBe(409);
-        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({ error: 'nothing to deliver — stage at least one file first' });
+        expect((await store.getSubmissionBySlug('sky-dodge'))?.jobId).toBe(10);
       }));
 
     it('delivers a staged owner edit, stamping owner authorship, and enforces the cooldown', async () =>
@@ -1228,7 +1229,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(entry?.agentAssisted).toBe(true);
       }));
 
-    it("an empty staging buffer inherits the base version's authorship, not a default of owner", async () => {
+    it("a fresh round with no staged edits inherits the base version's authorship", async () => {
       const stageAgent = (path: string, content: string) =>
         games.putStagedSourceFile({
           slug: 'sky-dodge',
@@ -1238,7 +1239,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
           content,
           stagedBy: 'agent',
         });
-      const paths = ['SPEC.md', 'GAME.json', 'game.ts', 'EDITOR.json'] as const;
       await stageAgent('SPEC.md', '# Sky Dodge');
       await stageAgent(
         'GAME.json',
@@ -1265,7 +1265,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       });
       expect((await games.getManifest('sky-dodge', firstVersion))?.authorship).toBe('agent');
 
-      await games.clearStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1, paths: [...paths] });
+      await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
 
       const secondVersion = await withApp(async (app) => {
         const res = await app.inject({
