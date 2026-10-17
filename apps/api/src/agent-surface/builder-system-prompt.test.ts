@@ -39,6 +39,7 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('npm run --silent capture -- <slug> --stills --out /tmp/shots-before');
     expect(shell).toContain('SwiftShader and takes one to three minutes, so capture it once, after your edit');
     expect(shell).toContain('If no browser starts, do not try to install one');
+    expect(shell).toContain('revise it and capture again before you submit');
     expect(builderSystemPrompt({ shell: false })).not.toContain('npm run --silent capture');
   });
 
