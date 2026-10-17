@@ -1,9 +1,17 @@
 import type { SourceDeliveryRejected } from '../delivery/source-delivery.js';
 
 // What a refused delivery tells the builder, per refusal.
-export function deliveryRefusalFields(delivery: SourceDeliveryRejected, fromStaged: boolean): Record<string, unknown> {
+export function deliveryRefusalFields(
+  delivery: SourceDeliveryRejected,
+  source: 'staged' | 'latest' | 'inline',
+): Record<string, unknown> {
   // Inline files are never copied into staging on a refusal.
-  const kept = fromStaged ? 'Your staged sources stay staged' : 'Files sent inline were not kept; send them again';
+  const kept =
+    source === 'staged'
+      ? 'Your staged sources stay staged'
+      : source === 'latest'
+        ? 'The latest delivery stays as it was for another fromLatestDelivery; inline overrides were not kept'
+        : 'Files sent inline were not kept; send them again';
   switch (delivery.rejected) {
     case 'stopped':
       return {
