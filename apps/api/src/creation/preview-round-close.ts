@@ -10,6 +10,10 @@ export function currentSessionFinished(record: SubmissionRecord): boolean {
   const session = record.costs?.find((entry) => entry.kind === 'agent_session' && entry.ref === lastRef);
   const observedHere = record.agentStateRef === lastRef && record.agentState === 'completed';
   if (session?.state === 'completed' || observedHere) return true;
-  // An explicit end() this round; submit and takeover markers are not one.
+  return endedExplicitly(record);
+}
+
+// An explicit end() this round; submit and takeover markers are not one.
+export function endedExplicitly(record: SubmissionRecord): boolean {
   return Boolean(record.agentEndedAt) && record.agentEndedBy !== 'submit' && record.agentEndedBy !== 'takeover';
 }

@@ -67,6 +67,7 @@ import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
 import type { SourceDeliveryService, SourceDeliveryValidationError } from '../delivery/source-delivery.js';
+import { deliveryRefusalFields } from './delivery-refusal-reply.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
 import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
@@ -2083,30 +2084,10 @@ export async function registerAgentChannelRoutes(
           return reply.send({
             accepted: false,
             rejected: delivery.rejected,
-            ...(delivery.rejected === 'delivery_cap' || delivery.rejected === 'job_delivery_cap'
-              ? {
-                  reason: 'self_build_delivery_cap',
-                  deliveryCap: delivery.deliveryCap,
-                  deliveriesUsed: delivery.deliveriesUsed,
-                }
-              : {}),
-            ...(delivery.rejected === 'gate_capacity'
-              ? { reason: 'gate_capacity', retry: 'your sources are staged — deliver again later' }
-              : {}),
-            ...(delivery.rejected === 'content_rejected'
-              ? {
-                  reason: 'content_rejected',
-                  category: delivery.category,
-                  retry:
-                    'SPEC.md or GAME.json carries text this platform will not publish. Rewrite it and deliver again.',
-                }
-              : {}),
-            ...(delivery.rejected === 'moderation_unavailable'
-              ? {
-                  reason: 'moderation_unavailable',
-                  retry: 'the content check could not run — your sources are staged, deliver again shortly',
-                }
-              : {}),
+            ...deliveryRefusalFields(
+              delivery,
+              parsed.data.fromStaged ? 'staged' : parsed.data.fromLatestDelivery ? 'latest' : 'inline',
+            ),
             ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
           });
         }

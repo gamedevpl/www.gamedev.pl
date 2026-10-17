@@ -173,6 +173,8 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         properties: {
           ok: { type: 'boolean' },
           rejected: { type: 'string' },
+          reason: { type: 'string' },
+          retry: { type: 'string' },
           mode: { type: 'string', enum: ['preview', 'publish'] },
           deliveryId: { type: ['string', 'null'] },
           delivery: {
@@ -369,6 +371,7 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         const body = res.json() as {
           error?: string;
           reason?: string;
+          retry?: string;
           accepted?: boolean;
           rejected?: string;
           mode?: string;
@@ -414,8 +417,9 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
         }
         return toolOk({
           ok: accepted,
-          mode: body.mode === 'preview' ? 'preview' : 'publish',
+          mode: body.mode === 'preview' || body.mode === 'publish' ? body.mode : mode,
           ...(body.rejected ? { rejected: body.rejected } : {}),
+          ...(accepted ? {} : { reason: body.reason, retry: body.retry }),
           deliveryId: body.delivery?.version ?? null,
           delivery: body.delivery ?? null,
           gateStarted,

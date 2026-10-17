@@ -120,7 +120,7 @@ describe('buildPrompt', () => {
     expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });
 
-  it('tells an undelivered round that nothing is recoverable, and to build fresh', () => {
+  it('tells an undelivered round to build fresh from what it staged, if anything', () => {
     // An MCP round has no shell to reach an earlier session with.
     const prompt = buildPrompt({
       ...BRIEF,
@@ -128,7 +128,7 @@ describe('buildPrompt', () => {
       undelivered: true,
     });
     expect(prompt).toContain('ended without delivering');
-    expect(prompt).toMatch(/`read_inbox` together.*Call `clear_staged_sources` before your first edit/);
+    expect(prompt).toMatch(/`read_inbox` together.*Call `list_staged_sources` before your first edit/);
     expect(prompt).not.toContain('npm run restore');
     expect(prompt).not.toContain('revise it, do not rebuild it');
     // The creator's words come from the channel, not the prompt.

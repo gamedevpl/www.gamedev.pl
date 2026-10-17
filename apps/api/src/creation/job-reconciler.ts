@@ -2,7 +2,7 @@ import { retryClosedPreviewDream } from './closed-preview-dream-retry.js';
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { isSettledAgentState } from '../platform/agent-state.js';
-import { currentSessionFinished } from './preview-round-close.js';
+import { currentSessionFinished, endedExplicitly } from './preview-round-close.js';
 import { lastRoundActivityAt } from '../platform/quiet-round.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
@@ -229,12 +229,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       // Stale: a handoff already dispatched a newer ref.
       if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
 
+      const deliveredThisRound = (fresh?.roundDeliveryCount ?? record.roundDeliveryCount ?? 0) > 0;
       // A preview is not publish readiness; its own gate verdict decides.
-      if (
-        result.reason === 'task_completed_without_delivery' &&
-        (fresh?.roundDeliveryCount ?? record.roundDeliveryCount ?? 0) > 0
-      ) {
+      if (result.reason === 'task_completed_without_delivery' && deliveredThisRound) {
         return fresh ? reconcileGateVerdict(fresh) : null;
+      }
+      // Delivered and ended: the gate decides, not the session.
+      if (result.to === 'failed' && deliveredThisRound && fresh && endedExplicitly(fresh)) {
+        return reconcileGateVerdict(fresh);
       }
 
       // Finished but uploaded nothing is the one failure worth answering.

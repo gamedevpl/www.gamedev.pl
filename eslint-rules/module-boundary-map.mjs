@@ -498,6 +498,8 @@ const FILE_BUCKET = {
   'mcp-visual-target-tools': 'agent-surface',
   'mcp-creator-notes-tools': 'agent-surface',
   'mcp-managed-round': 'agent-surface',
+  'delivery-refusal-reply': 'agent-surface',
+  'delivery-refusal-reply.test': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',
   'managed-provider-openai': 'agent-surface',
