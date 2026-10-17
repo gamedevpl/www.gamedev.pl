@@ -55,6 +55,7 @@ function sourcesFor(spec: string): Record<string, string> {
 const GAMES: Record<string, Record<string, string>> = {
   tuned: sourcesFor('---\ntitle: Tuned\neditor: content\n---\n'),
   plain: sourcesFor('---\ntitle: Plain\n---\n'),
+  soon: { ...sourcesFor('---\ntitle: Soon\neditor: content\n---\n'), 'publish.ts': "import './game/runtime.ts';\n" },
 };
 
 function gamesStore(gated: Array<Record<string, unknown>> = []): GamesStore {
@@ -187,6 +188,13 @@ describe('remix guards', () => {
   it('refuses a game that does not declare editor: content', async () => {
     const { app } = await track(build());
     const response = await start(app, 'plain');
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'not_remixable' });
+  });
+
+  it('refuses a game that serves a publish entry', async () => {
+    const { app } = await track(build());
+    const response = await start(app, 'soon');
     expect(response.statusCode).toBe(403);
     expect(response.json()).toEqual({ error: 'not_remixable' });
   });

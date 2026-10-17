@@ -531,7 +531,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         ref: manifest.engineRef ?? options.publishedRef ?? 'main',
         fromStore: true,
         parentVersion: publication.currentVersion,
-        remixable: declaresContentEditor(null, sources['SPEC.md']),
+        remixable: declaresContentEditor(null, sources['SPEC.md']) && !Object.hasOwn(sources, 'publish.ts'),
       };
     }
 
@@ -542,9 +542,10 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     // Catalog membership is established before repository existence is probed.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
     if (manifest === null) return null;
-    const [editorJson, editorContentJson] = await Promise.all([
+    const [editorJson, editorContentJson, publishTs] = await Promise.all([
       options.githubClient.getGameFile(ref, slug, EDITOR_FILE),
       options.githubClient.getGameFile(ref, slug, EDITOR_CONTENT_FILE),
+      options.githubClient.getGameFile(ref, slug, 'publish.ts'),
     ]);
     // Declaration only: a repo game's code stays on the ref (the assembler reads
     // it there), so the code lane has no file list to map and says so, while the
@@ -556,7 +557,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       sources,
       ref,
       fromStore: false,
-      remixable: declaresContentEditor(entry, undefined),
+      // A publish entry serves a trimmed build; remix would rebuild the full game.ts.
+      remixable: declaresContentEditor(entry, undefined) && publishTs === null,
     };
   }
 
