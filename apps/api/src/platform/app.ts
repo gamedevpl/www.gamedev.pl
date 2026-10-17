@@ -104,6 +104,11 @@ import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from
 import { registerSeedDispatchRoute, type SeedDispatchRouteOptions } from '../creation/seed-dispatch.js';
 import { registerDispatchReaperRoutes, type DispatchReaperRoutesOptions } from '../creation/dispatch-reaper.js';
 import {
+  createManagedSessionRetentionFromEnv,
+  registerManagedSessionRetentionRoutes,
+  type ManagedSessionRetentionRoutesOptions,
+} from '../agent-surface/managed-session-retention-routes.js';
+import {
   buildImprovementBrief,
   registerSuggestionInboxRoutes,
   type SuggestionInboxRoutesOptions,
@@ -186,6 +191,7 @@ export interface BuildAppOptions {
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
   seedDispatchRoutes?: Partial<Omit<SeedDispatchRouteOptions, 'dispatchQueuedJob'>>;
   dispatchReaperRoutes?: Partial<Omit<DispatchReaperRoutesOptions, 'store' | 'redispatchQueuedJob'>>;
+  managedSessionRetentionRoutes?: Partial<ManagedSessionRetentionRoutesOptions>;
   /** Seams for the published-shelf health sweep; defaults to OIDC-or-deny-all from env. */
   healthSweepRoutes?: Partial<HealthSweepRoutesOptions>;
   /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
@@ -777,6 +783,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     redispatchQueuedJob: submissionSeams.redispatchQueuedJob,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'dispatchReaper'),
     ...options.dispatchReaperRoutes,
+  });
+  await registerManagedSessionRetentionRoutes(app, {
+    ...createManagedSessionRetentionFromEnv(process.env),
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'managedSessionRetention'),
+    ...options.managedSessionRetentionRoutes,
   });
 
   // The service calling itself so round-0 seeding runs inside a request (seed-dispatch.ts).

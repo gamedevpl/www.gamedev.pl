@@ -455,6 +455,15 @@ accepted), never creator text, keys or URLs, and say the notes never outrank the
 Any failure (store creation, or the session refusing the resource with a 400) starts the round
 without memory. Stores are not yet deleted with their game.
 
+**Session retention.** Anthropic keeps every session and its transcript until it is deleted,
+and those transcripts hold the round's (expired) keys and the builder's context. A nightly
+scheduler job calls `/api/internal/managed-session-retention`
+([`managed-session-retention.ts`](../apps/api/src/agent-surface/managed-session-retention.ts)),
+which deletes sessions older than `MANAGED_SESSION_RETENTION_DAYS` (default 30, minimum 7, so
+recent rounds stay available for debugging), at most 200 per run. It only deletes `idle` or
+`terminated` sessions created with our own `MANAGED_AGENT_ID` (the environment may also host
+hand-run sessions, and sessions of a rotated-out agent are left alone), never a running one. Vaults need no sweep: they are already archived per round.
+
 **Visual checks.** On the shell lane the system prompt has the agent run the kit's
 `npm run capture -- <slug> --stills` before and after a change the creator will judge by eye,
 and read the PNGs (6–12 s for 2D; 1–3 min for a `gfx3d` game, which renders through

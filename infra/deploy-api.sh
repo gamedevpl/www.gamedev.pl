@@ -65,6 +65,9 @@
 #                               /api/internal/dispatch-reaper, the retry for a job whose
 #                               dispatch died before it recorded a session. Its own
 #                               audience for the same reason.)
+#   MANAGED_SESSION_RETENTION_AUDIENCE=... (retention endpoint URL; enables OIDC auth on
+#                               /api/internal/managed-session-retention, the nightly delete
+#                               of old platform builder sessions. Its own audience.)
 #   SEED_DISPATCH_AUDIENCE=... (/api/internal/seed's own URL; enables the service to
 #                               hand round-0 seeding to itself as a request, which is
 #                               what lets CPU be request-scoped -- see seed-dispatch.ts.
@@ -174,6 +177,7 @@ SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
 ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
+MANAGED_SESSION_RETENTION_AUDIENCE="${MANAGED_SESSION_RETENTION_AUDIENCE:-}"
 SEED_DISPATCH_AUDIENCE="${SEED_DISPATCH_AUDIENCE:-}"
 # The runtime identity, and the same value both deploy paths pin (deploy.yml derives it
 # from the service name identically). Set on every deploy rather than once on the
@@ -450,6 +454,7 @@ for MANAGED_VAR in \
   MANAGED_AGENT_VAULT_IDS \
   MANAGED_AGENT_MCP_URL \
   MANAGED_AGENT_DELIVERY_MODE \
+  MANAGED_SESSION_RETENTION_DAYS \
   MANAGED_AGENT_COPILOT_MCP_REPO \
   MANAGED_AGENT_COPILOT_MCP_BASE_REF \
   MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
@@ -560,6 +565,9 @@ if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$DISPATCH_REAPER_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}"
+fi
+if [ -n "$MANAGED_SESSION_RETENTION_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|MANAGED_SESSION_RETENTION_AUDIENCE=${MANAGED_SESSION_RETENTION_AUDIENCE}"
 fi
 if [ -n "$SEED_DISPATCH_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}"
