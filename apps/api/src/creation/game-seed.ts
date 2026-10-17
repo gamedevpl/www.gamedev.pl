@@ -336,6 +336,7 @@ export class ModelGameSeeder implements GameSeeder {
         // No maxItems: Anthropic structured outputs 400 on it; the slice below caps.
         properties: { picks: { type: 'array', items: { type: 'string' } } },
         required: ['picks'],
+        additionalProperties: false,
       },
     };
   }
