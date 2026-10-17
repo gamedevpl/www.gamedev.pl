@@ -9,11 +9,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Breaking
 
-- New checkouts use gamedev.pl history without creating a local Git repository; opt in with `checkout --git` or `git init`.
+- New checkouts use gamedev.pl history without creating a local Git repository; opt in with `checkout --git` or `git init` (#1895).
 
 ### Added
 
-- Optional Git setup imports delivered history, preserves existing repositories and supports source repositories, consistent raster files and commit-based delivery synchronization.
+- Optional Git setup imports delivered history, preserves existing repositories and supports source repositories, consistent raster files and commit-based delivery synchronization (#1895).
 
 ## 0.52.0 — 2026-10-17
 
