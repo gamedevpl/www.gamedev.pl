@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
 import { encodePng } from './image-rgba.js';
+import { pngOf } from './image-size.test.js';
 import { imageSize, isJpeg } from './image-size.js';
 import { fitDreamSource, MAX_DREAM_SOURCE_EDGE, scaleHudRegions } from './dream-source.js';
 
@@ -48,6 +49,12 @@ describe('fitDreamSource', () => {
     expect(result.bytes.length).toBeLessThanOrEqual(MAX_SHOT_BYTES);
     expect(result.size.width).toBe(result.size.height);
     expect(result.scale).toBe(result.size.width / 1024);
+  });
+
+  it('refuses a header too large to decode without decoding it', () => {
+    // 20000x20000 declared; the pixels never exist, so decoding would allocate 1.6 GB.
+    const huge = pngOf(20000, 20000, { scanlines: Buffer.alloc(1) });
+    expect(fitDreamSource(huge)).toEqual({ refused: 'gate capture is too large to decode' });
   });
 
   it('refuses what is missing, not a PNG, or undecodable', () => {

@@ -1,7 +1,7 @@
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { encode as encodeJpegData } from 'jpeg-js';
 import { decodePng, downscaleRgba, type RgbaImage } from './image-rgba.js';
-import { imageSize, isPng, type ImageSize } from './image-size.js';
+import { imageSize, isPng, withinDecodeBudget, type ImageSize } from './image-size.js';
 import type { DreamFrame, HudRegion } from '../creation/dream-frames.js';
 
 // One quality for the source and the frames drawn from it.
@@ -31,6 +31,8 @@ export function fitDreamSource(source: Buffer | null): DreamSource {
   if (!source || source.length === 0) return { refused: 'no gate capture stored' };
   if (!isPng(source)) return { refused: 'gate capture is not a PNG' };
   const original = imageSize(source);
+  // The header is untrusted: check the decoded size before allocating it.
+  if (original && !withinDecodeBudget(original)) return { refused: 'gate capture is too large to decode' };
   const decoded = original ? decodePng(source) : null;
   if (!original || !decoded) return { refused: `${source.length} bytes and undecodable` };
   let image = downscaleRgba(decoded, targetWidth(decoded)) ?? decoded;
