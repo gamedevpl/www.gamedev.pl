@@ -790,8 +790,10 @@ At submission, `publishCandidate` also stores `preview.html` for the exact deliv
 version before starting the gate. A pending verdict does not prevent the creator from
 playing that artifact. The client pins delivered-preview requests to that version and
 supersedes requests for older heads, including late responses. Each new head gets its own
-bounded retry budget. A pending current-round preview remains live after agent `end`,
-even though preview delivery leaves the phase at `building` rather than `submitted`.
+bounded retry budget. A stored candidate alone does not prove that its gate started.
+After agent `end` or a stall, Studio shows an unanimated "Awaiting verification" until
+the gate reports progress, which then takes precedence over the agent's stall. This
+also covers Cloud Build refusing creation and acceptance without a returned build ID.
 
 Selecting a historical build lasts until the newest successful version changes. When a
 new delivery passes, Studio returns to the live preview automatically; choosing history

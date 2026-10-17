@@ -76,6 +76,7 @@ describe('Studio status after a round without a new delivery', () => {
         phase: mode === 'preview' ? 'building' : 'submitted',
         stall: 'ended',
         jobId: 42,
+        gateProgress: { lane: mode, stage: 'preparing', index: 0, total: 6, at: '2026-10-13T00:47:12.000Z' },
         recentBuilds: [{ jobId: 42, version, createdAt: '2026-10-13T00:47:11.987Z', mode, verdict: 'pending' }],
       });
 
