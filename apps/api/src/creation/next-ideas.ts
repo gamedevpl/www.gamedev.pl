@@ -70,6 +70,29 @@ const NextIdeaResultSchema = z.object({
     .optional(),
 });
 
+// The provider enforces it; the prompt only describes it.
+export const NEXT_IDEAS_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    ideas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label_en: { type: 'string' },
+          label_pl: { type: 'string' },
+          prompt_en: { type: 'string' },
+          prompt_pl: { type: 'string' },
+        },
+        required: ['label_en', 'label_pl', 'prompt_en', 'prompt_pl'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['ideas'],
+  additionalProperties: false,
+};
+
 function cleanBilingual(
   raw: { en?: string; pl?: string } | undefined,
   maxLength: number,
@@ -207,6 +230,7 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
         this.clientFor(model)(request)
           .temperature(0.4)
           .thinking({ level: 'low' })
+          .responseFormat({ type: 'json_schema', name: 'next_ideas', schema: NEXT_IDEAS_JSON_SCHEMA, strict: true })
           .signal(AbortSignal.timeout(budgetMs))
           .json((value) => NextIdeaResultSchema.parse(value));
       let fellBack = false;
