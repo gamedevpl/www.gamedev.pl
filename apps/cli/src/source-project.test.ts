@@ -186,7 +186,7 @@ it('diffs, pulls and ignores files using src paths, keeping repository files int
   const diff = await diffGame({ api, slug: 'airtime', dest: root });
   expect(diff.kind).toBe('local_only');
   expect(diff.local).toEqual(['game.ts']);
-  await expect(pullGame({ api, slug: 'airtime', dest: root })).rejects.toThrow('local edits would be overwritten');
+  expect((await pullGame({ api, slug: 'airtime', dest: root })).kept).toContain('game.ts');
   await pullGame({ api, slug: 'airtime', dest: root, force: true });
   expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('export const score = 1;');
   expect(readFileSync(join(root, 'src/private.ts'), 'utf8')).toBe('secret local data');

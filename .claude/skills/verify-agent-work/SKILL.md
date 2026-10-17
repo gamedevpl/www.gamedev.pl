@@ -172,6 +172,8 @@ Kill a separate writer process and exercise recovery: an in-process rename-failu
 does not leave the persistent writer lock behind. Reclaim only a demonstrably dead
 history-edit owner, never a live or agent-owned lock; serialize stale-lock cleanup too.
 Recheck the remote tip after fetching trees and computing reverse merges, before writing.
+For pull merges, verify historical content against base hashes before applying three-way merges.
+Record the remote tree as the new base; merged drafts must remain local differences.
 Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
 Test historical checkout through the real entrypoint as well as slash routing;
 the ordinary checkout branch and global --version handling can bypass the new action.

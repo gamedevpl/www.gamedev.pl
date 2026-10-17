@@ -46,7 +46,7 @@ export const BLURB: Record<SlashVerb, string> = {
   submit: 'alias for push — deliver a preview from local files',
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
   publish: 'alias for push --publish — submit for operator publication',
-  pull: 'update a checkout from the platform',
+  pull: 'update from the platform, merging independent text edits and preserving local drafts',
   diff: 'working-copy patch; diff <v1> <v2> [--slug <slug>] compares delivered versions',
   update: 'update the CLI and this project’s npm CLI dependency',
 };
