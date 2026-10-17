@@ -96,10 +96,9 @@ describe('createManagedSessionRetentionFromEnv', () => {
   const configured = {
     MANAGED_AGENT_API_KEY: 'key',
     MANAGED_AGENT_ID: 'agent_1',
-    MANAGED_AGENT_ENVIRONMENT_ID: 'env_1',
   };
 
-  it('builds a janitor only when key, agent and environment are set', () => {
+  it('builds a janitor only when key and agent are set; no environment needed', () => {
     expect(createManagedSessionRetentionFromEnv(configured).janitor).not.toBeNull();
     expect(createManagedSessionRetentionFromEnv({ ...configured, MANAGED_AGENT_ID: ' ' }).janitor).toBeNull();
     expect(createManagedSessionRetentionFromEnv({ ...configured, MANAGED_AGENT_API_KEY: '' }).janitor).toBeNull();

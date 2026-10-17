@@ -27,7 +27,6 @@ type ListedSession = z.infer<typeof ListedSessionSchema>;
 export interface SessionJanitorConfig {
   apiKey: string;
   agentId: string;
-  environmentId: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -65,10 +64,7 @@ function agentIdOf(session: ListedSession): string | undefined {
   return session.agent?.id ?? undefined;
 }
 
-export function isDeletableSession(
-  session: ListedSession,
-  scope: { agentId: string; environmentId: string; olderThan: Date },
-): boolean {
+export function isDeletableSession(session: ListedSession, scope: { agentId: string; olderThan: Date }): boolean {
   const createdAt = session.created_at ? Date.parse(session.created_at) : Number.NaN;
   if (!Number.isFinite(createdAt) || createdAt >= scope.olderThan.getTime()) return false;
   // The agent alone: the environment may also host hand-run sessions.
@@ -126,7 +122,7 @@ export function createAnthropicSessionJanitor(config: SessionJanitorConfig): Man
   return {
     async prune({ olderThan, maxDeletes, maxPages = DEFAULT_MAX_PAGES }) {
       const result: SessionPruneResult = { scanned: 0, deleted: 0, failed: 0, pages: 0 };
-      const scope = { agentId: config.agentId, environmentId: config.environmentId, olderThan };
+      const scope = { agentId: config.agentId, olderThan };
       let cursor: string | undefined;
       // Attempts, not successes, bound the run so failures cannot loop.
       const budgetLeft = () => result.deleted + result.failed < maxDeletes;

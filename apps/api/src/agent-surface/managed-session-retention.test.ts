@@ -49,7 +49,6 @@ function janitor(fetchImpl: typeof fetch) {
   return createAnthropicSessionJanitor({
     apiKey: KEY,
     agentId: 'agent_ours',
-    environmentId: 'env_ours',
     baseUrl: 'https://anthropic.test/',
     fetchImpl,
   });

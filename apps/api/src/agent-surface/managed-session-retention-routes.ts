@@ -28,12 +28,9 @@ export function createManagedSessionRetentionFromEnv(
 ): Pick<ManagedSessionRetentionRoutesOptions, 'janitor' | 'retentionDays' | 'maxDeletes'> {
   const apiKey = env.MANAGED_AGENT_API_KEY?.trim();
   const agentId = env.MANAGED_AGENT_ID?.trim();
-  const environmentId = env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
   const baseUrl = env.MANAGED_AGENT_BASE_URL?.trim();
   const janitor =
-    apiKey && agentId && environmentId
-      ? createAnthropicSessionJanitor({ apiKey, agentId, environmentId, ...(baseUrl ? { baseUrl } : {}) })
-      : null;
+    apiKey && agentId ? createAnthropicSessionJanitor({ apiKey, agentId, ...(baseUrl ? { baseUrl } : {}) }) : null;
   return {
     janitor,
     retentionDays: parseRetentionDays(env.MANAGED_SESSION_RETENTION_DAYS),
