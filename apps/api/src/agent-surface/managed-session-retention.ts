@@ -93,6 +93,7 @@ export function createAnthropicSessionJanitor(config: SessionJanitorConfig): Man
       agent_id: config.agentId,
       'created_at[lt]': olderThan.toISOString(),
       order: 'asc',
+      include_archived: 'true',
     });
     for (const status of DELETABLE_STATUSES) query.append('statuses', status);
     if (cursor) query.set('page', cursor);

@@ -106,6 +106,7 @@ describe('createAnthropicSessionJanitor', () => {
       expect(query.get('agent_id')).toBe('agent_ours');
       expect(query.get('created_at[lt]')).toBe(CUTOFF.toISOString());
       expect(query.get('order')).toBe('asc');
+      expect(query.get('include_archived')).toBe('true');
       expect(query.getAll('statuses').sort()).toEqual(['idle', 'terminated']);
     }
     expect(api.calls[1].url).toBe('https://anthropic.test/v1/sessions/a?beta=true');
