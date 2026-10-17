@@ -24,7 +24,8 @@ describe('buildPromptOpening for an undelivered round', () => {
       'Your latest preview of `rocks` (version v1) was delivered and the creator has written since',
     );
     expect(opening).not.toContain('ended without delivering');
-    expect(opening).toContain('Call `clear_staged_sources` before your first edit');
+    expect(opening).toContain('Call `list_staged_sources` before your first edit');
+    expect(opening).not.toContain('Call `clear_staged_sources`');
   });
 
   it('keeps the plain opening for an operator retry, which carries no creator note', () => {

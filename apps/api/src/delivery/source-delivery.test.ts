@@ -197,7 +197,7 @@ describe('shared source delivery', () => {
       backend: BACKEND,
       authority,
     });
-    expect(refused).toEqual({ accepted: false, rejected: 'gate_capacity' });
+    expect(refused).toEqual({ accepted: false, rejected: 'gate_capacity', gateCapacity: 'daily_cap' });
     expect(gate).toHaveBeenCalledTimes(1);
   });
 

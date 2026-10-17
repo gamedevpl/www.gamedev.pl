@@ -76,6 +76,8 @@ export type SourceDeliveryRejected = {
     | 'moderation_unavailable';
   deliveryCap?: number;
   deliveriesUsed?: number;
+  // Why gate_capacity refused: an operator pause or the spent daily allowance.
+  gateCapacity?: 'paused' | 'daily_cap';
   // Category of the refused text; never which words tripped it.
   category?: RejectCategory;
 };
@@ -151,7 +153,7 @@ export interface SourceDeliveryServiceOptions {
   typecheckPreflightMaxRefusals: number;
   // Read-only: refuses early. Slots are spent in platform/gate-run-ceiling.ts.
   gateRunGate?: {
-    peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+    peek(uid: string, dateStr: string): Promise<{ allowed: boolean; reason?: string }>;
   } | null;
   // Reads delivered prose only; a self-build ignores the moderated spec.
   contentChecker?: ContentChecker | null;
@@ -300,7 +302,10 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         const dateStr = new Date(now()).toISOString().slice(0, 10);
         // The ceiling belongs to whoever owns the game now.
         const headroom = await options.gateRunGate.peek(await gameOwnerUid(options.store, record), dateStr);
-        if (!headroom.allowed) return { accepted: false, rejected: 'gate_capacity' };
+        if (!headroom.allowed) {
+          const gateCapacity = headroom.reason === 'paused' ? 'paused' : 'daily_cap';
+          return { accepted: false, rejected: 'gate_capacity', gateCapacity };
+        }
       }
 
       if (record.builder === 'self') {

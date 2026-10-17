@@ -283,6 +283,21 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     expect(patched.next).toBeUndefined();
   });
 
+  it('a refused delivery states why and echoes its mode', async () => {
+    await round();
+    await start();
+    for (const file of FILES) await call('stage_source_file', file);
+    await store.setCreationLimits({ gatePaused: true }, 'operator');
+    const refused = await call('submit_sources', { fromStaged: true, mode: 'preview', kitEngineRef: NEW_ENGINE });
+    expect(refused.data).toMatchObject({
+      ok: false,
+      rejected: 'gate_capacity',
+      reason: 'gate_capacity',
+      mode: 'preview',
+    });
+    expect(refused.data.retry).toMatch(/paused gate runs.*stay staged/);
+  });
+
   it('G: a successful delivery points at end, and end closes the session', async () => {
     await round();
     await start();

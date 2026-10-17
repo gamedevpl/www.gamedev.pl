@@ -7,7 +7,7 @@ import { fakeFirestore } from '../store/fake-firestore.js';
 import { createJobReconciler } from './job-reconciler.js';
 
 const AT = '2026-09-26T12:00:00.000Z';
-type AgentState = 'in_progress' | 'completed' | 'idle';
+type AgentState = 'in_progress' | 'completed' | 'idle' | 'timed_out' | 'failed';
 
 async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0, ledger = true, backend = 'managed') {
   const store = new InMemoryStore();
@@ -106,6 +106,27 @@ describe('a finished session that delivered only a preview', () => {
     await poll();
     await poll();
     expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('lets the gate, not a timed-out session, close a round that delivered and ended', async () => {
+    const { store, agent, gate, poll } = await setup(null);
+    agent.state = 'timed_out';
+    await store.markAgentEnded(9, AT, 'end');
+    await poll();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+    gate.current = { green: true };
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('still fails a session that timed out without ending', async () => {
+    const { store, agent, poll } = await setup(null);
+    agent.state = 'timed_out';
+    await poll();
+    expect((await store.getSubmission(9))?.transitions?.at(-1)).toMatchObject({
+      to: 'failed',
+      reason: 'task_timed_out',
+    });
   });
 
   it('keeps an idle session without an end marker building', async () => {
