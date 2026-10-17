@@ -15,7 +15,7 @@ export function buildPromptOpening(brief: BuildBrief, slug: string, creating: bo
   if (brief.undelivered && brief.previewVersion && brief.feedback)
     return `Your latest preview of \`${slug}\` (version ${brief.previewVersion}) was delivered and the creator has written since; this continues the same round. Revise that version, do not rebuild it: start from ${base}, and ${undeliveredRequest(brief)}. ${STAGED_FIRST}`;
   if (brief.undelivered)
-    return `Your previous session on \`${slug}\` ended without delivering it. Nothing it built reached the site or the creator; only files it staged in this round may remain. Build it as you would a fresh round: start from ${base}, and ${undeliveredRequest(brief)}. ${STAGED_FIRST}`;
+    return `Your previous session on \`${slug}\` ended without delivering it. It delivered no candidate; files it staged in this round may remain, and the creator may have seen a preview assembled from them. Build it as you would a fresh round: start from ${base}, and ${undeliveredRequest(brief)}. ${STAGED_FIRST}`;
   if (brief.feedback)
     return `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`;
   return `Build a new browser game in \`games/${slug}/\`.`;

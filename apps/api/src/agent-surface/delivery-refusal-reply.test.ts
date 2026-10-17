@@ -5,7 +5,9 @@ describe('deliveryRefusalFields', () => {
   const daily = { accepted: false, rejected: 'gate_capacity', gateCapacity: 'daily_cap' } as const;
 
   it('says what survived the refusal, by where the sources came from', () => {
-    expect(deliveryRefusalFields(daily, 'staged').retry).toMatch(/staged sources stay staged/);
+    expect(deliveryRefusalFields(daily, 'staged').retry).toMatch(
+      /staged sources stay staged; inline files sent with them were not kept/,
+    );
     expect(deliveryRefusalFields(daily, 'latest').retry).toMatch(/latest delivery stays.*fromLatestDelivery/);
     expect(deliveryRefusalFields(daily, 'inline').retry).toMatch(/sent inline were not kept/);
   });

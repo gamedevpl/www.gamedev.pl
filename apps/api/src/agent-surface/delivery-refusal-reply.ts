@@ -8,7 +8,7 @@ export function deliveryRefusalFields(
   // Inline files are never copied into staging on a refusal.
   const kept =
     source === 'staged'
-      ? 'Your staged sources stay staged'
+      ? 'Your staged sources stay staged; inline files sent with them were not kept'
       : source === 'latest'
         ? 'The latest delivery stays as it was for another fromLatestDelivery; inline overrides were not kept'
         : 'Files sent inline were not kept; send them again';
