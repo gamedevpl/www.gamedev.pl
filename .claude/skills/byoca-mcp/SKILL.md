@@ -28,7 +28,10 @@ own description. They describe; the client decides — see "Server text states f
      on deploy. The full key is still required; shortened text with `...` is never valid.
    - `get_sources` is the first read of **every** round. A new game arrives with a
      generated round-0 draft (`origin: seed`), a later round with what it delivered
-     (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold
+     (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold.
+     One exception: a managed shell round whose mounted workspace (`managed-workspace.ts`)
+     already holds a delivery base is told to skip `get_sources` — the archive is that same
+     version. A mounted seed still reads `get_sources` for its references and notes
    - A tree over `INLINE_SOURCES_MAX_CHARS` (20k chars) comes back as `manifest[]` plus
      `GAME.json`/`SPEC.md` (`truncated: true`). Contents come from `read_source_files` (up to
      12 paths) or, for a shell agent, `archive`: a signed GET of the same base as one
@@ -605,10 +608,10 @@ then-existing `SEED_DISPATCH` flag (since removed) or credentials being unset.
 `AgentBackend.seedDelivery()` answers, before anything is generated, how a seed would
 reach that round's agent:
 
-| Answer      | Means                                                                | Who                                                                            |
-| ----------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `workspace` | Files are placed for the agent, so the prompt may say so             | Gemini with no named environment (inline sources)                              |
-| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; Anthropic, Copilot, OpenAI, Gemini-with-an-environment |
+| Answer      | Means                                                                | Who                                                                                                       |
+| ----------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `workspace` | Files are placed for the agent, so the prompt may say so             | Gemini with no named environment (inline sources)                                                         |
+| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; Anthropic (also mounted, still read), Copilot, OpenAI, Gemini-with-an-environment |
 
 **`channel` is the entry that made managed rounds seedable at all.** The first pass at this
 only asked whether the provider accepts `workspaceFiles` (`acceptsSeed`), and skipped
