@@ -8,6 +8,7 @@ import { connectGame } from './connect.js';
 import { studioToken } from './studio.js';
 import { openWorkshop, type Workshop, type PickChoice } from './workshop.js';
 import type { CliTelemetry } from './telemetry.js';
+import { initializeGitCheckout } from './git-checkout.js';
 
 export type GameSession = { token: string; slug: string; workshop?: Workshop; conversationId: string };
 type Input = {
@@ -17,6 +18,7 @@ type Input = {
   cwd?: string;
   sessionToken?: string;
   fresh?: boolean;
+  git?: boolean;
   env: NodeJS.ProcessEnv;
   pick?: PickChoice;
   abort: Workshop['abort'];
@@ -45,8 +47,8 @@ export async function checkoutSession(input: Input): Promise<GameSession | null>
   const { token } = session;
   if (existing?.root !== root || existing.slug !== input.slug) {
     input.onActivity?.(`Downloading ${input.slug}`);
-    await checkoutGame({ api: input.api, slug: input.slug, dest: root, allowUndelivered: true });
-  }
+    await checkoutGame({ api: input.api, slug: input.slug, dest: root, allowUndelivered: true, git: input.git });
+  } else if (input.git) await initializeGitCheckout({ api: input.api, root });
   input.telemetry?.record('checkout_opened');
   const opened = await openWorkshop({ ...input, token, root });
   const workshop: Workshop = {

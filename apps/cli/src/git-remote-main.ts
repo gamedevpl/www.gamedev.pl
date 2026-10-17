@@ -13,10 +13,21 @@ import { runRemoteHelper, type PushResult } from './git-remote.js';
 import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
 import { localGameFiles, trackedTree, writeBase } from './checkout.js';
+import { writeFileSync } from 'node:fs';
+import {
+  checkoutGit,
+  gitConfig,
+  remoteLayout,
+  historyScope,
+  projectGitFiles,
+  type GitLayout,
+} from './git-checkout-layout.js';
+import { gitPushBase } from './git-push-base.js';
+import { synchronizeGitDelivery } from './git-delivery-sync.js';
+import { sameGitSources } from './git-delivery-ref.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { readHistory, readHistoryTree, historySlug } from './history-api.js';
 import { knownHistoryCommits } from './git-history-cache.js';
-import { createHash } from 'node:crypto';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -51,18 +62,53 @@ export async function reconcilePush(input: {
   cwd: string;
   srcRef: string;
   submit?: typeof submitGame;
+  layout?: GitLayout;
+  scope?: string;
 }): Promise<PushResult> {
   const tmp = mkdtempSync(join(tmpdir(), 'gamedev-push-'));
   try {
+    const commit = checkoutGit(input.cwd)(['rev-parse', '--verify', '--end-of-options', `${input.srcRef}^{commit}`])
+      .toString()
+      .trim();
     const dest = materializePushCheckout({
       repo: input.cwd,
-      srcRef: input.srcRef,
+      srcRef: commit,
       slug: input.slug,
       cwd: input.cwd,
       dest: tmp,
+      layout: input.layout,
     });
+    if (input.scope && input.layout) {
+      const base = await gitPushBase({ ...input, commit, scope: input.scope, layout: input.layout });
+      writeFileSync(
+        join(dest, '.gamedev-base.json'),
+        JSON.stringify({ ...base, ...(input.layout.root === 'src' ? { slug: input.slug } : {}) }),
+      );
+    }
+    const pushed = localGameFiles(dest, input.slug);
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
-    adoptCheckoutBase(input.cwd, input.slug, dest, result);
+    try {
+      if (input.scope && input.layout) {
+        const version = result.kind === 'delivered' ? result.version : result.sync.version;
+        const synced = await synchronizeGitDelivery({
+          ...input,
+          commit,
+          version,
+          pushed,
+          scope: input.scope,
+          layout: input.layout,
+        });
+        if (
+          checkoutGit(input.cwd)(['rev-parse', 'HEAD']).toString().trim() === commit &&
+          sameGitSources(pushed, synced.files)
+        )
+          writeBase(input.cwd, synced.version, trackedTree(input.cwd, input.slug, synced.files));
+      } else adoptCheckoutBase(input.cwd, input.slug, dest, result);
+    } catch {
+      stderr.write(
+        'Delivery succeeded, but local synchronization metadata could not be recorded. Review gamedevpl status before another delivery.\n',
+      );
+    }
     const notice = formatIgnoredNotice(result.ignored);
     if (notice.length) stderr.write(`${notice.join('\n')}\n`);
     return { ok: true };
@@ -73,7 +119,11 @@ export async function reconcilePush(input: {
   }
 }
 
-export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
+export async function runGitRemoteHelper(
+  argv: string[],
+  env: NodeJS.ProcessEnv = process.env,
+  options: { submit?: typeof submitGame } = {},
+): Promise<number> {
   const slug = remoteSlugFromArgv(argv, readSlugFile(process.cwd()));
   if (!slug) {
     stdout.write('error missing game slug\n');
@@ -81,7 +131,12 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
   }
   const api = createApi({ origin: originFromEnv(env), store: storeFromEnv(env), env });
   historySlug(slug);
-  const scope = createHash('sha256').update(api.origin).digest('hex').slice(0, 16);
+  const git = checkoutGit(process.cwd()),
+    remote = argv[2] && /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(argv[2]) ? argv[2] : undefined,
+    layout = remote ? remoteLayout(git, slug, remote) : { root: `games/${slug}`, rasters: 'raw' as const };
+  const pinned = remote ? gitConfig(git, `remote.${remote}.gamedevpl-origin`) : undefined;
+  if (pinned && pinned !== api.origin) throw Error('This Git remote belongs to another platform origin.');
+  const scope = historyScope(api.origin, slug, layout);
   const rl = createInterface({ input: stdin, crlfDelay: Infinity });
   try {
     const iter = rl[Symbol.asyncIterator]();
@@ -92,7 +147,7 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
       },
       write: (line) => stdout.write(line.endsWith('\n') ? line : `${line}\n`),
       fetchVersions: (game) => readHistory(api, game),
-      fetchTree: async (game, version) => (await readHistoryTree(api, game, version)).files,
+      fetchTree: async (game, version) => projectGitFiles((await readHistoryTree(api, game, version)).files, layout),
       knownCommits: () => knownHistoryCommits(slug, process.cwd(), scope),
       scope,
       importScript: async (script) => {
@@ -100,7 +155,18 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
           stdout.write(script, (error) => (error ? reject(error) : resolve())),
         );
       },
-      pushReconcile: async (src) => reconcilePush({ api, slug, cwd: process.cwd(), srcRef: src }),
+      sourceRoot: layout.root,
+      preserveOutsideSources: Boolean(pinned),
+      pushReconcile: async (src) =>
+        reconcilePush({
+          api,
+          slug,
+          cwd: process.cwd(),
+          srcRef: src,
+          layout,
+          submit: options.submit,
+          ...(pinned ? { scope } : {}),
+        }),
     });
     return 0;
   } finally {

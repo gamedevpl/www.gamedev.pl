@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- New checkouts use gamedev.pl history without creating a local Git repository; opt in with `checkout --git` or `git init` (#1895).
+
+### Added
+
+- Optional Git setup imports delivered history, preserves existing repositories and supports source repositories, consistent raster files and commit-based delivery synchronization (#1895).
+
 ### Fixed
 
 - Local delegation advertises `capture_game` and the connected screenshot tools, and directs agents to host-side captures when their shell cannot open a local port. No-change tasks no longer receive an assumed browser-access failure (#1893).

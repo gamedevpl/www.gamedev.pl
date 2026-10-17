@@ -21,6 +21,7 @@ import { createIgnoreMatcher, type IgnoredHit } from './ignore.js';
 import { formatCheckoutIncoming, formatPatches, formatPullNotices, ignoredClashMessage } from './working-copy.js';
 import { preparePullMerge } from './checkout-pull-merge.js';
 import { pendingHistoryRoot } from './history-edit-files.js';
+import { initializeGitCheckout } from './git-checkout.js';
 
 export type { TreeFile, SyncResult } from './checkout-sync.js';
 export type { IgnoredHit } from './ignore.js';
@@ -285,11 +286,6 @@ export function writeGameFiles(
   }
 }
 
-export function initializeCheckoutGit(dest: string, slug: string, run = defaultRun): void {
-  run('git', ['init'], dest);
-  run('git', ['remote', 'add', 'origin', gitRemoteUrl(slug)], dest);
-}
-
 export function assertCheckoutDestination(dest: string, slug: string): void {
   if (
     existsSync(dest) &&
@@ -310,6 +306,7 @@ export async function checkoutGame(input: {
   fetchBuffer?: (url: string) => Promise<Buffer>;
   run?: (cmd: string, args: string[], cwd: string) => void;
   allowUndelivered?: boolean;
+  git?: boolean;
 }): Promise<{ dest: string; remote: string; notices: string[] }> {
   const run = input.run ?? defaultRun;
   assertCheckoutDestination(input.dest, input.slug);
@@ -324,7 +321,6 @@ export async function checkoutGame(input: {
   try {
     run('tar', ['-xzf', '.gamedev-workspace.tgz'], input.dest);
     writeFileSync(join(input.dest, '.gamedev-slug'), input.slug);
-    initializeCheckoutGit(input.dest, input.slug, run);
   } finally {
     rmSync(tgz, { force: true });
   }
@@ -346,6 +342,7 @@ export async function checkoutGame(input: {
     '\n## Playing this game\n\nWhen the creator asks to play, run `gamedevpl play` from this checkout. It opens a sandboxed local preview with automatic reload after successful builds. Repeating it reuses the server. `--no-open` prints the URL; `--stop` stops it. Errors preserve the last playable build. Playing never submits or publishes.\n';
   const previous = existsSync(instructions) ? readFileSync(instructions, 'utf8') : '';
   if (!previous.includes('## Playing this game')) writeFileSync(instructions, previous + note);
+  if (input.git) await initializeGitCheckout({ api: input.api, root: input.dest });
   return { dest: input.dest, remote: gitRemoteUrl(input.slug), notices };
 }
 

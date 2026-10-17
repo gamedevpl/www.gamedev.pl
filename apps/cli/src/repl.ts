@@ -217,7 +217,11 @@ export async function handleReplLine(input: {
           };
           const opened =
             cmd === 'checkout'
-              ? await checkoutSession({ ...options, fresh: parsed.args[1] !== undefined })
+              ? await checkoutSession({
+                  ...options,
+                  fresh: parsed.args[1] !== undefined,
+                  git: parsed.flags.git === true,
+                })
               : await connectSession({
                   ...options,
                   agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,

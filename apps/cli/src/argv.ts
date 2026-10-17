@@ -20,6 +20,7 @@ export const SLASH_VERBS = [
   'connect',
   'delegate',
   'checkout',
+  'git',
   'quota',
   'notifications',
   'help',
@@ -77,6 +78,7 @@ export function suggestVerb(command: string): (typeof CLI_VERBS)[number] | undef
 
 export const VERSION_VALUE_VERBS = new Set(['blame', 'checkout', 'restore', 'revert']);
 const BOOLEAN_FLAGS = new Set([
+  'git',
   'play',
   'edit',
   'terminal',

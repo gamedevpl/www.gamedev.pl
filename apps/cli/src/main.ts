@@ -344,8 +344,8 @@ export async function runCli(
       const slug = args[0];
       if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = resolvePath(args[1] ?? slug);
-      const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
-      io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
+      const result = await checkoutGame({ api, slug, dest, allowUndelivered: true, git: flags.git === true });
+      io.stdout.write(`checked out ${slug} → ${result.dest}\n`);
       for (const notice of result.notices) io.stdout.write(`${notice}\n`);
       io.stdout.write(
         `Next: cd ${JSON.stringify(resolvePath(result.dest))} and run gamedevpl to edit interactively.\n`,

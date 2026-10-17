@@ -40,6 +40,8 @@ export type HelperIo = {
   knownCommits?: () => Map<string, string>;
   scope?: string;
   pushReconcile: (src: string) => Promise<PushResult>;
+  sourceRoot?: string;
+  preserveOutsideSources?: boolean;
 };
 
 export function pushSrcRef(rest: string[]): string | null {
@@ -70,6 +72,7 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
       const knownCommits = io.knownCommits?.();
       let parent: string | undefined;
       let markOffset = 0;
+      let previousFiles: string[] = [];
       const chronological = [...versions].sort(
         (a, b) => a.createdAt.localeCompare(b.createdAt) || a.version.localeCompare(b.version),
       );
@@ -77,6 +80,7 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
         const known = knownCommits?.get(row.version);
         if (known) {
           parent = known;
+          previousFiles = row.sourceFiles ?? [];
           continue;
         }
         const files = await io.fetchTree(slug, row.version);
@@ -89,10 +93,14 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
             parent,
             markOffset,
             finish: false,
+            sourceRoot: io.sourceRoot,
+            preserveOutsideSources: io.preserveOutsideSources,
+            parentSourceFiles: previousFiles,
           }),
         );
         markOffset++;
         parent = versionImportRef(slug, row.version, io.scope);
+        previousFiles = row.sourceFiles ?? files.map((file) => file.path);
       }
       await io.importScript(
         Buffer.from((parent ? `reset ${remoteImportRef(slug, io.scope)}\nfrom ${parent}\n\n` : '') + 'done\n'),

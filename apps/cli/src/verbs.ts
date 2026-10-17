@@ -10,6 +10,7 @@ import { discoverAgents, formatAgents } from './agents.js';
 import { npmCliProject, updateProjectCli } from './update-project.js';
 import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
 import { historyOutput } from './history-pager.js';
+import { gitCheckoutCommand } from './git-checkout.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdin?: { isTTY?: boolean }; stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
@@ -40,6 +41,16 @@ export async function dispatchReadVerb(input: {
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
+  if (verb === 'git') {
+    const result = await gitCheckoutCommand({ api, args, flags, cwd: input.cwd ?? process.cwd() });
+    emit(
+      io,
+      asJson,
+      result,
+      `Git connected: ${result.tracking}, ${result.versions} delivered versions. ${!result.versions ? 'Make a local commit to start Git history.' : result.initialized ? 'Local history initialized.' : 'Existing local branch preserved.'}`,
+    );
+    return EXIT_GREEN;
+  }
   if (isHistoryVerb(verb, args, flags)) {
     const output = historyOutput({
       io,

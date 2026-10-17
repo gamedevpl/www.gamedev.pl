@@ -173,6 +173,13 @@ does not leave the persistent writer lock behind. Reclaim only a demonstrably de
 history-edit owner, never a live or agent-owned lock; serialize stale-lock cleanup too.
 Recheck the remote tip after fetching trees and computing reverse merges, before writing.
 For pull merges, verify historical content against base hashes before applying three-way merges.
+Git remains optional: exercise native checkout with no repository and explicit Git setup separately.
+Verify real Git pull/stash/push across both source layouts and raster representations.
+Derive delivery bases from pushed commit ancestry, not a mutable working-copy base.
+Exercise push followed by fetch and fast-forward pull; cache-only receipts leave sibling commits.
+Preserve repository context outside the platform manifest when importing later source versions.
+Test intervening deliveries during verification and retain them in projection ancestry.
+Do not advance a working-copy base for another branch or unmerged canonical sources.
 Record the remote tree as the new base; merged drafts must remain local differences.
 Exercise missing value flags through their handlers: suppressing CLI version output is insufficient.
 Test historical checkout through the real entrypoint as well as slash routing;
