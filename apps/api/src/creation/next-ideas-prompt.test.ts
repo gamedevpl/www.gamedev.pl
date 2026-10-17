@@ -26,12 +26,12 @@ describe('NextIdeaModelGenerator prompt', () => {
     const { client, requests } = fakeClient();
     const ideas = await new NextIdeaModelGenerator({ clientFor: () => client, env: {} }).generate({
       ...base,
-      screenshotPng: 'QUFB',
+      screenshot: { data: 'QUFB', mediaType: 'image/jpeg' },
       history: ['Creator asked: add artillery', 'Delivered: artillery strikes on Q'],
     });
     expect(ideas).toHaveLength(1);
     const request = requests[0] as { text: string; images: Array<{ data: string; mediaType: string }> };
-    expect(request.images).toEqual([{ data: 'QUFB', mediaType: 'image/png' }]);
+    expect(request.images).toEqual([{ data: 'QUFB', mediaType: 'image/jpeg' }]);
     expect(request.text).toContain('- Delivered: artillery strikes on Q');
     expect(request.text).toContain('real screenshot of the game as it is now');
     expect(request.text).toContain('never propose it again');

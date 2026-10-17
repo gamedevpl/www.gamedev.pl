@@ -5,6 +5,7 @@ import { createVertexClient, type VertexGenerationConfig } from '../platform/gen
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { normalizeLocale } from '../platform/translate.js';
 import { callWithVertexResilience } from '../platform/vertex-resilience.js';
+import type { DreamFrame } from './dream-frames.js';
 
 // Layer-2 idea chips; generation always fails open.
 
@@ -29,8 +30,8 @@ export interface NextIdeasParams {
   // True flips "next build" framing to "next thing for the live game".
   published: boolean;
   locale?: string;
-  // The game as it looks now, base64 PNG.
-  screenshotPng?: string;
+  // The game as it looks now.
+  screenshot?: DreamFrame;
   // Recent round notes, oldest first: what was asked and delivered.
   history?: string[];
   // Every billed call, first included, named by the model that ran.
@@ -190,10 +191,10 @@ Game concept:
 """
 ${params.spec}
 """
-${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.history?.length ? `\nRecent rounds, oldest first (already built or asked for):\n${params.history.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.screenshotPng ? '\nThe attached image is a real screenshot of the game as it is now.\n' : ''}`;
+${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.history?.length ? `\nRecent rounds, oldest first (already built or asked for):\n${params.history.map((line) => `- ${line}`).join('\n')}\n` : ''}${params.screenshot ? '\nThe attached image is a real screenshot of the game as it is now.\n' : ''}`;
 
-      const request = params.screenshotPng
-        ? user(promptText, { images: [image(params.screenshotPng, 'image/png')] })
+      const request = params.screenshot
+        ? user(promptText, { images: [image(params.screenshot.data, params.screenshot.mediaType)] })
         : promptText;
       const draw = (model: string, budgetMs: number) =>
         this.clientFor(model)(request)

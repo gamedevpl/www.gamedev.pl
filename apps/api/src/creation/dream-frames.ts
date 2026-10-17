@@ -11,8 +11,8 @@ export interface HudRegion {
 }
 
 export interface DreamFrameRequest {
-  // The real gate capture, PNG as base64.
-  sourcePng: string;
+  // The real gate capture, base64.
+  source: DreamFrame;
   width: number;
   height: number;
   // "a dark top-down horror game" — what the model is looking at.
@@ -100,7 +100,9 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
   async generate(request: DreamFrameRequest): Promise<DreamFrame | null> {
     const prompt = buildDreamPrompt(request);
     const timeoutMs = this.options.timeoutMs ?? Number(process.env.DREAM_TIMEOUT_MS ?? DEFAULT_DREAM_TIMEOUT_MS);
-    const result = await this.getClient()(user(prompt, { images: [image(request.sourcePng, 'image/png')] }))
+    const result = await this.getClient()(
+      user(prompt, { images: [image(request.source.data, request.source.mediaType)] }),
+    )
       .signal(AbortSignal.timeout(timeoutMs))
       .run();
     for (const part of result.parts) {

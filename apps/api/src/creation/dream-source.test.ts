@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
+import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
 import { encodePng } from '../platform/image-rgba.js';
-import { fitDreamSource, MAX_DREAM_SOURCE_BYTES, MAX_DREAM_SOURCE_EDGE, scaleHudRegions } from './dream-source.js';
+import { imageSize, isJpeg } from '../platform/image-size.js';
+import { fitDreamSource, MAX_DREAM_SOURCE_EDGE, scaleHudRegions } from './dream-source.js';
 
-// Noise defeats PNG compression, like a detailed game scene.
+// Noise defeats compression, like a very detailed game scene.
 function noisePng(width: number, height: number): Buffer {
   return encodePng({ data: new Uint8ClampedArray(randomBytes(width * height * 4)), width, height });
 }
@@ -12,38 +14,46 @@ function flatPng(width: number, height: number): Buffer {
   return encodePng({ data: new Uint8ClampedArray(width * height * 4).fill(200), width, height });
 }
 
+function fitted(png: Buffer) {
+  const result = fitDreamSource(png);
+  if ('refused' in result) throw new Error(result.refused);
+  return { ...result, bytes: Buffer.from(result.image.data, 'base64') };
+}
+
 describe('fitDreamSource', () => {
-  it('passes a small capture through untouched', () => {
-    const png = flatPng(640, 360);
-    expect(fitDreamSource(png)).toEqual({
-      png,
-      size: { width: 640, height: 360 },
-      original: { width: 640, height: 360 },
+  it('re-encodes a small capture as a JPEG at its own size', () => {
+    const result = fitted(flatPng(640, 400));
+    expect(result.image.mediaType).toBe('image/jpeg');
+    expect(isJpeg(result.bytes)).toBe(true);
+    expect(imageSize(result.bytes)).toEqual({ width: 640, height: 400 });
+    expect(result).toMatchObject({
+      size: { width: 640, height: 400 },
+      original: { width: 640, height: 400 },
       scale: 1,
     });
   });
 
   it('scales a large capture to the fixed edge, keeping its shape', () => {
-    const fitted = fitDreamSource(flatPng(1920, 1080));
-    if ('refused' in fitted) throw new Error(fitted.refused);
-    expect(fitted.size).toEqual({ width: MAX_DREAM_SOURCE_EDGE, height: 576 });
-    expect(fitted.original).toEqual({ width: 1920, height: 1080 });
-    expect(fitted.scale).toBeCloseTo(1024 / 1920, 5);
+    const result = fitted(flatPng(1920, 1080));
+    expect(result.size).toEqual({ width: MAX_DREAM_SOURCE_EDGE, height: 576 });
+    expect(imageSize(result.bytes)).toEqual(result.size);
+    expect(result.original).toEqual({ width: 1920, height: 1080 });
+    expect(result.scale).toBeCloseTo(1024 / 1920, 5);
   });
 
-  it('shrinks busy art further until the shot fits', () => {
-    const png = noisePng(400, 400);
-    expect(png.length).toBeGreaterThan(MAX_DREAM_SOURCE_BYTES);
-    const fitted = fitDreamSource(png);
-    if ('refused' in fitted) throw new Error(fitted.refused);
-    expect(fitted.png.length).toBeLessThanOrEqual(MAX_DREAM_SOURCE_BYTES);
-    expect(fitted.size.width).toBe(fitted.size.height);
-    expect(fitted.scale).toBe(fitted.size.width / 400);
+  it('keeps busy art under the shot limit', () => {
+    const png = noisePng(1024, 1024);
+    expect(png.length).toBeGreaterThan(MAX_SHOT_BYTES);
+    const result = fitted(png);
+    expect(result.bytes.length).toBeLessThanOrEqual(MAX_SHOT_BYTES);
+    expect(result.size.width).toBe(result.size.height);
+    expect(result.scale).toBe(result.size.width / 1024);
   });
 
-  it('refuses what is missing or not a PNG', () => {
+  it('refuses what is missing, not a PNG, or undecodable', () => {
     expect(fitDreamSource(null)).toEqual({ refused: 'no gate capture stored' });
     expect(fitDreamSource(Buffer.from('nope'))).toEqual({ refused: 'gate capture is not a PNG' });
+    expect('refused' in fitDreamSource(flatPng(8, 8).subarray(0, 40))).toBe(true);
   });
 });
 

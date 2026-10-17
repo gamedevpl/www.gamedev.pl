@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDreamPrompt, StubDreamFrameGenerator } from './dream-frames.js';
 
 const base = {
-  sourcePng: 'AAAA',
+  source: { data: 'AAAA', mediaType: 'image/jpeg' as const },
   width: 900,
   height: 900,
   styleNote: '"Parcel Run", a browser game: deliver parcels in space',

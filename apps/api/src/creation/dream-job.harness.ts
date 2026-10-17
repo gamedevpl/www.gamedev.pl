@@ -3,7 +3,8 @@ import { createDreamAvailabilityGate } from './dream-availability.js';
 import { StubDreamFrameGenerator, type DreamFrame } from './dream-frames.js';
 import { StubNextIdeaGenerator, type NextIdea } from './next-ideas.js';
 import { InMemoryStore } from '../platform/store.js';
-import { jpegHeader, pngHeader } from '../platform/image-size.test.js';
+import { encodePng } from '../platform/image-rgba.js';
+import { jpegHeader } from '../platform/image-size.test.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 
 export const ideas: NextIdea[] = [
@@ -42,7 +43,7 @@ export async function harness(params: {
   };
   const metadata = params.hud === undefined ? { frames: 3 } : { frames: 3, hud: params.hud };
   const artifacts: Record<string, Buffer | null> = {
-    'media/opening.png': pngHeader(900, 900),
+    'media/opening.png': encodePng({ data: new Uint8ClampedArray(900 * 900 * 4).fill(120), width: 900, height: 900 }),
     'media/metadata.json': Buffer.from(JSON.stringify(metadata)),
     ...params.artifacts,
   };

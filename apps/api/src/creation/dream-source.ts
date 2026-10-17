@@ -1,39 +1,47 @@
-import { decodePng, downscaleRgba, encodePng, type RgbaImage } from '../platform/image-rgba.js';
-import { MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
+import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
+import { encode as encodeJpegData } from 'jpeg-js';
+import { decodePng, downscaleRgba, type RgbaImage } from '../platform/image-rgba.js';
 import { imageSize, isPng, type ImageSize } from '../platform/image-size.js';
-import type { HudRegion } from './dream-frames.js';
+import { DREAM_JPEG_QUALITY, type DreamFrame, type HudRegion } from './dream-frames.js';
 
 // Both models downsample past this anyway; fixed size, predictable cards.
 export const MAX_DREAM_SOURCE_EDGE = 1024;
-// Its frames' limit: 640x400 of busy art is already 415 KB.
-export const MAX_DREAM_SOURCE_BYTES = MAX_PROPOSAL_FRAME_BYTES;
-// Busier still overflows it; each pass keeps three quarters.
+// JPEG rarely needs it: 415 KB of PNG art came out small.
 const SHRINK_STEP = 0.75;
 const SHRINK_PASSES = 3;
 
-// `scale` maps the gate capture's pixels onto `png`'s.
-export type DreamSource = { png: Buffer; size: ImageSize; original: ImageSize; scale: number } | { refused: string };
+// `scale` maps the gate capture's pixels onto `image`'s.
+export type DreamSource =
+  { image: DreamFrame; size: ImageSize; original: ImageSize; scale: number } | { refused: string };
 
 function targetWidth(image: RgbaImage): number {
   const edge = Math.max(image.width, image.height);
   return Math.round(image.width * Math.min(1, MAX_DREAM_SOURCE_EDGE / edge));
 }
 
-// The gate capture, sized for both the shot and the models.
+function encodeJpeg(image: RgbaImage): Buffer {
+  const data = Buffer.from(image.data.buffer, image.data.byteOffset, image.data.byteLength);
+  return encodeJpegData({ data, width: image.width, height: image.height }, DREAM_JPEG_QUALITY).data;
+}
+
+// The gate PNG as a JPEG for the shot and models.
 export function fitDreamSource(source: Buffer | null): DreamSource {
   if (!source || source.length === 0) return { refused: 'no gate capture stored' };
   if (!isPng(source)) return { refused: 'gate capture is not a PNG' };
   const original = imageSize(source);
-  if (!original) return { refused: 'gate capture is unmeasurable' };
-  const fits = Math.max(original.width, original.height) <= MAX_DREAM_SOURCE_EDGE;
-  if (fits && source.length <= MAX_DREAM_SOURCE_BYTES) return { png: source, size: original, original, scale: 1 };
-  const decoded = decodePng(source);
-  if (!decoded) return { refused: `${source.length} bytes and undecodable` };
+  const decoded = original ? decodePng(source) : null;
+  if (!original || !decoded) return { refused: `${source.length} bytes and undecodable` };
   let image = downscaleRgba(decoded, targetWidth(decoded)) ?? decoded;
   for (let pass = 0; pass <= SHRINK_PASSES; pass += 1) {
-    const png = encodePng(image);
-    const size = { width: image.width, height: image.height };
-    if (png.length <= MAX_DREAM_SOURCE_BYTES) return { png, size, original, scale: image.width / original.width };
+    const jpeg = encodeJpeg(image);
+    if (jpeg.length <= MAX_SHOT_BYTES) {
+      return {
+        image: { data: jpeg.toString('base64'), mediaType: 'image/jpeg' },
+        size: { width: image.width, height: image.height },
+        original,
+        scale: image.width / original.width,
+      };
+    }
     const smaller = downscaleRgba(image, Math.round(image.width * SHRINK_STEP));
     if (!smaller) break;
     image = smaller;
