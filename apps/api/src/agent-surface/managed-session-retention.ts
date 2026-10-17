@@ -91,7 +91,7 @@ export function createAnthropicSessionJanitor(config: SessionJanitorConfig): Man
       order: 'asc',
       include_archived: 'true',
     });
-    for (const status of DELETABLE_STATUSES) query.append('statuses', status);
+    for (const status of DELETABLE_STATUSES) query.append('statuses[]', status);
     if (cursor) query.set('page', cursor);
     const response = await fetchImpl(`${baseUrl}/v1/sessions${BETA_QUERY}&${query.toString()}`, {
       method: 'GET',
