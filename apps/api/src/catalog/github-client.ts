@@ -124,6 +124,11 @@ export interface GetGameSourcesOptions {
    * return null rather than falling back to games/<slug> on the ref.
    */
   noRefFallback?: boolean;
+  /**
+   * 'publish' bundles games/<slug>/publish.ts instead of game.ts when the game has one,
+   * so the served build can leave out code that only the repo and its gate run.
+   */
+  entry?: 'publish';
 }
 
 // Generation lives here so every assembly path gets it for free.
@@ -1260,6 +1265,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       if (gameTs === null || manifestSource === null || gameShellCss === null || coreJs === null) {
         return null;
       }
+      const publishTs = options?.entry === 'publish' ? await gameFile('publish.ts') : null;
 
       const title = specMd ? parseSpecTitle(specMd) : null;
 
@@ -1391,7 +1397,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
-      const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides, undefined, options);
+      const gameJs = await bundleGameTypeScript(publishTs ?? gameTs, ref, slug, overrides, undefined, options);
       const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
