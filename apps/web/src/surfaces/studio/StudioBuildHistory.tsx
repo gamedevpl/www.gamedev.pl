@@ -167,7 +167,10 @@ export function StudioBuildHistory({
         {displayedBuilds.map((build, index) => {
           const isExpanded = expandedBuildVersion === build.version;
           const isPreviewing = activePreviewVersion === build.version;
-          const canPreview = Boolean(onSelectPreviewVersion && build.verdict !== 'pending');
+          const canPreview = Boolean(
+            onSelectPreviewVersion &&
+            (build.verdict !== 'pending' || (status.preview && status.progress?.headSha === build.version)),
+          );
           const isReverting = revertingVersion === build.version;
 
           return (

@@ -37,20 +37,7 @@ export type StageSource = {
 
 const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
 
-/**
- * The stage's one source of truth for "what is running right now."
- *
- * Lifted out of `SubmissionStatusView`'s two fetch effects (preview-keyed-on-headSha,
- * channel-keyed-on-playable-ref) so `CreatorStudioView` can feed the same object to
- * both the always-mounted `<StudioStage>` and the embedded thread — the ribbon and the
- * thread's own "preview updated" moments can never disagree about which build is on
- * screen, because there is only one fetch of it.
- *
- * Preserves the original behaviour byte for byte: preview wins over channel, a refetch
- * failure keeps showing the last-good document instead of clearing it, and every
- * document gets the same `embedGameHtml(withGameLocale(...))` preparation every
- * embedded game gets.
- */
+// Shares the latest playable source between the stage and thread.
 export type UseStageSourceResult = StageSource & {
   pushPreview: (html: string) => void;
 };
@@ -65,6 +52,9 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
+  const deliveredPreviewVersion = status?.recentBuilds?.find(
+    (build) => build.version === status.progress?.headSha,
+  )?.version;
   const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
@@ -79,7 +69,7 @@ export function useStageSource(
   const loadedVersionPreviewKeyRef = useRef<string | null>(null);
   const versionPreviewInFlightRef = useRef(false);
   const loadedPreviewKeyRef = useRef<string | null>(null);
-  const previewInFlightRef = useRef(false);
+  const previewRequestKeyRef = useRef<string | null>(null);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
   const loadedPublishedSlugRef = useRef<string | null>(null);
@@ -105,7 +95,7 @@ export function useStageSource(
     loadedPreviewKeyRef.current = null;
     loadedVersionPreviewKeyRef.current = null;
     versionPreviewInFlightRef.current = false;
-    previewInFlightRef.current = false;
+    previewRequestKeyRef.current = null;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
     loadedPublishedSlugRef.current = null;
@@ -146,22 +136,30 @@ export function useStageSource(
       });
   }, [token, selectedPreviewVersion]);
 
-  // Auto-load the live preview as soon as one is available, and silently refresh it
-  // whenever the agent pushes a new commit (headSha changes) — no click required.
+  // New deliveries supersede requests still fetching the previous document.
   useEffect(() => {
     const previewSlug = status?.preview?.slug;
     const headSha = status?.progress?.headSha;
     const gateRunAt = status?.previewGate?.ranAt;
     const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}`;
-    if (!previewSlug || previewInFlightRef.current) return;
+    if (!previewSlug) return;
     if (headSha && previewKey === loadedPreviewKeyRef.current) return;
     if (!headSha && loadedPreviewKeyRef.current !== null) return;
 
-    previewInFlightRef.current = true;
+    if (previewRequestKeyRef.current !== previewKey) {
+      previewRequestKeyRef.current = previewKey;
+      previewRetryRef.current = 0;
+    }
+    let cancelled = false;
+    let retryTimer: number | undefined;
     const requestToken = token;
-    getSubmissionPreview(token)
+    // Pin deliveries so a cached fallback cannot impersonate the new version.
+    const request = deliveredPreviewVersion
+      ? getSubmissionPreview(token, deliveredPreviewVersion)
+      : getSubmissionPreview(token);
+    request
       .then((result) => {
-        if (activeTokenRef.current !== requestToken) return;
+        if (cancelled || activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
         previewRetryRef.current = 0;
         // Prefer the gate's own "produced at" over the client's fetch time — the
@@ -175,26 +173,29 @@ export function useStageSource(
         });
       })
       .catch(() => {
-        // Keep last-good on a refetch failure — a stale stage beats a blank one. But
-        // don't mark this head/gate key loaded yet: a 409 while assembly is still
-        // finishing is transient, and marking it now would block every later poll with
-        // the same head/gate from ever trying again (bounded retry, same as channel/
-        // published below).
-        if (activeTokenRef.current !== requestToken) return;
+        // Assembly can still be finishing; retain the previous playable document.
+        if (cancelled || activeTokenRef.current !== requestToken) return;
         if (previewRetryRef.current < 3) {
           previewRetryRef.current += 1;
-          window.setTimeout(() => {
+          retryTimer = window.setTimeout(() => {
             if (activeTokenRef.current === requestToken) setPreviewRetryTick((tick) => tick + 1);
           }, 4_000);
         } else {
           loadedPreviewKeyRef.current = previewKey;
         }
-      })
-      .finally(() => {
-        if (activeTokenRef.current !== requestToken) return;
-        previewInFlightRef.current = false;
       });
-  }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, token, previewRetryTick]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+    };
+  }, [
+    status?.preview?.slug,
+    status?.progress?.headSha,
+    status?.previewGate?.ranAt,
+    deliveredPreviewVersion,
+    token,
+    previewRetryTick,
+  ]);
 
   // Prefetch the latest channel build when there is no PR preview yet — or when a
   // staged assembly has landed more recently than the PR preview currently on screen.
