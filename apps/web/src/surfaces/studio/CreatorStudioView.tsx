@@ -185,18 +185,16 @@ export function CreatorStudioView({
   // One row per game. Refetch after abandon can reveal a sibling.
   const shelfGames = useMemo(() => collapseStudioGames(games), [games]);
 
-  // Resolve the URL's game segment against the shelf — by slug, or by capability token
-  // for links minted before games were given slugs at submission. A value matching
-  // neither selects nothing: the shelf holds only this creator's games, so a slug
-  // belonging to someone else is indistinguishable from one that does not exist.
-  // Prefer the collapsed tip when a slug has both a live job and an improve job.
-  useEffect(() => {
-    if (!selectedGame) return;
+  // Legacy tokens and slugs both resolve to the current shelf tip.
+  const requestedShelfGame = useMemo(() => {
+    if (!selectedGame) return null;
     const match = games.find((game) => game.slug === selectedGame || game.token === selectedGame);
-    if (!match) return;
-    const tip = match.slug ? shelfGames.find((game) => game.slug === match.slug) : match;
-    if (tip) setSelected(tip.token);
+    if (!match) return null;
+    return (match.slug ? shelfGames.find((game) => game.slug === match.slug) : match) ?? null;
   }, [selectedGame, games, shelfGames]);
+  useEffect(() => {
+    if (requestedShelfGame) setSelected(requestedShelfGame.token);
+  }, [requestedShelfGame]);
 
   useEffect(() => {
     if (!user) {
@@ -427,6 +425,8 @@ export function CreatorStudioView({
   // leaves a readable URL behind and takes the capability token out of history.
   useEffect(() => {
     if (!selected) return;
+    // History navigation must resolve selection before canonicalizing its URL.
+    if (selectedGame && selected !== requestedShelfGame?.token) return;
     const game = shelfGames.find((entry) => entry.token === selected);
     if (!game) return;
     const next = resolveTab(game, selectedTab);
@@ -438,7 +438,7 @@ export function CreatorStudioView({
     if (window.location.pathname !== canonical) {
       onNavigate(canonical, { replace: true });
     }
-  }, [selected, selectedTab, selectedGame, shelfGames, onNavigate]);
+  }, [selected, selectedTab, selectedGame, requestedShelfGame, shelfGames, onNavigate]);
 
   /**
    * Below the rail breakpoint the details panel is a sheet over the thread, and a sheet

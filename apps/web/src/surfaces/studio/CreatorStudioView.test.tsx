@@ -1279,8 +1279,7 @@ describe('CreatorStudioView', () => {
 
     // It still opens the right game…
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Game 2');
-    // …and leaves a readable URL behind it, taking the capability out of history. In
-    // place, so the old address does not become an entry to go Back through.
+    // Replace legacy tokens without adding a history entry.
     expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread', { replace: true });
 
     root.unmount();
@@ -1977,7 +1976,7 @@ describe('CreatorStudioView abandon', () => {
     await act(async () => {
       third!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/thread');
 
     await act(async () => {
       resolveRefetch(
@@ -2001,7 +2000,7 @@ describe('CreatorStudioView abandon', () => {
     });
 
     expect(onNavigate).not.toHaveBeenCalledWith('/studio');
-    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/thread');
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Third Game');
 
     root.unmount();
