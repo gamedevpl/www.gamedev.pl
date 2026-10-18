@@ -34,7 +34,9 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
     parent.postMessage({ captureProbe: true, blocked }, '*');
   `;
     const child = `<body style="background:#23aa77">Game capture<script>${probe}</script>`;
-    const html = `<!doctype html><body><script>
+    const html = `<!doctype html><html data-gamedev-capture><body><script>
+    window.__GAMEDEV_CAPTURE_READY__ = false;
+    setTimeout(() => { window.__GAMEDEV_CAPTURE_READY__ = true; }, 1500);
     let childBlocked;
     addEventListener('message', event => {
       if (event.source === game.contentWindow && event.data.captureProbe) { childBlocked = event.data.blocked;
