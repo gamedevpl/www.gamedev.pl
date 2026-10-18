@@ -181,10 +181,13 @@ export async function captureBrowser(input: {
     input.signal.throwIfAborted();
     return new Promise((resolve, reject) => {
       const id = ++sequence;
-      const timer = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error(`Browser timeout: ${method}`));
-      }, 10_000);
+      const timer = setTimeout(
+        () => {
+          pending.delete(id);
+          reject(new Error(`Browser timeout: ${method}`));
+        },
+        input.gameUrl ? 75_000 : 10_000,
+      );
       pending.set(id, { resolve, reject, timer });
       writer.write(JSON.stringify({ id, method, params, sessionId }) + '\0');
     });

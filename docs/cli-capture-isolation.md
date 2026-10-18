@@ -81,6 +81,8 @@ Validation bounds requests and files to 64 KiB, nesting, expanded actions to
 execution to 60 seconds. The existing task capture budget and single-job limit
 apply to both modes. Failed assertions, exhausted frame budgets, missing harnesses
 and timeouts return a failed job without an image.
+The host cancels the whole scenario browser after 90 seconds, including startup
+and screenshot encoding; individual browser commands stay within that budget.
 
 The trusted interpreter is bundled into the CLI from the pure Creator Kit
 `capture-plan.ts` interpreter; its source revision is recorded in
