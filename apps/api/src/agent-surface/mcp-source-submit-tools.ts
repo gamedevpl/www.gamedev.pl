@@ -280,8 +280,6 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const held = await deps.holdForReference?.(ctx, auth.jobId, auth.record.roundGeneration ?? 1);
-        if (held) return toolOk(referenceHoldReply(args.mode));
 
         const fromStaged = args.fromStaged === true;
         const fromLatestDelivery = args.fromLatestDelivery === true;
@@ -318,6 +316,8 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
 
         const requestedMode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
         const mode = await effectiveSubmitMode(requestedMode, fromLatestDelivery, auth.record, gamesStore);
+        const held = await deps.holdForReference?.(ctx, auth.jobId, auth.record.roundGeneration ?? 1);
+        if (held) return toolOk(referenceHoldReply(mode));
         if (mode === 'publish' && auth.record.slug && store) {
           if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
             return toolRefusal(PUBLISH_NOT_OWNER_REASON, 'not_owner');
