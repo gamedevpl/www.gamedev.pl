@@ -36,13 +36,17 @@ export function formatLocalChange(result: object): string {
       ? [
           `Pending ${row.kind} merge (${row.phase})`,
           ...row.conflicts.map((c) => `  ${c.resolved ? 'resolved' : c.kind}: ${c.paths.map(sanitizePath).join(', ')}`),
-          'Edit text conflicts, then resolve <path>; or resolve <path> --ours|--theirs|--delete.',
+          row.phase === 'aborting'
+            ? 'Abort was interrupted; repeat resolve --abort.'
+            : 'Edit text conflicts, then resolve <path>; or resolve <path> --ours|--theirs|--delete.',
           `Next: ${row.next}`,
         ].join('\n')
       : 'No pending merge.';
   }
   if ('aborted' in result && 'backup' in result)
-    return `Merge aborted. Edits made during resolution are backed up at ${sanitizePath(String(result.backup))}.`;
+    return 'replayed' in result
+      ? `Last completed abort; recovery copy: ${sanitizePath(String(result.backup))}.`
+      : `Merge aborted. Edits made during resolution are backed up at ${sanitizePath(String(result.backup))}.`;
   if ('completed' in result) return 'Merge completed. Sources remain local; review gamedevpl diff before pushing.';
   if ('resolved' in result)
     return `Resolved: ${(result.resolved as string[]).map(sanitizePath).join(', ')}. Run resolve to inspect remaining paths.`;

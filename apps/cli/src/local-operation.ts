@@ -1,5 +1,6 @@
 import { isRasterSourcePath } from '@gamedevpl/contract';
-import { existsSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, lstatSync, rmSync } from 'node:fs';
 import { z } from 'zod';
 import type { ApiClient } from './api.js';
 import { hashContent, hashesOf, type TreeFile } from './checkout-sync.js';
@@ -28,7 +29,7 @@ const schema = z
     origin: z.string().url(),
     slug: z.string(),
     source: z.string(),
-    phase: z.enum(['preparing', 'active', 'committing']),
+    phase: z.enum(['preparing', 'active', 'committing', 'aborting']),
     before: snapshotSchema,
     base: z.string().max(1_000_000),
     context: z.string().regex(/^[a-f0-9]{64}$/),
@@ -55,6 +56,11 @@ const schema = z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .optional(),
+    abortId: z.string().uuid().optional(),
+    abortDigest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
   })
   .strict();
 export type LocalOperation = z.infer<typeof schema>;
@@ -62,6 +68,8 @@ export type LocalOperation = z.infer<typeof schema>;
 export function readLocalOperation(root: string): LocalOperation | null {
   if (!existsSync(kitPath(root, OPERATION_FILE))) return null;
   const state = schema.parse(readLocalJson(root, OPERATION_FILE));
+  if (state.phase === 'aborting' && (!state.abortId || !state.abortDigest))
+    throw new CliError('Invalid interrupted abort journal. Recovery copies were preserved.', EXIT_REFUSED);
   checkedFiles(state.target);
   state.managed.forEach(sourcePath);
   for (const conflict of state.conflicts) conflict.paths.forEach(sourcePath);
@@ -75,7 +83,12 @@ export function operationSummary(root: string) {
         kind: state.kind,
         phase: state.phase,
         conflicts: state.conflicts,
-        next: state.kind === 'pull' ? 'pull --continue / pull --abort' : 'stash continue / stash abort',
+        next:
+          state.phase === 'aborting'
+            ? 'resolve --abort'
+            : state.kind === 'pull'
+              ? 'pull --continue / pull --abort'
+              : 'stash continue / stash abort',
       }
     : undefined;
 }
@@ -163,6 +176,8 @@ export async function finishLocalOperation(api: ApiClient, root: string, expecte
     throw new CliError(`The pending operation is ${state.kind}. Use resolve --continue or --abort.`, EXIT_REFUSED);
   const ws = localWorkspace(root);
   checkContext(ws, state, api);
+  if (state.phase === 'aborting')
+    throw new CliError('Abort is in progress. Run resolve --abort to finish it.', EXIT_REFUSED);
   if (state.phase === 'preparing')
     throw new CliError('Merge setup was interrupted. Run resolve --abort after any history recovery.', EXIT_REFUSED);
   if (state.conflicts.some((c) => !c.resolved))
@@ -210,22 +225,83 @@ export async function finishLocalOperation(api: ApiClient, root: string, expecte
 
 export function abortLocalOperation(api: ApiClient, root: string, expected?: LocalOperation['kind']) {
   const state = readLocalOperation(root);
-  if (!state) throw new CliError('No merge is waiting for resolution.', EXIT_REFUSED);
+  if (!state) {
+    const prior = lastAbortResult(api, root, expected);
+    if (prior) return prior;
+    throw new CliError('No merge is waiting for resolution.', EXIT_REFUSED);
+  }
   if (expected && state.kind !== expected)
     throw new CliError(`The pending operation is ${state.kind}. Use resolve --abort.`, EXIT_REFUSED);
   if (state.phase === 'committing')
     throw new CliError('Merge completion started. Use resolve --continue to finish it safely.', EXIT_REFUSED);
   const ws = localWorkspace(root);
   checkContext(ws, state, api);
-  const backup = installHistorySources({
-    root,
+  if (state.phase !== 'aborting') {
+    state.phase = 'aborting';
+    state.abortId = randomUUID();
+    state.abortDigest = ws.before.digest;
+    writeLocalJson(root, OPERATION_FILE, state);
+  }
+  const backup = kitPath(root, `.gamedev/history-backups/${state.abortId!}`);
+  if (existsSync(backup)) {
+    if (sourceSnapshot(backup).digest !== state.abortDigest)
+      throw new CliError(
+        'Abort recovery copy changed. Keep the source and backup copies for manual recovery.',
+        EXIT_REFUSED,
+      );
+  } else {
+    const stale = kitPath(root, `.gamedev/history-stage-${state.abortId!}`);
+    rmSync(stale, { recursive: true, force: true });
+    state.abortDigest = ws.before.digest;
+    writeLocalJson(root, OPERATION_FILE, state);
+    installHistorySources({
+      root,
+      source: ws.source,
+      before: ws.before,
+      after: restoreSnapshot(root, state.before),
+      identity: ws.identity,
+      id: state.abortId,
+    });
+  }
+  writeLocalJson(root, '.gamedev/last-abort.json', {
+    kind: state.kind,
+    slug: ws.slug,
     source: ws.source,
-    before: ws.before,
-    after: restoreSnapshot(root, state.before),
-    identity: ws.identity,
+    origin: api.origin,
+    id: state.abortId,
   });
   rmSync(kitPath(root, OPERATION_FILE));
   return { kind: state.kind, aborted: true, backup };
+}
+
+export function lastAbortResult(api: ApiClient, root: string, expected?: LocalOperation['kind']) {
+  const path = '.gamedev/last-abort.json';
+  if (!existsSync(kitPath(root, path))) return null;
+  const record = z
+    .object({
+      kind: z.enum(['pull', 'stash']),
+      slug: z.string(),
+      source: z.string(),
+      origin: z.string().url(),
+      id: z.string().uuid(),
+    })
+    .strict()
+    .parse(readLocalJson(root, path));
+  const ws = localWorkspace(root);
+  if (
+    record.slug !== ws.slug ||
+    record.source !== ws.source ||
+    record.origin !== api.origin ||
+    (expected && expected !== record.kind)
+  )
+    throw new CliError(
+      'No matching merge is pending. The last abort belongs to a different operation context.',
+      EXIT_REFUSED,
+    );
+  const backup = kitPath(root, `.gamedev/history-backups/${record.id}`);
+  if (!existsSync(backup) || !lstatSync(backup).isDirectory())
+    throw new CliError('The last abort recovery copy is missing.', EXIT_REFUSED);
+  return { kind: record.kind, aborted: true, backup, replayed: true };
 }
 
 export function resolveLocalPath(api: ApiClient, root: string, path: string, choice?: 'ours' | 'theirs' | 'delete') {

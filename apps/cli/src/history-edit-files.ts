@@ -188,9 +188,10 @@ export function installHistorySources(input: {
   after: SourceSnapshot;
   identity: string;
   move?: typeof renameSync;
+  id?: string;
 }): string {
   const move = input.move ?? renameSync,
-    id = randomUUID();
+    id = input.id ?? randomUUID();
   const journal: Journal = { id, source: input.source, result: '0'.repeat(64), committed: false };
   const paths = journalPaths(input.root, journal),
     pending = kitPath(input.root, PENDING);

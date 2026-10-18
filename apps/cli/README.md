@@ -215,6 +215,8 @@ Abort restores the original source tree, preserving edits made during resolution
 private recovery copy. Merge state survives CLI restarts. If a source swap was interrupted,
 run `restore --recover` first, then inspect `resolve` and continue or abort as directed.
 An interrupted final base update can be completed idempotently with `resolve --continue`.
+Repeating `resolve --abort` after interruption returns the original recovery-copy path,
+including if the source restore had already finished; edits made afterward stay intact.
 
 ### Local stash without a repository
 
