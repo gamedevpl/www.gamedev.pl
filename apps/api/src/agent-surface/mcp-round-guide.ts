@@ -62,7 +62,7 @@ export interface NextStepState {
   warnings: ReadonlyArray<{ code?: unknown; message?: unknown }>;
   // True once get_kit answered since the last delivery.
   kitRefreshed?: boolean;
-  // False for a managed lane with no shell to open a URL.
+  // True only for a managed lane known to have a shell.
   canFetchUrls?: boolean;
 }
 
@@ -89,7 +89,9 @@ export function nextSuggestedTool(state: NextStepState): string | undefined {
   if (codes.has('inbox_pending')) return 'read_inbox';
   const read = CONTEXT_READS.find(([code]) => codes.has(code));
   if (read) return read[1];
-  if (codes.has('reference_unseen') && state.canFetchUrls !== false) return 'get_reference_images';
+  // A known shell only, and never over a close.
+  const delivering = state.tool === 'submit_sources' || state.tool === 'get_gate_verdict';
+  if (codes.has('reference_unseen') && state.canFetchUrls === true && !delivering) return 'get_reference_images';
   // A delivery whose gate never started is not one to close on.
   if (codes.has('gate_not_started')) return undefined;
   const delivered = state.tool === 'submit_sources' || state.tool === 'get_gate_verdict';

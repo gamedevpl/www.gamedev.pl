@@ -899,7 +899,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       reason: data.reason,
       warnings,
       kitRefreshed: refreshedKits.has(jobId),
-      canFetchUrls: managedOpenerClaims(ctx.bearerToken)?.shell !== false,
+      canFetchUrls: managedOpenerClaims(ctx.bearerToken)?.shell === true,
     });
     if (warnings.length === 0 && !piggybacked && !next) {
       return result;

@@ -27,9 +27,12 @@ describe('mcp-round-guide', () => {
     expect(step('stage_source_file', ['typecheck_hint', 'inbox_pending'])).toBeUndefined();
   });
 
-  it('points an unseen reference image at get_reference_images, unless no shell can open it', () => {
-    expect(step('stage_upload_url', ['reference_unseen'])).toBe('get_reference_images');
-    expect(step('stage_upload_url', ['reference_unseen', 'transcript_unread'])).toBe('get_transcript');
+  it('points an unseen reference image at get_reference_images only for a shell, never over a close', () => {
+    const shell = { canFetchUrls: true };
+    expect(step('stage_upload_url', ['reference_unseen'], shell)).toBe('get_reference_images');
+    expect(step('stage_upload_url', ['reference_unseen', 'transcript_unread'], shell)).toBe('get_transcript');
+    expect(step('submit_sources', ['reference_unseen', 'call_end'], shell)).toBe('end');
+    expect(step('stage_upload_url', ['reference_unseen'])).toBeUndefined();
     expect(step('stage_upload_url', ['reference_unseen'], { canFetchUrls: false })).toBeUndefined();
   });
 
