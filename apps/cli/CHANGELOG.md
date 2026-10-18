@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.53.0 — 2026-10-17
+
 ### Breaking
 
 - New checkouts use gamedev.pl history without creating a local Git repository; opt in with `checkout --git` or `git init` (#1895).
