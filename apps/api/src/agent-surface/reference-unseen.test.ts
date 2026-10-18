@@ -90,8 +90,12 @@ describe('createReferenceHold', () => {
     expect([first, overlapping].filter(Boolean)).toHaveLength(1);
     // Another instance shares the store, so it cannot hold again.
     expect(await createReferenceHold(async () => true, store)(1, 1)).toBe(false);
-    expect(await hold(1, 2)).toBe(true);
+    // Only the current round claims; stale ones never move it back.
+    expect(await hold(1, 2)).toBe(false);
+    const current = (await store.bumpRoundGeneration(1))!;
+    expect(await hold(1, current - 1)).toBe(false);
+    expect(await hold(1, current)).toBe(true);
     unseen = false;
-    expect(await hold(1, 3)).toBe(false);
+    expect(await hold(1, current + 1)).toBe(false);
   });
 });

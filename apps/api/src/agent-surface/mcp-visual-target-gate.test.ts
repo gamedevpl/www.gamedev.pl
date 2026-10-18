@@ -80,17 +80,16 @@ describe('visual_target is managed-only', () => {
     expect(await listed()).not.toContain('creator_notes');
   });
 
-  it('leaves Studio and account tools out of a managed session, and kit search out of a shell one', async () => {
+  it('leaves Studio and account tools out of a managed session, keeping the ones its guidance names', async () => {
     app = await start();
     const shell = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1, shell: true })}`;
-    const noShell = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1 })}`;
-    for (const name of ['get_game_performance', 'share_draft', 'open_round', 'show_media']) {
+    for (const name of ['get_game_performance', 'share_draft', 'list_account_games', 'concept_frame_upload_url']) {
       expect(await listed(shell)).not.toContain(name);
       expect(await listed()).toContain(name);
     }
-    expect(await listed(shell)).not.toContain('knowledge_query');
-    expect(await listed(noShell)).toContain('knowledge_query');
-    expect(await listed(shell)).toEqual(expect.arrayContaining(['start', 'submit_sources', 'create_game', 'get_kit']));
+    expect(await listed(shell)).toEqual(
+      expect.arrayContaining(['start', 'submit_sources', 'create_game', 'knowledge_query', 'show_media', 'open_round']),
+    );
   });
 
   it('is not offered when the feature is off', async () => {

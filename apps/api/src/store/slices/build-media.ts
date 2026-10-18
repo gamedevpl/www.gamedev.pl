@@ -139,7 +139,7 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
     const job = this.submissions?.get(jobId);
-    if (!job || job.referenceHoldGeneration === roundGeneration) return false;
+    if (!job || !holdClaimable(job, roundGeneration)) return false;
     this.submissions!.set(jobId, { ...job, referenceHoldGeneration: roundGeneration });
     return true;
   }
@@ -288,8 +288,8 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
     return this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
-      const held = (job.data() as SubmissionRecord | undefined)?.referenceHoldGeneration;
-      if (!job.exists || held === roundGeneration) return false;
+      const record = job.data() as SubmissionRecord | undefined;
+      if (!record || !holdClaimable(record, roundGeneration)) return false;
       transaction.update(this.jobRef(jobId), { referenceHoldGeneration: roundGeneration });
       return true;
     });
@@ -445,4 +445,9 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     }
     return stale.length;
   }
+}
+
+// Only the current round may claim, and the marker never moves back.
+function holdClaimable(record: SubmissionRecord, roundGeneration: number): boolean {
+  return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
 }

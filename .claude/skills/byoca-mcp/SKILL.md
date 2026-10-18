@@ -317,14 +317,15 @@ expired, and the builder is `platform`. Never mention a managed-only tool in pub
 descriptions, `MCP_INSTRUCTIONS` or replies; only the managed builder system prompt may name it.
 
 The reverse also holds: `tools/list` for a managed opener leaves out `MCP_HIDDEN_FROM_MANAGED`
-(Studio, account and UI tools a builder never calls) and, on a shell lane, `knowledge_query`
-(`managed-tool-filter.ts`), to keep every model request smaller. They still answer `tools/call`.
-The proposal readers stay listed, since accepted-proposal rounds can be managed.
+(`managed-tool-filter.ts`): Studio and account tools a builder never calls and that no tool or
+guidance it sees names, to keep every model request smaller. They still answer `tools/call`. A tool
+any visible description or `ROUND_SEQUENCE` mentions (proposal readers, `knowledge_query`,
+`show_media`, `open_round`, `continue_draft`) stays listed.
 
 **Reference hold.** On a managed shell lane, `submit_sources` refuses the round's first delivery
 while `reference_unseen` holds (`rejected: reference_unseen`, with `retry`). The claim is
 `claimReferenceHold` on the submission record, a transaction, so it happens once per round
-generation across instances; the next submit is delivered either way. Public clients and no-shell
+generation across instances, only for the record's current round, and the marker never moves back; the next submit is delivered either way. Public clients and no-shell
 lanes only see the warning.
 
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)

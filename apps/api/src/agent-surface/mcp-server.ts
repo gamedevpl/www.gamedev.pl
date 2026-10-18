@@ -34,7 +34,7 @@ import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
 import { createCreatorNotesTools } from './mcp-creator-notes-tools.js';
-import { MCP_HIDDEN_FROM_MANAGED, MCP_HIDDEN_FROM_MANAGED_SHELL } from './managed-tool-filter.js';
+import { MCP_HIDDEN_FROM_MANAGED } from './managed-tool-filter.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -1512,10 +1512,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // Managed-only tools need an opener; URL-only ones also a shell.
       const offered = (name: string) =>
         (!MCP_MANAGED_ONLY_TOOLS.has(name) || (opener !== null && (!MCP_SHELL_ONLY_TOOLS.has(name) || opener.shell))) &&
-        !(
-          opener !== null &&
-          (MCP_HIDDEN_FROM_MANAGED.has(name) || (opener.shell && MCP_HIDDEN_FROM_MANAGED_SHELL.has(name)))
-        );
+        !(opener !== null && MCP_HIDDEN_FROM_MANAGED.has(name));
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);
