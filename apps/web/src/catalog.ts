@@ -16,7 +16,7 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
-import { isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry, isPublishedEntry } from '@gamedevpl/contract';
 import type {
   CatalogEditor,
   CatalogEntry,
@@ -174,7 +174,10 @@ export async function fetchCatalog(): Promise<CatalogEntry[]> {
     throw new Error('Catalog response was not an array');
   }
 
-  return body.map((entry) => normalizeCatalogEntry(entry)).filter((entry): entry is CatalogEntry => entry !== null);
+  // Belt and braces: the API already drops unlisted games.
+  return body
+    .map((entry) => normalizeCatalogEntry(entry))
+    .filter((entry): entry is CatalogEntry => entry !== null && isListedEntry(entry));
 }
 
 /**
@@ -202,6 +205,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     genre: entry.genre,
     controls: entry.controls,
     status: entry.status,
+    ...(entry.listed === false ? { listed: false as const } : {}),
     media: parseCatalogMedia(entry.media),
     multiplayer: parseCatalogMultiplayer(entry.multiplayer),
     saves: entry.saves === 'player' ? 'player' : null,

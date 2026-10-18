@@ -15,30 +15,27 @@ export function parsePublicPlaySlugs(value: string | undefined): string[] {
   ];
 }
 
-export function isPublicPlayRequest(request: FastifyRequest, publicPlaySlugs: Set<string>): boolean {
+// Slug of a would-be anonymous play request, else null.
+export function publicPlayRequestSlug(request: FastifyRequest): string | null {
   const path = request.url.split('?')[0] ?? request.url;
 
   if (request.method === 'POST' && path === '/api/telemetry') {
     const body = request.body;
-    return (
-      typeof body === 'object' &&
+    return typeof body === 'object' &&
       body !== null &&
       'slug' in body &&
-      typeof (body as { slug?: unknown }).slug === 'string' &&
-      publicPlaySlugs.has((body as { slug: string }).slug)
-    );
+      typeof (body as { slug?: unknown }).slug === 'string'
+      ? (body as { slug: string }).slug
+      : null;
   }
 
-  if (request.method !== 'GET') return false;
+  if (request.method !== 'GET') return null;
   const match = path.match(/^\/api\/games\/([^/]+)(?:\/(votes|world|presence))?\/?$/);
-  if (!match?.[1]) return false;
+  if (!match?.[1]) return null;
 
-  let slug: string;
   try {
-    slug = decodeURIComponent(match[1]);
+    return decodeURIComponent(match[1]);
   } catch {
-    return false;
+    return null;
   }
-
-  return publicPlaySlugs.has(slug);
 }

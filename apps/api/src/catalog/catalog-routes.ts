@@ -21,7 +21,7 @@ import { chooseMediaObject } from './media-object-choice.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
-import { isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry, isPublishedEntry } from '@gamedevpl/contract';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 
 type PublishedGame = { slug: string; title: string; html: string };
@@ -52,6 +52,8 @@ export interface CatalogRoutesHandle {
   // Repo catalog OR store publication — the answer /play itself acts on.
   isSlugPublishedAnyLane(slug: string): Promise<boolean>;
   getPublishedCatalogEntry(slug: string): Promise<CatalogGameEntry | null>;
+  // Published in either lane but kept off lists (SPEC `listed: false`).
+  isSlugUnlistedPublished(slug: string): Promise<boolean>;
   readSnapshotGame(slug: string): Promise<PublishedGame | null>;
   storePublishedGame(slug: string): Promise<PublishedGame | null>;
   // Clears cached store-catalog and media entries for a changed slug.
@@ -191,6 +193,23 @@ export async function registerCatalogRoutes(
     if (!githubClient) return null;
     const entries = await getCatalogEntries();
     return entries.find((entry) => entry.slug === slug && isPublishedEntry(entry)) ?? null;
+  }
+
+  async function isSlugUnlistedPublished(slug: string): Promise<boolean> {
+    if (!githubClient) return false;
+    try {
+      const repoEntry = (await getCatalogEntries()).find((entry) => entry.slug === slug && isPublishedEntry(entry));
+      if (repoEntry) return repoEntry.listed === false;
+      // One publication and SPEC read for this slug, never a scan.
+      if (!store || !gamesStore) return false;
+      const publication = await store.getPublication(slug);
+      if (!isPublished(publication)) return false;
+      const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
+      return spec !== null && catalogEntryFromSpec(slug, spec, () => null)?.listed === false;
+    } catch {
+      // Fails closed: an outage keeps unlisted games behind the wall.
+      return false;
+    }
   }
 
   // Mirrors createCombinedPublishedSlugGate, which is env-built; see published-slugs.ts.
@@ -373,7 +392,10 @@ export async function registerCatalogRoutes(
 
     try {
       const published = (await getCatalogEntries()).filter(isPublishedEntry);
-      const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
+      // Unlisted slugs still shadow the store lane, then drop out.
+      const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))].filter(
+        isListedEntry,
+      );
       const deattributed = await attachRemixOn(await deattributeDeletedOwners(combined), store, now());
       return reply.send(await attachCatalogEnrichments(deattributed, store, now()));
     } catch (error) {
@@ -505,6 +527,7 @@ export async function registerCatalogRoutes(
     isSlugPublished,
     isSlugPublishedAnyLane,
     getPublishedCatalogEntry,
+    isSlugUnlistedPublished,
     readSnapshotGame,
     storePublishedGame,
     invalidatePublishedGameCache,

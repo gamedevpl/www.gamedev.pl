@@ -5,7 +5,7 @@ import { VertexEmbeddingService } from './embedding-service.js';
 import { CatalogVectorIndex, type IndexedGameVector } from './catalog-vector-index.js';
 import type { Store } from '../platform/store.js';
 import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
-import { isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry } from '@gamedevpl/contract';
 
 // Derives searchable document text from game metadata fields.
 export function computeCatalogDocText(entry: {
@@ -71,7 +71,7 @@ export class CatalogIndexer {
     this.lastIndexBuildAttemptTime = Date.now();
     try {
       const entries = await this.getCatalogEntries();
-      const published = entries.filter(isPublishedEntry);
+      const published = entries.filter(isListedEntry);
       const enriched = await attachCatalogEnrichments(published, this.store);
 
       let storedMap = new Map<string, CatalogEnrichmentRecord>();

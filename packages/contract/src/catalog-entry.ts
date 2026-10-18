@@ -41,6 +41,11 @@ export function isPublishedEntry(entry: { status?: string } | null | undefined):
   return entry?.status === CATALOG_PUBLISHED_STATUS;
 }
 
+// Published and allowed onto lists; unlisted games stay playable by link.
+export function isListedEntry(entry: { status?: string; listed?: boolean } | null | undefined): boolean {
+  return isPublishedEntry(entry) && entry?.listed !== false;
+}
+
 // One game's catalog entry, derived from its SPEC frontmatter.
 export interface CatalogEntry {
   slug: string;
@@ -49,6 +54,8 @@ export interface CatalogEntry {
   genre: string;
   controls: string;
   status: string;
+  // Present only as false: reachable by link, kept off every list.
+  listed?: false;
   media: CatalogMedia | null;
   multiplayer: CatalogMultiplayer | null;
   // Advisory badge only; the bridge never gates on it.

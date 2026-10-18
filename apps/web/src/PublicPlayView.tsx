@@ -1,11 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameLoadScreen } from './GameLoadScreen.js';
 import { GameTheater } from './GameTheater.js';
 import { PlayNotFoundPanel } from './PlayNotFoundPanel.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 
-export function PublicPlayView({ slug, onExit }: { slug: string; onExit: () => void }) {
+export function PublicPlayView({
+  slug,
+  onExit,
+  unauthorizedFallback,
+}: {
+  slug: string;
+  onExit: () => void;
+  // Rendered instead of an error when the API walls this off.
+  unauthorizedFallback?: ReactNode;
+}) {
   const { t } = useTranslation();
   const { game, progress, error: fetchError } = usePublishedGameFetch(slug);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +33,8 @@ export function PublicPlayView({ slug, onExit }: { slug: string; onExit: () => v
     document.body.classList.add('player-open');
     return () => document.body.classList.remove('player-open');
   }, [error]);
+
+  if (fetchError?.status === 401 && unauthorizedFallback) return <>{unauthorizedFallback}</>;
 
   if (error) {
     const isNotFound = fetchError?.status === 404 || fetchError?.status === 409;

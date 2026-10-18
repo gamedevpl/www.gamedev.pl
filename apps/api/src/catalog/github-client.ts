@@ -1628,6 +1628,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       genre: typeof candidate.genre === 'string' ? candidate.genre : '',
       controls: typeof candidate.controls === 'string' ? candidate.controls : '',
       status,
+      ...(candidate.listed === false ? { listed: false as const } : {}),
       media: parseCommittedMedia(candidate.media),
       multiplayer: parseCommittedMultiplayer(candidate.multiplayer),
       saves: parseSaves(candidate.saves),
@@ -1701,6 +1702,11 @@ function parseCommittedMultiplayer(value: unknown): CatalogGameMultiplayer | nul
   return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
 }
 
+// `listed: false` keeps a published game off every list; anything else, or no key, lists it.
+export function parseSpecListed(raw: string | undefined): boolean {
+  return raw?.trim().toLowerCase() !== 'false';
+}
+
 /**
  * Parses a game SPEC.md's YAML-ish frontmatter into a flat string map — the same
  * lenient `key: value` format the games repo's tools/lib/spec.mjs uses (no nested
@@ -1736,6 +1742,7 @@ export function catalogEntryFromSpec(
     genre: frontmatter.genre ?? '',
     controls: frontmatter.controls ?? '',
     status,
+    ...(parseSpecListed(frontmatter.listed) === false ? { listed: false as const } : {}),
     media: parseGameMedia(mediaMetadata),
     multiplayer: parseMultiplayer(frontmatter),
     saves: parseSaves(frontmatter.saves),

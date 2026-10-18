@@ -330,6 +330,8 @@ async function listCreatorPublishedGames(
       } catch {
         // A missing store object must not blank the whole profile.
       }
+      // Unreadable store SPEC: visibility unknown, so fail closed.
+      if (!entry) continue;
     }
     if (!entry) {
       entry = {
@@ -348,6 +350,8 @@ async function listCreatorPublishedGames(
         submittedBy: profileBylineName(profile),
       };
     }
+    // Unlisted games stay playable by link but never appear on the profile.
+    if (entry.listed === false) continue;
     games.push({
       ...entry,
       status: 'published',

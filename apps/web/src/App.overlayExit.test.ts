@@ -177,6 +177,9 @@ describe('closing a full-viewport game', () => {
       if (url.includes('/api/my/games') || url.includes('/api/studio')) {
         return new Response(JSON.stringify({ games: [] }));
       }
+      if (url.endsWith('/api/games/pending-draft/page')) {
+        return new Response(JSON.stringify({ error: 'not_found' }), { status: 404 });
+      }
       if (url.includes('/api/games/pending-draft')) {
         return gamePending;
       }

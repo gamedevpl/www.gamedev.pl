@@ -62,6 +62,7 @@ status: published # draft | in-progress | published
 genre: arcade
 controls: Left and right arrow keys
 submitted_by: null # GitHub handle when creator-submitted, else null
+# listed: false # optional: stays published and playable by link, but on no site list
 ---
 
 ## Concept
