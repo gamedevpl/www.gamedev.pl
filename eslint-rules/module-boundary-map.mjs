@@ -502,6 +502,7 @@ const FILE_BUCKET = {
   'mcp-managed-round': 'agent-surface',
   'delivery-refusal-reply': 'agent-surface',
   'managed-tool-filter': 'agent-surface',
+  'mcp-reference-hold.test': 'agent-surface',
   'delivery-refusal-reply.test': 'agent-surface',
   'managed-workspace': 'agent-surface',
   'managed-provider-gemini': 'agent-surface',

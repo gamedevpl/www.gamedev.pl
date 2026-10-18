@@ -96,7 +96,7 @@
     "apps/api/src/agent-surface/mcp-session-nudges.ts": 391,
     "apps/api/src/agent-surface/mcp-source-patch-tools.ts": 425,
     "apps/api/src/agent-surface/mcp-source-stage-tools.ts": 381,
-    "apps/api/src/agent-surface/mcp-source-submit-tools.ts": 438,
+    "apps/api/src/agent-surface/mcp-source-submit-tools.ts": 441,
     "apps/api/src/agent-surface/mcp-tool-support.ts": 323,
     "apps/api/src/agent-surface/mcp-ui.test.ts": 611,
     "apps/api/src/agent-surface/mcp-ui.ts": 1874,

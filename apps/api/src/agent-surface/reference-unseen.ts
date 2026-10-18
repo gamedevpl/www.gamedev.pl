@@ -1,6 +1,7 @@
 // reference_unseen: a creator image newer than any the agent downloaded.
 import type { Store } from '../platform/store.js';
 import type { NudgeWarning } from './mcp-session-nudges.js';
+import { channelControlFields, pendingMessagesFromChannel, type ChannelControlBody } from './mcp-tool-support.js';
 
 // Writes are where building blind costs the round.
 export const REFERENCE_WRITE_TOOLS = new Set([
@@ -54,18 +55,25 @@ export function createReferenceHold(
   };
 }
 
-// What submit_sources answers when it holds a delivery.
-export function referenceHoldReply(mode: unknown): Record<string, unknown> {
+// A held submit's reply, carrying the live round state.
+export async function referenceHoldReply(
+  mode: 'preview' | 'publish',
+  live: () => Promise<{ statusCode: number; json: () => unknown }>,
+): Promise<Record<string, unknown>> {
+  const res = await live();
+  const body = (res.statusCode === 200 ? res.json() : {}) as ChannelControlBody & {
+    pending?: Array<{ id: string; text: string; createdAt: string }>;
+  };
   return {
     ok: false,
-    mode: mode === 'publish' ? 'publish' : 'preview',
+    mode,
     rejected: 'reference_unseen',
     retry: REFERENCE_HOLD_RETRY,
     deliveryId: null,
     delivery: null,
     gateStarted: false,
     deliveriesRemaining: null,
-    stop: false,
-    pendingMessages: [],
+    ...channelControlFields(body),
+    pendingMessages: pendingMessagesFromChannel(body),
   };
 }
