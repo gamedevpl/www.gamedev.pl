@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { holdPreview } from './play-presence.js';
 import { CAPTURE_READY_BRIDGE } from './capture-readiness.js';
+import { CAPTURE_SCENARIO_SCRIPT } from './generated/capture-scenario.js';
+import type { CaptureScenario } from './capture-scenario.js';
 
 export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
 export type PreviewSnapshot = { html: string; revision: string };
@@ -98,21 +100,29 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
 
 export const CAPTURE_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; frame-src about:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
-export function capturePage(html: string): string {
+export function captureGameDocument(html: string, scenario?: CaptureScenario): string {
+  const bridge = scenario
+    ? `<script>${CAPTURE_SCENARIO_SCRIPT}\nGAMEDEV_CAPTURE_SCENARIO.start(${JSON.stringify(scenario.plan).replace(/</g, '\\u003c')}, ${JSON.stringify(scenario.mark ?? null).replace(/</g, '\\u003c')});</script>`
+    : CAPTURE_READY_BRIDGE;
   const insertion = /<head\b[^>]*>/i.test(html) ? /<head\b[^>]*>/i : /<body\b[^>]*>/i;
-  const withBridge = insertion.test(html)
-    ? html.replace(insertion, (open) => open + CAPTURE_READY_BRIDGE)
+  return insertion.test(html)
+    ? html.replace(insertion, (open) => open + bridge)
     : /<!doctype\b[^>]*>/i.test(html)
-      ? html.replace(/<!doctype\b[^>]*>/i, (open) => open + CAPTURE_READY_BRIDGE)
-      : CAPTURE_READY_BRIDGE + html;
-  const document = JSON.stringify(withBridge).replace(/</g, '\\u003c');
+      ? html.replace(/<!doctype\b[^>]*>/i, (open) => open + bridge)
+      : bridge + html;
+}
+export function capturePage(html: string, gameUrl?: string): string {
+  const document = gameUrl ? undefined : JSON.stringify(captureGameDocument(html)).replace(/</g, '\\u003c');
   return `<!doctype html><html data-gamedev-capture><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><iframe title="Game capture" sandbox="allow-scripts allow-pointer-lock"></iframe><script>
 window.__GAMEDEV_CAPTURE_READY__ = false;
 const frame = document.querySelector('iframe');
 addEventListener('message', event => {
-  if (event.source === frame.contentWindow && event.data?.source === 'gdpl-capture' && event.data.type === 'ready')
+  if (event.source !== frame.contentWindow || event.data?.source !== 'gdpl-capture') return;
+  if (event.data.type === 'error') window.__GAMEDEV_CAPTURE_ERROR__ = String(event.data.value).slice(0, 2500);
+  if (event.data.type === 'result') window.__GAMEDEV_CAPTURE_RESULT__ = event.data.value;
+  if (event.data.type === 'ready' || event.data.type === 'result')
     window.__GAMEDEV_CAPTURE_READY__ = true;
 });
-frame.srcdoc=${document};
+${gameUrl ? `frame.src=${JSON.stringify(gameUrl).replace(/</g, '\\u003c')};` : `frame.srcdoc=${document};`}
 </script></body></html>`;
 }

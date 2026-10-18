@@ -6,7 +6,8 @@ import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { captureBrowser, type CaptureImage, type CaptureViewport } from './local-capture-browser.js';
-import { capturePage, CAPTURE_CSP, previewSource } from './local-preview-source.js';
+import { capturePage, captureGameDocument, CAPTURE_CSP, previewSource } from './local-preview-source.js';
+import { selectScenario, type CaptureScenario } from './capture-scenario.js';
 
 const tool = (
   name: string,
@@ -26,8 +27,41 @@ const TOOLS = [
   ),
   tool(
     'capture_game',
-    'Capture the current local game using the CLI host browser, without running npm scripts or opening a server in the agent sandbox. Returns a job ID; call capture_status to receive its PNG image, console errors and rendered revision. Captures the initial state, not the Creator Kit capture plan. No source or published media is changed.',
-    { viewport: { type: 'string', enum: ['desktop', 'mobile'] } },
+    'Capture the current local game using the CLI host browser. Returns a job ID; poll capture_status for the PNG, console errors and revision. With mark, replay CAPTURE.json up to its first matching capture step. With plan, replay an inline CAPTURE.json scenario; capture the final state, or stop at mark if also supplied. Without either, capture the initial rendered state. No npm scripts, arbitrary JavaScript, file paths or URLs. No sources or published media are changed.',
+    {
+      viewport: { type: 'string', enum: ['desktop', 'mobile'] },
+      mark: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 128,
+        description:
+          'Name of a capture step. Unknown marks return available names. Uses CAPTURE.json unless plan is supplied.',
+      },
+      plan: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['script'],
+        description:
+          'Inline deterministic scenario. Same CAPTURE.json action DSL. Defaults: seed=1, fps=30, maxFrames=3600. Max 2000 expanded actions, 600 simulated seconds, 60 seconds execution. Starts a fresh game; does not continue a previous capture.',
+        properties: {
+          seed: { type: 'integer', minimum: 0, maximum: 4294967295 },
+          fps: { type: 'integer', minimum: 1, maximum: 60 },
+          maxFrames: { type: 'integer', minimum: 1, maximum: 36000 },
+          script: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 2000,
+            items: {
+              type: 'object',
+              minProperties: 1,
+              maxProperties: 1,
+              description:
+                'One action: {wait:frames}, {tap:key|{key,code?}}, {press:{key,code?,frames}}, {keyDown:key}, {keyUp:key}, {click:point}, {move:point}, {drag:{from:point,to:point,frames}}, {capture:name}, {assert:condition}, {waitFor:{...condition,maxFrames}}, {repeat:{times,actions}}. Point: normalized {x,y} in 0..1, or {fromMetadata:{x:field,y:field}} in canvas pixels. Condition: {field,equals|notEquals|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|oneOf}. No JavaScript.',
+            },
+          },
+        },
+      },
+    },
   ),
   tool(
     'capture_status',
@@ -43,6 +77,7 @@ type Job = {
   image?: CaptureImage;
   error?: string;
   startedAt: string;
+  scenario?: CaptureScenario;
 };
 const text = (value: unknown) => ({ type: 'text', text: JSON.stringify(value) });
 
@@ -52,7 +87,7 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
   for await (const raw of request) {
     const chunk = Buffer.from(raw as Buffer);
     size += chunk.length;
-    if (size > 8192) throw new Error('Request exceeds 8 KiB.');
+    if (size > 65_536) throw new Error('Request exceeds 64 KiB.');
     chunks.push(chunk);
   }
   const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString());
@@ -69,6 +104,7 @@ export async function startLocalPreviewMcp(input: {
   abort: AbortSignal;
   write: (line: string) => void;
   capture?: typeof captureBrowser;
+  readCapturePlan?: () => unknown;
   onApproval?: ApproveTool;
   // Requests outside the sandbox are denied before anyone is asked.
   sandbox?: { permissions: AgentTask['permissions']; cwd: string };
@@ -85,7 +121,7 @@ export async function startLocalPreviewMcp(input: {
   const renderKey = randomBytes(32).toString('hex');
   const jobs = new Map<string, Job>();
   let current: Promise<void> | undefined;
-  let render: { id: string; html: string } | undefined;
+  let render: { id: string; html: string; gameUrl?: string; gameHtml?: string } | undefined;
   let origin = '';
   let lastStarted = 0;
   const captureBudget = input.captureBudget ?? { used: 0 };
@@ -96,12 +132,21 @@ export async function startLocalPreviewMcp(input: {
       signal.throwIfAborted();
       job.revision = snapshot.revision;
       job.state = 'capturing';
-      render = { id: job.id, html: capturePage(snapshot.html) };
+      const gameUrl = job.scenario
+        ? `${origin}/${renderKey}/${job.id}/game?capture=1&seed=${job.scenario.plan.seed}`
+        : undefined;
+      render = {
+        id: job.id,
+        html: capturePage(snapshot.html, gameUrl),
+        gameUrl,
+        gameHtml: job.scenario ? captureGameDocument(snapshot.html, job.scenario) : undefined,
+      };
       input.write('Local capture: taking a screenshot…');
       job.image = await (input.capture ?? captureBrowser)({
         url: `${origin}/${renderKey}/${job.id}`,
         viewport,
-        signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+        ...(gameUrl ? { gameUrl } : {}),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(job.scenario ? 90_000 : 45_000)]),
       });
       job.state = 'complete';
       input.write(`Local capture ready (${viewport}, build ${snapshot.revision.slice(0, 12)}).`);
@@ -122,9 +167,13 @@ export async function startLocalPreviewMcp(input: {
     if (name === 'report_progress') return { content: [text(report(value))] };
     if (!source) throw new Error('No local preview is available.');
     if (name === 'preview_status' && keys.length === 0) return { content: [text(await source.status())] };
-    if ((name === 'capture_game' || name === 'capture') && keys.every((item) => item === 'viewport')) {
+    if (
+      (name === 'capture_game' || name === 'capture') &&
+      keys.every((item) => ['viewport', 'mark', 'plan'].includes(item))
+    ) {
       const viewport = value.viewport ?? 'desktop';
       if (viewport !== 'desktop' && viewport !== 'mobile') throw new Error('Unknown viewport.');
+      const scenario = selectScenario(value, input.readCapturePlan);
       if (current) throw new Error('A capture is already running. Use capture_status.');
       if (captureBudget.used >= MAX_CAPTURES_PER_TASK)
         throw new Error(
@@ -134,7 +183,7 @@ export async function startLocalPreviewMcp(input: {
       captureBudget.used++;
       lastStarted = Date.now();
       while (jobs.size >= 3) jobs.delete(jobs.keys().next().value!);
-      const job: Job = { id: randomUUID(), state: 'building', startedAt: new Date().toISOString() };
+      const job: Job = { id: randomUUID(), state: 'building', startedAt: new Date().toISOString(), scenario };
       jobs.set(job.id, job);
       current = execute(job, viewport).finally(() => {
         current = undefined;
@@ -153,6 +202,16 @@ export async function startLocalPreviewMcp(input: {
             startedAt: job.startedAt,
             error: job.error,
             consoleErrors: job.image?.errors,
+            scenario: job.scenario
+              ? {
+                  source: job.scenario.source,
+                  mark: job.scenario.mark,
+                  hash: job.scenario.hash,
+                  seed: job.scenario.plan.seed,
+                  fps: job.scenario.plan.fps,
+                  ...job.image?.scenario,
+                }
+              : undefined,
             pollAfterMs: job.image || job.error ? undefined : 1000,
           }),
           ...(job.image ? [{ type: 'image', mimeType: 'image/png', data: job.image.png }] : []),
@@ -183,8 +242,21 @@ export async function startLocalPreviewMcp(input: {
     }
     if (request.method === 'GET' && render && request.url === `/${renderKey}/${render.id}`) {
       response.setHeader('Content-Type', 'text/html; charset=utf-8');
-      response.setHeader('Content-Security-Policy', CAPTURE_CSP);
+      response.setHeader(
+        'Content-Security-Policy',
+        render.gameUrl ? CAPTURE_CSP.replace('frame-src about:', "frame-src 'self' about:") : CAPTURE_CSP,
+      );
       response.end(render.html);
+      return;
+    }
+    if (
+      request.method === 'GET' &&
+      render?.gameUrl &&
+      request.url === new URL(render.gameUrl).pathname + new URL(render.gameUrl).search
+    ) {
+      response.setHeader('Content-Type', 'text/html; charset=utf-8');
+      response.setHeader('Content-Security-Policy', CAPTURE_CSP);
+      response.end(render.gameHtml);
       return;
     }
     if (request.url !== '/mcp' || request.headers.authorization !== `Bearer ${key}`) {

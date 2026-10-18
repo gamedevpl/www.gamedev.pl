@@ -57,3 +57,11 @@ it('preserves browser failures rather than retrying them as navigation', async (
   );
   expect(call).toHaveBeenCalledOnce();
 });
+
+it('surfaces scenario assertion failures instead of reporting a successful screenshot', async () => {
+  const call = vi.fn(async () => ({ result: { value: 'assertion failed at frame 5' } }));
+  await expect(waitForCaptureReady(call, 'http://127.0.0.1:1234/game', new AbortController().signal)).rejects.toThrow(
+    'Capture plan failed: assertion failed',
+  );
+  expect(call).toHaveBeenCalledOnce();
+});

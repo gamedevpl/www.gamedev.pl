@@ -7,7 +7,11 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Readable, Writable } from 'node:stream';
 
-export type CaptureImage = { png: string; errors: string[] };
+export type CaptureImage = {
+  png: string;
+  errors: string[];
+  scenario?: { frame: number; snapshot: Record<string, unknown> };
+};
 export type CaptureViewport = 'desktop' | 'mobile';
 export function chromeExecutable(): string {
   const candidates =
@@ -29,11 +33,12 @@ export function chromeExecutable(): string {
 
 export async function captureBrowser(input: {
   url: string;
+  gameUrl?: string;
   viewport: CaptureViewport;
   signal: AbortSignal;
 }): Promise<CaptureImage> {
   const executable = chromeExecutable();
-  const network = await captureNetworkPolicy(input.url);
+  const network = await captureNetworkPolicy(input.url, input.gameUrl);
   let profile = '';
   try {
     profile = mkdtempSync(join(tmpdir(), 'gamedev-capture-'));
@@ -202,13 +207,29 @@ export async function captureBrowser(input: {
     });
     const navigation = await call('Page.navigate', { url: input.url });
     if (navigation.errorText) throw new Error(String(navigation.errorText));
-    await waitForCaptureReady(call, input.url, input.signal);
+    await waitForCaptureReady(call, input.url, input.signal, input.gameUrl ? 75_000 : 30_000);
+    let scenario: CaptureImage['scenario'];
+    if (input.gameUrl) {
+      const result = await call('Runtime.evaluate', {
+        expression: 'window.__GAMEDEV_CAPTURE_RESULT__',
+        returnByValue: true,
+      });
+      const value = (result.result as { value?: unknown } | undefined)?.value;
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        !Number.isInteger((value as { frame?: unknown }).frame) ||
+        JSON.stringify(value).length > 32_768
+      )
+        throw new Error('Capture plan returned an invalid result.');
+      scenario = value as CaptureImage['scenario'];
+    }
     const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     if (typeof shot.data !== 'string' || shot.data.length > 4 * 1024 * 1024)
       throw new Error('Invalid or oversized screenshot.');
     const png = Buffer.from(shot.data, 'base64');
     if (!png.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) throw new Error('Browser returned no PNG.');
-    return { png: shot.data, errors };
+    return { png: shot.data, errors, ...(scenario ? { scenario } : {}) };
   } finally {
     input.signal.removeEventListener('abort', stop);
     fail(new Error('Capture finished.'));

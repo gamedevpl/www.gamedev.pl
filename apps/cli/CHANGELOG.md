@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local `capture_game` can replay a named `CAPTURE.json` mark or a custom inline plan before taking a screenshot, without editing the plan or publishing media (#1906).
+
 ### Fixed
 
 - Local screenshots wait for the game document, GameKit renderer and painted frames instead of capturing after a fixed delay, avoiding blank images from slower game startup (#1906).
