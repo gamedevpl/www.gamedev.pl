@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.54.0 — 2026-10-18
+
 ### Breaking
 
 - Overlapping `pull` edits now leave conflict markers and a pending resolution session; use `pull --continue` or `pull --abort` instead of retrying an untouched checkout (#1904).
