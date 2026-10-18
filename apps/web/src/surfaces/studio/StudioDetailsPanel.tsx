@@ -9,6 +9,7 @@ import { isStudioGamePublished, isStudioGameShelfLive, type StudioShelfGame } fr
 import { ContributionsSetting } from '../../ContributionsSetting.js';
 import { ProposalReviewPanel } from '../review/ProposalReviewPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
+import { DreamsSetting } from './DreamsSetting.js';
 import { StatsSection } from './StudioStatsSection.js';
 import { StudioConnectGuide } from './StudioConnectGuide.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
@@ -246,6 +247,12 @@ export function DetailsPanel({
                 aria-label={t(catalogLive ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title')}
               >
                 <DraftShareControl game={game} live={catalogLive} onSharedChange={onDraftSharedChange} />
+              </section>
+            ) : null}
+
+            {game.slug && game.lastKnownStatus !== 'abandoned' && isOwner ? (
+              <section className="studio-rail-section" aria-label={t('studioPanel.dreams.title')}>
+                <DreamsSetting slug={game.slug} />
               </section>
             ) : null}
           </>

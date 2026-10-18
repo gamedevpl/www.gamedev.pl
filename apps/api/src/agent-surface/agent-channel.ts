@@ -1119,7 +1119,8 @@ export async function registerAgentChannelRoutes(
         }
         // Uncached, and the owner's now: a mute must not buy frames.
         const mutedBy = record.slug ? await currentOwnerUid(store!, record.slug, record.ownerUid) : record.ownerUid;
-        if (mutedBy && (await store!.readProposalsMutedAt(mutedBy))) {
+        const gameOff = record.slug ? await store!.getGameDreamsOffAt(record.slug) : null;
+        if (gameOff || (mutedBy && (await store!.readProposalsMutedAt(mutedBy)))) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
         // Without a green capture the card can never post, and the agent would learn that

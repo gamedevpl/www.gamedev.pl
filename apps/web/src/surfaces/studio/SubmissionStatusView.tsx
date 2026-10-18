@@ -711,7 +711,10 @@ export function SubmissionStatusView({
   const onActivityCountRef = useRef(onActivityCount);
   onActivityCountRef.current = onActivityCount;
 
-  const proposalPrefs = useProposalsMuted(activity.some((entry) => entry.proposal) || Boolean(status?.dreaming));
+  const proposalPrefs = useProposalsMuted(
+    activity.some((entry) => entry.proposal) || Boolean(status?.dreaming),
+    status?.slug,
+  );
   const proposalHandlers: ProposalHandlers = {
     builder: status?.builder === 'self' ? 'self' : 'platform',
     muted: proposalPrefs.muted === true,
@@ -721,7 +724,7 @@ export function SubmissionStatusView({
         seq: Date.now(),
         attachment: { name: t('statusView.proposal.aiLabel'), url: buildMediaUrl(token, pick.frame) },
       }),
-    onMute: proposalPrefs.mute,
+    ...(proposalPrefs.canMute ? { onMute: proposalPrefs.mute } : {}),
   };
 
   /**

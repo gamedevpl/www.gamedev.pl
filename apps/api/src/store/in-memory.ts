@@ -190,8 +190,11 @@ export class InMemoryStore extends OAuthFacade implements Store {
     this.shelfGuard.shelves,
     (uid) => [...this.submissions.values()].filter((record) => record.ownerUid === uid).length,
   );
-  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
-    this.quotaStore.getCreationLimits(),
+  private buildLogStore = new InMemoryBuildLogStore(
+    this.submissions,
+    this.identityStore.users,
+    () => this.quotaStore.getCreationLimits(),
+    (slug) => this.contributionStore.gameDreamsOff.get(slug) ?? null,
   );
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
@@ -837,6 +840,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
       locale?: string;
       proposal: CreatorProposal;
       ownerUid: string;
+      slug?: string;
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
@@ -1495,6 +1499,14 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
     return this.contributionStore.setGameAutonomy(slug, mode);
+  }
+
+  async getGameDreamsOffAt(slug: string): Promise<string | null> {
+    return this.contributionStore.getGameDreamsOffAt(slug);
+  }
+
+  async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
+    return this.contributionStore.setGameDreamsOffAt(slug, at);
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {

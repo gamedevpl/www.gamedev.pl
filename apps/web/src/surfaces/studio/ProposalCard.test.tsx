@@ -186,6 +186,16 @@ describe('ProposalCard', () => {
     expect(recordStudioStep).toHaveBeenCalledWith('proposal_picked', 'platform');
   });
 
+  it('offers no turn-off to a viewer who may not switch the game off', async () => {
+    const { container } = await mount({ onMute: undefined });
+    await act(async () => {
+      button(container, 'Zobacz oba pomysły').click();
+    });
+    const dialog = document.body.querySelector('.studio-proposal-dialog') as HTMLElement;
+    expect(dialog.textContent).not.toContain('Wyłącz szkice w tej grze');
+    expect(dialog.textContent).toContain('Nie teraz');
+  });
+
   it('"not now" closes without a pick; "ask me less" tells the parent', async () => {
     const { container, picks, onMute } = await mount();
     await act(async () => {
@@ -200,7 +210,7 @@ describe('ProposalCard', () => {
       button(container, 'Zobacz oba pomysły').click();
     });
     await act(async () => {
-      button(document.body, 'Nie podpowiadaj mi tego').click();
+      button(document.body, 'Wyłącz szkice w tej grze').click();
     });
     expect(onMute).toHaveBeenCalledTimes(1);
     expect(picks).toHaveLength(0);
@@ -280,7 +290,7 @@ describe('ProposalCard', () => {
       opener.click();
     });
     await act(async () => {
-      button(document.body, 'Nie podpowiadaj mi tego').click();
+      button(document.body, 'Wyłącz szkice w tej grze').click();
     });
 
     const note = container.querySelector('.studio-proposal-muted');
@@ -383,7 +393,7 @@ describe('ProposalCard', () => {
       expect(pick.classList).toContain('primary-btn');
     }
     expect(button(dialog, 'Nie teraz').classList).toContain('secondary-btn');
-    expect(button(dialog, 'Nie podpowiadaj mi tego').classList).toContain('secondary-btn');
+    expect(button(dialog, 'Wyłącz szkice w tej grze').classList).toContain('secondary-btn');
     expect(dialog.querySelector('.studio-proposal-head .studio-proposal-close')?.classList).toContain(
       'modal-close-btn',
     );
@@ -435,6 +445,7 @@ describe('ProposalCard', () => {
   it('renders the muted note instead of frames once the creator opted out', async () => {
     const { container } = await mount({ muted: true });
     expect(container.querySelector('.studio-proposal-thumb')).toBeNull();
-    expect(container.textContent).toContain('koniec z propozycjami');
+    expect(container.textContent).toContain('szkice w tej grze wyłączone');
+    expect(container.textContent).toContain('Przegląd');
   });
 });

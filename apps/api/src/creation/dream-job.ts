@@ -205,6 +205,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       // The current owner's, not the uid that built the round.
       const mutedBy = record.slug ? await currentOwnerUid(store, record.slug, record.ownerUid) : record.ownerUid;
       if (mutedBy && (await store.readProposalsMutedAt(mutedBy))) return 'muted';
+      // Turned off for this game alone, from the card or the rail.
+      if (record.slug && (await store.getGameDreamsOffAt(record.slug))) return 'muted';
       const live = await store.getSubmission(jobId);
       // A reopen leaves the version alone, so the generation is the tell.
       if ((live?.roundGeneration ?? 1) !== (record.roundGeneration ?? 1)) return 'superseded';
@@ -348,6 +350,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         locale: 'pl',
         proposal,
         ownerUid: proposalOwnerUid,
+        ...(record.slug ? { slug: record.slug } : {}),
         roundGeneration: record.roundGeneration ?? 1,
         // Publishing is this job's cue; abandoning and cancelling are stops.
         blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',
