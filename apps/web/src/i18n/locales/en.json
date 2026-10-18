@@ -673,6 +673,7 @@
       "crashed": "Build interrupted",
       "live": "Checking your latest changes now",
       "livePlaying": "Checking your latest build — you can already play it",
+      "waiting": "Changes saved; awaiting verification",
       "idle": "No build is running right now",
       "title": "Recent builds",
       "mode": {
@@ -682,6 +683,8 @@
       },
       "verdict": {
         "pending": "Checking…",
+        "waiting": "Awaiting verification",
+        "unverified": "No verification result",
         "green": "Passed",
         "red": "Failed"
       },
@@ -708,6 +711,8 @@
       "timedOut": "Build timed out",
       "crashed": "Build interrupted",
       "starting": "Verification starting",
+      "waiting": "Awaiting verification",
+      "unverified": "No verification result",
       "roundInProgress": "Round in progress",
       "failed": "Check failed",
       "passed": "Checks passed",

@@ -6,12 +6,22 @@ const CURRENTLY_MOVING_STATUSES = new Set<SubmissionStatus['status']>(['building
 export function isBuildLive(status: SubmissionStatus): boolean {
   if (status.phase === 'failed' || status.status === 'needs_changes' || status.status === 'abandoned') return false;
   if (status.gateProgress) return true;
-  if (status.phase === 'submitted') return true;
+  if (status.phase === 'submitted') return status.stall !== 'gate_not_started';
   if (status.stall) return false;
   // A delivered build waits on its gate before the first stage reports.
   const newest = status.recentBuilds?.[0];
   if (newest?.verdict === 'pending' && newestBuildIsCurrentRound(status.recentBuilds ?? [], status)) return true;
   return CURRENTLY_MOVING_STATUSES.has(status.status);
+}
+
+export function isCurrentBuild(status: SubmissionStatus, build: RecentBuild | undefined): boolean {
+  return Boolean(
+    build && build.version === status.recentBuilds?.[0]?.version && newestBuildIsCurrentRound([build], status),
+  );
+}
+
+export function isAwaitingVerification(status: SubmissionStatus, build = status.recentBuilds?.[0]): boolean {
+  return build?.verdict === 'pending' && isCurrentBuild(status, build) && !isBuildLive(status);
 }
 
 // recentBuilds is slug history — its newest entry may be an older round.

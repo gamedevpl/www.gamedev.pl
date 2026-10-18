@@ -92,11 +92,14 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
-  it('reads a stalled "building" round as idle, not actively checking', async () => {
+  it('reads a stalled round as idle when only an older round has a pending build', async () => {
     const { host, unmount } = await mount({
       status: 'building',
       stall: 'quiet',
-      recentBuilds: [{ version: 'v7', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending' }],
+      jobId: 8,
+      recentBuilds: [
+        { jobId: 7, version: 'v7', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending' },
+      ],
     });
     expect(host.querySelector('.studio-build-history-live')?.className).not.toContain('is-live');
     expect(host.querySelector('.studio-build-history-dot')?.className).not.toContain('is-live');
@@ -252,9 +255,7 @@ describe('StudioBuildHistory', () => {
   });
 
   it('offers to seal only the current round build, by jobId — not by row position', async () => {
-    // A newer sibling round on the same slug can outrank the current one in the list
-    // (contract note on RecentBuild.jobId). Sealing must still bind to the round
-    // this token/status actually is, not to whichever row happens to be newest.
+    // Slug history can lead with siblings; sealing targets this token's round.
     const { host, unmount } = await mount(
       {
         ...base,
@@ -281,8 +282,7 @@ describe('StudioBuildHistory', () => {
       'tok',
     );
 
-    // Only one row expands at a time — check the newest (a sibling round), then the
-    // current round's own row, in turn.
+    // Expand sibling, then current round; only one row stays open.
     const summaries = host.querySelectorAll('.studio-build-history-summary');
     await act(async () => {
       (summaries[0] as HTMLElement).click();

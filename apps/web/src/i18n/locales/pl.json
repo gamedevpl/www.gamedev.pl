@@ -679,6 +679,7 @@
       "crashed": "Build przerwany",
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
       "livePlaying": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
+      "waiting": "Zmiany zapisane; oczekiwanie na weryfikację",
       "idle": "Żaden build nie jest teraz uruchomiony",
       "title": "Ostatnie buildy",
       "mode": {
@@ -688,6 +689,8 @@
       },
       "verdict": {
         "pending": "Sprawdzamy…",
+        "waiting": "Oczekiwanie na weryfikację",
+        "unverified": "Brak wyniku weryfikacji",
         "green": "Zaliczony",
         "red": "Niezaliczony"
       },
@@ -716,6 +719,8 @@
       "timedOut": "Przekroczono czas buildu",
       "crashed": "Build przerwany",
       "starting": "Sprawdzanie się zaczyna",
+      "waiting": "Oczekiwanie na weryfikację",
+      "unverified": "Brak wyniku weryfikacji",
       "roundInProgress": "Runda w toku",
       "failed": "Sprawdzian niezaliczony",
       "passed": "Sprawdziany zaliczone",

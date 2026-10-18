@@ -41,7 +41,6 @@ const ENDED_BUT_GATING = {
 
 describe('Studio status while the gate still owes a verdict', () => {
   it('does not report the build rail as idle beside a pending row', async () => {
-    // It used to contradict its own first line.
     const host = await render(<StudioBuildHistory status={ENDED_BUT_GATING} />);
 
     expect(host.querySelector('.studio-build-history-live')?.className).toContain('is-live');

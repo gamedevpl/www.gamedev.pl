@@ -68,18 +68,22 @@ describe('Studio status after a round without a new delivery', () => {
     expect(host.querySelector('.studio-build-bar-tag.is-playing')?.textContent).toBe('Playing #6c803e');
   });
 
-  it('keeps both surfaces busy while a delivered build awaits the gate after agent end', async () => {
-    const host = await render({
-      status: 'building',
-      phase: 'submitted',
-      stall: 'ended',
-      jobId: 42,
-      recentBuilds: [
-        { jobId: 42, version, createdAt: '2026-10-13T00:47:11.987Z', mode: 'publish', verdict: 'pending' },
-      ],
-    });
+  it.each(['preview', 'publish'] as const)(
+    'keeps both surfaces busy for a pending %s after agent end',
+    async (mode) => {
+      const host = await render({
+        status: 'building',
+        phase: mode === 'preview' ? 'building' : 'submitted',
+        stall: 'ended',
+        jobId: 42,
+        ...(mode === 'preview'
+          ? { gateProgress: { lane: mode, stage: 'preparing', index: 0, total: 6, at: '2026-10-13T00:47:12.000Z' } }
+          : {}),
+        recentBuilds: [{ jobId: 42, version, createdAt: '2026-10-13T00:47:11.987Z', mode, verdict: 'pending' }],
+      });
 
-    expect(host.querySelector('.studio-build-history-live')?.className).toContain('is-live');
-    expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-busy')).toBe('true');
-  });
+      expect(host.querySelector('.studio-build-history-live')?.className).toContain('is-live');
+      expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-busy')).toBe('true');
+    },
+  );
 });

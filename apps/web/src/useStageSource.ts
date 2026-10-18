@@ -3,21 +3,10 @@ import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 import { publishedBuildVersion } from './stageCheckVerdict.js';
+import { deliveredPreview } from './studioPreviewDelivery.js';
 import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from './submissionApi.js';
 
-/**
- * Which build is on screen, and what to call it in the ribbon (`StudioVersionRibbon`).
- *
- * `at` is an epoch ms marking when this build was produced, read from a server
- * timestamp when the pipeline reports one (`previewGate.ranAt` for a PR preview,
- * `playable.createdAt` for a channel build) — comparing a preview and a channel build
- * needs a shared clock, or a preview loaded a while ago always looks "fresher" than a
- * channel build that just landed, even across a page reload (CE-12). Falls back to the
- * client's own observed-landing time only when the server does not report one (the
- * staged-preview pipeline's failures are silent by design; see
- * docs/studio-game-first-implementation-plan.md Workstream B2). `null` means unknown,
- * which the ribbon must render as "unknown" rather than guess.
- */
+// Freshness uses server clocks; see docs/studio-preview-source.md.
 export type StageOriginKind = 'staged' | 'delivered' | 'seed' | 'none';
 
 export type StageOrigin = {
@@ -37,20 +26,7 @@ export type StageSource = {
 
 const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
 
-/**
- * The stage's one source of truth for "what is running right now."
- *
- * Lifted out of `SubmissionStatusView`'s two fetch effects (preview-keyed-on-headSha,
- * channel-keyed-on-playable-ref) so `CreatorStudioView` can feed the same object to
- * both the always-mounted `<StudioStage>` and the embedded thread — the ribbon and the
- * thread's own "preview updated" moments can never disagree about which build is on
- * screen, because there is only one fetch of it.
- *
- * Preserves the original behaviour byte for byte: preview wins over channel, a refetch
- * failure keeps showing the last-good document instead of clearing it, and every
- * document gets the same `embedGameHtml(withGameLocale(...))` preparation every
- * embedded game gets.
- */
+// Sharing one source keeps the stage ribbon and thread in sync.
 export type UseStageSourceResult = StageSource & {
   pushPreview: (html: string) => void;
 };
@@ -65,6 +41,9 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
+  const delivery = deliveredPreview(status);
+  const deliveredPreviewVersion = delivery?.version;
+  const deliveredPreviewVerdict = delivery?.verdict;
   const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
@@ -79,7 +58,7 @@ export function useStageSource(
   const loadedVersionPreviewKeyRef = useRef<string | null>(null);
   const versionPreviewInFlightRef = useRef(false);
   const loadedPreviewKeyRef = useRef<string | null>(null);
-  const previewInFlightRef = useRef(false);
+  const previewRequestKeyRef = useRef<string | null>(null);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
   const loadedPublishedSlugRef = useRef<string | null>(null);
@@ -105,7 +84,7 @@ export function useStageSource(
     loadedPreviewKeyRef.current = null;
     loadedVersionPreviewKeyRef.current = null;
     versionPreviewInFlightRef.current = false;
-    previewInFlightRef.current = false;
+    previewRequestKeyRef.current = null;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
     loadedPublishedSlugRef.current = null;
@@ -146,27 +125,33 @@ export function useStageSource(
       });
   }, [token, selectedPreviewVersion]);
 
-  // Auto-load the live preview as soon as one is available, and silently refresh it
-  // whenever the agent pushes a new commit (headSha changes) — no click required.
+  // New deliveries supersede requests still fetching the previous document.
   useEffect(() => {
     const previewSlug = status?.preview?.slug;
     const headSha = status?.progress?.headSha;
     const gateRunAt = status?.previewGate?.ranAt;
-    const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}`;
-    if (!previewSlug || previewInFlightRef.current) return;
+    const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}:${deliveredPreviewVerdict ?? ''}`;
+    if (!previewSlug) return;
     if (headSha && previewKey === loadedPreviewKeyRef.current) return;
     if (!headSha && loadedPreviewKeyRef.current !== null) return;
 
-    previewInFlightRef.current = true;
+    if (previewRequestKeyRef.current !== previewKey) {
+      previewRequestKeyRef.current = previewKey;
+      previewRetryRef.current = 0;
+    }
+    let cancelled = false;
+    let retryTimer: number | undefined;
     const requestToken = token;
-    getSubmissionPreview(token)
+    // Pin deliveries so a cached fallback cannot impersonate the new version.
+    const request = deliveredPreviewVersion
+      ? getSubmissionPreview(token, deliveredPreviewVersion)
+      : getSubmissionPreview(token);
+    request
       .then((result) => {
-        if (activeTokenRef.current !== requestToken) return;
+        if (cancelled || activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
         previewRetryRef.current = 0;
-        // Prefer the gate's own "produced at" over the client's fetch time — the
-        // latter is only comparable to a channel build's `createdAt` while the page
-        // stays open (see the CE-12 note above).
+        // CE-12: gate ranAt keeps preview/channel freshness comparable across reloads.
         const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
         setPreview({
           html: result.html,
@@ -175,26 +160,31 @@ export function useStageSource(
         });
       })
       .catch(() => {
-        // Keep last-good on a refetch failure — a stale stage beats a blank one. But
-        // don't mark this head/gate key loaded yet: a 409 while assembly is still
-        // finishing is transient, and marking it now would block every later poll with
-        // the same head/gate from ever trying again (bounded retry, same as channel/
-        // published below).
-        if (activeTokenRef.current !== requestToken) return;
+        // Assembly can still be finishing; retain the previous playable document.
+        if (cancelled || activeTokenRef.current !== requestToken) return;
+        // A transient assembly 409 must not mark this key loaded.
         if (previewRetryRef.current < 3) {
           previewRetryRef.current += 1;
-          window.setTimeout(() => {
+          retryTimer = window.setTimeout(() => {
             if (activeTokenRef.current === requestToken) setPreviewRetryTick((tick) => tick + 1);
           }, 4_000);
         } else {
           loadedPreviewKeyRef.current = previewKey;
         }
-      })
-      .finally(() => {
-        if (activeTokenRef.current !== requestToken) return;
-        previewInFlightRef.current = false;
       });
-  }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, token, previewRetryTick]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retryTimer);
+    };
+  }, [
+    status?.preview?.slug,
+    status?.progress?.headSha,
+    status?.previewGate?.ranAt,
+    deliveredPreviewVersion,
+    deliveredPreviewVerdict,
+    token,
+    previewRetryTick,
+  ]);
 
   // Prefetch the latest channel build when there is no PR preview yet — or when a
   // staged assembly has landed more recently than the PR preview currently on screen.
@@ -308,6 +298,7 @@ export function useStageSource(
       : showChannel
         ? channel!.html
         : (preview?.html ?? channel?.html ?? published?.html ?? null);
+  // Every source shares the same locale preparation and embedding path.
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;

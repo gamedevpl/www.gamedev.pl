@@ -23,6 +23,7 @@ import { StudioFullBleed } from './StudioFullBleed.js';
 import { stageCheckVerdict } from '../../stageCheckVerdict.js';
 import { useStageSource } from '../../useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
+import { useStudioPreviewSelection } from './useStudioPreviewSelection.js';
 import { useStudioShelfLookup } from './useStudioShelfLookup.js';
 import { GameTheater } from '../../GameTheater.js';
 import {
@@ -326,8 +327,8 @@ export function CreatorStudioView({
   // play posture before it ever applied.
   const initialSelectedPostureRef = useRef(selectedPosture);
   const firstStageTokenAppliedRef = useRef(false);
-  const [activePreviewVersion, setActivePreviewVersion] = useState<string | null>(null);
   const studioStatus = useStudioStatusPoll(stageToken);
+  const [activePreviewVersion, setActivePreviewVersion] = useStudioPreviewSelection(stageToken, studioStatus);
   const stageSource = useStageSource(stageToken ?? '', studioStatus, { selectedPreviewVersion: activePreviewVersion });
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
   // "Fix it" seeds this; the composer consumes it once, then clears it.
@@ -361,12 +362,10 @@ export function CreatorStudioView({
     if (theaterOpen) setShareMenuOpen(false);
   }, [theaterOpen]);
 
-  // A game switch starts every per-game bit of stage state fresh. The very first
-  // resolution applies the deep link's posture (if any); every later switch — the
-  // creator picking a different game — always starts back in watch.
+  // Game switches reset per-game state, including any historical preview selection.
   useEffect(() => {
     if (!stageToken) return;
-    setActivePreviewVersion(null);
+    // First resolution honors Play links; later game switches start in Watch.
     const deepLinkPlay = !firstStageTokenAppliedRef.current && initialSelectedPostureRef.current === 'play';
     firstStageTokenAppliedRef.current = true;
     setPosture(deepLinkPlay ? 'play' : 'watch');

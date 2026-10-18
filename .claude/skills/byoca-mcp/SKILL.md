@@ -804,8 +804,26 @@ above: take the new `engineRef` and submit against that.
 
 `apps/api/src/delivery/staged-preview.ts` assembles the **staging buffer itself** and stores it as
 an ordinary `BuildPreview`, so the creator plays what the agent has staged long before a
-delivery or a gate run. Studio floats it as a muted, non-interactive frame above the
-composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theater.
+delivery or a gate run. Studio's always-mounted stage consumes it through
+`apps/web/src/useStageSource.ts`; the creator can enter Play while verification continues.
+
+At submission, `publishCandidate` also stores `preview.html` for the exact delivered
+version before starting the gate. A pending verdict does not prevent the creator from
+playing that artifact. The client pins delivered-preview requests to that version and
+supersedes requests for older heads, including late responses. Each new head gets its own
+bounded retry budget. A stored candidate alone does not prove that its gate started.
+A `submitted` round normally reports agent `end` before its first gate milestone;
+Studio keeps "Verification starting" during that window. The server's `gate_not_started`
+stall ends that optimistic state. A stored preview in phase `building` with an ended or
+quiet agent instead shows unanimated "Awaiting verification". Actual gate progress
+takes precedence over either stall. Cloud Build refusing creation and acceptance without
+a returned build ID remain supported outcomes.
+
+Selecting a historical build lasts until the newest successful version changes. When a
+new delivery passes, Studio returns to the live preview automatically; choosing history
+after that still works until another build passes. Failed checks do not clear the choice.
+The live-preview fetch key includes the delivery's verdict, so completion retries a preview
+whose earlier pending fetches failed, even when no `previewGate.ranAt` accompanies the poll.
 
 - Fires from the channel’s `PUT …/sources/stage` via `onSourcesStaged`, **off** the
   response path — a staging receipt never waits on an assembly.
@@ -1460,8 +1478,8 @@ queued.
 | Stall / `ended`                    | `apps/api/src/creation/job-state.ts` (`detectStall`)                                                                                                                                                                |
 | Handoff gate                       | `apps/api/src/creation/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                                                  |
 | Live staged preview                | `apps/api/src/delivery/staged-preview.ts`                                                                                                                                                                           |
-| Studio live-preview frame          | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                                                                |
-| Studio status poll cadence         | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                                                                |
+| Studio stage                       | `apps/web/src/surfaces/studio/StudioStage.tsx`                                                                                                                                                                      |
+| Studio status poll cadence         | `apps/web/src/surfaces/studio/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                                                |
 | Feedback / resume                  | `apps/api/src/submissions.ts`                                                                                                                                                                                       |
 | Studio copy / builder choice       | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard)                                           |
 
@@ -1469,7 +1487,7 @@ queued.
 
 Games render only in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"` and **no `allow-same-origin`**. That includes
-the Studio live-preview frame, which additionally takes no pointer input and no focus.
+the Studio stage; Play enables input inside that same sandbox.
 
 ## Mandatory: keep this skill current
 
