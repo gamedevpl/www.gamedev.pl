@@ -48,8 +48,6 @@ describe('reference_unseen', () => {
     expect(await lookup(7)).toBe(true);
     expect((await download(newer.id)).statusCode).toBe(200);
     expect(await lookup(7)).toBe(false);
-    await store.markReferenceSeen(7, older);
-    expect((await store.getSubmission(7))?.referenceSeenAt).toBe(newer.createdAt);
   });
 
   it('still warns about an older named image after a newer one is downloaded', async () => {
@@ -76,6 +74,19 @@ describe('reference_unseen', () => {
     await store.appendCreatorMessage(7, `Many.\n\nreferenceImageShotIds: ${ids.join(',')}`);
     for (const id of ids) expect((await download(id)).statusCode).toBe(200);
     expect(await createReferenceLookup(store)(7)).toBe(false);
+  });
+
+  it('keeps a legacy time mark for images downloaded before per-shot marks', async () => {
+    const { store, older, newer, download } = await setup();
+    const record = { ...(await store.getSubmission(7))!, referenceSeenAt: older.createdAt, previewVersion: 'v1' };
+    const lookup = createReferenceLookup({
+      getSubmission: async () => record,
+      listPendingCreatorMessages: (jobId) => store.listPendingCreatorMessages(jobId),
+      listBuildShots: (jobId, opts) => store.listBuildShots(jobId, opts),
+    });
+    expect(await lookup(7)).toBe(true);
+    expect((await download(newer.id)).statusCode).toBe(200);
+    expect(await lookup(7)).toBe(false);
   });
 
   it('ignores an image no pending note names once the game has a delivery', async () => {

@@ -795,8 +795,8 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.buildMediaStore.deleteBuildShots(jobId, ids);
   }
 
-  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
-    return this.buildMediaStore.markReferenceSeen(jobId, shot);
+  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
+    return this.buildMediaStore.markReferenceSeen(jobId, shotId);
   }
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {

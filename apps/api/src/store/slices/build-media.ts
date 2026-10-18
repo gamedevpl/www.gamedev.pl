@@ -87,8 +87,8 @@ export interface BuildMediaStore {
   // Drops shots by id; a card that never posted leaves none.
   deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
-  // An agent downloaded this reference image; the time mark never moves back.
-  markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void>;
+  // An agent downloaded this reference image; stamps agentSeenAt on the shot.
+  markReferenceSeen(jobId: number, shotId: string): Promise<void>;
   // True once per round generation: the caller holds that round's delivery.
   claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean>;
 
@@ -131,11 +131,8 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return { ...record };
   }
 
-  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
-    const job = this.submissions?.get(jobId);
-    if (!job) return;
-    this.submissions!.set(jobId, { ...job, ...referenceSeenPatch(job, shot) });
-    const stored = this.buildShots.get(jobId)?.find((candidate) => candidate.id === shot.id);
+  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
+    const stored = this.buildShots.get(jobId)?.find((candidate) => candidate.id === shotId);
     if (stored) stored.agentSeenAt ??= new Date().toISOString();
   }
 
@@ -277,13 +274,8 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   }
 
   // Overlapping downloads commit in any order; the mark only moves forward.
-  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
-    await this.db.runTransaction(async (transaction) => {
-      const job = await transaction.get(this.jobRef(jobId));
-      if (!job.exists) return;
-      transaction.update(this.jobRef(jobId), referenceSeenPatch(job.data() as SubmissionRecord, shot));
-      transaction.update(this.shotsCollection(jobId).doc(shot.id), { agentSeenAt: new Date().toISOString() });
-    });
+  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
+    await this.shotsCollection(jobId).doc(shotId).update({ agentSeenAt: new Date().toISOString() });
   }
 
   // A transaction, so overlapping submits and instances claim it once.
@@ -452,16 +444,4 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 // Only the current round may claim, and the marker never moves back.
 function holdClaimable(record: SubmissionRecord, roundGeneration: number): boolean {
   return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
-}
-
-// Time mark moves forward only; per-shot marks take over from it.
-function referenceSeenPatch(
-  record: SubmissionRecord,
-  shot: { createdAt: string },
-): Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenById'> {
-  const seenAt = record.referenceSeenAt;
-  return {
-    referenceSeenAt: seenAt && seenAt >= shot.createdAt ? seenAt : shot.createdAt,
-    referenceSeenById: true,
-  };
 }
