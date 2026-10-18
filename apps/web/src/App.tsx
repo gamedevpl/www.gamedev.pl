@@ -11,6 +11,7 @@ import { creatorPath, navUpTarget, playPath, reviewPath, studioPath } from './co
 import { RouteChunkBoundary } from './appRouteRecovery.js';
 import { useAppNavigation } from './useAppNavigation.js';
 import { useGameTheater } from './useGameTheater.js';
+import { useUnlistedPlayEntry } from './useUnlistedPlayEntry.js';
 import { StageOverlay } from './StageOverlay.js';
 import { useSpecSubmissionFlow } from './useSpecSubmissionFlow.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
@@ -101,6 +102,11 @@ export function App() {
     setRecommendationsRefreshKey,
     setMyGamesRefreshKey,
   });
+  const { unlistedLoading, playableEntries } = useUnlistedPlayEntry({
+    slug: route.view === 'play' ? route.slug : null,
+    catalogEntries,
+    catalogStatus,
+  });
 
   const {
     stageContent,
@@ -112,7 +118,7 @@ export function App() {
     handlePlayTogether,
   } = useGameTheater({
     route,
-    catalogEntries,
+    catalogEntries: playableEntries,
     catalogStatus,
     user,
     navigate,
@@ -260,8 +266,9 @@ export function App() {
   // Only after the catalog is ready: a catalog *error* must keep GameDetailPage's
   // retry UI, not look like a missing draft.
   const playCatalogGame =
-    route.view === 'play' ? (catalogEntries.find((game) => game.slug === route.slug) ?? null) : null;
-  const unpublishedPlayTheater = route.view === 'play' && catalogStatus === 'ready' && !playCatalogGame;
+    route.view === 'play' ? (playableEntries.find((game) => game.slug === route.slug) ?? null) : null;
+  const unpublishedPlayTheater =
+    route.view === 'play' && catalogStatus === 'ready' && !playCatalogGame && !unlistedLoading;
 
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
   // while a theater owns the viewport (`stageContent`, unpublished play, studio playtest).
@@ -442,11 +449,15 @@ export function App() {
   }
 
   if (privateBeta && !user) {
+    // The API lets unlisted links past the wall; others 401 back here.
+    if (route.view === 'play') {
+      return <PublicPlayView slug={route.slug} onExit={exitOverlay} unauthorizedFallback={<ClosedBetaSplash />} />;
+    }
     return <ClosedBetaSplash />;
   }
 
   // /play cold visit: hold mascot until catalog answers.
-  if (route.view === 'play' && catalogStatus === 'loading') {
+  if (route.view === 'play' && (catalogStatus === 'loading' || unlistedLoading)) {
     return <AppLoadingScreen onExit={exitOverlay} />;
   }
 

@@ -348,6 +348,8 @@ async function listCreatorPublishedGames(
         submittedBy: profileBylineName(profile),
       };
     }
+    // Unlisted games stay playable by link but never appear on the profile.
+    if (entry.listed === false) continue;
     games.push({
       ...entry,
       status: 'published',

@@ -2,7 +2,7 @@ import { createGitHubClient, type GitHubClient } from './github-client.js';
 import { createSnapshotReaderFromEnv } from './game-snapshot.js';
 import type { CatalogGenreSource } from './recommendations.js';
 import type { RecommendGame } from './recommend.js';
-import { isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry } from '@gamedevpl/contract';
 
 /**
  * Published catalog summaries (slug + genre) for the recommender.
@@ -32,7 +32,7 @@ export function createCatalogGenreSource(options: CatalogGenreSourceOptions): Ca
 
   async function load(): Promise<RecommendGame[]> {
     const entries = await client.getCatalog(ref);
-    const games = entries.filter(isPublishedEntry).map((entry) => ({
+    const games = entries.filter(isListedEntry).map((entry) => ({
       slug: entry.slug,
       genre: entry.genre,
       ...(typeof entry.effort === 'number' ? { effort: entry.effort } : {}),

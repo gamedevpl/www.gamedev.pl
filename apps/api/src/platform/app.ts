@@ -18,7 +18,7 @@ import { registerClientAddress } from './client-address.js';
 import { registerReadMeterLog } from './read-meter-log.js';
 import { createLoadShedControls } from './load-shedding.js';
 import { registerServingBrake } from './serving-brake.js';
-import { isPublicPlayRequest, parsePublicPlaySlugs } from './public-play.js';
+import { parsePublicPlaySlugs, publicPlayRequestSlug } from './public-play.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
@@ -148,7 +148,7 @@ import type { CimdFetcher } from './cimd-fetch.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-key-routes.js';
 import { createManagedWorkspaceLoader } from '../agent-surface/managed-workspace.js';
-import { isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry } from '@gamedevpl/contract';
 export interface BuildAppOptions {
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
   logger?: FastifyServerOptions['logger'];
@@ -283,7 +283,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
-  const pastBetaWall = async (slug: string) => !privateBeta || (await getPublicPlaySlugs()).has(slug);
+  // Bound once catalog routes exist; unlisted games pass by link.
+  let isUnlistedPublished: (slug: string) => Promise<boolean> = async () => false;
+  const pastBetaWall = async (slug: string) =>
+    !privateBeta || (await getPublicPlaySlugs()).has(slug) || (await isUnlistedPublished(slug));
   // A promotional slug is exempt from the beta wall, never from the rung.
   const playableAnonymously = async (slug: string) => !(await loadShed.refusesAnonymous()) && pastBetaWall(slug);
   registerServingBrake(app, { controls: loadShed });
@@ -525,6 +528,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch, snapshotReader),
     agentChannel: agentChannelOptions,
   });
+  isUnlistedPublished = submissionSeams.isSlugUnlistedPublished;
 
   // The agent's wire and the MCP tools over it, mounted where the route table lives.
   const { agentSurface } = submissionSeams;
@@ -703,7 +707,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     try {
       const fromSnapshot = snapshotReader ? await snapshotReader.getCatalog() : null;
       if (fromSnapshot && fromSnapshot.length > 0) {
-        return fromSnapshot.map((entry) => ({
+        return fromSnapshot.filter(isListedEntry).map((entry) => ({
           slug: entry.slug,
           title: entry.title,
           creatorHandle: entry.creatorHandle ?? null,
@@ -716,7 +720,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
     if (!reviewCatalogClient) return [];
     const entries = await reviewCatalogClient.getCatalog(publishedRef);
-    return entries.filter(isPublishedEntry).map((entry) => ({
+    return entries.filter(isListedEntry).map((entry) => ({
       slug: entry.slug,
       title: entry.title,
       creatorHandle: entry.creatorHandle ?? null,
@@ -1155,7 +1159,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Unlisted npm kit tarball; 404 unless PUBLIC_KIT_DOWNLOAD is on.
     if (!closedByRung && request.url.startsWith(PUBLIC_KIT_ROUTE_PREFIX)) return;
     if (request.url === '/api/csp-report') return; // browser-posted, mostly before sign-in
-    if (!closedByRung && isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
+    const playSlug = closedByRung ? null : publicPlayRequestSlug(request);
+    if (playSlug !== null && (await pastBetaWall(playSlug))) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }

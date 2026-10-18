@@ -16,6 +16,8 @@ This specification defines the quality gates enforced on incoming pull requests 
   - `genre` (string)
   - `controls` (string)
   - `submitted_by` (GitHub handle string or `null`)
+  - optional `listed` (only `false`): the game stays published and playable at its own link, but
+    the site keeps it off every list (catalog, search, recommendations, creator profiles)
     _(Note: Field schema is defined in `games-repo-blueprint.md` §2; confirm against a live `SPEC.md` in `gamedevpl/www.gamedev.pl-games` when implementing `validate.yml`.)_
 - Ensure `index.html` entrypoint is present in the game directory.
 

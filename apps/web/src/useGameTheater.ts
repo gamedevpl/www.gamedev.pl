@@ -88,7 +88,8 @@ export function useGameTheater({
           prev?.type === 'catalog' && prev.game.slug === entry.slug ? { ...prev, game: entry } : prev,
         );
       }
-      if (catalogStatus === 'ready' && !entry) {
+      // Unlisted games never sit in the catalog; their page opened them.
+      if (catalogStatus === 'ready' && !entry && stageContent.game.listed !== false) {
         setStageContent(null);
       }
       return;

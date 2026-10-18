@@ -349,6 +349,8 @@ export interface SubmissionRoutesHandle {
    * profile cards must use the same winner or they can advertise a stale filename.
    */
   getRepoPublishedCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
+  // Published with SPEC listed: false, so reachable by link only.
+  isSlugUnlistedPublished: (slug: string) => Promise<boolean>;
   /**
    * The notification fan-out dependencies (mailer, base URL, unsubscribe secret) as
    * this module resolved them.
@@ -1909,6 +1911,7 @@ export async function registerSubmissionRoutes(
     configuredSeedProviders: [...configuredSeedProviders],
     defaultSeedProvider: seedProviderEnv.defaultProvider,
     getRepoPublishedCatalogEntry: catalogRoutes.getPublishedCatalogEntry,
+    isSlugUnlistedPublished: catalogRoutes.isSlugUnlistedPublished,
     startImprovementRound,
     buildNotifyDeps,
     invalidateStatusCache,

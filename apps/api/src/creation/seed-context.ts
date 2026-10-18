@@ -48,6 +48,7 @@ interface CatalogEntry {
   title?: unknown;
   genre?: unknown;
   status?: unknown;
+  listed?: unknown;
 }
 
 export interface SeedFileIndex {
@@ -76,7 +77,8 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
       typeof entry.slug === 'string' &&
       typeof entry.title === 'string' &&
       typeof entry.genre === 'string' &&
-      (entry.status === undefined || entry.status === 'published'),
+      (entry.status === undefined || entry.status === 'published') &&
+      entry.listed !== false,
   );
   if (published.length === 0) return null;
 
