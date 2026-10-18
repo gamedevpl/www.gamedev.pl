@@ -6,6 +6,7 @@ import { MAX_CAPTURES_PER_TASK, startLocalPreviewMcp } from './local-preview-mcp
 import { capturePage, previewSource } from './local-preview-source.js';
 import { localPreviewAdapter } from './local-preview-adapter.js';
 import { readFileSync, existsSync } from 'node:fs';
+import { PNG } from 'pngjs';
 import type { AdapterSpec } from './adapters.js';
 
 const cleanup: Array<() => Promise<unknown> | void> = [];
@@ -210,13 +211,17 @@ it('retains the capture budget after an approval server is replaced', async () =
 });
 
 it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
-  'returns a real rendered game image through capture_game',
+  'waits for a delayed GameKit renderer and returns painted pixels through capture_game',
   async () => {
     const f = await fixture();
-    f.state.html = `<!doctype html><body style="margin:0;background:#23aa77"><canvas width="960" height="600"></canvas><script>
+    f.state.html = `<!doctype html><body style="margin:0;background:white"><canvas width="960" height="600"></canvas><script>
+      window.__GAME_HARNESS__ = { ready: false };
+      setTimeout(() => {
       const context = document.querySelector('canvas').getContext('2d');
       context.fillStyle = '#23aa77'; context.fillRect(0, 0, 960, 600);
-      console.error('MCP_CAPTURE_GAME_RENDERED');
+      window.__GAME_HARNESS__.ready = true;
+      console.error('MCP_CAPTURE_GAME_RENDERED ' + document.compatMode);
+      }, 2300);
     </script></body>`;
     const mcp = await startLocalPreviewMcp({ previewUrl: f.previewUrl, abort: f.controller.signal, write: vi.fn() });
     cleanup.push(() => mcp.close());
@@ -242,10 +247,13 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
     );
     const status = JSON.parse(result.content[0].text);
     expect(status.revision).toBe(f.revision());
-    expect(status.consoleErrors.join(' ')).toContain('MCP_CAPTURE_GAME_RENDERED');
+    expect(status.consoleErrors.join(' ')).toContain('MCP_CAPTURE_GAME_RENDERED CSS1Compat');
     const png = Buffer.from(result.content[1].data, 'base64');
     expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([960, 600]);
+    const pixels = PNG.sync.read(png);
+    const center = (Math.floor(pixels.height / 2) * pixels.width + Math.floor(pixels.width / 2)) * 4;
+    expect([...pixels.data.subarray(center, center + 4)]).toEqual([35, 170, 119, 255]);
   },
   60_000,
 );

@@ -3,6 +3,12 @@
 A local capture uses a temporary browser profile and the Chromium sandbox.
 The rendered game remains in an opaque-origin sandboxed iframe.
 
+Capture waits for the document and its game frame to load. A task-local bridge
+waits for GameKit readiness when present and two animation frames before notifying
+the host. The browser checks the expected document URL and readiness before taking
+the screenshot. A game that never becomes ready produces a timeout error, rather
+than a successful capture of the initial blank page.
+
 Capture loads through a local proxy that forwards only its fixed document URL.
 The proxy rejects tunnels and other requests. Chrome's temporary profile disables
 non-proxied WebRTC UDP; remaining TCP transports must use the rejecting proxy.
@@ -23,8 +29,8 @@ GAMEDEV_CAPTURE_BROWSER_TEST=1 npm test -w @gamedevpl/cli -- src/capture-network
 ```
 
 The local MCP render regression also exercises `capture_game` through the real
-browser, checks that the sandboxed canvas fixture ran, and verifies the returned
-PNG dimensions and revision:
+browser, delays GameKit startup beyond the former fixed capture delay, and verifies
+the returned PNG pixels, dimensions and revision:
 
 ```bash
 GAMEDEV_CAPTURE_BROWSER_TEST=1 npm test -w @gamedevpl/cli -- src/local-preview-mcp.test.ts

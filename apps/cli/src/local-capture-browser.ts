@@ -1,4 +1,5 @@
 import { captureNetworkPolicy } from './capture-network-policy.js';
+import { waitForCaptureReady } from './capture-readiness.js';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -201,7 +202,7 @@ export async function captureBrowser(input: {
     });
     const navigation = await call('Page.navigate', { url: input.url });
     if (navigation.errorText) throw new Error(String(navigation.errorText));
-    await delay(1500, undefined, { signal: input.signal });
+    await waitForCaptureReady(call, input.url, input.signal);
     const shot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
     if (typeof shot.data !== 'string' || shot.data.length > 4 * 1024 * 1024)
       throw new Error('Invalid or oversized screenshot.');

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { holdPreview } from './play-presence.js';
+import { CAPTURE_READY_BRIDGE } from './capture-readiness.js';
 
 export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
 export type PreviewSnapshot = { html: string; revision: string };
@@ -98,6 +99,20 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
 export const CAPTURE_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; frame-src about:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 export function capturePage(html: string): string {
-  const document = JSON.stringify(html).replace(/</g, '\\u003c');
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><iframe title="Game capture" sandbox="allow-scripts allow-pointer-lock"></iframe><script>document.querySelector('iframe').srcdoc=${document};</script></body></html>`;
+  const insertion = /<head\b[^>]*>/i.test(html) ? /<head\b[^>]*>/i : /<body\b[^>]*>/i;
+  const withBridge = insertion.test(html)
+    ? html.replace(insertion, (open) => open + CAPTURE_READY_BRIDGE)
+    : /<!doctype\b[^>]*>/i.test(html)
+      ? html.replace(/<!doctype\b[^>]*>/i, (open) => open + CAPTURE_READY_BRIDGE)
+      : CAPTURE_READY_BRIDGE + html;
+  const document = JSON.stringify(withBridge).replace(/</g, '\\u003c');
+  return `<!doctype html><html data-gamedev-capture><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden}</style></head><body><iframe title="Game capture" sandbox="allow-scripts allow-pointer-lock"></iframe><script>
+window.__GAMEDEV_CAPTURE_READY__ = false;
+const frame = document.querySelector('iframe');
+addEventListener('message', event => {
+  if (event.source === frame.contentWindow && event.data?.source === 'gdpl-capture' && event.data.type === 'ready')
+    window.__GAMEDEV_CAPTURE_READY__ = true;
+});
+frame.srcdoc=${document};
+</script></body></html>`;
 }

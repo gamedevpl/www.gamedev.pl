@@ -102,6 +102,13 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **A valid PNG does not prove that a game rendered.** The former local capture
+  waited 1.5 seconds after navigation. A 6.6 MB GameKit 3D document returned an
+  all-white PNG with no console errors because its frame had not loaded yet;
+  a small synchronous canvas fixture passed. Wait for document and renderer
+  readiness plus paint frames, and assert decoded screenshot pixels in the native
+  regression. Exercise a real GameKit game too.
+
 - **A Claude Bash permission prompt does not prove a sandbox escape.** With
   sandbox auto-allow enabled, variable-prefixed commands and content-scoped ask
   rules can still prompt. Test ordinary Bash through the real local MCP endpoint,
