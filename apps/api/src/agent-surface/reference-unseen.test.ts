@@ -80,6 +80,19 @@ describe('reference_unseen', () => {
     expect(referenceUnseen(undefined, undefined)).toBe(false);
   });
 
+  it('finds a named image behind more than twenty newer unnamed ones', async () => {
+    const { store } = await setup();
+    await store.setSubmissionPreviewVersion(7, 'v1');
+    for (let i = 0; i < 21; i += 1) {
+      await store.appendBuildShot(7, {
+        data: 'cmVm',
+        label: 'creator-reference',
+        createdAt: `2026-10-11T15:${String(i).padStart(2, '0')}:00.000Z`,
+      });
+    }
+    expect(await createReferenceLookup(store)(7)).toBe(true);
+  });
+
   it('still lists the reference behind a full page of agent screenshots', async () => {
     const { store, server, newer } = await setup();
     for (let i = 0; i < 20; i += 1) {

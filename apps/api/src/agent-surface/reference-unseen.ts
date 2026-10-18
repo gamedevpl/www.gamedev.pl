@@ -33,7 +33,8 @@ export function createReferenceLookup(
       const [record, pending, shots] = await Promise.all([
         store.getSubmission(jobId),
         store.listPendingCreatorMessages(jobId),
-        store.listBuildShots(jobId, { label: 'creator-reference', limit: 20 }),
+        // Unbounded: an old named image may sit behind many newer ones.
+        store.listBuildShots(jobId, { label: 'creator-reference', limit: Infinity }),
       ]);
       if (!record) return false;
       const named = new Set(referenceShotIds(pending));
@@ -52,8 +53,8 @@ export function createReferenceLookup(
 }
 
 export const REFERENCE_HOLD_RETRY =
-  'Not delivered: a creator reference image is still undownloaded. get_reference_images returns its URL; curl it ' +
-  'and read the file, then submit again.';
+  'Not delivered: a creator reference image is still undownloaded; get_reference_images returns its URL. ' +
+  'This hold applies to one delivery per round.';
 
 // Holds one delivery per round while a reference is unseen; never two.
 export function createReferenceHold(
