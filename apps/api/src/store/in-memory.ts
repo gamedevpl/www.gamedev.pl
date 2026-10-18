@@ -1497,6 +1497,14 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.contributionStore.setGameAutonomy(slug, mode);
   }
 
+  async getGameDreamsOffAt(slug: string): Promise<string | null> {
+    return this.contributionStore.getGameDreamsOffAt(slug);
+  }
+
+  async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
+    return this.contributionStore.setGameDreamsOffAt(slug, at);
+  }
+
   async putSuggestion(record: SuggestionRecord): Promise<void> {
     return this.contributionStore.putSuggestion(record);
   }

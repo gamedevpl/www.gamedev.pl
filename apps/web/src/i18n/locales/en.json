@@ -843,6 +843,15 @@
       "failed": "That did not go through. Please try again.",
       "quota": "You have used today's improvement allowance."
     },
+    "dreams": {
+      "title": "Concept sketches",
+      "on": "On",
+      "off": "Off",
+      "hintOn": "After each round I sketch two directions this game could go next.",
+      "hintOff": "No sketches after rounds of this game.",
+      "accountMuted": "Concept proposals are also off for your whole account, in the notification bell.",
+      "failed": "Could not save. Try again."
+    },
     "autonomy": {
       "title": "What we may do without asking",
       "note": "Nothing goes live without your review, whatever you choose here.",
@@ -1130,8 +1139,8 @@
       "current": "Your game now",
       "pick": "Build this",
       "notNow": "Not now",
-      "askLess": "Don't suggest these",
-      "muted": "Okay — no more concept proposals. You can turn them back on in notification settings.",
+      "askLess": "Turn off sketches for this game",
+      "muted": "Okay — no more concept sketches for this game. Turn them back on in the game panel, under Overview.",
       "close": "Close",
       "enlarge": "Enlarge: {{name}}",
       "compare": "Compare with your game",

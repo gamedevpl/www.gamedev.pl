@@ -45,6 +45,7 @@ import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerRemixSettingRoutes } from '../community/remix-setting-routes.js';
+import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
 import { invalidateRemixOnSlugs } from '../catalog/remix-on.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
@@ -1020,6 +1021,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     ...options.gamePageRoutes,
   });
+
+  await registerDreamSettingRoutes(app, { store });
 
   await registerRemixSettingRoutes(app, {
     store,

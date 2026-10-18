@@ -27,6 +27,11 @@ export interface ContributionStore {
 
   setGameAutonomy(slug: string, mode: string): Promise<void>;
 
+  // When the owner turned this game's sketches off; null means on.
+  getGameDreamsOffAt(slug: string): Promise<string | null>;
+
+  setGameDreamsOffAt(slug: string, at: string | null): Promise<void>;
+
   // Cleanup for the superseded per-game suggestion sweep's leftover docs.
   purgeLegacyGameSuggestions(limit: number): Promise<number>;
 
@@ -99,6 +104,17 @@ export class InMemoryContributionStore implements ContributionStore {
 
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
     this.gameAutonomy.set(slug, mode);
+  }
+
+  gameDreamsOff = new Map<string, string>(); // slug -> when turned off
+
+  async getGameDreamsOffAt(slug: string): Promise<string | null> {
+    return this.gameDreamsOff.get(slug) ?? null;
+  }
+
+  async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
+    if (at) this.gameDreamsOff.set(slug, at);
+    else this.gameDreamsOff.delete(slug);
   }
 
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {
@@ -243,6 +259,15 @@ export class FirestoreContributionStore implements ContributionStore {
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
     // Merge -- a whole-document write would drop other per-game facts.
     await this.gameRef(slug).set({ autonomy: mode }, { merge: true });
+  }
+
+  async getGameDreamsOffAt(slug: string): Promise<string | null> {
+    const snap = await this.gameRef(slug).get();
+    return (snap.data() as { dreamsOffAt?: string | null } | undefined)?.dreamsOffAt ?? null;
+  }
+
+  async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
+    await this.gameRef(slug).set({ dreamsOffAt: at }, { merge: true });
   }
 
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {

@@ -117,6 +117,14 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('stays quiet on a game whose owner turned sketches off', async () => {
+    const { store, ideas: generator, run } = await harness({ hud: [] });
+    await store.setGameDreamsOffAt('parcel-run', '2026-09-01T00:00:00.000Z');
+    expect(await run()).toBe('muted');
+    expect(generator.requests).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
   it('refuses the idea call when the creator mutes mid-run', async () => {
     const { store, ideas: generator, run } = await harness({ hud: [] });
     await store.upsertUser({ uid: 'g:owner' });

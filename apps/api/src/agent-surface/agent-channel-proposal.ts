@@ -139,6 +139,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
       // Muting is the current owner's preference about their thread.
       const ownerNow = record.slug ? await currentOwnerUid(store, record.slug, record.ownerUid) : record.ownerUid;
       if (ownerNow && (await store.readProposalsMutedAt(ownerNow))) return reject('muted');
+      if (record.slug && (await store.getGameDreamsOffAt(record.slug))) return reject('muted');
 
       const version = record.previewVersion ?? record.deliveredVersion;
       if (!record.slug || !version) return reject('no_screenshot');

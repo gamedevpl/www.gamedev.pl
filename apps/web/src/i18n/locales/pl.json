@@ -853,6 +853,15 @@
       "failed": "Nie udało się. Spróbuj ponownie.",
       "quota": "Wykorzystano dzisiejszy limit ulepszeń."
     },
+    "dreams": {
+      "title": "Szkice konceptów",
+      "on": "Włączone",
+      "off": "Wyłączone",
+      "hintOn": "Po każdej rundzie szkicuję dwa kierunki, w których może pójść ta gra.",
+      "hintOff": "Bez szkiców po rundach tej gry.",
+      "accountMuted": "Propozycje konceptów są też wyłączone dla całego konta, w dzwonku powiadomień.",
+      "failed": "Nie udało się zapisać. Spróbuj ponownie."
+    },
     "autonomy": {
       "title": "Co możemy zrobić bez pytania",
       "note": "Nic nie trafi na stronę bez Twojej akceptacji, cokolwiek tu wybierzesz.",
@@ -1140,8 +1149,8 @@
       "current": "Twoja gra teraz",
       "pick": "Zbuduj to",
       "notNow": "Nie teraz",
-      "askLess": "Nie podpowiadaj mi tego",
-      "muted": "OK — koniec z propozycjami konceptów. Włączysz je z powrotem w ustawieniach powiadomień.",
+      "askLess": "Wyłącz szkice w tej grze",
+      "muted": "OK — szkice w tej grze wyłączone. Włączysz je z powrotem w panelu gry, w zakładce Przegląd.",
       "close": "Zamknij",
       "enlarge": "Powiększ: {{name}}",
       "compare": "Porównaj ze swoją grą",

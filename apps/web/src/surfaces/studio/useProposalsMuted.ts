@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchGameDreams, onGameDreamsChanged, setGameDreams } from '../../gameDreamsApi.js';
 import {
   fetchNotificationPreferences,
   onNotificationPreferencesChanged,
@@ -12,23 +13,43 @@ export const PROPOSAL_PREFS_RETRY_MS = 4000;
 export const PROPOSAL_PREFS_SLOW_RETRY_MS = 60_000;
 
 export interface ProposalsMuted {
-  // Null until the account preference is known; cards wait for it.
+  // Null until both switches are known; cards wait for it.
   muted: boolean | null;
   mute: () => void;
 }
 
-// Reads the persisted mute once, when a proposal is on screen.
-export function useProposalsMuted(proposalOnScreen: boolean): ProposalsMuted {
-  const [muted, setMuted] = useState<boolean | null>(null);
+// Reads both mutes once a proposal shows; muting hits the game.
+export function useProposalsMuted(proposalOnScreen: boolean, slug?: string): ProposalsMuted {
+  const [accountMuted, setAccountMuted] = useState<boolean | null>(null);
+  // No slug means no game switch, so it counts as on.
+  const [gameOff, setGameOff] = useState<boolean | null>(slug ? null : false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (muted !== null || !proposalOnScreen) return;
+    setGameOff(slug ? null : false);
+  }, [slug]);
+
+  useEffect(() => {
+    if ((accountMuted !== null && gameOff !== null) || !proposalOnScreen) return;
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
-    fetchNotificationPreferences()
-      .then((prefs) => {
-        if (!cancelled) setMuted(prefs.proposals === false);
+    Promise.all([
+      accountMuted === null ? fetchNotificationPreferences().then((prefs) => prefs.proposals === false) : accountMuted,
+      gameOff === null && slug
+        ? fetchGameDreams(slug).then(
+            (dreams) => !dreams.on,
+            // Not the owner's game: no switch of theirs to honour.
+            (error: { status?: number }) => {
+              if (error.status === 404) return false;
+              throw error;
+            },
+          )
+        : gameOff,
+    ])
+      .then(([account, game]) => {
+        if (cancelled) return;
+        setAccountMuted(account);
+        setGameOff(game);
       })
       .catch(() => {
         // Unknown, not unmuted; bumping state is what retries.
@@ -40,23 +61,35 @@ export function useProposalsMuted(proposalOnScreen: boolean): ProposalsMuted {
       cancelled = true;
       if (retry) clearTimeout(retry);
     };
-  }, [proposalOnScreen, muted, attempt]);
+  }, [proposalOnScreen, accountMuted, gameOff, slug, attempt]);
 
-  // The bell carries the same switch; its toggle must reach the card.
+  // The bell and the rail flip these too; the card must follow.
   useEffect(
     () =>
       onNotificationPreferencesChanged((prefs) => {
-        if (prefs.proposals !== undefined) setMuted(prefs.proposals === false);
+        if (prefs.proposals !== undefined) setAccountMuted(prefs.proposals === false);
       }),
     [],
   );
+  useEffect(
+    () =>
+      onGameDreamsChanged((changed, dreams) => {
+        if (changed === slug) setGameOff(!dreams.on);
+      }),
+    [slug],
+  );
 
   return {
-    muted,
+    muted: accountMuted === null || gameOff === null ? null : accountMuted || gameOff,
     mute: () => {
-      setMuted(true);
-      // Roll back a failed write; a card must not lie about muting.
-      void updateNotificationPreferences({ proposals: false }).catch(() => setMuted(false));
+      if (slug) {
+        setGameOff(true);
+        // Roll back a failed write; a card must not lie about muting.
+        void setGameDreams(slug, false).catch(() => setGameOff(false));
+        return;
+      }
+      setAccountMuted(true);
+      void updateNotificationPreferences({ proposals: false }).catch(() => setAccountMuted(false));
     },
   };
 }

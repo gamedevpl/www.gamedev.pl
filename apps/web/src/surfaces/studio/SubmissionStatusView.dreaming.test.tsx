@@ -24,6 +24,11 @@ vi.mock('../../submissionApi', async () => {
   };
 });
 
+vi.mock('../../gameDreamsApi', async () => {
+  const actual = await vi.importActual<typeof import('../../gameDreamsApi')>('../../gameDreamsApi');
+  return { ...actual, fetchGameDreams: vi.fn().mockResolvedValue({ on: true, accountMuted: false }) };
+});
+
 vi.mock('../../notificationsApi', async () => {
   const actual = await vi.importActual<typeof import('../../notificationsApi')>('../../notificationsApi');
   return { ...actual, fetchNotificationPreferences: vi.fn() };

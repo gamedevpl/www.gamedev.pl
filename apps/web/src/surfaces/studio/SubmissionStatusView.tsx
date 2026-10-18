@@ -711,7 +711,10 @@ export function SubmissionStatusView({
   const onActivityCountRef = useRef(onActivityCount);
   onActivityCountRef.current = onActivityCount;
 
-  const proposalPrefs = useProposalsMuted(activity.some((entry) => entry.proposal) || Boolean(status?.dreaming));
+  const proposalPrefs = useProposalsMuted(
+    activity.some((entry) => entry.proposal) || Boolean(status?.dreaming),
+    status?.slug,
+  );
   const proposalHandlers: ProposalHandlers = {
     builder: status?.builder === 'self' ? 'self' : 'platform',
     muted: proposalPrefs.muted === true,
