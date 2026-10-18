@@ -16,7 +16,8 @@ export type ProposalHandlers = {
   builder: BuilderDimension;
   muted: boolean;
   onPick: (pick: ProposalPick) => void;
-  onMute: () => void;
+  // Absent when the viewer may not switch this game off.
+  onMute?: () => void;
 };
 
 function frameItem(ref: string): BuildMediaItem {
@@ -99,7 +100,7 @@ export function ProposalCard({
     recordStudioStep('proposal_muted', builderRef.current);
     claimFocus.current = true;
     setOpen(false);
-    handlers.onMute();
+    handlers.onMute?.();
   };
 
   return (
@@ -135,7 +136,7 @@ export function ProposalCard({
           lang={lang}
           onPick={pick}
           onPostpone={postpone}
-          onMute={mute}
+          onMute={handlers.onMute ? mute : undefined}
         />
       ) : null}
     </div>
@@ -155,7 +156,7 @@ function ProposalDialog({
   lang: 'en' | 'pl';
   onPick: (option: CreatorProposalOption) => void;
   onPostpone: () => void;
-  onMute: () => void;
+  onMute?: () => void;
 }) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -291,9 +292,11 @@ function ProposalDialog({
           <button type="button" className="secondary-btn" onClick={onPostpone}>
             {t('statusView.proposal.notNow')}
           </button>
-          <button type="button" className="secondary-btn studio-proposal-quiet" onClick={onMute}>
-            {t('statusView.proposal.askLess')}
-          </button>
+          {onMute ? (
+            <button type="button" className="secondary-btn studio-proposal-quiet" onClick={onMute}>
+              {t('statusView.proposal.askLess')}
+            </button>
+          ) : null}
         </footer>
         {zoom ? (
           <ProposalZoom

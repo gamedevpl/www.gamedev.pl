@@ -724,7 +724,7 @@ export function SubmissionStatusView({
         seq: Date.now(),
         attachment: { name: t('statusView.proposal.aiLabel'), url: buildMediaUrl(token, pick.frame) },
       }),
-    onMute: proposalPrefs.mute,
+    ...(proposalPrefs.canMute ? { onMute: proposalPrefs.mute } : {}),
   };
 
   /**

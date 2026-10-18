@@ -203,6 +203,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         locale: 'pl',
         proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
         ownerUid: ownerNow ?? record.ownerUid,
+        ...(record.slug ? { slug: record.slug } : {}),
         roundGeneration,
         blocked: (job) => stopReason(job) !== null,
       });

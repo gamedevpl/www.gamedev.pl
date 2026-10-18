@@ -841,6 +841,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
       locale?: string;
       proposal: CreatorProposal;
       ownerUid: string;
+      slug?: string;
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },

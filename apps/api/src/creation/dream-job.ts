@@ -350,6 +350,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         locale: 'pl',
         proposal,
         ownerUid: proposalOwnerUid,
+        ...(record.slug ? { slug: record.slug } : {}),
         roundGeneration: record.roundGeneration ?? 1,
         // Publishing is this job's cue; abandoning and cancelling are stops.
         blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',

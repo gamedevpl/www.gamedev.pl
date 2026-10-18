@@ -125,6 +125,18 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('refuses the card when the game is switched off while its shots are written', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const real = store.appendBuildShot.bind(store);
+    store.appendBuildShot = async (jobId, shot) => {
+      // After the last guard: only the post's own read sees it.
+      await store.setGameDreamsOffAt('parcel-run', '2026-09-07T12:00:00.000Z');
+      return await real(jobId, shot);
+    };
+    expect(await run()).toBe('muted');
+    expect((await store.listCreatorMessages(7)).filter((message) => message.proposal)).toEqual([]);
+  });
+
   it('refuses the idea call when the creator mutes mid-run', async () => {
     const { store, ideas: generator, run } = await harness({ hud: [] });
     await store.upsertUser({ uid: 'g:owner' });

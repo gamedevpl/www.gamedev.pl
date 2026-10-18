@@ -186,6 +186,16 @@ describe('ProposalCard', () => {
     expect(recordStudioStep).toHaveBeenCalledWith('proposal_picked', 'platform');
   });
 
+  it('offers no turn-off to a viewer who may not switch the game off', async () => {
+    const { container } = await mount({ onMute: undefined });
+    await act(async () => {
+      button(container, 'Zobacz oba pomysły').click();
+    });
+    const dialog = document.body.querySelector('.studio-proposal-dialog') as HTMLElement;
+    expect(dialog.textContent).not.toContain('Wyłącz szkice w tej grze');
+    expect(dialog.textContent).toContain('Nie teraz');
+  });
+
   it('"not now" closes without a pick; "ask me less" tells the parent', async () => {
     const { container, picks, onMute } = await mount();
     await act(async () => {

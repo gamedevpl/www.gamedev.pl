@@ -15,6 +15,8 @@ export const PROPOSAL_PREFS_SLOW_RETRY_MS = 60_000;
 export interface ProposalsMuted {
   // Null until both switches are known; cards wait for it.
   muted: boolean | null;
+  // False for an editor: the game's switch is the owner's.
+  canMute: boolean;
   mute: () => void;
 }
 
@@ -23,10 +25,13 @@ export function useProposalsMuted(proposalOnScreen: boolean, slug?: string): Pro
   const [accountMuted, setAccountMuted] = useState<boolean | null>(null);
   // No slug means no game switch, so it counts as on.
   const [gameOff, setGameOff] = useState<boolean | null>(slug ? null : false);
+  // An editor reads the owner's thread but holds no game switch.
+  const [ownsGame, setOwnsGame] = useState(Boolean(slug));
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setGameOff(slug ? null : false);
+    setOwnsGame(Boolean(slug));
   }, [slug]);
 
   useEffect(() => {
@@ -40,8 +45,9 @@ export function useProposalsMuted(proposalOnScreen: boolean, slug?: string): Pro
             (dreams) => !dreams.on,
             // Not the owner's game: no switch of theirs to honour.
             (error: { status?: number }) => {
-              if (error.status === 404) return false;
-              throw error;
+              if (error.status !== 404) throw error;
+              setOwnsGame(false);
+              return false;
             },
           )
         : gameOff,
@@ -81,8 +87,9 @@ export function useProposalsMuted(proposalOnScreen: boolean, slug?: string): Pro
 
   return {
     muted: accountMuted === null || gameOff === null ? null : accountMuted || gameOff,
+    canMute: !slug || ownsGame,
     mute: () => {
-      if (slug) {
+      if (slug && ownsGame) {
         setGameOff(true);
         // Roll back a failed write; a card must not lie about muting.
         void setGameDreams(slug, false).catch(() => setGameOff(false));

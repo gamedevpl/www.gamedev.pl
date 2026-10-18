@@ -480,6 +480,7 @@
     "apps/api/src/store/records/quota.ts": 138,
     "apps/api/src/store/records/submission.ts": 318,
     "apps/api/src/store/slices/agent-keys.ts": 200,
+    "apps/api/src/store/slices/build-log.ts": 509,
     "apps/api/src/store/slices/dispatch.ts": 444,
     "apps/api/src/store/slices/moderation-flag-reopen.test.ts": 36,
     "apps/api/src/store/slices/moderation-flags.ts": 242,

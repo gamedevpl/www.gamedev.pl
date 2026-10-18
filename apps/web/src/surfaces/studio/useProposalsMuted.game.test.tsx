@@ -64,6 +64,7 @@ describe('useProposalsMuted with a game', () => {
     fetchGameDreams.mockResolvedValue({ on: true, accountMuted: false });
     await mount();
     expect(latest?.muted).toBe(false);
+    expect(latest?.canMute).toBe(true);
     await act(async () => latest!.mute());
     expect(setGameDreams).toHaveBeenCalledWith('neon', false);
     expect(updateNotificationPreferences).not.toHaveBeenCalled();
@@ -78,10 +79,11 @@ describe('useProposalsMuted with a game', () => {
     expect(latest?.muted).toBe(false);
   });
 
-  it("treats a game that is not the viewer's as switched on", async () => {
+  it("treats a game that is not the viewer's as switched on, and offers no switch", async () => {
     fetchGameDreams.mockRejectedValue(Object.assign(new Error('not found'), { status: 404 }));
     await mount();
     expect(latest?.muted).toBe(false);
+    expect(latest?.canMute).toBe(false);
   });
 
   it('follows the rail switch without a reload', async () => {

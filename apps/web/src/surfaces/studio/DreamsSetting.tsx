@@ -13,6 +13,9 @@ export function DreamsSetting({ slug }: { slug: string }) {
   useEffect(() => {
     mountedRef.current = true;
     let cancelled = false;
+    // Another game's switch must not stay clickable while this one loads.
+    setDreams(null);
+    setFailed(false);
     fetchGameDreams(slug)
       .then((value) => {
         if (!cancelled) setDreams(value);

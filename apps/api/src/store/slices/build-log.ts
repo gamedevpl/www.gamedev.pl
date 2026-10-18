@@ -78,6 +78,8 @@ export interface BuildLogStore {
       locale?: string;
       proposal: CreatorProposal;
       ownerUid: string;
+      // Read inside the post: a game switched off mid-run refuses.
+      slug?: string;
       roundGeneration: number;
       // The caller's stop rule, re-checked against the written row.
       blocked: (job: SubmissionRecord) => boolean;
@@ -119,6 +121,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     private submissions: Map<number, SubmissionRecord>,
     private users: Map<string, { proposalsMutedAt?: string | null }>,
     private limits: () => Promise<{ dreamsPaused?: boolean } | null>,
+    private gameDreamsOffAt: (slug: string) => string | null = () => null,
   ) {}
 
   async appendBuildEvent(
@@ -218,6 +221,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       locale?: string;
       proposal: CreatorProposal;
       ownerUid: string;
+      slug?: string;
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
@@ -227,6 +231,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     if (refusedBy) return { posted: null, refusedBy };
     if ((record?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
     if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return { posted: null, refusedBy: 'muted' };
+    if (opts.slug && this.gameDreamsOffAt(opts.slug)) return { posted: null, refusedBy: 'muted' };
     if ((await this.limits())?.dreamsPaused === true) return { posted: null, refusedBy: 'paused' };
     if (opts.blocked(record!)) return { posted: null, refusedBy: 'blocked' };
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
@@ -383,6 +388,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       locale?: string;
       proposal: CreatorProposal;
       ownerUid: string;
+      slug?: string;
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
@@ -402,12 +408,16 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       const owner = await transaction.get(this.db.collection('users').doc(opts.ownerUid));
       // The operator's pause, read with the write rather than before it.
       const ops = await transaction.get(this.db.collection('opsConfig').doc('creationLimits'));
+      const game = opts.slug ? await transaction.get(this.db.collection('games').doc(opts.slug)) : null;
       const job = snap.data() as SubmissionRecord | undefined;
       const refusedBy = !snap.exists ? 'claim' : dreamClaimRefusal(job, claim);
       if (refusedBy) return { posted: null, refusedBy };
       // A reopen bumps the generation and leaves the version alone.
       if ((job?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
       if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) {
+        return { posted: null, refusedBy: 'muted' };
+      }
+      if ((game?.data() as { dreamsOffAt?: string | null } | undefined)?.dreamsOffAt) {
         return { posted: null, refusedBy: 'muted' };
       }
       if ((ops.data() as { dreamsPaused?: boolean } | undefined)?.dreamsPaused === true) {
