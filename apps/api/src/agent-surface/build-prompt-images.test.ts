@@ -22,7 +22,7 @@ describe('buildPrompt and creator images', () => {
 
   it('tells a no-shell round to say it could not see the images', () => {
     const prompt = buildPrompt({ ...BRIEF, feedback: 'Add ice floes.' }, { shell: false });
-    expect(prompt).toContain('URLs you cannot open here');
+    expect(prompt).toContain('you cannot open here');
     expect(prompt).not.toContain('curl each');
     expect(prompt).not.toContain('Skip optional polish');
   });

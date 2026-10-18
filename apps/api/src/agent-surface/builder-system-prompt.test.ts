@@ -10,7 +10,7 @@ describe('builderSystemPrompt', () => {
     expect(prompt).toContain('never claim more than you shipped');
     expect(prompt).toContain('`end` with `summaryLocalized` and `locale`');
     expect(prompt).toContain('`transcript_unread` means read `get_transcript` before your first source edit');
-    expect(prompt).toContain('Images attached to creator messages');
+    expect(prompt).toContain('Images the creator attached');
   });
 
   it('keeps one edit path per file on the shell lane only', () => {
@@ -36,7 +36,8 @@ describe('builderSystemPrompt', () => {
 
   it('captures visual requests on the shell lane only, once for 3D', () => {
     const shell = builderSystemPrompt({ shell: true });
-    expect(shell).toContain('npm run --silent capture -- <slug> --stills --out /tmp/shots-before');
+    expect(shell).toContain('npm run --silent capture -- <slug> --stills --out /tmp/shots-after');
+    expect(shell).toContain('compare two of its PNGs taken seconds apart');
     expect(shell).toContain('SwiftShader and takes one to three minutes, so capture it once, after your edit');
     expect(shell).toContain('If no browser starts, do not try to install one');
     expect(shell).toContain('revise it and capture again before you submit');

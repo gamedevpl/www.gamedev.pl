@@ -100,7 +100,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, ${mountedSources ? '' : '`get_sources` '}and \`get_kit\`.`,
+          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, \`creator_notes\` (sessionKey only), ${mountedSources ? '' : '`get_sources` '}and \`get_kit\`. Once you know what you will change, send one short \`report_progress\` saying so in the creator’s language, before your first edit.`,
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources ? [] : GET_SOURCES),
@@ -108,14 +108,14 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),
           'Stage with `patch_source_file` / `stage_source_file`, or PUT changed files to `stage_upload_url`.',
-          'Creator images (`referenceImages` from `read_inbox`, `get_reference_images`) are part of the request: curl each and `read` the file before your first edit.',
+          'Creator images are part of the request: `get_reference_images` returns their URLs; curl each and `read` the file before your first edit.',
         ]
       : [
           'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
           'Call `get_kit` for kitEngineRef, then `get_kit_api` once with it: that is your API and file-shape reference.',
           'Fill its gaps with `search_kit_files` / `read_kit_file`; do not download or unpack the kit archive.',
           'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
-          'Creator images (`referenceImages`, `get_reference_images`) come as URLs you cannot open here: build from the words and say in `end.summary` that you did not see them.',
+          'Creator images come as URLs (`get_reference_images`) you cannot open here: build from the words and say in `end.summary` that you did not see them.',
         ]),
     'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`. Stage calls sequentially; never parallelize mutating calls.',
     'Before the first preview, stage `game.ts`, `GAME.json`, and the complete editor bundle: compiled `EDITOR.json`, `EDITOR.content.json` for v2, and `game/editor-content.ts`.',
@@ -132,7 +132,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
     '  game is playable, even if you can see things you would rather improve. A delivered rough',
     '  draft beats a better one that never arrived.',
-    '- `end` straight after the submit returns. Do not wait on the gate.',
+    '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
   ];
 }
 

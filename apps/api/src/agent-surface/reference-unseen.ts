@@ -17,9 +17,9 @@ export function referenceUnseen(newestAt: string | undefined, seenAt: string | u
 export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
   code: 'reference_unseen',
   message:
-    'The creator attached a reference image you have not downloaded. It is part of the request: ' +
-    'get_reference_images (or referenceImages on read_inbox) gives its URL; with a shell, curl it and read the ' +
-    'file before building on. Without a shell, say in end.summary that you did not see it.',
+    'The creator attached a reference image you have not downloaded; it may come from an earlier message in this game. ' +
+    'It is part of the request: get_reference_images returns its URL (get_brief lists only ids); with a shell, curl it ' +
+    'and read the file before building on. Without a shell, say in end.summary that you did not see it.',
 };
 
 // Refused requests drop their images, so every stored reference was accepted.

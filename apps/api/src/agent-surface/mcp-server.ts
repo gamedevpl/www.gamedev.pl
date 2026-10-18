@@ -532,11 +532,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
     const preferSessionKey =
       Boolean(sessionKeyArg) &&
-      (!bearer ||
-        bearerIsOAuth ||
-        bearerIsOpener ||
-        bearerIsRetiredGameKey ||
-        bearerIsManagedOpener);
+      (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey || bearerIsManagedOpener);
     let identity!: AuthedJob['identity'];
     let sessionActorUid: string | undefined;
 
@@ -903,6 +899,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       reason: data.reason,
       warnings,
       kitRefreshed: refreshedKits.has(jobId),
+      canFetchUrls: managedOpenerClaims(ctx.bearerToken)?.shell === true,
     });
     if (warnings.length === 0 && !piggybacked && !next) {
       return result;
@@ -1291,7 +1288,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createAccountGamesTools({
       store,
       agentTokenSecret,
-        now,
+      now,
       loadOwnerGames: options.loadOwnerGames,
     }),
     ...createPerformanceTools({ store, agentTokenSecret, readGamePerformance: options.readGamePerformance, now }),
@@ -1300,7 +1297,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createProposalTools({
       store,
       agentTokenSecret,
-        now,
+      now,
       missingCredentialHint,
       gamesStore: gamesStoreForProposals,
       resolveProposalBase: resolveProposalBaseFor,
@@ -1311,7 +1308,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createRoundReopenTools({
       store,
       agentTokenSecret,
-        startImprovementRound,
+      startImprovementRound,
       continueDraftRound,
       contentChecker,
       dailyImprovementQuota,
