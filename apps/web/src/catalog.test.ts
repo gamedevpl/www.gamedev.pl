@@ -6,6 +6,41 @@ describe('catalog helpers', () => {
     vi.restoreAllMocks();
   });
 
+  it('preserves localized catalog descriptions from the API and drops malformed values', async () => {
+    const taglines = [
+      { en: ' Command the front. ', pl: ' Dowódź na froncie. ' },
+      { en: 42, pl: 'Polski opis.' },
+      { en: { text: 'Invalid' }, pl: ['Invalid'] },
+      'Not a localized object',
+      null,
+      { en: '  ', pl: '' },
+    ];
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify(
+          taglines.map((tagline, index) => ({
+            slug: `game-${index}`,
+            title: 'Game',
+            genre: 'strategy',
+            controls: 'Full controls',
+            status: 'published',
+            tagline,
+          })),
+        ),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.tagline)).toEqual([
+      { en: 'Command the front.', pl: 'Dowódź na froncie.' },
+      { pl: 'Polski opis.' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('filters out non-published catalog entries', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(

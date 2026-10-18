@@ -290,7 +290,10 @@ function MoreLikeThisThumb({ entry }: { entry: CatalogEntry }) {
 
 // The curated, daily rotating hero pick above the rails.
 export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis = [] }: FeaturedGameProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = (i18n.resolvedLanguage ?? i18n.language).toLowerCase().startsWith('pl') ? 'pl' : 'en';
+  const tagline = (entry.tagline?.[language]?.trim() || entry.tagline?.en?.trim() || '').replace(/\s+/g, ' ');
+  const description = tagline.length > 180 ? `${tagline.slice(0, 179).replace(/\s+\S*$/, '')}…` : tagline;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const screenshots = entry.media?.screenshots ?? [];
@@ -363,7 +366,7 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis =
             {entry.title}
           </a>
         </h3>
-        <p className="featured-game-meta">{t('catalog.controlsSummary', { controls: entry.controls })}</p>
+        {description && <p className="featured-game-meta">{description}</p>}
         <p className="featured-game-author">
           {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (
             <>
