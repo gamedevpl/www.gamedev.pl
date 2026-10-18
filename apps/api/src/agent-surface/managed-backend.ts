@@ -156,7 +156,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
-      prompt: buildPrompt(effectiveBrief, { shell }),
+      prompt: buildPrompt(effectiveBrief, { shell, maxSeconds: options.maxDurationSeconds }),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(seedSupported && brief.seed
@@ -174,7 +174,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     };
     const load = options.workspace ? () => options.workspace!(brief) : undefined;
     const withWorkspace = (lines: string[], mountedSources: boolean) =>
-      buildPrompt(effectiveBrief, { shell, workspace: lines, mountedSources });
+      buildPrompt(effectiveBrief, { shell, workspace: lines, mountedSources, maxSeconds: options.maxDurationSeconds });
     const vendor = {
       workspaceArchiveDir: options.provider.workspaceArchiveDir,
       startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),

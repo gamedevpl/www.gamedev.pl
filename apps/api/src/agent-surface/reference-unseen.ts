@@ -37,3 +37,34 @@ export function createReferenceLookup(store: Pick<Store, 'getSubmission' | 'list
     }
   };
 }
+
+export const REFERENCE_HOLD_RETRY =
+  'Not delivered: a creator reference image is still undownloaded. get_reference_images returns its URL; curl it ' +
+  'and read the file, then submit again. A second submit_sources this round is delivered either way.';
+
+// Holds one delivery per round while a reference is unseen; never two.
+export function createReferenceHold(lookup: (jobId: number) => Promise<boolean>) {
+  const held = new Set<string>();
+  return async (jobId: number, roundGeneration: number): Promise<boolean> => {
+    const key = `${jobId}:${roundGeneration}`;
+    if (held.has(key) || !(await lookup(jobId))) return false;
+    held.add(key);
+    return true;
+  };
+}
+
+// What submit_sources answers when it holds a delivery.
+export function referenceHoldReply(mode: unknown): Record<string, unknown> {
+  return {
+    ok: false,
+    mode: mode === 'publish' ? 'publish' : 'preview',
+    rejected: 'reference_unseen',
+    retry: REFERENCE_HOLD_RETRY,
+    deliveryId: null,
+    delivery: null,
+    gateStarted: false,
+    deliveriesRemaining: null,
+    stop: false,
+    pendingMessages: [],
+  };
+}

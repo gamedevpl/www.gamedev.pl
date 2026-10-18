@@ -34,6 +34,7 @@ import { createGateMediaTools } from './mcp-gate-media-tools.js';
 import { createConceptTools } from './mcp-concept-tools.js';
 import { createVisualTargetTools, type VisualTargetToolsDeps } from './mcp-visual-target-tools.js';
 import { createCreatorNotesTools } from './mcp-creator-notes-tools.js';
+import { MCP_HIDDEN_FROM_MANAGED, MCP_HIDDEN_FROM_MANAGED_SHELL } from './managed-tool-filter.js';
 import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourceReadTools } from './mcp-source-read-tools.js';
@@ -136,7 +137,12 @@ import { seedPayload } from './seed-status.js';
 import { captureNoticeFor } from './capture-notice.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
-import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
+import {
+  createReferenceHold,
+  createReferenceLookup,
+  REFERENCE_UNSEEN_WARNING,
+  REFERENCE_WRITE_TOOLS,
+} from './reference-unseen.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
@@ -423,6 +429,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
   const referenceLookup = store ? createReferenceLookup(store) : null;
+  const referenceHold = referenceLookup ? createReferenceHold(referenceLookup) : null;
   // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
   // Note ids each job's read_inbox already returned.
@@ -1332,7 +1339,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),
-    ...createSourceSubmitTools({ resolveAuth, injectChannel, store, gamesStore: options.gamesStore }),
+    ...createSourceSubmitTools({
+      resolveAuth,
+      injectChannel,
+      store,
+      gamesStore: options.gamesStore,
+      // Only a managed shell lane can open the image; others are told.
+      holdForReference: async (ctx, jobId, generation) =>
+        managedOpenerClaims(ctx.bearerToken)?.shell === true &&
+        referenceHold !== null &&
+        referenceHold(jobId, generation),
+    }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
     ...createShareDraftTools({ resolveAuth, store, refuseShare: options.refuseShare, now }),
@@ -1494,7 +1511,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const opener = managedOpenerClaims(bearerToken);
       // Managed-only tools need an opener; URL-only ones also a shell.
       const offered = (name: string) =>
-        !MCP_MANAGED_ONLY_TOOLS.has(name) || (opener !== null && (!MCP_SHELL_ONLY_TOOLS.has(name) || opener.shell));
+        (!MCP_MANAGED_ONLY_TOOLS.has(name) || (opener !== null && (!MCP_SHELL_ONLY_TOOLS.has(name) || opener.shell))) &&
+        !(
+          opener !== null &&
+          (MCP_HIDDEN_FROM_MANAGED.has(name) || (opener.shell && MCP_HIDDEN_FROM_MANAGED_SHELL.has(name)))
+        );
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = sessionWantsUi(sessionHeader);

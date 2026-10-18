@@ -66,7 +66,7 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
 }
 
 // workspace: mounted-kit kickoff lines; mountedSources: the game is in them too.
-type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean };
+type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean; maxSeconds?: number };
 
 const GET_SOURCES = [
   "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
@@ -85,10 +85,10 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
   return [
     '## This round is on a clock',
     '',
-    'The session has a hard time limit and is cancelled when it runs out; a round that has',
-    'not called `submit_sources` by then delivers nothing at all.',
+    `The session is cancelled after ${lane.maxSeconds ? `${Math.round(lane.maxSeconds / 60)} minutes` : 'a hard time limit'}; without \`submit_sources\` by then it delivers nothing.`,
+    'Opening the creator’s images and a 2D capture take seconds: they are part of the round.',
     '',
-    'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request (with its images, where your tools can open them) and the sources. Only then edit.',
+    'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request with its images, and the sources. Only then edit.',
     ...(creating
       ? [
           `Call \`create_game\` first with ${JSON.stringify({

@@ -9,6 +9,7 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { PUBLISH_NOT_OWNER_REASON } from './agent-game-key.js';
 import type { GamesStore } from '../delivery/games-store.js';
+import { referenceHoldReply } from './reference-unseen.js';
 import {
   toolOk,
   toolErr,
@@ -49,6 +50,7 @@ export interface SourceSubmitToolsDeps {
   ) => Promise<{ statusCode: number; json: () => unknown }>;
   store: Store | undefined;
   gamesStore?: GamesStore;
+  holdForReference?: (ctx: ToolContext, jobId: number, roundGeneration: number) => Promise<boolean>;
 }
 
 export interface SourceSubmitToolEntry {
@@ -278,6 +280,8 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
+        const held = await deps.holdForReference?.(ctx, auth.jobId, auth.record.roundGeneration ?? 1);
+        if (held) return toolOk(referenceHoldReply(args.mode));
 
         const fromStaged = args.fromStaged === true;
         const fromLatestDelivery = args.fromLatestDelivery === true;
