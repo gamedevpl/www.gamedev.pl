@@ -32,8 +32,8 @@ export function createReferenceLookup(
     try {
       const [record, pending, shots] = await Promise.all([
         store.getSubmission(jobId),
-        store.listPendingCreatorMessages(jobId),
-        // Unbounded: an old named image may sit behind many newer ones.
+        // Unbounded: a named image may sit behind many notes or newer images.
+        store.listPendingCreatorMessages(jobId, { limit: Infinity }),
         store.listBuildShots(jobId, { label: 'creator-reference', limit: Infinity }),
       ]);
       if (!record) return false;

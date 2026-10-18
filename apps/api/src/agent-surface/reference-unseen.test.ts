@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { InMemoryStore } from '../platform/store.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
@@ -91,6 +91,25 @@ describe('reference_unseen', () => {
       });
     }
     expect(await createReferenceLookup(store)(7)).toBe(true);
+  });
+
+  it('finds an image named by the eleventh pending note', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(8, 'g:owner', 'Fog');
+    await store.setSubmissionPreviewVersion(8, 'v1');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      for (let i = 0; i < 10; i += 1) {
+        vi.setSystemTime(Date.parse('2026-10-11T10:00:00.000Z') + i * 1000);
+        await store.appendCreatorMessage(8, `Note ${i}.`);
+      }
+      vi.setSystemTime(Date.parse('2026-10-11T11:00:00.000Z'));
+      const shot = await store.appendBuildShot(8, { data: 'cmVm', label: 'creator-reference' });
+      await store.appendCreatorMessage(8, `Like this.\n\nreferenceImageShotIds: ${shot.id}`);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await createReferenceLookup(store)(8)).toBe(true);
   });
 
   it('still lists the reference behind a full page of agent screenshots', async () => {
