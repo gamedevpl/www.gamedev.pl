@@ -52,6 +52,19 @@ describe('reference_unseen', () => {
     expect((await store.getSubmission(7))?.referenceSeenAt).toBe(newer.createdAt);
   });
 
+  it('ignores an image no pending note names once the game has a delivery', async () => {
+    const { store } = await setup();
+    const lookup = createReferenceLookup(store);
+    await store.setSubmissionPreviewVersion(7, 'v1');
+    const pending = await store.listPendingCreatorMessages(7);
+    await store.markCreatorMessagesDelivered(
+      7,
+      pending.map((message) => message.id),
+    );
+    await store.appendCreatorMessage(7, 'Darker floor, please.');
+    expect(await lookup(7)).toBe(false);
+  });
+
   it('follows the stored images: a deleted one stops the warning, a failed read stays quiet', async () => {
     const { store, older, newer } = await setup();
     const lookup = createReferenceLookup(store);
@@ -60,6 +73,7 @@ describe('reference_unseen', () => {
     const broken = createReferenceLookup({
       getSubmission: async () => Promise.reject(new Error('down')),
       listBuildShots: async () => [],
+      listPendingCreatorMessages: async () => [],
     });
     expect(await broken(7)).toBe(false);
     expect(referenceUnseen('b', 'a')).toBe(true);
