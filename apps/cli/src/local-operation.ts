@@ -31,7 +31,7 @@ const schema = z
     source: z.string(),
     phase: z.enum(['preparing', 'active', 'committing', 'aborting']),
     before: snapshotSchema,
-    base: z.string().max(1_000_000),
+    base: z.string().max(96_000_000),
     context: z.string().regex(/^[a-f0-9]{64}$/),
     target: filesSchema,
     managed: z.array(z.string()).max(4000),
@@ -65,9 +65,8 @@ const schema = z
   .strict();
 export type LocalOperation = z.infer<typeof schema>;
 
-export function readLocalOperation(root: string): LocalOperation | null {
-  if (!existsSync(kitPath(root, OPERATION_FILE))) return null;
-  const state = schema.parse(readLocalJson(root, OPERATION_FILE));
+function validateLocalOperation(root: string, value: unknown): LocalOperation {
+  const state = schema.parse(value);
   if (state.phase === 'aborting' && (!state.abortId || !state.abortDigest))
     throw new CliError('Invalid interrupted abort journal. Recovery copies were preserved.', EXIT_REFUSED);
   checkedFiles(state.target);
@@ -75,6 +74,15 @@ export function readLocalOperation(root: string): LocalOperation | null {
   for (const conflict of state.conflicts) conflict.paths.forEach(sourcePath);
   restoreSnapshot(root, state.before);
   return state;
+}
+function writeOperation(root: string, state: LocalOperation): void {
+  validateLocalOperation(root, state);
+  writeLocalJson(root, OPERATION_FILE, state);
+}
+export function readLocalOperation(root: string): LocalOperation | null {
+  return existsSync(kitPath(root, OPERATION_FILE))
+    ? validateLocalOperation(root, readLocalJson(root, OPERATION_FILE))
+    : null;
 }
 export function operationSummary(root: string) {
   const state = readLocalOperation(root);
@@ -158,7 +166,7 @@ export function startLocalOperation(input: {
     conflicts: input.conflicts,
     ...(input.pop ? { pop: input.pop } : {}),
   };
-  writeLocalJson(ws.root, OPERATION_FILE, state);
+  writeOperation(ws.root, state);
   try {
     installHistorySources({ root: ws.root, source: ws.source, before: ws.before, after, identity: ws.identity });
   } catch (error) {
@@ -166,7 +174,7 @@ export function startLocalOperation(input: {
     throw error;
   }
   state.phase = 'active';
-  writeLocalJson(ws.root, OPERATION_FILE, state);
+  writeOperation(ws.root, state);
 }
 
 export async function finishLocalOperation(api: ApiClient, root: string, expected?: LocalOperation['kind']) {
@@ -216,7 +224,7 @@ export async function finishLocalOperation(api: ApiClient, root: string, expecte
     throw new CliError('Sources or checkout metadata changed while completing the merge. Retry.', EXIT_REFUSED);
   state.phase = 'committing';
   state.finalDigest = ws.before.digest;
-  writeLocalJson(root, OPERATION_FILE, state);
+  writeOperation(root, state);
   if (state.kind === 'pull') writeLocalJson(root, '.gamedev-base.json', JSON.parse(nextBase(ws, state)));
   if (state.pop) rmSync(kitPath(root, `.gamedev/stashes/${state.pop}.json`), { force: true });
   rmSync(kitPath(root, OPERATION_FILE));
@@ -240,7 +248,7 @@ export function abortLocalOperation(api: ApiClient, root: string, expected?: Loc
     state.phase = 'aborting';
     state.abortId = randomUUID();
     state.abortDigest = ws.before.digest;
-    writeLocalJson(root, OPERATION_FILE, state);
+    writeOperation(root, state);
   }
   const backup = kitPath(root, `.gamedev/history-backups/${state.abortId!}`);
   if (existsSync(backup)) {
@@ -253,7 +261,7 @@ export function abortLocalOperation(api: ApiClient, root: string, expected?: Loc
     const stale = kitPath(root, `.gamedev/history-stage-${state.abortId!}`);
     rmSync(stale, { recursive: true, force: true });
     state.abortDigest = ws.before.digest;
-    writeLocalJson(root, OPERATION_FILE, state);
+    writeOperation(root, state);
     installHistorySources({
       root,
       source: ws.source,
@@ -351,6 +359,6 @@ export function resolveLocalPath(api: ApiClient, root: string, path: string, cho
       throw new CliError('Sources changed while marking the conflict resolved. Retry.', EXIT_REFUSED);
   }
   conflict.resolved = true;
-  writeLocalJson(root, OPERATION_FILE, state);
+  writeOperation(root, state);
   return { resolved: conflict.paths, remaining: state.conflicts.filter((c) => !c.resolved).flatMap((c) => c.paths) };
 }

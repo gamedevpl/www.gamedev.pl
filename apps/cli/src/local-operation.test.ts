@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanupHistoryFixtures, sourceLines } from '../test/history-edit-fixture.js';
 import { localChangesFixture } from '../test/local-changes-fixture.js';
@@ -125,4 +125,22 @@ it('permits an explicitly selected side containing marker-shaped text', async ()
   await f.resolve(['game.ts'], { ours: true });
   await f.resolve([], { continue: true });
   expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(original);
+});
+it.each(['continue', 'abort'])('supports a valid base record over one megabyte through %s', async (mode) => {
+  const f = localChangesFixture();
+  const base = f.originalBase + ' '.repeat(1_010_000);
+  writeFileSync(join(f.root, '.gamedev-base.json'), base);
+  f.draft();
+  f.advance();
+  await expect(f.pull()).rejects.toThrow('Pull conflicts');
+  expect(readLocalOperation(f.root)?.base).toBe(base);
+  if (mode === 'continue') {
+    await f.resolve(['game.ts'], { ours: true });
+    await f.resolve([], { continue: true });
+    expect(readBase(f.root)?.version).toBe('v4');
+  } else {
+    await f.resolve([], { abort: true });
+    expect(readFileSync(join(f.root, '.gamedev-base.json'), 'utf8')).toBe(base);
+  }
+  expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(9, 3));
 });
