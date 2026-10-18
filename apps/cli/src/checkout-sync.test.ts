@@ -150,22 +150,24 @@ describe('what a refused sync tells you to do next', () => {
     ...extra,
   });
 
-  it('sends a conflict to diff, and names the force that actually clears it', () => {
+  it('sends a conflict to pull and explains continuing or aborting resolution', () => {
     const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
     expect(refused.message).toContain('GAME.json');
-    expect(refused.message).toContain('gamedevpl diff');
-    expect(refused.message).toContain('gamedevpl pull --force');
-    expect(refused.next).toBe('gamedevpl diff');
+    expect(refused.message).toContain('gamedevpl resolve');
+    expect(refused.message).toContain('gamedevpl pull --continue');
+    expect(refused.message).toContain('gamedevpl pull --abort');
+    expect(refused.next).toBe('gamedevpl pull');
   });
 
-  it('says force replaces the directory, not only the conflicting files', () => {
+  it('offers a reversible merge rather than forced replacement', () => {
     const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
-    expect(refused.message).toContain('games/<slug>');
+    expect(refused.message).toContain('starts a three-way merge');
+    expect(refused.message).not.toContain('--force');
   });
 
-  it('names the untouched local edits a force would take down with it', () => {
+  it('names unrelated local edits that the merge preserves', () => {
     const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'], local: ['level.ts', 'hud.ts'] }), 'pull');
-    expect(refused.message).toContain('discards level.ts, hud.ts as well');
+    expect(refused.message).toContain('Local-only edits are kept (level.ts, hud.ts)');
   });
 
   it('stays quiet about other edits when a conflict is the only divergence', () => {
@@ -173,9 +175,9 @@ describe('what a refused sync tells you to do next', () => {
     expect(refused.message).not.toContain('as well');
   });
 
-  it('never tells a conflict to run plain pull, which refuses again', () => {
+  it('starts conflict resolution with pull instead of requiring a checkout', () => {
     const refused = syncRefuse(refusal('conflict', { conflict: ['GAME.json'] }), 'pull');
-    expect(refused.next).not.toBe('gamedevpl pull');
+    expect(refused.next).toBe('gamedevpl pull');
     expect(refused.next).not.toContain('checkout');
   });
 
@@ -241,7 +243,7 @@ describe('what a refused sync tells you to do next', () => {
       'pull',
     );
     expect(refused.message).toContain('conflict on conf.ts');
-    expect(refused.message).toContain('discards local.ts as well');
+    expect(refused.message).toContain('Local-only edits are kept (local.ts)');
     expect(refused.message).not.toContain(esc);
     expect(refused.message).not.toContain('\n.ts');
     expect(refused.message).not.toContain('\r');

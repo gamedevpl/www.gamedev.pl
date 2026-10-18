@@ -153,8 +153,9 @@ export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: 
     };
   }
   if (sync.kind === 'conflict') {
+    const kept = sync.local.length ? ` Local-only edits are kept (${cleanPaths(sync.local)}).` : '';
     return {
-      message: `conflict on ${cleanPaths(sync.conflict)} — ${cliUsage('pull')} starts a three-way merge. Use ${cliUsage('resolve')} for unresolved paths, then ${cliUsage('pull', '--continue')} or ${cliUsage('pull', '--abort')}.`,
+      message: `conflict on ${cleanPaths(sync.conflict)} — ${cliUsage('pull')} starts a three-way merge. Use ${cliUsage('resolve')} for unresolved paths, then ${cliUsage('pull', '--continue')} or ${cliUsage('pull', '--abort')}.${kept}`,
       next: cliUsage('pull'),
     };
   }

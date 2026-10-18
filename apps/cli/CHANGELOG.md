@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Local `stash` saves, lists and reapplies drafts without delivery or a Git repository, preserving ignored files and retaining failed pops (#1904).
+- Conflicting `pull` and stash merges persist local resolutions: use `resolve`, then continue or abort; recovery copies preserve drafts and pending merges block delivery (#1904).
+
 ## 0.53.0 — 2026-10-17
 
 ### Breaking
