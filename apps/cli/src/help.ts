@@ -37,6 +37,9 @@ export const BLURB: Record<SlashVerb, string> = {
   connect: 'open a game session — connect <slug>; --manual for MCP setup',
   delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
   checkout: 'download and open local files — checkout [slug]; --version <version> restores sources in this checkout',
+  stash: 'save local drafts without delivery — stash [push [-m text]|list|show|apply|pop|drop [id]|continue|abort]',
+  resolve:
+    'inspect conflicts or mark a path resolved — resolve [path [--ours|--theirs|--delete]]; --continue or --abort completes the merge',
   git: 'opt into local Git history — git init [--remote <name>]; checkout --git enables it when downloading',
   quota: "today's submission budget",
   notifications: 'unread notifications',
@@ -47,7 +50,7 @@ export const BLURB: Record<SlashVerb, string> = {
   submit: 'alias for push — deliver a preview from local files',
   push: 'send local changes as a preview after checks — push [dir] [--publish]',
   publish: 'alias for push --publish — submit for operator publication',
-  pull: 'update from the platform, merging independent text edits and preserving local drafts',
+  pull: 'merge platform changes; resolve conflicts, then pull --continue; pull --abort restores the original sources',
   diff: 'working-copy patch; diff <v1> <v2> [--slug <slug>] compares delivered versions',
   update: 'update the CLI and this project’s npm CLI dependency',
 };

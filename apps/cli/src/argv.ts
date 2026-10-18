@@ -21,6 +21,8 @@ export const SLASH_VERBS = [
   'delegate',
   'checkout',
   'git',
+  'stash',
+  'resolve',
   'quota',
   'notifications',
   'help',
@@ -78,6 +80,11 @@ export function suggestVerb(command: string): (typeof CLI_VERBS)[number] | undef
 
 export const VERSION_VALUE_VERBS = new Set(['blame', 'checkout', 'restore', 'revert']);
 const BOOLEAN_FLAGS = new Set([
+  'continue',
+  'abort',
+  'ours',
+  'theirs',
+  'delete',
   'git',
   'play',
   'edit',
@@ -163,7 +170,9 @@ export function parseArgv(argv: string[] | string): {
       else args.push(...tokens.slice(i + 1));
       break;
     }
-    if (token.startsWith('--')) {
+    if (verb === 'stash' && token === '-m' && tokens[i + 1] && !tokens[i + 1]!.startsWith('-')) {
+      flags.message = tokens[++i]!;
+    } else if (token.startsWith('--')) {
       const body = token.slice(2);
       const eq = body.indexOf('=');
       if (eq >= 0) {

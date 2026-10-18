@@ -21,6 +21,9 @@ import { createIgnoreMatcher, type IgnoredHit } from './ignore.js';
 import { formatCheckoutIncoming, formatPatches, formatPullNotices, ignoredClashMessage } from './working-copy.js';
 import { preparePullMerge } from './checkout-pull-merge.js';
 import { pendingHistoryRoot } from './history-edit-files.js';
+import { hasLocalMerge } from './local-change-store.js';
+import { operationSummary, startLocalOperation } from './local-operation.js';
+import { localWorkspace } from './local-workspace.js';
 import { initializeGitCheckout } from './git-checkout.js';
 
 export type { TreeFile, SyncResult } from './checkout-sync.js';
@@ -28,7 +31,12 @@ export type { IgnoredHit } from './ignore.js';
 export { unreconciledMessage, formatSyncLines, syncRefuse, writeBase, readBase } from './checkout-sync.js';
 export { formatWorkingCopy } from './working-copy.js';
 
-export type DiffReport = SyncResult & { ignored: IgnoredHit[]; patches: string[]; incoming: IncomingIgnore };
+export type DiffReport = SyncResult & {
+  ignored: IgnoredHit[];
+  patches: string[];
+  incoming: IncomingIgnore;
+  operation?: ReturnType<typeof operationSummary>;
+};
 
 export type IncomingIgnore = { blocked: string[]; absent: string[]; git: string[] };
 
@@ -359,7 +367,7 @@ export async function inspectGame(input: { api: ApiClient; slug: string; dest: s
   const remote = trackedTree(input.dest, input.slug, tree.files);
   const sync = classify({ local, remote, remoteVersion: tree.version, base });
   const incoming = classifyIncoming(input.dest, input.slug, tree.files);
-  if (sync.kind === 'clean' && !incoming.blocked.length) {
+  if (sync.kind === 'clean' && !incoming.blocked.length && !hasLocalMerge(input.dest)) {
     writeBase(input.dest, tree.version, remote);
   }
   const seen = new Set(ignored.map((hit) => hit.path));
@@ -407,6 +415,24 @@ async function pullGameUnlocked(input: {
       remote: tracked,
       conflicts: sync.conflict,
     });
+    if (result.conflicts.length) {
+      const ws = localWorkspace(input.dest);
+      if (ws.before.digest !== result.snapshot.digest || ws.identity !== result.identity)
+        throw new CliError('Sources changed before conflict setup. Retry pull.', EXIT_REFUSED);
+      startLocalOperation({
+        ws,
+        api: input.api,
+        kind: 'pull',
+        target: tracked,
+        result: result.files,
+        conflicts: result.conflicts,
+        version: tree.version,
+      });
+      throw new CliError(
+        'Pull conflicts are saved locally. Run gamedevpl resolve; then pull --continue or pull --abort.',
+        EXIT_REFUSED,
+      );
+    }
     writeGameFiles(input.dest, input.slug, result.files);
     writeBase(input.dest, tree.version, tracked);
     if (result.merged.length) notices.push(`Auto-merged: ${result.merged.join(', ')}`);
@@ -444,9 +470,15 @@ export async function diffGame(input: { api: ApiClient; slug: string; dest: stri
   const { sync, tree, ignored } = await inspectGame(input);
   const patches = formatPatches(sync, localGameFiles(input.dest, input.slug), tree.files);
   const incoming = classifyIncoming(input.dest, input.slug, tree.files);
-  return { ...sync, ignored, patches, incoming };
+  return {
+    ...sync,
+    ignored,
+    patches,
+    incoming,
+    ...(hasLocalMerge(input.dest) ? { operation: operationSummary(input.dest) } : {}),
+  };
 }
 
 export function pullGame(input: Parameters<typeof pullGameUnlocked>[0]): ReturnType<typeof pullGameUnlocked> {
-  return withCheckoutWriter(input.dest, () => pullGameUnlocked(input));
+  return withCheckoutWriter(input.dest, () => pullGameUnlocked(input), { history: true });
 }

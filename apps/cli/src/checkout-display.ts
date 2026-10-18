@@ -37,6 +37,15 @@ export function formatCheckoutStatus(report: DiffReport, slug: string): string[]
     `Working copy: ${sanitizePath(slug)}`,
     `Platform version: ${sanitizePath(report.version) || '(none)'}`,
   ];
+  if (report.operation)
+    lines.push(
+      '',
+      `Pending ${report.operation.kind} merge:`,
+      ...report.operation.conflicts.map(
+        (c) => `  ${c.resolved ? 'resolved' : c.kind}: ${c.paths.map(sanitizePath).join(', ')}`,
+      ),
+      `  gamedevpl resolve — then ${report.operation.next}`,
+    );
   const labels = fileLabels(report.patches);
   if (report.local.length) {
     lines.push(
@@ -63,7 +72,7 @@ export function formatCheckoutStatus(report: DiffReport, slug: string): string[]
     lines.push('', 'Conflicts (local and platform changed):', '  (use "gamedevpl diff" to compare before resolving)');
     lines.push(...report.conflict.map((path) => `  both changed: ${sanitizePath(path)}`));
   }
-  if (report.kind === 'clean' && !report.incoming.blocked.length)
+  if (report.kind === 'clean' && !report.incoming.blocked.length && !report.operation)
     lines.push('', 'Working tree clean — local files match the platform.');
   lines.push(...notices(report));
   return lines;

@@ -174,6 +174,10 @@ history-edit owner, never a live or agent-owned lock; serialize stale-lock clean
 Recheck the remote tip after fetching trees and computing reverse merges, before writing.
 For pull merges, verify historical content against base hashes before applying three-way merges.
 Git remains optional: exercise native checkout with no repository and explicit Git setup separately.
+For native stash and conflicts, test pop failure retains its entry, abort preserves resolution edits,
+and source/base commit recovery survives a newer delivery. Block native and helper delivery
+while a merge is pending, and keep status reads from advancing its base. Test ignored
+collisions, binary choices, case collisions and actual shell/slash commands without a repository.
 Verify real Git pull/stash/push across both source layouts and raster representations.
 Derive delivery bases from pushed commit ancestry, not a mutable working-copy base.
 Exercise push followed by fetch and fast-forward pull; cache-only receipts leave sibling commits.

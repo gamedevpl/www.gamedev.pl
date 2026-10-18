@@ -6,6 +6,7 @@ import { cleanupHistoryFixtures, historyFixture, sourceLines } from '../test/his
 import { pullGame, readBase, writeGameFiles } from './checkout.js';
 import { hashesOf } from './checkout-sync.js';
 import { handleReplLine } from './repl.js';
+import { resolveCommand } from './local-change-command.js';
 import { runCli } from './main.js';
 
 afterEach(() => {
@@ -70,11 +71,13 @@ describe.each([false, true])('pull merge, source repository=%s', (project) => {
     expect(f.calls.filter((path) => path.endsWith('/v3/tree'))).toHaveLength(1);
     expect(readFileSync(join(f.root, '.git/HEAD'), 'utf8')).toBe('caller HEAD');
   });
-  it('leaves all sources and the base untouched on overlapping edits', async () => {
+  it('opens overlapping edits for resolution and restores all original sources on abort', async () => {
     const f = fixture(project);
     f.trees.v4!.find((file) => file.path === 'game.ts')!.content = sourceLines(8, 3);
     f.putRemote('remote.ts', 'should not land\n');
-    await expect(f.pull()).rejects.toThrow('Conflict on game.ts');
+    await expect(f.pull()).rejects.toThrow('Pull conflicts');
+    expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toContain('<<<<<<< local');
+    await resolveCommand({ api: f.api, cwd: f.root, args: [], flags: { abort: true }, write: () => {} });
     unchanged(f);
     expect(existsSync(join(f.game, 'remote.ts'))).toBe(false);
   });
@@ -89,7 +92,8 @@ describe.each([false, true])('pull merge, source repository=%s', (project) => {
       ),
     );
     writeFileSync(join(f.game, 'game.ts'), sourceLines(9, 3));
-    await expect(f.pull()).rejects.toThrow('Binary conflict');
+    await expect(f.pull()).rejects.toThrow('Pull conflicts');
+    await resolveCommand({ api: f.api, cwd: f.root, args: [], flags: { abort: true }, write: () => {} });
     unchanged(f);
     expect(readFileSync(join(f.game, 'images/test.png'))).toEqual(
       project ? Buffer.from([0, 255, 9]) : Buffer.from(Buffer.from([0, 255, 9]).toString('base64')),
@@ -97,7 +101,7 @@ describe.each([false, true])('pull merge, source repository=%s', (project) => {
   });
 });
 
-it.each(['add/add', 'modify/delete'])('refuses %s before writing any successfully merged file', async (kind) => {
+it.each(['add/add', 'modify/delete'])('can abort %s conflicts and restore original sources', async (kind) => {
   const f = fixture();
   if (kind === 'add/add') {
     f.putRemote('new.ts', 'remote\n');
@@ -107,7 +111,8 @@ it.each(['add/add', 'modify/delete'])('refuses %s before writing any successfull
     f.versions[0]!.sourceFiles = f.trees.v4.map((file) => file.path);
     writeFileSync(join(f.game, 'later.ts'), 'modified\n');
   }
-  await expect(f.pull()).rejects.toThrow('Add/delete conflict');
+  await expect(f.pull()).rejects.toThrow('Pull conflicts');
+  await resolveCommand({ api: f.api, cwd: f.root, args: [], flags: { abort: true }, write: () => {} });
   unchanged(f);
 });
 it('refuses an unavailable or mismatched historical base', async () => {
