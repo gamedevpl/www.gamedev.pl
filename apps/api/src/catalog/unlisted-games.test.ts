@@ -1,11 +1,12 @@
 import { isListedEntry, isPublishedEntry } from '@gamedevpl/contract';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
 import { createCatalogGenreSource } from './catalog-genre-source.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import { withSnapshot } from './local-snapshot-reader.js';
+import type { GamesStore } from '../delivery/games-store.js';
 
 const secret = 'dev-session-secret-change-me';
 
@@ -64,8 +65,8 @@ describe('unlisted games on the API', () => {
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function makeApp(options: { privateBeta?: boolean } = {}) {
-    const store = new InMemoryStore();
+  async function makeApp(options: { privateBeta?: boolean; store?: InMemoryStore; gamesStore?: GamesStore } = {}) {
+    const store = options.store ?? new InMemoryStore();
     await store.upsertUser({ uid: 'g:owner' });
     const app = await buildApp({
       store,
@@ -74,6 +75,7 @@ describe('unlisted games on the API', () => {
       submissionRoutes: {
         githubToken: 'token',
         submissionTokenSecret: 'test-submission-secret',
+        ...(options.gamesStore ? { agentChannel: { gamesStore: options.gamesStore } } : {}),
         ...withSnapshot({ getCatalog: async () => CATALOG } as unknown as GitHubClient),
       },
     });
@@ -116,5 +118,56 @@ describe('unlisted games on the API', () => {
       },
     });
     expect(res.statusCode).not.toBe(401);
+  });
+
+  it('resolves a store-lane unlisted link by its own slug, never scanning publications', async () => {
+    const store = new InMemoryStore();
+    await store.setPublication({
+      slug: 'store-hidden',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const reads: string[] = [];
+    const gamesStore = {
+      getSourceFile: async (slug: string) => {
+        reads.push(slug);
+        return '---\ntitle: Store Hidden\ngenre: arcade\nlisted: false\n---\n';
+      },
+      getDerivedArtifact: async () => null,
+    } as unknown as GamesStore;
+    const scans = vi.spyOn(store, 'listPublications');
+    const app = await makeApp({ privateBeta: true, store, gamesStore });
+
+    const hidden = await app.inject({ method: 'GET', url: '/api/games/store-hidden/votes' });
+    expect(hidden.statusCode).not.toBe(401);
+    const unknown = await app.inject({ method: 'GET', url: '/api/games/no-such-game/votes' });
+    expect(unknown.statusCode).toBe(401);
+    expect(scans).not.toHaveBeenCalled();
+    expect(reads).toEqual(['store-hidden']);
+  });
+
+  it('keeps a store game off the public profile when its SPEC cannot be read', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.claimHandle('g:creator', 'ada', '2026-07-01T00:00:00.000Z');
+    await store.createSubmission(42, 'g:creator', 'Lost Spec');
+    await store.setSubmissionSlug(42, 'lost-spec');
+    await store.setSubmissionPublishedAt(42, '2026-08-01T12:00:00.000Z');
+    await store.setPublication({
+      slug: 'lost-spec',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const gamesStore = {
+      getSourceFile: async () => null,
+      getDerivedArtifact: async () => null,
+    } as unknown as GamesStore;
+    const app = await makeApp({ store, gamesStore });
+
+    const page = await app.inject({ method: 'GET', url: '/api/creators/ada' });
+    expect(page.statusCode).toBe(200);
+    expect(page.json().games).toEqual([]);
   });
 });

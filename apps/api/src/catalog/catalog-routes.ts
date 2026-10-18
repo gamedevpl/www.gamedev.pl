@@ -198,11 +198,14 @@ export async function registerCatalogRoutes(
   async function isSlugUnlistedPublished(slug: string): Promise<boolean> {
     if (!githubClient) return false;
     try {
-      const published = (await getCatalogEntries()).filter(isPublishedEntry);
-      const repoEntry = published.find((entry) => entry.slug === slug);
+      const repoEntry = (await getCatalogEntries()).find((entry) => entry.slug === slug && isPublishedEntry(entry));
       if (repoEntry) return repoEntry.listed === false;
-      const storeEntries = await storeCatalogEntries(published.map((entry) => entry.slug));
-      return storeEntries.some((entry) => entry.slug === slug && entry.listed === false);
+      // One publication and SPEC read for this slug, never a scan.
+      if (!store || !gamesStore) return false;
+      const publication = await store.getPublication(slug);
+      if (!isPublished(publication)) return false;
+      const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
+      return spec !== null && catalogEntryFromSpec(slug, spec, () => null)?.listed === false;
     } catch {
       // Fails closed: an outage keeps unlisted games behind the wall.
       return false;

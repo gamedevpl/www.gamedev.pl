@@ -330,6 +330,8 @@ async function listCreatorPublishedGames(
       } catch {
         // A missing store object must not blank the whole profile.
       }
+      // Unreadable store SPEC: visibility unknown, so fail closed.
+      if (!entry) continue;
     }
     if (!entry) {
       entry = {
