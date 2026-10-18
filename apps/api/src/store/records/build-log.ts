@@ -73,6 +73,8 @@ export interface BuildShot {
   roundGeneration?: number;
   // True for a frame the platform drew, so counts can tell whose it is.
   platformDrawn?: true;
+  // Set when an agent downloads this creator reference.
+  agentSeenAt?: string;
   createdAt: string;
 }
 

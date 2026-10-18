@@ -17,6 +17,7 @@ import {
 } from './reference-image-url.js';
 import { VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
 import { captureNoticeFor } from './capture-notice.js';
+import { referenceShotIds } from './inbox-reference-images.js';
 
 // Round brief and creator-attached reference images the agent starts from.
 export interface AgentChannelBriefRoutesDeps {
@@ -83,10 +84,13 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       const { jobId } = resolved;
 
       // By label, so newer screenshots never push a reference out of reach.
-      const summaries = await store!.listBuildShots(jobId, {
-        label: 'creator-reference',
-        limit: MAX_LISTED_REFERENCES,
-      });
+      const [all, pending] = await Promise.all([
+        store!.listBuildShots(jobId, { label: 'creator-reference', limit: Infinity }),
+        store!.listPendingCreatorMessages(jobId, { limit: Infinity }),
+      ]);
+      // The newest few, plus every image a pending note names.
+      const named = new Set(referenceShotIds(pending));
+      const summaries = all.filter((shot, index) => index < MAX_LISTED_REFERENCES || named.has(shot.id));
       // URLs instead of bytes: the agent downloads what it needs.
       if ((request.query as { urls?: string }).urls === '1' && agentTokenSecret) {
         const base = `${canonicalAppBaseUrl()}${REFERENCE_IMAGE_DOWNLOAD_ROUTE}`;
@@ -125,7 +129,7 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       // Seen once the body is fully sent; a failed mark stays silent.
       if (reference) {
         reply.raw.once('finish', () => {
-          void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+          void store.markReferenceSeen(claim.jobId, shot.id).catch(() => undefined);
         });
       }
       return reply

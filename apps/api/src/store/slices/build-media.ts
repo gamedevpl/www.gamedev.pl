@@ -87,8 +87,8 @@ export interface BuildMediaStore {
   // Drops shots by id; a card that never posted leaves none.
   deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
-  // An agent downloaded the reference image created at shotCreatedAt; never moves back.
-  markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void>;
+  // An agent downloaded this reference image; stamps agentSeenAt on the shot.
+  markReferenceSeen(jobId: number, shotId: string): Promise<void>;
   // True once per round generation: the caller holds that round's delivery.
   claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean>;
 
@@ -131,10 +131,9 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return { ...record };
   }
 
-  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
-    const job = this.submissions?.get(jobId);
-    if (!job || (job.referenceSeenAt && job.referenceSeenAt >= shotCreatedAt)) return;
-    this.submissions!.set(jobId, { ...job, referenceSeenAt: shotCreatedAt });
+  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
+    const stored = this.buildShots.get(jobId)?.find((candidate) => candidate.id === shotId);
+    if (stored) stored.agentSeenAt ??= new Date().toISOString();
   }
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
@@ -275,13 +274,8 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   }
 
   // Overlapping downloads commit in any order; the mark only moves forward.
-  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
-    await this.db.runTransaction(async (transaction) => {
-      const job = await transaction.get(this.jobRef(jobId));
-      const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
-      if (!job.exists || (seen && seen >= shotCreatedAt)) return;
-      transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
-    });
+  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
+    await this.shotsCollection(jobId).doc(shotId).update({ agentSeenAt: new Date().toISOString() });
   }
 
   // A transaction, so overlapping submits and instances claim it once.
@@ -305,7 +299,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       // Equality only: the single-field index serves it, no composite needed.
       const snap = await this.shotsCollection(jobId)
         .where('label', '==', opts.label)
-        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'agentSeenAt', 'createdAt')
         .get();
       return snap.docs
         .map((doc) => doc.data() as BuildShotSummary)

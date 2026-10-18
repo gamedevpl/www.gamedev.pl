@@ -152,7 +152,7 @@ export interface SubmissionRecord {
    */
   agentEndedAt?: string;
   agentEndedBy?: AgentEndedBy;
-  // createdAt of the newest creator reference image an agent downloaded.
+  // Legacy, no longer written: shots up to it count as downloaded.
   referenceSeenAt?: string;
   // Round generation whose one unseen-reference delivery hold is spent.
   referenceHoldGeneration?: number;
