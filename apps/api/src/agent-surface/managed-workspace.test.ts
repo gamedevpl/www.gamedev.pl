@@ -112,7 +112,7 @@ describe('workspace kickoff', () => {
     const prompt = buildPrompt(brief, { shell: true, workspace, mountedSources: true });
     expect(prompt).toContain('start from the files already in `games/rocks/`');
     expect(prompt).toContain('do not call `get_sources`');
-    expect(prompt).toContain('then call `get_brief`, `read_inbox`, and `get_kit`');
+    expect(prompt).toContain('then call `get_brief`, `read_inbox`, `creator_notes` (sessionKey only), and `get_kit`');
     expect(prompt).not.toContain('Call `get_sources` before deciding anything');
     expect(buildPrompt(brief, { shell: true, workspace })).toContain('Call `get_sources` before deciding anything');
   });

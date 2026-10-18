@@ -27,6 +27,12 @@ describe('mcp-round-guide', () => {
     expect(step('stage_source_file', ['typecheck_hint', 'inbox_pending'])).toBeUndefined();
   });
 
+  it('points an unseen reference image at get_reference_images, unless no shell can open it', () => {
+    expect(step('stage_upload_url', ['reference_unseen'])).toBe('get_reference_images');
+    expect(step('stage_upload_url', ['reference_unseen', 'transcript_unread'])).toBe('get_transcript');
+    expect(step('stage_upload_url', ['reference_unseen'], { canFetchUrls: false })).toBeUndefined();
+  });
+
   it('refreshes a stale kit before anything else, and only a stale kit', () => {
     const refused = (message: string) =>
       nextSuggestedTool({ tool: 'start', warnings: [{ code: 'must_fix_gate', message }] });
