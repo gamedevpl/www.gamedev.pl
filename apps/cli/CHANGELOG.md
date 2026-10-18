@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Overlapping `pull` edits now leave conflict markers and a pending resolution session; use `pull --continue` or `pull --abort` instead of retrying an untouched checkout (#1904).
+
 ### Added
 
 - Local `stash` saves, lists and reapplies drafts without delivery or a Git repository, preserving ignored files and retaining failed pops (#1904).

@@ -178,6 +178,8 @@ For native stash and conflicts, test pop failure retains its entry, abort preser
 and source/base commit recovery survives a newer delivery. Block native and helper delivery
 while a merge is pending, and keep status reads from advancing its base. Test ignored
 collisions, binary choices, case collisions and actual shell/slash commands without a repository.
+Stash inspection and deletion must not depend on the current base or a source snapshot.
+Exercise missing/corrupt bases and broken, symbolic or oversized working sources.
 Kill abort after the source restore and before/after journal removal: the original resolution
 backup must remain discoverable, and a retry must preserve edits made after restoration.
 Verify real Git pull/stash/push across both source layouts and raster representations.

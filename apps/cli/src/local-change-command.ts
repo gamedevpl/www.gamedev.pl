@@ -6,6 +6,7 @@ import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { abortLocalOperation, finishLocalOperation, operationSummary, resolveLocalPath } from './local-operation.js';
 import { stashCommand } from './local-stash.js';
 import { withCheckoutWriter } from './workbench-lock.js';
+import { localCheckoutContext } from './local-workspace.js';
 
 type Input = {
   api: ApiClient;
@@ -56,8 +57,7 @@ export function formatLocalChange(result: object): string {
 }
 
 export async function resolveCommand(input: Input, expected?: 'pull' | 'stash') {
-  const here = findCheckout(input.cwd);
-  if (!here) throw new CliError('Run resolve inside a game checkout.', EXIT_INPUT);
+  const here = localCheckoutContext(input.cwd);
   const { flags, args } = input;
   const choices = ['ours', 'theirs', 'delete'].filter((key) => flags[key] === true),
     modes = ['continue', 'abort'].filter((key) => flags[key] === true);

@@ -3,7 +3,6 @@ import { existsSync, lstatSync, readdirSync, rmSync } from 'node:fs';
 import { z } from 'zod';
 import type { ApiClient } from './api.js';
 import { withCheckoutWriter } from './workbench-lock.js';
-import { findCheckout } from './checkout.js';
 import { hashesOf } from './checkout-sync.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { historyIdentity, installHistorySources, sourceSnapshot } from './history-edit-files.js';
@@ -11,7 +10,7 @@ import { kitPath } from './kit-install.js';
 import { checkedFiles, filesSchema, readLocalJson, writeLocalJson } from './local-change-store.js';
 import { mergeLocalTrees } from './local-merge.js';
 import { abortLocalOperation, finishLocalOperation, startLocalOperation } from './local-operation.js';
-import { localWorkspace, prepareLocalSources, workspaceBase } from './local-workspace.js';
+import { localCheckoutContext, localWorkspace, prepareLocalSources, workspaceBase } from './local-workspace.js';
 
 const schema = z
   .object({
@@ -71,7 +70,7 @@ async function stashUnlocked(input: {
 }) {
   const { api, flags } = input,
     [action = 'push', selected, ...extra] = input.args,
-    ws = localWorkspace(input.cwd);
+    context = localCheckoutContext(input.cwd);
   if (
     extra.length ||
     Object.keys(flags).some((key) => !['json', 'message'].includes(key)) ||
@@ -82,15 +81,16 @@ async function stashUnlocked(input: {
   if (['continue', 'abort'].includes(action)) {
     if (selected) throw new CliError('Stash completion takes no id.', EXIT_INPUT);
     return action === 'continue'
-      ? finishLocalOperation(api, ws.root, 'stash')
-      : abortLocalOperation(api, ws.root, 'stash');
+      ? finishLocalOperation(api, context.root, 'stash')
+      : abortLocalOperation(api, context.root, 'stash');
   }
-  const stashes = readStashes(ws.root);
+  const stashes = readStashes(context.root);
   if (action === 'list') {
     if (selected) throw new CliError('stash list takes no id.', EXIT_INPUT);
     return { stashes: stashes.map(summary) };
   }
   if (action === 'push') {
+    const ws = localWorkspace(context.root);
     if (selected) throw new CliError('Use --message for a stash description.', EXIT_INPUT);
     const base = await workspaceBase(api, ws),
       modified = changes({ base, files: ws.files });
@@ -137,14 +137,15 @@ async function stashUnlocked(input: {
     index = /^(?:\d+|stash@\{\d+\})$/.test(ref) ? Number(ref.replace(/\D/g, '')) : -1,
     stash = index >= 0 ? stashes[index] : stashes.find((row) => row.id === ref);
   if (!stash) throw new CliError('Local stash not found. Run gamedevpl stash list.', EXIT_REFUSED);
-  if (stash.slug !== ws.slug || stash.source !== ws.source || stash.origin !== api.origin)
-    throw new CliError('The stash belongs to another game, source layout or platform origin.', EXIT_REFUSED);
   if (action === 'show') return { stash: summary(stash, stashes.indexOf(stash)) };
   if (action === 'drop') {
-    rmSync(kitPath(ws.root, stashPath(stash.id)));
+    rmSync(kitPath(context.root, stashPath(stash.id)));
     return { dropped: stash.id };
   }
-  const result = mergeLocalTrees(stash.base, ws.files, stash.files);
+  if (stash.slug !== context.slug || stash.source !== context.source || stash.origin !== api.origin)
+    throw new CliError('The stash belongs to another game, source layout or platform origin.', EXIT_REFUSED);
+  const ws = localWorkspace(context.root),
+    result = mergeLocalTrees(stash.base, ws.files, stash.files);
   startLocalOperation({
     ws,
     api,
@@ -165,8 +166,8 @@ async function stashUnlocked(input: {
 }
 
 export async function stashCommand(input: Parameters<typeof stashUnlocked>[0]) {
-  const here = findCheckout(input.cwd);
-  if (!here) throw new CliError('Run stash inside a game checkout.', EXIT_INPUT);
+  const here = localCheckoutContext(input.cwd);
+  if (['list', 'show'].includes(input.args[0] ?? 'push')) return stashUnlocked(input);
   return withCheckoutWriter(here.root, () => stashUnlocked(input), {
     history: true,
     reclaimHistory: true,

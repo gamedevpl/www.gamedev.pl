@@ -1,10 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, lstatSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  truncateSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { cleanupHistoryFixtures, sourceLines } from '../test/history-edit-fixture.js';
 import { localChangesFixture } from '../test/local-changes-fixture.js';
 import { readBase, writeGameFiles } from './checkout.js';
 import { readLocalOperation } from './local-operation.js';
+import { stashCommand } from './local-stash.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -135,4 +145,67 @@ it('does not treat marker-shaped source content as generated stash conflicts', a
   await f.stash(['pop']);
   expect(readFileSync(join(f.game, 'example.ts'), 'utf8')).toBe(content);
   expect(readLocalOperation(f.root)).toBeNull();
+});
+describe.each([false, true])('stash inspection without working-tree validation, source repository=%s', (project) => {
+  it.each(['missing base', 'corrupt base', 'source symlink', 'large source', 'broken spec'])(
+    'lists, shows and drops records with %s',
+    async (problem) => {
+      const f = localChangesFixture(project);
+      f.draft();
+      await f.stash();
+      const listed = (await f.stash(['list'])) as { stashes: { id: string }[] },
+        id = listed.stashes[0]!.id;
+      if (problem === 'missing base') rmSync(join(f.root, '.gamedev-base.json'));
+      if (problem === 'corrupt base') writeFileSync(join(f.root, '.gamedev-base.json'), '{broken');
+      if (problem === 'source symlink') symlinkSync(join(f.root, '.gitignore'), join(f.game, 'link.ts'));
+      if (problem === 'large source') truncateSync(join(f.game, 'game.ts'), 33_000_001);
+      if (problem === 'broken spec') writeFileSync(join(f.game, 'SPEC.md'), 'temporarily broken frontmatter');
+      const calls = f.calls.length;
+      expect(await f.stash(['list'])).toMatchObject({ stashes: [{ id }] });
+      expect(await f.stash(['show', id])).toMatchObject({
+        stash: { id, changes: [{ path: 'game.ts', kind: 'modified' }] },
+      });
+      expect(await f.stash(['drop', id])).toEqual({ dropped: id });
+      expect(await f.stash(['list'])).toEqual({ stashes: [] });
+      expect(f.calls.length).toBe(calls);
+    },
+  );
+});
+it('can inspect saved stashes while source-swap recovery is pending', async () => {
+  const f = localChangesFixture();
+  f.draft();
+  await f.stash();
+  writeFileSync(join(f.root, '.gamedev/history-pending.json'), 'interrupted source swap');
+  expect(await f.stash(['list'])).toMatchObject({ stashes: [expect.any(Object)] });
+  expect(await f.stash(['show'])).toMatchObject({ stash: expect.any(Object) });
+  await expect(f.stash(['drop'])).rejects.toThrow('needs recovery');
+});
+it('allows local inspection across origin changes but refuses applying another origin’s sources', async () => {
+  const f = localChangesFixture();
+  f.draft();
+  await f.stash();
+  const api = { ...f.api, origin: 'https://other.invalid' },
+    calls = f.calls.length;
+  await expect(stashCommand({ api, cwd: f.root, args: ['apply'], flags: {} })).rejects.toThrow(
+    'another game, source layout or platform origin',
+  );
+  expect(await stashCommand({ api, cwd: f.root, args: ['show'], flags: {} })).toMatchObject({
+    stash: expect.any(Object),
+  });
+  expect(await stashCommand({ api, cwd: f.root, args: ['drop'], flags: {} })).toMatchObject({
+    dropped: expect.any(String),
+  });
+  expect(f.calls.length).toBe(calls);
+});
+it('finds the source-repository stack from its private runtime directory without a valid base', async () => {
+  const f = localChangesFixture(true);
+  f.draft();
+  await f.stash();
+  const cwd = join(f.root, '.gamedev/local');
+  mkdirSync(cwd, { recursive: true });
+  writeFileSync(join(cwd, '.gamedev-slug'), 'probe');
+  rmSync(join(f.root, '.gamedev-base.json'));
+  expect(await stashCommand({ api: f.api, cwd, args: ['list'], flags: {} })).toMatchObject({
+    stashes: [expect.any(Object)],
+  });
 });

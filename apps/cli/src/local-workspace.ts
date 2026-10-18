@@ -1,15 +1,49 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { isRasterSourcePath } from '@gamedevpl/contract';
 import { findCheckout, localGameFiles } from './checkout.js';
 import { hashContent, readBase, type TreeFile } from './checkout-sync.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
-import { readHistoryTree } from './history-api.js';
+import { historySlug, readHistoryTree } from './history-api.js';
 import { historyIdentity, prepareSources, sourceSnapshot, type SourceSnapshot } from './history-edit-files.js';
 import { historyTree, localBytes, localTree, sourcePath } from './history-edit-tree.js';
 import { gameSourcePath, sourceProject, sourceSpecSlug } from './source-project.js';
 import { kitPath } from './kit-install.js';
 import { createIgnoreMatcher } from './ignore.js';
 import type { ApiClient } from './api.js';
+
+export function localCheckoutContext(cwd: string) {
+  const text = (root: string, relative: string, limit = 256): string | undefined => {
+    const path = kitPath(root, relative);
+    if (!existsSync(path)) return undefined;
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.size > limit) throw new CliError('Invalid checkout identity marker.', EXIT_REFUSED);
+    return readFileSync(path, 'utf8').trim() || undefined;
+  };
+  const at = (root: string) => {
+    const saved = text(root, '.gamedev/source-slug'),
+      native = text(root, '.gamedev-slug');
+    const project = Boolean(saved || existsSync(kitPath(root, 'gamedev-kit.json')));
+    const slug = saved ?? native ?? (project ? sourceSpecSlug(text(root, 'src/SPEC.md', 1_000_000) ?? '') : undefined);
+    if (!slug) return null;
+    historySlug(slug);
+    return { root, slug, project, source: project ? 'src' : `games/${slug}` };
+  };
+  let root = resolve(cwd);
+  for (let depth = 0; depth < 40; depth++) {
+    const outside = dirname(dirname(root));
+    if (root === join(outside, '.gamedev/local')) {
+      const context = at(outside);
+      if (context?.project) return context;
+    }
+    const context = at(root);
+    if (context) return context;
+    const parent = dirname(root);
+    if (parent === root) break;
+    root = parent;
+  }
+  throw new CliError('Run this command inside a game checkout.', EXIT_INPUT);
+}
 
 export function localWorkspace(cwd: string) {
   const here = findCheckout(cwd);

@@ -237,6 +237,10 @@ empty base needs no network. In an undelivered source repository, `src/SPEC.md` 
 in place so its game identity remains available for `stash pop`; its draft is saved too.
 It never stages, delivers or publishes anything. Listing,
 showing, dropping and applying saved entries use local data and require no platform call.
+`stash list/show/drop` do not validate the current source tree or synchronization base.
+`list/show` stay available during a pending source operation; drops remain serialized
+and refuse while a merge or source recovery is pending. Applying a record still checks
+its game, source layout and platform origin.
 Text merging requires the Git executable when both sides edited the same text file;
 no local Git repository is needed.
 

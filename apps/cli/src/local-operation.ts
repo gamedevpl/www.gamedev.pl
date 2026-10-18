@@ -19,7 +19,7 @@ import {
   storedSnapshot,
   writeLocalJson,
 } from './local-change-store.js';
-import { localWorkspace, prepareLocalSources, type LocalWorkspace } from './local-workspace.js';
+import { localCheckoutContext, localWorkspace, prepareLocalSources, type LocalWorkspace } from './local-workspace.js';
 import { sourceSpecSlug } from './source-project.js';
 import { localGameFiles } from './checkout.js';
 
@@ -295,7 +295,7 @@ export function lastAbortResult(api: ApiClient, root: string, expected?: LocalOp
     })
     .strict()
     .parse(readLocalJson(root, path));
-  const ws = localWorkspace(root);
+  const ws = localCheckoutContext(root);
   if (
     record.slug !== ws.slug ||
     record.source !== ws.source ||
