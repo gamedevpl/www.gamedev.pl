@@ -135,6 +135,8 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     const job = this.submissions?.get(jobId);
     if (!job) return;
     this.submissions!.set(jobId, { ...job, ...referenceSeenPatch(job, shot) });
+    const stored = this.buildShots.get(jobId)?.find((candidate) => candidate.id === shot.id);
+    if (stored) stored.agentSeenAt ??= new Date().toISOString();
   }
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
@@ -280,6 +282,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       const job = await transaction.get(this.jobRef(jobId));
       if (!job.exists) return;
       transaction.update(this.jobRef(jobId), referenceSeenPatch(job.data() as SubmissionRecord, shot));
+      transaction.update(this.shotsCollection(jobId).doc(shot.id), { agentSeenAt: new Date().toISOString() });
     });
   }
 
@@ -304,7 +307,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       // Equality only: the single-field index serves it, no composite needed.
       const snap = await this.shotsCollection(jobId)
         .where('label', '==', opts.label)
-        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'agentSeenAt', 'createdAt')
         .get();
       return snap.docs
         .map((doc) => doc.data() as BuildShotSummary)
@@ -451,17 +454,14 @@ function holdClaimable(record: SubmissionRecord, roundGeneration: number): boole
   return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
 }
 
-const MAX_SEEN_REFERENCE_IDS = 64;
-
-// Time mark moves forward only; the id joins a capped list.
+// Time mark moves forward only; per-shot marks take over from it.
 function referenceSeenPatch(
   record: SubmissionRecord,
-  shot: { id: string; createdAt: string },
-): Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenIds'> {
+  shot: { createdAt: string },
+): Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenById'> {
   const seenAt = record.referenceSeenAt;
-  const ids = (record.referenceSeenIds ?? []).filter((id) => id !== shot.id);
   return {
     referenceSeenAt: seenAt && seenAt >= shot.createdAt ? seenAt : shot.createdAt,
-    referenceSeenIds: [...ids, shot.id].slice(-MAX_SEEN_REFERENCE_IDS),
+    referenceSeenById: true,
   };
 }

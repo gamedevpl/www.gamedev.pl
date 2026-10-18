@@ -16,13 +16,13 @@ export function referenceUnseen(newestAt: string | undefined, seenAt: string | u
   return Boolean(newestAt && !(seenAt && seenAt >= newestAt));
 }
 
-// By id; older records fall back to the time mark.
+// Per shot; older records fall back to the time mark.
 function referenceSeen(
-  record: Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenIds'>,
-  shot: { id: string; createdAt: string },
+  record: Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenById'>,
+  shot: { agentSeenAt?: string; createdAt: string },
 ): boolean {
-  if (record.referenceSeenIds) return record.referenceSeenIds.includes(shot.id);
-  return !referenceUnseen(shot.createdAt, record.referenceSeenAt);
+  if (shot.agentSeenAt) return true;
+  return !record.referenceSeenById && !referenceUnseen(shot.createdAt, record.referenceSeenAt);
 }
 
 export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {

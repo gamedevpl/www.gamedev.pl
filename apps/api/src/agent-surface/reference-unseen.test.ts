@@ -62,6 +62,22 @@ describe('reference_unseen', () => {
     expect(await lookup(7)).toBe(false);
   });
 
+  it('clears once every one of many named images is downloaded', async () => {
+    const { store, download } = await setup();
+    await store.setSubmissionPreviewVersion(7, 'v1');
+    const ids: string[] = [];
+    for (let i = 0; i < 70; i += 1) {
+      ids.push((await store.appendBuildShot(7, { data: 'cmVm', label: 'creator-reference' })).id);
+    }
+    await store.markCreatorMessagesDelivered(
+      7,
+      (await store.listPendingCreatorMessages(7)).map((m) => m.id),
+    );
+    await store.appendCreatorMessage(7, `Many.\n\nreferenceImageShotIds: ${ids.join(',')}`);
+    for (const id of ids) expect((await download(id)).statusCode).toBe(200);
+    expect(await createReferenceLookup(store)(7)).toBe(false);
+  });
+
   it('ignores an image no pending note names once the game has a delivery', async () => {
     const { store } = await setup();
     const lookup = createReferenceLookup(store);
