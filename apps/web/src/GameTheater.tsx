@@ -71,7 +71,7 @@ export type GameTheaterSource = { html: string } | { slug: string; reviewVersion
 
 type GameTheaterProps = {
   title: string;
-  badge: { icon: PixelIconName; label: string };
+  badge?: { icon: PixelIconName; label: string };
   source: GameTheaterSource;
   onExit: () => void;
   /** The orientation the game was designed for; drives the rotate nudge. */
@@ -631,9 +631,11 @@ export function GameTheater({
           }}
         >
           <div className="game-theater-meta">
-            <span className="theater-badge" title={t('ai.generatedTooltip')}>
-              <PixelIcon name={badge.icon} size={12} /> {badge.label}
-            </span>
+            {badge && (
+              <span className="theater-badge" title={t('ai.generatedTooltip')}>
+                <PixelIcon name={badge.icon} size={12} /> {badge.label}
+              </span>
+            )}
             <h2 className="theater-title">
               <span className="theater-title-text">{displayTitle}</span>
               <span className="theater-author">

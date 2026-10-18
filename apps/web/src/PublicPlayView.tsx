@@ -48,7 +48,6 @@ export function PublicPlayView({
   return (
     <GameTheater
       title={game.title}
-      badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
       source={{ slug, loadedGame: game }}
       reportSlug={slug}
       remixable={false}
