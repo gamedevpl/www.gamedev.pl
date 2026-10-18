@@ -6,7 +6,7 @@ const CAPTURE_PLAN_FILE = 'CAPTURE.json';
 export const CAPTURE_NOTICE =
   'The creator asked for concept sketches, and they start from the gate’s gameplay screenshot. This game has no CAPTURE.json, so the gate takes none. In this round, write CAPTURE.json: a capture plan that gets past any title or menu into real play and then takes { "capture": "gameplay" } there.';
 
-type NoticeStore = Pick<Store, 'getGameDreamsWantedAt'>;
+type NoticeStore = Pick<Store, 'getGameDreamsWantedAt' | 'getGameDreamsOffAt'>;
 type NoticeGamesStore = { getSourceFile(slug: string, version: string, path: string): Promise<string | null> };
 
 // Derived each round, never stored: it goes quiet once the file exists.
@@ -18,6 +18,8 @@ export async function captureNoticeFor(
   if (!store || !record.slug) return {};
   try {
     if (!(await store.getGameDreamsWantedAt(record.slug))) return {};
+    // Turned off after a yes: the plan is no longer owed.
+    if (await store.getGameDreamsOffAt(record.slug)) return {};
     const version = record.previewVersion ?? record.deliveredVersion;
     if (version && gamesStore && (await gamesStore.getSourceFile(record.slug, version, CAPTURE_PLAN_FILE))) return {};
     return { captureNotice: CAPTURE_NOTICE };

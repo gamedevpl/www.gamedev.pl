@@ -24,6 +24,13 @@ describe('captureNoticeFor', () => {
     expect(await captureNoticeFor(store, files({ 'CAPTURE.json': '{}' }), record)).toEqual({});
   });
 
+  it('goes quiet when sketches were turned off after a yes', async () => {
+    const store = new InMemoryStore();
+    await store.setGameDreamsWantedAt('neon', '2026-10-18T10:00:00.000Z');
+    await store.setGameDreamsOffAt('neon', '2026-10-18T11:00:00.000Z');
+    expect(await captureNoticeFor(store, files({}), record)).toEqual({});
+  });
+
   it('never fails a round start on a read error', async () => {
     const store = new InMemoryStore();
     store.getGameDreamsWantedAt = async () => {

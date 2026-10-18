@@ -1523,7 +1523,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.contributionStore.setGameDreamsWantedAt(slug, at);
   }
 
-  async claimGameDreamsOffer(slug: string, at: string): Promise<boolean> {
+  async claimGameDreamsOffer(slug: string, at: string | null): Promise<boolean> {
     return this.contributionStore.claimGameDreamsOffer(slug, at);
   }
 

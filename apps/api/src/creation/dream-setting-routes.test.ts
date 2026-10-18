@@ -50,7 +50,8 @@ describe('per-game dreaming switch', () => {
     expect(await store.getGameDreamsOffAt('neon')).toBe('2026-10-18T10:00:00.000Z');
 
     await app.inject({ method: 'PUT', url: '/api/me/games/neon/dreams', headers: owner, payload: { on: true } });
-    expect((await get()).json()).toEqual({ on: true, wanted: false, accountMuted: false });
+    // Switching on is a yes: a missing capture plan is owed.
+    expect((await get()).json()).toEqual({ on: true, wanted: true, accountMuted: false });
     expect(await store.getGameDreamsOffAt('neon')).toBeNull();
   });
 

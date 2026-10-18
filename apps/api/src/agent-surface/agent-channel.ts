@@ -2102,7 +2102,8 @@ export async function registerAgentChannelRoutes(
         const fresh = store ? ((await store.getSubmission(jobId)) ?? record) : record;
         const captureMissing =
           !files.some((file) => file.path === 'CAPTURE.json') &&
-          Boolean(await store?.getGameDreamsWantedAt(slug).catch(() => null));
+          Boolean(await store?.getGameDreamsWantedAt(slug).catch(() => null)) &&
+          !(await store?.getGameDreamsOffAt(slug).catch(() => null));
         return reply.send({
           accepted: true,
           mode,

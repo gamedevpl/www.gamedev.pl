@@ -20,12 +20,18 @@ export async function offerDreamsSetup(store: OfferStore, record: SubmissionReco
   if (await store.getGameDreamsWantedAt(record.slug)) return false;
   if (await store.getGameDreamsOffAt(record.slug)) return false;
   if (!(await store.claimGameDreamsOffer(record.slug, at))) return false;
-  await store.appendCreatorMessage(record.jobId, DREAMS_OFFER_TEXT_EN, {
-    origin: 'studio',
-    delivered: true,
-    textLocalized: DREAMS_OFFER_TEXT_PL,
-    locale: 'pl',
-    dreamsOffer: true,
-  });
+  try {
+    await store.appendCreatorMessage(record.jobId, DREAMS_OFFER_TEXT_EN, {
+      origin: 'studio',
+      delivered: true,
+      textLocalized: DREAMS_OFFER_TEXT_PL,
+      locale: 'pl',
+      dreamsOffer: true,
+    });
+  } catch (error) {
+    // A claim without its card would silence the question for good.
+    await store.claimGameDreamsOffer(record.slug, null).catch(() => {});
+    throw error;
+  }
   return true;
 }

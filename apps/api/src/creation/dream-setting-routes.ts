@@ -68,7 +68,10 @@ export async function registerDreamSettingRoutes(
     if (!slug) return reply;
     const body = DreamSettingSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'invalid request' });
-    await store.setGameDreamsOffAt(slug, body.data.on ? null : new Date(now()).toISOString());
+    const at = new Date(now()).toISOString();
+    await store.setGameDreamsOffAt(slug, body.data.on ? null : at);
+    // Switching on is a yes, even after a declined offer.
+    if (body.data.on && !(await store.getGameDreamsWantedAt(slug))) await store.setGameDreamsWantedAt(slug, at);
     return reply.send(await describe(slug, request.user!.uid));
   });
 

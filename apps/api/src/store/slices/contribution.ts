@@ -37,8 +37,8 @@ export interface ContributionStore {
 
   setGameDreamsWantedAt(slug: string, at: string | null): Promise<void>;
 
-  // True once per game: the sketches offer is asked a single time.
-  claimGameDreamsOffer(slug: string, at: string): Promise<boolean>;
+  // True once per game: the offer is asked once; null releases it.
+  claimGameDreamsOffer(slug: string, at: string | null): Promise<boolean>;
 
   // Cleanup for the superseded per-game suggestion sweep's leftover docs.
   purgeLegacyGameSuggestions(limit: number): Promise<number>;
@@ -137,7 +137,11 @@ export class InMemoryContributionStore implements ContributionStore {
     else this.gameDreamsWanted.delete(slug);
   }
 
-  async claimGameDreamsOffer(slug: string, _at: string): Promise<boolean> {
+  async claimGameDreamsOffer(slug: string, at: string | null): Promise<boolean> {
+    if (at === null) {
+      this.gameDreamsOffered.delete(slug);
+      return true;
+    }
     if (this.gameDreamsOffered.has(slug)) return false;
     this.gameDreamsOffered.add(slug);
     return true;
@@ -305,7 +309,11 @@ export class FirestoreContributionStore implements ContributionStore {
     await this.gameRef(slug).set({ dreamsWantedAt: at }, { merge: true });
   }
 
-  async claimGameDreamsOffer(slug: string, at: string): Promise<boolean> {
+  async claimGameDreamsOffer(slug: string, at: string | null): Promise<boolean> {
+    if (at === null)
+      return this.gameRef(slug)
+        .set({ dreamsOfferedAt: null }, { merge: true })
+        .then(() => true);
     // A transaction: two dream workers must not both post the offer.
     return this.db.runTransaction(async (tx) => {
       const ref = this.gameRef(slug);

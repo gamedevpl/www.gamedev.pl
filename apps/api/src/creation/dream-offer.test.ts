@@ -35,6 +35,21 @@ describe('dream job without a capture plan', () => {
     expect(await off.store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('asks again later when the card could not be written', async () => {
+    const { store, run } = await harness({ hud: [], sources: { 'CAPTURE.json': null } });
+    const real = store.appendCreatorMessage.bind(store);
+    store.appendCreatorMessage = async () => {
+      throw new Error('write failed');
+    };
+    await run({ screenshotPath: undefined }).catch(() => 'failed');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+
+    store.appendCreatorMessage = real;
+    await store.setSubmissionPreviewVersion(7, 'v2');
+    expect(await run({ version: 'v2', screenshotPath: undefined })).toBe('no_capture');
+    expect((await store.listCreatorMessages(7)).map((message) => message.dreamsOffer)).toEqual([true]);
+  });
+
   it('keeps no_screenshot for a plan that captured nothing', async () => {
     const { store, run } = await harness({ hud: [] });
     expect(await run({ screenshotPath: undefined })).toBe('no_screenshot');
