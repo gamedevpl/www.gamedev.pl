@@ -10,6 +10,7 @@ import { discoverAgents, formatAgents } from './agents.js';
 import { npmCliProject, updateProjectCli } from './update-project.js';
 import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-command.js';
 import { historyOutput } from './history-pager.js';
+import { localChangeCommand } from './local-change-command.js';
 import { gitCheckoutCommand } from './git-checkout.js';
 
 type Flags = Record<string, string | boolean>;
@@ -41,6 +42,15 @@ export async function dispatchReadVerb(input: {
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
+  if (verb === 'stash' || verb === 'resolve')
+    return localChangeCommand({
+      api,
+      args,
+      flags,
+      verb,
+      cwd: input.cwd ?? process.cwd(),
+      write: (text) => io.stdout.write(`${text}\n`),
+    });
   if (verb === 'git') {
     const result = await gitCheckoutCommand({ api, args, flags, cwd: input.cwd ?? process.cwd() });
     emit(

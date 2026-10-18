@@ -27,7 +27,7 @@ describe.skipIf(process.platform === 'win32')('history writer crash recovery', (
         '-e',
         `
       const {withCheckoutWriter}=await import(process.argv[1]);
-      await withCheckoutWriter(process.argv[2],async()=>{console.log('locked');setInterval(()=>{},1000);await new Promise(()=>{});},{history:process.argv[3]==='history'});
+      await withCheckoutWriter(process.argv[2],async()=>{console.log('locked');setInterval(()=>{},1000);await new Promise(()=>{});},{history:process.argv[3]==='history',recoverHistory:true});
     `,
         new URL('./workbench-lock.ts', import.meta.url).href,
         f.root,

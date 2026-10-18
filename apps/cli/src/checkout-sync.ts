@@ -153,10 +153,10 @@ export function syncRefuse(sync: SyncResult, op: 'pull' | 'submit'): { message: 
     };
   }
   if (sync.kind === 'conflict') {
-    const alsoLost = sync.local.length ? ` It discards ${cleanPaths(sync.local)} as well.` : '';
+    const kept = sync.local.length ? ` Local-only edits are kept (${cleanPaths(sync.local)}).` : '';
     return {
-      message: `conflict on ${cleanPaths(sync.conflict)} — ${cliUsage('diff')} shows both sides. Plain pull refuses while they disagree: copy the whole games/<slug> aside, then ${cliUsage('pull', '--force')} replaces it with the platform copy for you to merge yours back into.${alsoLost}`,
-      next: cliUsage('diff'),
+      message: `conflict on ${cleanPaths(sync.conflict)} — ${cliUsage('pull')} starts a three-way merge. Use ${cliUsage('resolve')} for unresolved paths, then ${cliUsage('pull', '--continue')} or ${cliUsage('pull', '--abort')}.${kept}`,
+      next: cliUsage('pull'),
     };
   }
   if (op === 'pull' && (sync.kind === 'local_only' || sync.kind === 'both')) {

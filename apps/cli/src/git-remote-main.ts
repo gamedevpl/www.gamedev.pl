@@ -25,6 +25,7 @@ import {
 import { gitPushBase } from './git-push-base.js';
 import { synchronizeGitDelivery } from './git-delivery-sync.js';
 import { sameGitSources } from './git-delivery-ref.js';
+import { withCheckoutWriter } from './workbench-lock.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { readHistory, readHistoryTree, historySlug } from './history-api.js';
 import { knownHistoryCommits } from './git-history-cache.js';
@@ -56,7 +57,7 @@ function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: Subm
   else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
 }
 
-export async function reconcilePush(input: {
+async function reconcilePushUnlocked(input: {
   api: ApiClient;
   slug: string;
   cwd: string;
@@ -116,6 +117,14 @@ export async function reconcilePush(input: {
     return { ok: false, message: describeError(error).message };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+export async function reconcilePush(input: Parameters<typeof reconcilePushUnlocked>[0]): Promise<PushResult> {
+  try {
+    return await withCheckoutWriter(input.cwd, () => reconcilePushUnlocked(input));
+  } catch (error) {
+    return { ok: false, message: describeError(error).message };
   }
 }
 

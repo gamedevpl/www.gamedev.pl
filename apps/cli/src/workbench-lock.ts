@@ -4,14 +4,16 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, w
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privatePlayDirectory } from './play-state.js';
+import { checkLocalWriter } from './local-edit-guard.js';
 
 const transaction = new AsyncLocalStorage<Set<string>>();
 export async function withCheckoutWriter<T>(
   root: string,
   run: () => Promise<T>,
-  options: { history?: boolean; recoverHistory?: boolean } = {},
+  options: { history?: boolean; recoverHistory?: boolean; resolveMerge?: boolean; reclaimHistory?: boolean } = {},
 ): Promise<T> {
   if (!existsSync(root)) return run();
+  checkLocalWriter(root, options);
   const canonical = realpathSync(root);
   if (transaction.getStore()?.has(canonical)) return run();
   const dir = privatePlayDirectory(join(tmpdir(), `gamedev-writers-${process.getuid?.() ?? 'user'}`));
@@ -21,7 +23,7 @@ export async function withCheckoutWriter<T>(
     mkdirSync(lock, { mode: 0o700 });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    if (options.recoverHistory && clearDeadHistoryWriter(lock, canonical)) {
+    if ((options.recoverHistory || options.reclaimHistory) && clearDeadHistoryWriter(lock, canonical)) {
       mkdirSync(lock, { mode: 0o700 });
     } else {
       throw Error(
@@ -46,6 +48,7 @@ export async function withCheckoutWriter<T>(
   const roots = new Set(transaction.getStore() ?? []);
   roots.add(canonical);
   try {
+    checkLocalWriter(root, options);
     return await transaction.run(roots, run);
   } finally {
     releaseWriter(lock, instance);

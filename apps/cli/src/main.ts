@@ -26,7 +26,7 @@ import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
-import { checkoutGame, diffGame, findCheckout, pullGame, readCheckoutSlug } from './checkout.js';
+import { checkoutGame, diffGame, findCheckout, readCheckoutSlug } from './checkout.js';
 import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js';
 import { colorCheckoutLines } from './checkout-style.js';
 import { wantsColor } from './renderer.js';
@@ -34,6 +34,7 @@ import { connectGame } from './connect.js';
 import { submitCommand } from './submit-command.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
+import { runPullCommand } from './local-change-command.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp, printVersion } from './help.js';
 import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
@@ -352,20 +353,14 @@ export async function runCli(
       );
       return EXIT_GREEN;
     }
-    if (verb === 'pull') {
-      const here = args[0] ? null : findCheckout(process.cwd());
-      const slug = args[0] ?? here?.slug ?? null;
-      if (!slug) throw new CliError(cliUsage('pull', '<slug>'), EXIT_INPUT, '<slug>');
-      const dest = args[1] ?? here?.root ?? process.cwd();
-      const pulled = await pullGame({ api, slug, dest, force: flags.force === true });
-      if (asJson) io.stdout.write(`${JSON.stringify(pulled)}\n`);
-      else {
-        const extra = pulled.kept.length ? `; kept local ${pulled.kept.join(', ')}` : '';
-        io.stdout.write(`pulled ${slug} @ ${pulled.version} (${pulled.sync.kind.replaceAll('_', ' ')})${extra}\n`);
-        for (const notice of pulled.notices) io.stdout.write(`${notice}\n`);
-      }
-      return EXIT_GREEN;
-    }
+    if (verb === 'pull')
+      return await runPullCommand({
+        api,
+        args,
+        flags,
+        cwd: process.cwd(),
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
     if (verb === 'diff') {
       const here = args[0] ? null : findCheckout(process.cwd());
       const slug = args[0] ?? here?.slug ?? null;

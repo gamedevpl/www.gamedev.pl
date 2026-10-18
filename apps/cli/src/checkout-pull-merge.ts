@@ -49,5 +49,5 @@ export async function preparePullMerge(input: {
       'Sources or checkout metadata changed during pull. Local edits were preserved; retry.',
       EXIT_REFUSED,
     );
-  return result;
+  return { ...result, snapshot, identity };
 }

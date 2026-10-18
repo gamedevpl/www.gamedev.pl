@@ -52,7 +52,7 @@ export function sourceSnapshot(root: string): SourceSnapshot {
   return { files, directories, digest: hash.digest('hex') };
 }
 
-export function historyIdentity(root: string): string {
+export function historyIdentity(root: string, ignoreBase = false): string {
   const hash = createHash('sha256');
   for (const rel of [
     '.gamedev-base.json',
@@ -63,6 +63,7 @@ export function historyIdentity(root: string): string {
     '.gitignore',
     '.gamedevplignore',
   ]) {
+    if (ignoreBase && rel === '.gamedev-base.json') continue;
     const path = kitPath(root, rel);
     if (existsSync(path)) {
       if (!lstatSync(path).isFile()) throw new CliError('Checkout metadata must be regular files.', EXIT_REFUSED);
@@ -187,9 +188,10 @@ export function installHistorySources(input: {
   after: SourceSnapshot;
   identity: string;
   move?: typeof renameSync;
+  id?: string;
 }): string {
   const move = input.move ?? renameSync,
-    id = randomUUID();
+    id = input.id ?? randomUUID();
   const journal: Journal = { id, source: input.source, result: '0'.repeat(64), committed: false };
   const paths = journalPaths(input.root, journal),
     pending = kitPath(input.root, PENDING);

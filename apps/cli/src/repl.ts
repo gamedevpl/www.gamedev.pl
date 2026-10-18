@@ -19,11 +19,12 @@ import { completeSlash, parseArgv, jsonMode, SLASH_VERBS, suggestSlash, type Sla
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
-import { diffGame, findCheckout, pullGame, readCheckoutSlug } from './checkout.js';
+import { diffGame, findCheckout, readCheckoutSlug } from './checkout.js';
 import { formatCheckoutDiff } from './checkout-display.js';
 import { replStatus } from './repl-status.js';
 import { connectSession, checkoutSession } from './connect-flow.js';
 import { submitRepl } from './repl-delivery.js';
+import { runPullCommand } from './local-change-command.js';
 import { dispatchReadVerb } from './verbs.js';
 import { postCliChat } from './chat.js';
 import { CLI_VERSION } from './update.js';
@@ -232,9 +233,7 @@ export async function handleReplLine(input: {
         }
         const dest = parsed.args[1] ?? (parsed.args[0] ? cwd : (here?.root ?? cwd));
         if (cmd === 'pull') {
-          const pulled = await pullGame({ api: input.api, slug, dest, force: parsed.flags.force === true });
-          const notices = pulled.notices.length ? `\n${pulled.notices.join('\n')}` : '';
-          input.write(`pulled ${slug} @ ${pulled.version}${notices}`);
+          await runPullCommand({ api: input.api, args: parsed.args, flags: parsed.flags, cwd, write: input.write });
         } else {
           const report = await diffGame({ api: input.api, slug, dest });
           input.write(jsonMode(parsed.flags) ? JSON.stringify(report) : formatCheckoutDiff(report).join('\n'));
@@ -246,7 +245,7 @@ export async function handleReplLine(input: {
     }
     if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
       try {
-        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+        const parsed = parseArgv(trimmed);
         const chunks: string[] = [];
         const stdout = { write: (s: string) => (chunks.push(s), true) } as unknown as NodeJS.WriteStream;
         const code = await dispatchReadVerb({

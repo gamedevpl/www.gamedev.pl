@@ -28,7 +28,7 @@ describe('argv and slash completion', () => {
       flags: { json: true, watch: true },
     });
     expect(parseArgv(['node', 'gamedev'])).toMatchObject({ verb: 'repl' });
-    expect(completeSlash('/sta')).toEqual(['status']);
+    expect(completeSlash('/sta')).toEqual(['status', 'stash']);
     expect(completeSlash('/')).toContain('games');
     expect(completeSlash('/pub')).toEqual(['publish']);
     expect(suggestSlash('/publsh')).toBe('publish');

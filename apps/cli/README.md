@@ -106,7 +106,7 @@ is involved.
 ## Verbs
 
 `login` `logout` `whoami` `agents` `games` `status` `share` `profile` `handle` `builder`
-`connect` `delegate` `checkout` `pull` `diff` `push` `publish` `submit` `quota` `notifications` `update` `help`
+`connect` `delegate` `checkout` `pull` `stash` `resolve` `diff` `push` `publish` `submit` `quota` `notifications` `update` `help`
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
@@ -176,8 +176,8 @@ model:
 - **both** — different files; `pull` keeps yours and takes theirs.
 - **conflict** — the same path changed on both sides. `pull` attempts a three-way
   text merge using the recorded platform base. Independent edits within a file combine;
-  overlapping edits, conflicting binary changes and add/delete conflicts stop before
-  writing any source files or advancing the base. `--force` explicitly replaces local sources.
+  unresolved edits start a local resolution session without advancing the base.
+  `--force` explicitly replaces local sources when no merge is pending.
 
 `gamedevpl pull` and `/pull` in a connected session use the same merge. Successful merges
 report `Auto-merged` paths and keep local edits available for `diff` and a later `push`.
@@ -189,8 +189,74 @@ Merging overlapping paths requires Git on `PATH` and access to the historical ba
 The CLI verifies base hashes, preserves ignored files, and refuses symbolic links or
 source snapshots over 32 MB, 2000 files or 2000 directories during a merge. Source and
 metadata edits or a newer platform delivery detected during merging refuse the pull.
-If a merge conflicts, use `gamedevpl diff` to review both sides and reconcile the changes
-before retrying. No conflict markers are written into your game.
+If a merge conflicts, text files contain `local`, `base` and `incoming` markers. Binary
+and add/delete conflicts retain your local side until you choose. `pull` exits with a
+refusal code while this session is pending; nonconflicting changes are already merged.
+
+```bash
+gamedevpl resolve                         # list unresolved and resolved paths
+# Edit the marked file, remove the markers, then:
+gamedevpl resolve game.ts
+# Or choose a complete side (deletion is also a choice):
+gamedevpl resolve images/hero.png --theirs
+gamedevpl resolve obsolete.ts --delete
+gamedevpl pull --continue
+# To undo the entire merge instead:
+gamedevpl pull --abort
+```
+
+`--ours` selects the pre-merge local file; `--theirs` selects the incoming file or its
+deletion. Case collisions are resolved as one group. `resolve --continue` / `--abort`
+work for either a pull or stash merge. The slash commands use identical rules.
+`status` shows the pending operation. Delivery, another pull and other CLI writers
+are blocked until completion or abort. Completion validates all resolutions and the
+platform tip, then records the downloaded tree as the base; merged drafts stay local.
+Abort restores the original source tree, preserving edits made during resolution in a
+private recovery copy. Merge state survives CLI restarts. If a source swap was interrupted,
+run `restore --recover` first, then inspect `resolve` and continue or abort as directed.
+An interrupted final base update can be completed idempotently with `resolve --continue`.
+Repeating `resolve --abort` after interruption returns the original recovery-copy path,
+including if the source restore had already finished; edits made afterward stay intact.
+
+### Local stash without a repository
+
+```bash
+gamedevpl stash push -m "before changing the renderer"
+gamedevpl stash list
+gamedevpl stash show 'stash@{0}'
+gamedevpl pull
+gamedevpl stash pop                       # apply, then remove only on success
+# Alternatives: stash apply [id] keeps it; stash drop [id] deletes it.
+```
+
+Bare `stash` means `stash push`. It saves deliverable local edits, including new files,
+deletions and raster sources, then restores those files to the checkout's recorded base.
+Ignored files, private notes, the Creator Kit and any Git HEAD/index remain untouched.
+Saving reads the historical base from gamedev.pl to verify its hashes; an undelivered
+empty base needs no network. In an undelivered source repository, `src/SPEC.md` stays
+in place so its game identity remains available for `stash pop`; its draft is saved too.
+It never stages, delivers or publishes anything. Listing,
+showing, dropping and applying saved entries use local data and require no platform call.
+`stash list/show/drop` do not validate the current source tree or synchronization base.
+`list/show` stay available during a pending source operation; drops remain serialized
+and refuse while a merge or source recovery is pending. Applying a record still checks
+its game, source layout and platform origin.
+Text merging requires the Git executable when both sides edited the same text file;
+no local Git repository is needed.
+
+Entries live under `.gamedev/stashes/`, bound to the game, layout and platform origin.
+Use `stash@{N}`, `N`, or the stable UUID printed by `stash list`; omitted IDs select the
+newest entry. `show` lists added/modified/deleted paths. At most 200 entries are retained;
+local records are bounded to 96 MB, total stash storage to 128 MB, and source snapshots
+to 32 MB / 2000 files.
+Stashes are local copies, so keep a separate backup before deleting a checkout.
+
+`apply` and `pop` three-way merge the saved draft onto the current local sources,
+preserving independent edits and leaving the synchronization base unchanged. Conflicts
+use the same `resolve` commands, followed by `stash continue` or `stash abort`. A conflicting
+`pop` keeps its entry until successful completion; abort always keeps the stash. CLI
+restarts do not discard it. Ignored collisions and changed checkout identities refuse
+before replacing files.
 
 `status` with no token, inside a checkout, lists local edits, incoming platform changes
 and conflicts in separate groups, with one path per line and added/modified/deleted labels.
@@ -392,8 +458,8 @@ synchronization base untouched until that working copy is reconciled.
 Native `gamedevpl pull`, `push`, `restore` and `revert` continue to operate on local
 sources and platform history. They do not create commits or move your Git branch/index.
 When mixing workflows, inspect `git diff` and commit source changes yourself before
-using Git pull. Git stash belongs to the optional Git workflow; no-repository sessions
-continue using the platform's history and local files.
+using Git pull. `git stash` belongs to the optional Git workflow; `gamedevpl stash`
+provides a separate local draft stack without a repository.
 
 The helper caches a commit per delivered version in `refs/gamedevpl/`,
 which Git maps to `origin/main`. It never updates a local branch. Repeated fetches
