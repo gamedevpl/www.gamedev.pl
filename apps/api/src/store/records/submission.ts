@@ -154,6 +154,8 @@ export interface SubmissionRecord {
   agentEndedBy?: AgentEndedBy;
   // createdAt of the newest creator reference image an agent downloaded.
   referenceSeenAt?: string;
+  // Round generation whose one unseen-reference delivery hold is spent.
+  referenceHoldGeneration?: number;
   /**
    * Latest MCP presence thought (closed vocabulary key + timestamp).
    *

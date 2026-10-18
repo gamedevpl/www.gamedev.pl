@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { WEB_TOOLS_OFF } from './managed-tool-filter.js';
 import { createManagedProvider, ManagedAgentError } from './managed-agent.js';
 import { ANTHROPIC_VENDOR, createAnthropicManagedProvider } from './managed-provider-anthropic.js';
 
@@ -166,7 +167,7 @@ describe('anthropic managed provider', () => {
     const body = JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body));
     expect(body.agent.mcp_servers).toEqual([{ type: 'url', name: 'gamedevpl', url: 'https://example.test/mcp' }]);
     expect(body.agent.tools).toEqual([
-      { type: 'agent_toolset_20260401' },
+      { type: 'agent_toolset_20260401', configs: WEB_TOOLS_OFF },
       {
         type: 'mcp_toolset',
         mcp_server_name: 'gamedevpl',

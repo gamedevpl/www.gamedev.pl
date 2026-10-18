@@ -136,6 +136,11 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('`read_inbox`');
   });
 
+  it('states the session limit rounded down, never longer than it is', () => {
+    expect(buildPrompt(BRIEF, { shell: true, maxSeconds: 90 })).toContain('cancelled after 90 seconds');
+    expect(buildPrompt(BRIEF, { shell: true, maxSeconds: 1799 })).toContain('cancelled after 29 minutes');
+  });
+
   it('truncates an oversized spec rather than sending it whole', () => {
     const prompt = buildPrompt({ ...BRIEF, spec: 'x'.repeat(20_000) });
     expect(prompt.length).toBeLessThan(12_000);

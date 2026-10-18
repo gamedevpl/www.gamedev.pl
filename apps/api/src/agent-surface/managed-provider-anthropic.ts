@@ -1,5 +1,6 @@
 // Anthropic Managed Agents adapter; the only vendor-shaped file.
 import { z } from 'zod';
+import { WEB_TOOLS_OFF } from './managed-tool-filter.js';
 import {
   ManagedAgentError,
   normalizeManagedState,
@@ -203,7 +204,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
                 mcp_servers: mcpServers,
                 // MCP defaults to always_ask; managed rounds need always_allow.
                 tools: [
-                  { type: 'agent_toolset_20260401' },
+                  { type: 'agent_toolset_20260401', configs: WEB_TOOLS_OFF },
                   ...mcpServers.map((server) => ({
                     type: 'mcp_toolset',
                     mcp_server_name: server.name,

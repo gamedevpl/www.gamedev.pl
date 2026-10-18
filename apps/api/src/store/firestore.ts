@@ -800,6 +800,10 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.buildMediaStore.markReferenceSeen(jobId, shotCreatedAt);
   }
 
+  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
+    return this.buildMediaStore.claimReferenceHold(jobId, roundGeneration);
+  }
+
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },

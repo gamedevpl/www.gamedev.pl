@@ -89,6 +89,8 @@ export interface BuildMediaStore {
 
   // An agent downloaded the reference image created at shotCreatedAt; never moves back.
   markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void>;
+  // True once per round generation: the caller holds that round's delivery.
+  claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean>;
 
   appendBuildPreview(
     jobId: number,
@@ -133,6 +135,13 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     const job = this.submissions?.get(jobId);
     if (!job || (job.referenceSeenAt && job.referenceSeenAt >= shotCreatedAt)) return;
     this.submissions!.set(jobId, { ...job, referenceSeenAt: shotCreatedAt });
+  }
+
+  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
+    const job = this.submissions?.get(jobId);
+    if (!job || !holdClaimable(job, roundGeneration)) return false;
+    this.submissions!.set(jobId, { ...job, referenceHoldGeneration: roundGeneration });
+    return true;
   }
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
@@ -272,6 +281,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
       if (!job.exists || (seen && seen >= shotCreatedAt)) return;
       transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
+    });
+  }
+
+  // A transaction, so overlapping submits and instances claim it once.
+  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
+    return this.db.runTransaction(async (transaction) => {
+      const job = await transaction.get(this.jobRef(jobId));
+      const record = job.data() as SubmissionRecord | undefined;
+      if (!record || !holdClaimable(record, roundGeneration)) return false;
+      transaction.update(this.jobRef(jobId), { referenceHoldGeneration: roundGeneration });
+      return true;
     });
   }
 
@@ -425,4 +445,9 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     }
     return stale.length;
   }
+}
+
+// Only the current round may claim, and the marker never moves back.
+function holdClaimable(record: SubmissionRecord, roundGeneration: number): boolean {
+  return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
 }
