@@ -61,8 +61,6 @@ export function StageOverlay({
         <GameTheater
           key={stageContent.game.slug}
           title={stageContent.game.title}
-          // AI Act art. 50 disclosure, kept short beside the title.
-          badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
           source={{ slug: stageContent.game.slug }}
           onExit={onExitCatalogTheater}
           orientation={stageContent.game.orientation}
