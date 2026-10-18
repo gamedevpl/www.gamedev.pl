@@ -9,6 +9,7 @@ import { PRESENCE_THOUGHT_MS } from './presenceThought.js';
 import { ShotLightbox } from './ShotLightbox.js';
 import type { ActivityEntry } from './buildActivityFeed.js';
 import { ProposalCard, type ProposalHandlers } from './ProposalCard.js';
+import { DreamsOfferCard } from './DreamsOfferCard.js';
 
 export type ThreadWorkingState = {
   // Coarse phase — "Writing code" / "Starting agent".
@@ -32,6 +33,7 @@ export function ThreadStream({
   stickNonce = 0,
   proposals,
   dreaming = null,
+  dreamsOfferSlug,
 }: {
   token: string;
   entries: ActivityEntry[];
@@ -49,6 +51,8 @@ export function ThreadStream({
   proposals?: ProposalHandlers;
   // A concept proposal is being drawn; the card replaces this line.
   dreaming?: string | null;
+  // The game a sketches offer is about; absent leaves plain text.
+  dreamsOfferSlug?: string;
 }) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
@@ -125,6 +129,7 @@ export function ThreadStream({
                   {entry.proposal && proposals ? (
                     <ProposalCard token={token} proposal={entry.proposal} handlers={proposals} />
                   ) : null}
+                  {entry.dreamsOffer && dreamsOfferSlug ? <DreamsOfferCard slug={dreamsOfferSlug} /> : null}
                   {media.length > 0 ? (
                     <span className="studio-turn-shots">
                       {media.map((item) => (

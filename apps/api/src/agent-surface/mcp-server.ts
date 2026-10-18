@@ -133,6 +133,7 @@ import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken }
 import type { SourceFile } from '../delivery/games-store.js';
 import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from './seed-status.js';
+import { captureNoticeFor } from './capture-notice.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
 import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
@@ -1052,6 +1053,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const seed = seedPayload(active);
           const gateField = await gateFieldForStart(options.gamesStore, active);
           const publishRight = await publishRightForStart(store, active.slug, actorUid);
+          const captureNotice = await captureNoticeFor(store, options.gamesStore, active);
           const structured = {
             sessionKey,
             sessionId,
@@ -1073,6 +1075,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ...seed,
             ...gateField,
             ...publishRight,
+            ...captureNotice,
           };
           return startToolResult(structured);
         };
@@ -1258,6 +1261,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const seed = seedPayload(record);
         const gateField = await gateFieldForStart(options.gamesStore, record);
         const publishRight = await publishRightForStart(store, record.slug, legacyActorUid);
+        const captureNotice = await captureNoticeFor(store, options.gamesStore, record);
         const structured = {
           sessionKey,
           sessionId,
@@ -1279,6 +1283,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...seed,
           ...gateField,
           ...publishRight,
+          ...captureNotice,
         };
         return startToolResult(structured);
       },

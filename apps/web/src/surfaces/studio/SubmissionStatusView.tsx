@@ -797,6 +797,7 @@ export function SubmissionStatusView({
                 entries={activity}
                 emptyLabel={stateDescription}
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
+                dreamsOfferSlug={status.slug}
                 priorSlug={status.slug}
                 proposals={proposalPrefs.muted === null ? undefined : proposalHandlers}
                 dreaming={status.dreaming && proposalPrefs.muted === false ? t('statusView.proposal.dreaming') : null}

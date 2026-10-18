@@ -13,6 +13,7 @@ const SlugParamsSchema = z.object({
 });
 
 const DreamSettingSchema = z.object({ on: z.boolean() });
+const DreamOfferAnswerSchema = z.object({ want: z.boolean() });
 
 export interface DreamSettingRoutesOptions {
   store: Store;
@@ -48,8 +49,12 @@ export async function registerDreamSettingRoutes(
   }
 
   async function describe(slug: string, uid: string) {
-    const [offAt, user] = await Promise.all([store.getGameDreamsOffAt(slug), store.getUser(uid)]);
-    return { on: !offAt, accountMuted: Boolean(user?.proposalsMutedAt) };
+    const [offAt, wantedAt, user] = await Promise.all([
+      store.getGameDreamsOffAt(slug),
+      store.getGameDreamsWantedAt(slug),
+      store.getUser(uid),
+    ]);
+    return { on: !offAt, wanted: Boolean(wantedAt), accountMuted: Boolean(user?.proposalsMutedAt) };
   }
 
   app.get('/api/me/games/:slug/dreams', async (request, reply) => {
@@ -64,6 +69,22 @@ export async function registerDreamSettingRoutes(
     const body = DreamSettingSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'invalid request' });
     await store.setGameDreamsOffAt(slug, body.data.on ? null : new Date(now()).toISOString());
+    return reply.send(await describe(slug, request.user!.uid));
+  });
+
+  // The thread's offer: yes asks the builder, no turns sketches off.
+  app.post('/api/me/games/:slug/dreams/offer', async (request, reply) => {
+    const slug = await requireOwner(request, reply);
+    if (!slug) return reply;
+    const body = DreamOfferAnswerSchema.safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+    const at = new Date(now()).toISOString();
+    if (body.data.want) {
+      await store.setGameDreamsWantedAt(slug, at);
+      await store.setGameDreamsOffAt(slug, null);
+    } else {
+      await store.setGameDreamsOffAt(slug, at);
+    }
     return reply.send(await describe(slug, request.user!.uid));
   });
 }

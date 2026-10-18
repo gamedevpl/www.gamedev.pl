@@ -21,6 +21,8 @@ export type ActivityEntry = {
   media?: BuildMediaItem[];
   // A studio turn carrying concept frames the creator can pick from.
   proposal?: CreatorProposal;
+  // A studio turn asking whether to set up concept sketches.
+  dreamsOffer?: true;
 };
 
 // Places the build's pictures on the timeline, dated to their moment.
@@ -75,6 +77,7 @@ export function buildActivityFeed(
             text: revision.text,
             at: Date.parse(revision.createdAt),
             ...(revision.proposal ? { proposal: revision.proposal } : {}),
+            ...(revision.dreamsOffer ? { dreamsOffer: true as const } : {}),
           }
         : {
             kind: 'revision' as const,

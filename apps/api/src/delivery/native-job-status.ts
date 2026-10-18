@@ -98,6 +98,7 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),
             ...(message.proposal ? { proposal: message.proposal } : {}),
+            ...(message.dreamsOffer ? { dreamsOffer: true as const } : {}),
           })),
         };
       }

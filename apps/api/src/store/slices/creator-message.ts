@@ -9,6 +9,7 @@ export type CreatorMessageWrite = {
   textLocalized?: string;
   locale?: string;
   proposal?: CreatorProposal;
+  dreamsOffer?: true;
 };
 
 export function newCreatorMessage(text: string, opts?: CreatorMessageWrite): CreatorMessage {
@@ -21,5 +22,6 @@ export function newCreatorMessage(text: string, opts?: CreatorMessageWrite): Cre
     ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
     ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     ...(opts?.proposal ? { proposal: opts.proposal } : {}),
+    ...(opts?.dreamsOffer ? { dreamsOffer: true as const } : {}),
   };
 }

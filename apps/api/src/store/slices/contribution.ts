@@ -32,6 +32,14 @@ export interface ContributionStore {
 
   setGameDreamsOffAt(slug: string, at: string | null): Promise<void>;
 
+  // When the owner said yes to setting up sketches; null is unanswered.
+  getGameDreamsWantedAt(slug: string): Promise<string | null>;
+
+  setGameDreamsWantedAt(slug: string, at: string | null): Promise<void>;
+
+  // True once per game: the sketches offer is asked a single time.
+  claimGameDreamsOffer(slug: string, at: string): Promise<boolean>;
+
   // Cleanup for the superseded per-game suggestion sweep's leftover docs.
   purgeLegacyGameSuggestions(limit: number): Promise<number>;
 
@@ -115,6 +123,24 @@ export class InMemoryContributionStore implements ContributionStore {
   async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
     if (at) this.gameDreamsOff.set(slug, at);
     else this.gameDreamsOff.delete(slug);
+  }
+
+  gameDreamsWanted = new Map<string, string>(); // slug -> when the owner said yes
+  gameDreamsOffered = new Set<string>();
+
+  async getGameDreamsWantedAt(slug: string): Promise<string | null> {
+    return this.gameDreamsWanted.get(slug) ?? null;
+  }
+
+  async setGameDreamsWantedAt(slug: string, at: string | null): Promise<void> {
+    if (at) this.gameDreamsWanted.set(slug, at);
+    else this.gameDreamsWanted.delete(slug);
+  }
+
+  async claimGameDreamsOffer(slug: string, _at: string): Promise<boolean> {
+    if (this.gameDreamsOffered.has(slug)) return false;
+    this.gameDreamsOffered.add(slug);
+    return true;
   }
 
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {
@@ -268,6 +294,26 @@ export class FirestoreContributionStore implements ContributionStore {
 
   async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
     await this.gameRef(slug).set({ dreamsOffAt: at }, { merge: true });
+  }
+
+  async getGameDreamsWantedAt(slug: string): Promise<string | null> {
+    const snap = await this.gameRef(slug).get();
+    return (snap.data() as { dreamsWantedAt?: string | null } | undefined)?.dreamsWantedAt ?? null;
+  }
+
+  async setGameDreamsWantedAt(slug: string, at: string | null): Promise<void> {
+    await this.gameRef(slug).set({ dreamsWantedAt: at }, { merge: true });
+  }
+
+  async claimGameDreamsOffer(slug: string, at: string): Promise<boolean> {
+    // A transaction: two dream workers must not both post the offer.
+    return this.db.runTransaction(async (tx) => {
+      const ref = this.gameRef(slug);
+      const snap = await tx.get(ref);
+      if ((snap.data() as { dreamsOfferedAt?: string } | undefined)?.dreamsOfferedAt) return false;
+      tx.set(ref, { dreamsOfferedAt: at }, { merge: true });
+      return true;
+    });
   }
 
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {

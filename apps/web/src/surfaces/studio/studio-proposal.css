@@ -102,6 +102,13 @@
   opacity: 0.75;
 }
 
+.studio-dreams-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .studio-proposal-overlay {
   position: fixed;
   inset: 0;
