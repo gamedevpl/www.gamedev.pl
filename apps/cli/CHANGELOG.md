@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Local screenshots wait for the game document, GameKit renderer and painted frames instead of capturing after a fixed delay, avoiding blank images from slower game startup.
+- Local screenshots wait for the game document, GameKit renderer and painted frames instead of capturing after a fixed delay, avoiding blank images from slower game startup (#1906).
 
 ## 0.54.0 — 2026-10-18
 

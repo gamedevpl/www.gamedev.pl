@@ -37,7 +37,7 @@ it('fails explicitly when the game never becomes ready', async () => {
   const rejected = expect(run).rejects.toThrow('Game did not become ready for capture within 30 seconds');
   await vi.advanceTimersByTimeAsync(30_000);
   await rejected;
-  expect(call.mock.calls.some((args) => (args[1] as { awaitPromise?: boolean })?.awaitPromise)).toBe(false);
+  expect(call).not.toHaveBeenCalledWith('Runtime.evaluate', expect.objectContaining({ awaitPromise: true }));
 });
 
 it('cancels readiness polling with the capture task', async () => {
