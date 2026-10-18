@@ -102,12 +102,13 @@ it('refuses stale source captures and preserves edits made during the base reque
   expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe('edited during request');
   expect(await f.stash(['list'])).toEqual({ stashes: [] });
 });
-it('stashes an undelivered draft without network or Git', async () => {
-  const f = localChangesFixture();
+it.each([false, true])('stashes an undelivered draft without network or Git, source repository=%s', async (project) => {
+  const f = localChangesFixture(project);
   writeBase(f.root, 'undelivered', []);
   vi.stubEnv('PATH', '');
   await f.stash();
   expect(f.calls).toEqual([]);
+  if (project) expect(readFileSync(join(f.game, 'SPEC.md'), 'utf8')).toContain('slug: probe');
   await f.stash(['pop']);
   expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(sourceLines(2, 3));
 });
@@ -144,4 +145,11 @@ it('blocks the Git helper before delivery while a native merge is pending', asyn
     message: expect.stringContaining('merge is pending'),
   });
   expect(f.calls.length).toBe(calls);
+});
+it('refuses lossy UTF-8 conversion without modifying the original source bytes', async () => {
+  const f = localChangesFixture();
+  const bytes = Buffer.from([0xff, 0xfe, 10]);
+  writeFileSync(join(f.game, 'game.ts'), bytes);
+  await expect(f.stash()).rejects.toThrow('valid UTF-8');
+  expect(readFileSync(join(f.game, 'game.ts'))).toEqual(bytes);
 });

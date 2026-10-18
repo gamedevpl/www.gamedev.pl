@@ -11,6 +11,7 @@ export type LocalConflict = {
   paths: string[];
   kind: 'text' | 'binary' | 'add-delete' | 'structural';
   resolved: boolean;
+  markerDigest?: string;
 };
 export const hasConflictMarkers = (text: string): boolean =>
   /^(?:<{7}(?: |$)|\|{7} base(?:\r?$)|>{7}(?: |$))/m.test(text);

@@ -127,3 +127,12 @@ it('supports show and drop by stable id, and rejects malformed stash refs', asyn
   await f.stash(['drop', id]);
   expect(await f.stash(['list'])).toEqual({ stashes: [] });
 });
+it('does not treat marker-shaped source content as generated stash conflicts', async () => {
+  const f = localChangesFixture();
+  const content = '<<<<<<< example\n||||||| base\n>>>>>>> example\n';
+  writeFileSync(join(f.game, 'example.ts'), content);
+  await f.stash();
+  await f.stash(['pop']);
+  expect(readFileSync(join(f.game, 'example.ts'), 'utf8')).toBe(content);
+  expect(readLocalOperation(f.root)).toBeNull();
+});

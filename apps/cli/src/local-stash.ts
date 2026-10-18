@@ -100,7 +100,9 @@ async function stashUnlocked(input: {
       ws,
       ws.before,
       [...new Set([...Object.keys(ws.base.files), ...ws.files.map((f) => f.path)])],
-      base,
+      ws.project && ws.base.version === 'undelivered' && !base.length
+        ? ws.files.filter((file) => file.path === 'SPEC.md')
+        : base,
     );
     if (
       historyIdentity(ws.root) !== ws.identity ||

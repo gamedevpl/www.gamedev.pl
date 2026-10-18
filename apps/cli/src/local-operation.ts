@@ -2,7 +2,7 @@ import { isRasterSourcePath } from '@gamedevpl/contract';
 import { existsSync, rmSync } from 'node:fs';
 import { z } from 'zod';
 import type { ApiClient } from './api.js';
-import { hashesOf, type TreeFile } from './checkout-sync.js';
+import { hashContent, hashesOf, type TreeFile } from './checkout-sync.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { historyIdentity, installHistorySources, sourceSnapshot } from './history-edit-files.js';
 import { localTree, sourcePath } from './history-edit-tree.js';
@@ -42,6 +42,10 @@ const schema = z
             paths: z.array(z.string()).min(1).max(4000),
             kind: z.enum(['text', 'binary', 'add-delete', 'structural']),
             resolved: z.boolean(),
+            markerDigest: z
+              .string()
+              .regex(/^[a-f0-9]{64}$/)
+              .optional(),
           })
           .strict(),
       )
@@ -165,7 +169,17 @@ export async function finishLocalOperation(api: ApiClient, root: string, expecte
     throw new CliError('Unresolved paths remain. Run gamedevpl resolve.', EXIT_REFUSED);
   const files = localGameFiles(ws.root, ws.slug);
   prepareLocalSources(ws, ws.before, [...new Set([...state.managed, ...files.map((f) => f.path)])], files);
-  if (files.some((f) => !isRasterSourcePath(f.path) && hasConflictMarkers(f.content)))
+  if (
+    files.some(
+      (file) =>
+        state.conflicts.some(
+          (conflict) =>
+            conflict.kind === 'text' &&
+            conflict.paths.includes(file.path) &&
+            conflict.markerDigest !== hashContent(file.content),
+        ) && hasConflictMarkers(file.content),
+    )
+  )
     throw new CliError('Conflict markers remain in source files.', EXIT_REFUSED);
   if (state.phase === 'committing' && ws.before.digest !== state.finalDigest)
     throw new CliError(
@@ -248,12 +262,15 @@ export function resolveLocalPath(api: ApiClient, root: string, path: string, cho
       files,
     );
     installHistorySources({ root, source: ws.source, before: ws.before, after, identity: ws.identity });
+    if (conflict.kind === 'text')
+      conflict.markerDigest = hashContent(files.find((file) => conflict.paths.includes(file.path))?.content ?? '');
   } else {
     const files = localGameFiles(root, ws.slug);
     localTree(files);
     for (const file of files.filter((f) => conflict.paths.includes(f.path)))
-      if (!isRasterSourcePath(file.path) && hasConflictMarkers(file.content))
+      if (conflict.kind === 'text' && hasConflictMarkers(file.content))
         throw new CliError('Remove the conflict markers before marking this path resolved.', EXIT_REFUSED);
+    delete conflict.markerDigest;
     if (sourceSnapshot(kitPath(root, ws.source)).digest !== ws.before.digest || historyIdentity(root) !== ws.identity)
       throw new CliError('Sources changed while marking the conflict resolved. Retry.', EXIT_REFUSED);
   }

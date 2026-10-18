@@ -25,7 +25,13 @@ export function localWorkspace(cwd: string) {
     files = localGameFiles(here.root, here.slug);
   for (const file of files) {
     const bytes = before.files.get(file.path)?.bytes;
-    if (bytes?.toString(project && isRasterSourcePath(file.path) ? 'base64' : 'utf8') !== file.content)
+    const encoding = project && isRasterSourcePath(file.path) ? 'base64' : 'utf8';
+    if (bytes && !Buffer.from(bytes.toString(encoding), encoding).equals(bytes))
+      throw new CliError(
+        'Source text must be valid UTF-8 before stashing or resolving. Original bytes were preserved.',
+        EXIT_REFUSED,
+      );
+    if (bytes?.toString(encoding) !== file.content)
       throw new CliError('Sources changed while capturing local changes. Retry.', EXIT_REFUSED);
   }
   if (historyIdentity(here.root) !== identity || sourceSnapshot(kitPath(here.root, source)).digest !== before.digest)

@@ -67,10 +67,22 @@ someone's disk, and the checkout is not the source of truth.
 
 The `gamedevpl` CLI records the platform version at checkout time (`.gamedev-base.json`)
 and classifies later `diff` / `pull` / `submit` against that base: local-only, platform-only,
-both, or a real path conflict. Ordinary local edits are not a conflict. `pull` will not
-overwrite unsaved local files; if the same path changed on both sides it refuses and tells
-you to copy those files aside first. `gamedevpl status` inside the checkout prints the same
-picture, and `gamedevpl diff` adds a patch. `.git` is never part of a delivery. `.gitignore` is
+both, or a real path conflict. Ordinary local edits are not a conflict. `pull` merges
+independent text changes and preserves drafts. Unresolved overlaps start a local resolution
+session: edit text markers and mark paths with `resolve <path>`, or choose `--ours`,
+`--theirs` or `--delete`. `pull --continue` finishes the merge; `pull --abort` restores the
+original sources and backs up edits made during resolution. Pending merges block delivery
+and other CLI writers. `gamedevpl status` shows the pending paths, and `gamedevpl diff`
+adds a patch. The synchronization base advances only when the merge completes.
+
+`gamedevpl stash` saves deliverable drafts locally, including new files and deletions,
+then restores their recorded base. `stash list/show/apply/pop/drop` manage the stack;
+conflicting applications use `resolve` and `stash continue/abort`. A failed pop keeps its
+entry. Ignored files and the installed Kit stay in place. Saving reads the historical base
+but does not stage or deliver anything; saved entries can be applied offline. Both workflows
+work without a local Git repository and have equivalent slash commands. See the
+[CLI workflow guide](../apps/cli/README.md#local-stash-without-a-repository) for recovery,
+limits and examples. `.git` is never part of a delivery. `.gitignore` is
 honored, and `.gamedevplignore` adds rules in the same syntax. `push` names the ignored files it
 left out. `pull` refuses when an ignored file on disk would be overwritten, and leaves a
 platform file unwritten when it only matches an ignore rule and is not already in the checkout.

@@ -116,3 +116,13 @@ it('finishes an already decided merge after a newer platform delivery arrives', 
   expect(f.calls.length).toBe(calls);
   expect(readBase(f.root)?.version).toBe('v4');
 });
+it('permits an explicitly selected side containing marker-shaped text', async () => {
+  const f = localChangesFixture(),
+    original = sourceLines(9, 3) + '<<<<<<< source example\n';
+  f.draft(original);
+  f.advance();
+  await expect(f.pull()).rejects.toThrow('Pull conflicts');
+  await f.resolve(['game.ts'], { ours: true });
+  await f.resolve([], { continue: true });
+  expect(readFileSync(join(f.game, 'game.ts'), 'utf8')).toBe(original);
+});

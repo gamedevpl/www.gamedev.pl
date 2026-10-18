@@ -106,7 +106,7 @@ is involved.
 ## Verbs
 
 `login` `logout` `whoami` `agents` `games` `status` `share` `profile` `handle` `builder`
-`connect` `delegate` `checkout` `pull` `diff` `push` `publish` `submit` `quota` `notifications` `update` `help`
+`connect` `delegate` `checkout` `pull` `stash` `resolve` `diff` `push` `publish` `submit` `quota` `notifications` `update` `help`
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
@@ -231,7 +231,9 @@ Bare `stash` means `stash push`. It saves deliverable local edits, including new
 deletions and raster sources, then restores those files to the checkout's recorded base.
 Ignored files, private notes, the Creator Kit and any Git HEAD/index remain untouched.
 Saving reads the historical base from gamedev.pl to verify its hashes; an undelivered
-empty base needs no network. It never stages, delivers or publishes anything. Listing,
+empty base needs no network. In an undelivered source repository, `src/SPEC.md` stays
+in place so its game identity remains available for `stash pop`; its draft is saved too.
+It never stages, delivers or publishes anything. Listing,
 showing, dropping and applying saved entries use local data and require no platform call.
 Text merging requires the Git executable when both sides edited the same text file;
 no local Git repository is needed.
