@@ -758,10 +758,17 @@ describe('getGameSources', () => {
       }) as unknown as typeof fetch;
       return createGitHubClient({ token: 'test-token', repo, fetchImpl });
     };
-    const publish: Array<[string, string]> = [['games/raid/publish.ts', 'GameKit.mount({ soon: "coming-soon" });']];
+    const publish: Array<[string, string]> = [
+      [
+        'games/raid/publish.ts',
+        '/*! keep-me */\nfunction startSoonLoop(flythroughSeconds: number) {\n  GameKit.mount({ soon: "coming-soon", flythroughSeconds });\n}\nstartSoonLoop(109);\n',
+      ],
+    ];
 
     const served = await clientFor(publish).getGameSources('main', 'raid', undefined, { entry: 'publish' });
     expect(served?.gameJs).toContain('coming-soon');
+    expect(served?.gameJs).not.toContain('startSoonLoop');
+    expect(served?.gameJs).not.toContain('keep-me');
     expect(served?.gameJs).not.toContain('full-game');
     expect((await clientFor(publish).getGameSources('main', 'raid'))?.gameJs).toContain('full-game');
     expect((await clientFor([]).getGameSources('main', 'raid', undefined, { entry: 'publish' }))?.gameJs).toContain(
