@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { localChangesFixture } from '../test/local-changes-fixture.js';
 import { cleanupHistoryFixtures, sourceLines } from '../test/history-edit-fixture.js';
@@ -153,3 +153,19 @@ it('refuses lossy UTF-8 conversion without modifying the original source bytes',
   await expect(f.stash()).rejects.toThrow('valid UTF-8');
   expect(readFileSync(join(f.game, 'game.ts'))).toEqual(bytes);
 });
+it.each([false, true])(
+  'does not conflict on a local raster rename when API encoding metadata is unchanged, source repository=%s',
+  async (project) => {
+    const f = localChangesFixture(project);
+    f.draft();
+    f.advance();
+    renameSync(join(f.game, 'images/test.png'), join(f.game, 'images/Test.png'));
+    await expect(f.pull()).rejects.toThrow('Pull conflicts');
+    expect(readLocalOperation(f.root)?.conflicts.map((c) => c.paths)).toEqual([['game.ts']]);
+    await f.resolve(['game.ts'], { ours: true });
+    await f.resolve([], { continue: true });
+    expect(readFileSync(join(f.game, 'images/Test.png'))).toEqual(
+      project ? Buffer.from([0, 255, 2]) : Buffer.from(Buffer.from([0, 255, 2]).toString('base64')),
+    );
+  },
+);

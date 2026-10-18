@@ -78,8 +78,8 @@ export function mergeLocalTrees(baseFiles: TreeFile[], oursFiles: TreeFile[], th
       left = oursFiles.filter((f) => paths.includes(f.path)),
       right = theirsFiles.filter((f) => paths.includes(f.path));
     const same = (a: TreeFile[], b: TreeFile[]) =>
-      JSON.stringify([...a].sort((x, y) => x.path.localeCompare(y.path))) ===
-      JSON.stringify([...b].sort((x, y) => x.path.localeCompare(y.path)));
+      a.length === b.length &&
+      a.every((file) => b.some((other) => file.path === other.path && file.content === other.content));
     const selected = same(left, right) || same(right, before) ? left : same(left, before) ? right : undefined;
     for (const path of paths) structural.add(path);
     for (const file of selected ?? left) result.set(file.path, file.content);
