@@ -43,13 +43,14 @@ export const REFERENCE_HOLD_RETRY =
   'and read the file, then submit again. A second submit_sources this round is delivered either way.';
 
 // Holds one delivery per round while a reference is unseen; never two.
-export function createReferenceHold(lookup: (jobId: number) => Promise<boolean>) {
-  const held = new Set<string>();
+export function createReferenceHold(
+  lookup: (jobId: number) => Promise<boolean>,
+  store: Pick<Store, 'claimReferenceHold'>,
+) {
   return async (jobId: number, roundGeneration: number): Promise<boolean> => {
-    const key = `${jobId}:${roundGeneration}`;
-    if (held.has(key) || !(await lookup(jobId))) return false;
-    held.add(key);
-    return true;
+    if (!(await lookup(jobId))) return false;
+    // Durable and atomic: a failed claim delivers rather than blocks.
+    return store.claimReferenceHold(jobId, roundGeneration).catch(() => false);
   };
 }
 

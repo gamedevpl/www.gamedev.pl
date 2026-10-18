@@ -8,8 +8,6 @@ export const MCP_HIDDEN_FROM_MANAGED: ReadonlySet<string> = new Set([
   'continue_draft',
   'open_round',
   'list_account_games',
-  'get_proposal_diff',
-  'get_proposal_summary',
   'propose_game_transfer',
   'get_game_transfer_proposal_receipt',
   'get_game_access',

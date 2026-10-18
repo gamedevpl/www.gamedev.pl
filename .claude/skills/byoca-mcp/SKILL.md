@@ -316,6 +316,17 @@ and each handler checks `opensManagedRound`: the opener names this job and curre
 expired, and the builder is `platform`. Never mention a managed-only tool in public
 descriptions, `MCP_INSTRUCTIONS` or replies; only the managed builder system prompt may name it.
 
+The reverse also holds: `tools/list` for a managed opener leaves out `MCP_HIDDEN_FROM_MANAGED`
+(Studio, account and UI tools a builder never calls) and, on a shell lane, `knowledge_query`
+(`managed-tool-filter.ts`), to keep every model request smaller. They still answer `tools/call`.
+The proposal readers stay listed, since accepted-proposal rounds can be managed.
+
+**Reference hold.** On a managed shell lane, `submit_sources` refuses the round's first delivery
+while `reference_unseen` holds (`rejected: reference_unseen`, with `retry`). The claim is
+`claimReferenceHold` on the submission record, a transaction, so it happens once per round
+generation across instances; the next submit is delivered either way. Public clients and no-shell
+lanes only see the warning.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens
@@ -1314,7 +1325,7 @@ known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
 | `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                                                                                                                                            |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that breaks the gate (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting. (`index.html` isn't in this lane: a fresh write is a hard refusal, not a warning — see "index.html can never be freshly written again") |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                                                                                                                                             |
-| `reference_unseen`      | On stage/submit replies: the newest stored creator reference image is newer than `referenceSeenAt` (set by the signed download route). Shell: curl + read it before building on; no shell: say so in `end.summary`                                                                             |
+| `reference_unseen`      | On stage/submit replies: the newest stored creator reference image is newer than `referenceSeenAt` (set by the signed download route). Shell: curl + read it before building on (a managed shell lane's first submit is held, see Managed-only tools); no shell: say so in `end.summary`       |
 | `inbox_unacked`         | On `submit_sources` replies: ids of creator notes `read_inbox` returned that are still pending until acknowledged (fact only; the system prompt says to ack)                                                                                                                                   |
 
 ## Builder handoff (Studio)

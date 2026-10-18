@@ -81,13 +81,17 @@ describe('reference_unseen', () => {
 });
 
 describe('createReferenceHold', () => {
-  it('holds one delivery per round while a reference is unseen, never a second', async () => {
+  it('holds one delivery per round while a reference is unseen, durably, never a second', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:owner', 'Game');
     let unseen = true;
-    const hold = createReferenceHold(async () => unseen);
-    expect(await hold(1, 1)).toBe(true);
-    expect(await hold(1, 1)).toBe(false);
+    const hold = createReferenceHold(async () => unseen, store);
+    const [first, overlapping] = await Promise.all([hold(1, 1), hold(1, 1)]);
+    expect([first, overlapping].filter(Boolean)).toHaveLength(1);
+    // Another instance shares the store, so it cannot hold again.
+    expect(await createReferenceHold(async () => true, store)(1, 1)).toBe(false);
     expect(await hold(1, 2)).toBe(true);
     unseen = false;
-    expect(await hold(2, 1)).toBe(false);
+    expect(await hold(1, 3)).toBe(false);
   });
 });

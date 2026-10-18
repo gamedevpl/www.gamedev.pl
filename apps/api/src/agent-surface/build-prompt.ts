@@ -85,7 +85,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
   return [
     '## This round is on a clock',
     '',
-    `The session is cancelled after ${lane.maxSeconds ? `${Math.round(lane.maxSeconds / 60)} minutes` : 'a hard time limit'}; without \`submit_sources\` by then it delivers nothing.`,
+    `The session is cancelled after ${!lane.maxSeconds ? 'a hard time limit' : lane.maxSeconds < 120 ? `${Math.floor(lane.maxSeconds)} seconds` : `${Math.floor(lane.maxSeconds / 60)} minutes`}; without \`submit_sources\` by then it delivers nothing.`,
     'Opening the creator’s images and a 2D capture take seconds: they are part of the round.',
     '',
     'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request with its images, and the sources. Only then edit.',

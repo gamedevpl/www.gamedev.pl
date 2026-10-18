@@ -429,7 +429,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
   const referenceLookup = store ? createReferenceLookup(store) : null;
-  const referenceHold = referenceLookup ? createReferenceHold(referenceLookup) : null;
+  const referenceHold = referenceLookup && store ? createReferenceHold(referenceLookup, store) : null;
   // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
   // Note ids each job's read_inbox already returned.
