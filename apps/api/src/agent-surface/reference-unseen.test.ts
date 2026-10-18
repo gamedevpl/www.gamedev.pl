@@ -112,6 +112,21 @@ describe('reference_unseen', () => {
     expect(await createReferenceLookup(store)(8)).toBe(true);
   });
 
+  it('lists an image a pending note names behind more than 24 newer references', async () => {
+    const { store, server, older } = await setup();
+    for (let i = 0; i < 25; i += 1) {
+      await store.appendBuildShot(7, {
+        data: 'cmVm',
+        label: 'creator-reference',
+        createdAt: `2026-10-11T15:${String(i).padStart(2, '0')}:00.000Z`,
+      });
+    }
+    const listed = await server.inject({ method: 'GET', url: `${AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES}?urls=1` });
+    const ids = (listed.json().images as Array<{ id: string }>).map((image) => image.id);
+    expect(ids).toContain(older.id);
+    expect(ids).toHaveLength(26);
+  });
+
   it('still lists the reference behind a full page of agent screenshots', async () => {
     const { store, server, newer } = await setup();
     for (let i = 0; i < 20; i += 1) {
