@@ -690,6 +690,7 @@
       "verdict": {
         "pending": "Sprawdzamy…",
         "waiting": "Oczekiwanie na weryfikację",
+        "unverified": "Brak wyniku weryfikacji",
         "green": "Zaliczony",
         "red": "Niezaliczony"
       },
@@ -719,6 +720,7 @@
       "crashed": "Build przerwany",
       "starting": "Sprawdzanie się zaczyna",
       "waiting": "Oczekiwanie na weryfikację",
+      "unverified": "Brak wyniku weryfikacji",
       "roundInProgress": "Runda w toku",
       "failed": "Sprawdzian niezaliczony",
       "passed": "Sprawdziany zaliczone",

@@ -684,6 +684,7 @@
       "verdict": {
         "pending": "Checking…",
         "waiting": "Awaiting verification",
+        "unverified": "No verification result",
         "green": "Passed",
         "red": "Failed"
       },
@@ -711,6 +712,7 @@
       "crashed": "Build interrupted",
       "starting": "Verification starting",
       "waiting": "Awaiting verification",
+      "unverified": "No verification result",
       "roundInProgress": "Round in progress",
       "failed": "Check failed",
       "passed": "Checks passed",

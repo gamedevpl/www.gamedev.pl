@@ -3,21 +3,10 @@ import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 import { publishedBuildVersion } from './stageCheckVerdict.js';
+import { deliveredPreview } from './studioPreviewDelivery.js';
 import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from './submissionApi.js';
 
-/**
- * Which build is on screen, and what to call it in the ribbon (`StudioVersionRibbon`).
- *
- * `at` is an epoch ms marking when this build was produced, read from a server
- * timestamp when the pipeline reports one (`previewGate.ranAt` for a PR preview,
- * `playable.createdAt` for a channel build) — comparing a preview and a channel build
- * needs a shared clock, or a preview loaded a while ago always looks "fresher" than a
- * channel build that just landed, even across a page reload (CE-12). Falls back to the
- * client's own observed-landing time only when the server does not report one (the
- * staged-preview pipeline's failures are silent by design; see
- * docs/studio-game-first-implementation-plan.md Workstream B2). `null` means unknown,
- * which the ribbon must render as "unknown" rather than guess.
- */
+// Freshness uses server clocks; see docs/studio-preview-source.md.
 export type StageOriginKind = 'staged' | 'delivered' | 'seed' | 'none';
 
 export type StageOrigin = {
@@ -37,7 +26,7 @@ export type StageSource = {
 
 const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
 
-// Shares the latest playable source between the stage and thread.
+// Sharing one source keeps the stage ribbon and thread in sync.
 export type UseStageSourceResult = StageSource & {
   pushPreview: (html: string) => void;
 };
@@ -52,9 +41,9 @@ export function useStageSource(
   options?: UseStageSourceOptions,
 ): UseStageSourceResult {
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
-  const deliveredPreview = status?.recentBuilds?.find((build) => build.version === status.progress?.headSha);
-  const deliveredPreviewVersion = deliveredPreview?.version;
-  const deliveredPreviewVerdict = deliveredPreview?.verdict;
+  const delivery = deliveredPreview(status);
+  const deliveredPreviewVersion = delivery?.version;
+  const deliveredPreviewVerdict = delivery?.verdict;
   const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{
@@ -162,7 +151,7 @@ export function useStageSource(
         if (cancelled || activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
         previewRetryRef.current = 0;
-        // Server timestamps keep preview and channel freshness comparable across reloads.
+        // CE-12: gate ranAt keeps preview/channel freshness comparable across reloads.
         const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
         setPreview({
           html: result.html,
@@ -173,6 +162,7 @@ export function useStageSource(
       .catch(() => {
         // Assembly can still be finishing; retain the previous playable document.
         if (cancelled || activeTokenRef.current !== requestToken) return;
+        // A transient assembly 409 must not mark this key loaded.
         if (previewRetryRef.current < 3) {
           previewRetryRef.current += 1;
           retryTimer = window.setTimeout(() => {
@@ -308,6 +298,7 @@ export function useStageSource(
       : showChannel
         ? channel!.html
         : (preview?.html ?? channel?.html ?? published?.html ?? null);
+  // Every source shares the same locale preparation and embedding path.
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;

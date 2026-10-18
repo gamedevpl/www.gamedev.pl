@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act, createElement, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { SubmissionStatus } from '../../submissionApi.js';
@@ -45,6 +45,7 @@ function status(version: string, verdict: 'pending' | 'green' | 'red'): Submissi
 }
 
 function probe() {
+  const committedSelections: Array<string | null> = [];
   let latest!: {
     selected: string | null;
     select: (version: string | null) => void;
@@ -54,6 +55,9 @@ function probe() {
     const [selected, select] = useStudioPreviewSelection(token, status);
     const source = useStageSource(token, status, { selectedPreviewVersion: selected });
     latest = { selected, select, source };
+    useLayoutEffect(() => {
+      committedSelections.push(selected);
+    });
     return null;
   }
   const host = document.createElement('div');
@@ -62,6 +66,7 @@ function probe() {
   unmounts.push(() => root.unmount());
   return {
     latest: () => latest,
+    committedSelections,
     render: async (status: SubmissionStatus, token = 'token') => {
       await act(async () => {
         root.render(createElement(Probe, { token, status }));
@@ -81,7 +86,9 @@ it('switches from the selected old build to the new build when it passes', async
   await view.render(status('new', 'pending'));
   expect(view.latest().selected).toBe('old');
 
+  view.committedSelections.length = 0;
   await view.render(status('new', 'green'));
+  expect(view.committedSelections).not.toContain('old');
   expect(view.latest().selected).toBeNull();
   expect(view.latest().source.origin.version).toBe('new');
   expect(view.latest().source.rawHtml).toBe('<p>new</p>');
@@ -100,7 +107,9 @@ it('preserves historical selection after a failed build and resets it on a game 
   expect(view.latest().selected).toBe('old');
   expect(view.latest().source.origin.version).toBe('old');
 
+  view.committedSelections.length = 0;
   await view.render(status('other', 'green'), 'other-token');
+  expect(view.committedSelections).not.toContain('old');
   expect(view.latest().selected).toBeNull();
   expect(view.latest().source.origin.version).toBe('other');
 });

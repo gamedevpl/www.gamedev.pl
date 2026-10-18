@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isBuildLive, newestBuildIsCurrentRound } from '../../buildLive.js';
+import { isAwaitingVerification, isBuildLive, newestBuildIsCurrentRound } from '../../buildLive.js';
+import { deliveredPreview } from '../../studioPreviewDelivery.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
-import { mergeBuildHistory } from './studioBuildHistoryModel.js';
+import { buildHistoryVerdict, mergeBuildHistory } from './studioBuildHistoryModel.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 import './studio-build-history.css';
 import './studio-credentials.css';
@@ -53,7 +54,7 @@ export function StudioBuildHistory({
 
   const live = isBuildLive(status);
   const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
-  const waiting = !live && head?.verdict === 'pending' && newestBuildIsCurrentRound(builds, status);
+  const waiting = isAwaitingVerification(status, head);
   const liveKey = live ? (playingPending ? 'livePlaying' : 'live') : waiting ? 'waiting' : 'idle';
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
@@ -164,13 +165,12 @@ export function StudioBuildHistory({
       <ul className="studio-build-history-list">
         {showLiveRoundRow ? <StudioLiveRoundRow status={status} emptyLabel={t('studioPanel.rail.buildEmpty')} /> : null}
         {displayedBuilds.map((build, index) => {
-          const verdict = build.verdict === 'pending' && !live ? 'waiting' : build.verdict;
+          const verdict = buildHistoryVerdict(status, build);
           const isExpanded = expandedBuildVersion === build.version;
           const isPreviewing = activePreviewVersion === build.version;
-          const canPreview = Boolean(
-            onSelectPreviewVersion &&
-            (build.verdict !== 'pending' || (status.preview && status.progress?.headSha === build.version)),
-          );
+          const canPreview =
+            Boolean(onSelectPreviewVersion) &&
+            (build.verdict !== 'pending' || deliveredPreview(status)?.version === build.version);
           const isReverting = revertingVersion === build.version;
 
           return (

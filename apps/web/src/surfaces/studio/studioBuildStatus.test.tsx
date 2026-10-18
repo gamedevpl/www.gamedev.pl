@@ -34,7 +34,6 @@ afterEach(() => {
 const ENDED_BUT_GATING = {
   status: 'building',
   phase: 'submitted',
-  gateProgress: { lane: 'publish', stage: 'preparing', index: 0, total: 12, at: '2026-08-21T17:40:01.000Z' },
   stall: 'ended',
   agentEndedAt: '2026-08-21T17:40:00.000Z',
   recentBuilds: [{ version: 'v9', createdAt: '2026-08-21T17:40:00.000Z', mode: 'publish', verdict: 'pending' }],

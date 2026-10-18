@@ -791,9 +791,12 @@ version before starting the gate. A pending verdict does not prevent the creator
 playing that artifact. The client pins delivered-preview requests to that version and
 supersedes requests for older heads, including late responses. Each new head gets its own
 bounded retry budget. A stored candidate alone does not prove that its gate started.
-After agent `end` or a stall, Studio shows an unanimated "Awaiting verification" until
-the gate reports progress, which then takes precedence over the agent's stall. This
-also covers Cloud Build refusing creation and acceptance without a returned build ID.
+A `submitted` round normally reports agent `end` before its first gate milestone;
+Studio keeps "Verification starting" during that window. The server's `gate_not_started`
+stall ends that optimistic state. A stored preview in phase `building` with an ended or
+quiet agent instead shows unanimated "Awaiting verification". Actual gate progress
+takes precedence over either stall. Cloud Build refusing creation and acceptance without
+a returned build ID remain supported outcomes.
 
 Selecting a historical build lasts until the newest successful version changes. When a
 new delivery passes, Studio returns to the live preview automatically; choosing history

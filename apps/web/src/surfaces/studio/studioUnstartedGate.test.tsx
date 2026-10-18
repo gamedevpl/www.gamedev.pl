@@ -55,7 +55,7 @@ it.each(['ended', 'quiet', 'gate_not_started'] as const)(
     expect(host.querySelector('.studio-build-history-dot.is-live')).toBeNull();
     expect(host.querySelector('.studio-build-history-verdict')?.textContent).toBe('Awaiting verification');
     expect(host.querySelector('.studio-build-history-playing')?.textContent).toContain('Playing');
-    expect(isBuildLive({ ...status, phase: 'submitted' })).toBe(false);
+    expect(isBuildLive({ ...status, phase: 'submitted' })).toBe(stall !== 'gate_not_started');
     expect(
       isBuildLive({
         ...status,

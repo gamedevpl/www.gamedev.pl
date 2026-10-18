@@ -362,10 +362,10 @@ export function CreatorStudioView({
     if (theaterOpen) setShareMenuOpen(false);
   }, [theaterOpen]);
 
-  // First resolution honors Play links; later game switches start in Watch.
+  // Game switches reset per-game state, including any historical preview selection.
   useEffect(() => {
     if (!stageToken) return;
-    setActivePreviewVersion(null);
+    // First resolution honors Play links; later game switches start in Watch.
     const deepLinkPlay = !firstStageTokenAppliedRef.current && initialSelectedPostureRef.current === 'play';
     firstStageTokenAppliedRef.current = true;
     setPosture(deepLinkPlay ? 'play' : 'watch');
@@ -377,7 +377,7 @@ export function CreatorStudioView({
     setChatDraft(null);
     seenActivityRef.current = 0;
     latestActivityRef.current = null;
-  }, [stageToken, setActivePreviewVersion]);
+  }, [stageToken]);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
     ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)

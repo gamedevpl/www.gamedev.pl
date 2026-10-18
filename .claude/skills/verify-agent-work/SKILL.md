@@ -192,6 +192,11 @@ A stored candidate with a pending verdict is not evidence of a running gate. Exe
 Cloud Build refusing creation and the agent subsequently ending or going quiet: neither
 Studio surface should animate a check indefinitely. Actual gate progress outranks the
 agent stall; acceptance without a build ID must remain a supported outcome too.
+Keep the normal submitted-before-first-milestone fixture without `gateProgress`: successful
+submit sets `agentEndedAt`, so `ended` alone must not disable that starting state. Only
+`gate_not_started` does. Adding progress to this fixture masks the regression. Also record
+committed selections before passive effects: an effect-based reset can briefly display
+history after a new build passes, even when the final state assertion succeeds.
 
 Two concrete instances of that (observed 2026-07-23):
 

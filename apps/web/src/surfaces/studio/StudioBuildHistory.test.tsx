@@ -255,7 +255,7 @@ describe('StudioBuildHistory', () => {
   });
 
   it('offers to seal only the current round build, by jobId — not by row position', async () => {
-    // Seal the token's round, even when a sibling sorts first.
+    // Slug history can lead with siblings; sealing targets this token's round.
     const { host, unmount } = await mount(
       {
         ...base,
@@ -282,7 +282,7 @@ describe('StudioBuildHistory', () => {
       'tok',
     );
 
-    // Only one row expands at a time.
+    // Expand sibling, then current round; only one row stays open.
     const summaries = host.querySelectorAll('.studio-build-history-summary');
     await act(async () => {
       (summaries[0] as HTMLElement).click();
