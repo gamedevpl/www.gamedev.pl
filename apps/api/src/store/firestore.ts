@@ -796,8 +796,8 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.buildMediaStore.deleteBuildShots(jobId, ids);
   }
 
-  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
-    return this.buildMediaStore.markReferenceSeen(jobId, shotCreatedAt);
+  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
+    return this.buildMediaStore.markReferenceSeen(jobId, shot);
   }
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {

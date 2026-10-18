@@ -129,7 +129,7 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       // Seen once the body is fully sent; a failed mark stays silent.
       if (reference) {
         reply.raw.once('finish', () => {
-          void store.markReferenceSeen(claim.jobId, shot.createdAt).catch(() => undefined);
+          void store.markReferenceSeen(claim.jobId, shot).catch(() => undefined);
         });
       }
       return reply

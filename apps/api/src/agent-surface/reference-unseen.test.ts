@@ -48,8 +48,18 @@ describe('reference_unseen', () => {
     expect(await lookup(7)).toBe(true);
     expect((await download(newer.id)).statusCode).toBe(200);
     expect(await lookup(7)).toBe(false);
-    await store.markReferenceSeen(7, older.createdAt);
+    await store.markReferenceSeen(7, older);
     expect((await store.getSubmission(7))?.referenceSeenAt).toBe(newer.createdAt);
+  });
+
+  it('still warns about an older named image after a newer one is downloaded', async () => {
+    const { store, older, newer, download } = await setup();
+    await store.setSubmissionPreviewVersion(7, 'v1');
+    const lookup = createReferenceLookup(store);
+    expect((await download(newer.id)).statusCode).toBe(200);
+    expect(await lookup(7)).toBe(true);
+    expect((await download(older.id)).statusCode).toBe(200);
+    expect(await lookup(7)).toBe(false);
   });
 
   it('ignores an image no pending note names once the game has a delivery', async () => {

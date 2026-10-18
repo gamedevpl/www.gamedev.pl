@@ -152,8 +152,9 @@ export interface SubmissionRecord {
    */
   agentEndedAt?: string;
   agentEndedBy?: AgentEndedBy;
-  // createdAt of the newest creator reference image an agent downloaded.
+  // Newest downloaded reference's createdAt, and downloaded ids (capped).
   referenceSeenAt?: string;
+  referenceSeenIds?: string[];
   // Round generation whose one unseen-reference delivery hold is spent.
   referenceHoldGeneration?: number;
   /**

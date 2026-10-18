@@ -1,5 +1,5 @@
 // reference_unseen: a creator image newer than any the agent downloaded.
-import type { Store } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { NudgeWarning } from './mcp-session-nudges.js';
 import { referenceShotIds } from './inbox-reference-images.js';
 import { channelControlFields, pendingMessagesFromChannel, type ChannelControlBody } from './mcp-tool-support.js';
@@ -14,6 +14,15 @@ export const REFERENCE_WRITE_TOOLS = new Set([
 
 export function referenceUnseen(newestAt: string | undefined, seenAt: string | undefined): boolean {
   return Boolean(newestAt && !(seenAt && seenAt >= newestAt));
+}
+
+// By id; older records fall back to the time mark.
+function referenceSeen(
+  record: Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenIds'>,
+  shot: { id: string; createdAt: string },
+): boolean {
+  if (record.referenceSeenIds) return record.referenceSeenIds.includes(shot.id);
+  return !referenceUnseen(shot.createdAt, record.referenceSeenAt);
 }
 
 export const REFERENCE_UNSEEN_WARNING: NudgeWarning = {
@@ -40,11 +49,7 @@ export function createReferenceLookup(
       const named = new Set(referenceShotIds(pending));
       const firstBuild = !record.deliveredVersion && !record.previewVersion;
       const relevant = shots.filter((shot, index) => named.has(shot.id) || (firstBuild && index === 0));
-      const newest = relevant
-        .map((shot) => shot.createdAt)
-        .sort()
-        .at(-1);
-      return referenceUnseen(newest, record.referenceSeenAt);
+      return relevant.some((shot) => !referenceSeen(record, shot));
     } catch {
       // A soft warning; a failed read must not fail the write.
       return false;

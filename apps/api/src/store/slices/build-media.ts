@@ -87,8 +87,8 @@ export interface BuildMediaStore {
   // Drops shots by id; a card that never posted leaves none.
   deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void>;
 
-  // An agent downloaded the reference image created at shotCreatedAt; never moves back.
-  markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void>;
+  // An agent downloaded this reference image; the time mark never moves back.
+  markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void>;
   // True once per round generation: the caller holds that round's delivery.
   claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean>;
 
@@ -131,10 +131,10 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return { ...record };
   }
 
-  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
+  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
     const job = this.submissions?.get(jobId);
-    if (!job || (job.referenceSeenAt && job.referenceSeenAt >= shotCreatedAt)) return;
-    this.submissions!.set(jobId, { ...job, referenceSeenAt: shotCreatedAt });
+    if (!job) return;
+    this.submissions!.set(jobId, { ...job, ...referenceSeenPatch(job, shot) });
   }
 
   async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
@@ -275,12 +275,11 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   }
 
   // Overlapping downloads commit in any order; the mark only moves forward.
-  async markReferenceSeen(jobId: number, shotCreatedAt: string): Promise<void> {
+  async markReferenceSeen(jobId: number, shot: { id: string; createdAt: string }): Promise<void> {
     await this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
-      const seen = (job.data() as SubmissionRecord | undefined)?.referenceSeenAt;
-      if (!job.exists || (seen && seen >= shotCreatedAt)) return;
-      transaction.update(this.jobRef(jobId), { referenceSeenAt: shotCreatedAt });
+      if (!job.exists) return;
+      transaction.update(this.jobRef(jobId), referenceSeenPatch(job.data() as SubmissionRecord, shot));
     });
   }
 
@@ -450,4 +449,19 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 // Only the current round may claim, and the marker never moves back.
 function holdClaimable(record: SubmissionRecord, roundGeneration: number): boolean {
   return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
+}
+
+const MAX_SEEN_REFERENCE_IDS = 64;
+
+// Time mark moves forward only; the id joins a capped list.
+function referenceSeenPatch(
+  record: SubmissionRecord,
+  shot: { id: string; createdAt: string },
+): Pick<SubmissionRecord, 'referenceSeenAt' | 'referenceSeenIds'> {
+  const seenAt = record.referenceSeenAt;
+  const ids = (record.referenceSeenIds ?? []).filter((id) => id !== shot.id);
+  return {
+    referenceSeenAt: seenAt && seenAt >= shot.createdAt ? seenAt : shot.createdAt,
+    referenceSeenIds: [...ids, shot.id].slice(-MAX_SEEN_REFERENCE_IDS),
+  };
 }
