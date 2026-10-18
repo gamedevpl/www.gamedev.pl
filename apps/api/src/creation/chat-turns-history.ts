@@ -26,8 +26,8 @@ export function reconstructChatTurns(messages: readonly CreatorMessage[]): ChatT
   let turns: ChatTurn[] = [];
   let pending: { text: string; origin?: 'agent' } | null = null;
   for (const message of messages) {
-    // A concept card answers nothing, so it must not become a reply.
-    if (message.proposal) continue;
+    // Concept and offer cards answer nothing, so neither becomes a reply.
+    if (message.proposal || message.dreamsOffer) continue;
     if (message.origin === 'studio') {
       turns = flushPending(turns, pending, { reply: message.text });
       pending = null;

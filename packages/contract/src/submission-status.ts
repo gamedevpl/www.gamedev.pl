@@ -42,6 +42,8 @@ export interface CreatorRevision {
   delivered?: boolean;
   // Present on a studio row that carries a visual proposal (NP-1v).
   proposal?: CreatorProposal;
+  // A studio row asking whether to set up concept sketches.
+  dreamsOffer?: true;
 }
 
 // Stored form; the translation pair is stripped before the wire.

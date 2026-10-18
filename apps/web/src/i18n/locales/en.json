@@ -1147,6 +1147,13 @@
       "holdHint": "Or press and hold the picture to see your game.",
       "dreaming": "Sketching two directions for the next round…"
     },
+    "dreamsOffer": {
+      "yes": "Yes, set it up",
+      "no": "No, thanks",
+      "accepted": "Okay — the builder will add a gameplay screenshot in the next round, and sketches start after that.",
+      "declined": "Okay — no sketches for this game. You can turn them on in the game panel, under Overview.",
+      "failed": "Could not save your answer. Try again."
+    },
     "gallery": {
       "alt": "The game as it looks right now",
       "caption": "How your game looks right now",

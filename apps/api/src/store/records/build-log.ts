@@ -35,6 +35,8 @@ export interface CreatorMessage {
   locale?: string;
   // A studio row carrying a visual proposal (NP-1v); frames are shots.
   proposal?: CreatorProposal;
+  // A studio row asking whether to set up concept sketches.
+  dreamsOffer?: true;
 }
 
 /** @see CreatorMessage.origin */

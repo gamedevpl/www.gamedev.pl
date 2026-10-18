@@ -38,7 +38,7 @@ describe('per-game dreaming switch', () => {
   it('is on by default and the owner can turn it off and back on', async () => {
     const { app, store } = await setup();
     const get = () => app.inject({ method: 'GET', url: '/api/me/games/neon/dreams', headers: owner });
-    expect((await get()).json()).toEqual({ on: true, accountMuted: false });
+    expect((await get()).json()).toEqual({ on: true, wanted: false, accountMuted: false });
 
     const off = await app.inject({
       method: 'PUT',
@@ -46,11 +46,12 @@ describe('per-game dreaming switch', () => {
       headers: owner,
       payload: { on: false },
     });
-    expect(off.json()).toEqual({ on: false, accountMuted: false });
+    expect(off.json()).toEqual({ on: false, wanted: false, accountMuted: false });
     expect(await store.getGameDreamsOffAt('neon')).toBe('2026-10-18T10:00:00.000Z');
 
     await app.inject({ method: 'PUT', url: '/api/me/games/neon/dreams', headers: owner, payload: { on: true } });
-    expect((await get()).json()).toEqual({ on: true, accountMuted: false });
+    // Switching on is a yes: a missing capture plan is owed.
+    expect((await get()).json()).toEqual({ on: true, wanted: true, accountMuted: false });
     expect(await store.getGameDreamsOffAt('neon')).toBeNull();
   });
 
@@ -58,7 +59,7 @@ describe('per-game dreaming switch', () => {
     const { app, store } = await setup();
     await store.setProposalsMuted('g:owner', '2026-10-01T00:00:00Z');
     const res = await app.inject({ method: 'GET', url: '/api/me/games/neon/dreams', headers: owner });
-    expect(res.json()).toEqual({ on: true, accountMuted: true });
+    expect(res.json()).toEqual({ on: true, wanted: false, accountMuted: true });
   });
 
   it('answers 404 to anyone but the owner, 401 without a session, 400 on a bad body', async () => {
@@ -83,5 +84,22 @@ describe('per-game dreaming switch', () => {
       payload: { on: 'no' },
     });
     expect(bad.statusCode).toBe(400);
+  });
+
+  it('answers the thread offer: yes asks the builder, no turns sketches off', async () => {
+    const { app, store } = await setup();
+    const offer = (want: unknown) =>
+      app.inject({ method: 'POST', url: '/api/me/games/neon/dreams/offer', headers: owner, payload: { want } });
+    expect((await offer(true)).json()).toEqual({ on: true, wanted: true, accountMuted: false });
+    expect(await store.getGameDreamsWantedAt('neon')).toBe('2026-10-18T10:00:00.000Z');
+    expect((await offer(false)).json()).toEqual({ on: false, wanted: true, accountMuted: false });
+    expect((await offer('maybe')).statusCode).toBe(400);
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/neon/dreams/offer',
+      headers: { 'x-test-uid': 'g:other' },
+      payload: { want: true },
+    });
+    expect(other.statusCode).toBe(404);
   });
 });

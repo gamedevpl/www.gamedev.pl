@@ -168,6 +168,8 @@ export type ChannelControlBody = {
     mustFixGate?: string;
     mustDeliver?: string;
   };
+  // Sketches wanted, yet the delivery has no CAPTURE.json.
+  captureMissing?: boolean;
 };
 
 function stopFromChannel(body: ChannelControlBody): {
@@ -200,6 +202,15 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
         'Nothing has been delivered for this build yet; staged files and pushed branches are not deliveries. ' +
         'submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) delivers a draft (mode: "publish" ' +
         'seals and needs TRACE.json + PLAYTEST.json); a session without one produces nothing.',
+    });
+  }
+  if (body.captureMissing === true) {
+    warnings.push({
+      code: 'capture_plan_missing',
+      message:
+        'The creator asked for concept sketches, but this delivery has no CAPTURE.json, so the gate takes no ' +
+        'gameplay screenshot. Stage a CAPTURE.json that reaches real play and takes { "capture": "gameplay" }, ' +
+        'then submit again.',
     });
   }
   return warnings;
@@ -262,6 +273,7 @@ export const WARNINGS_PROP = {
             'byte_budget_low',
             'reference_unseen',
             'inbox_unacked',
+            'capture_plan_missing',
           ],
         },
         message: { type: 'string' },

@@ -28,6 +28,8 @@ export async function harness(params: {
   record?: Partial<SubmissionRecord>;
   limits?: { dreamsPaused?: boolean; globalDailyDreamCap?: number };
   log?: DreamJobDeps['log'];
+  // Source files of the delivered version; a capture plan by default.
+  sources?: Record<string, string | null>;
 }) {
   const store = new InMemoryStore();
   if (params.limits) await store.setCreationLimits(params.limits, 'g:boss');
@@ -57,7 +59,10 @@ export async function harness(params: {
   const waits: number[] = [];
   const deps: DreamJobDeps = {
     store,
-    gamesStore: { getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null },
+    gamesStore: {
+      getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null,
+      getSourceFile: async (_slug, _version, path) => ({ 'CAPTURE.json': '{}', ...params.sources })[path] ?? null,
+    },
     availability: createDreamAvailabilityGate({ store }),
     ideas: ideaGenerator,
     frames,

@@ -3,12 +3,12 @@ import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { CreatorProposal } from '@gamedevpl/contract';
 import type { BuildEvent } from '../../platform/submission-status.js';
-import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
+import type { CreatorMessage } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
 import { ownsDreamClaim, type DreamClaimRef } from './round-budget.js';
-import { newCreatorMessage } from './creator-message.js';
+import { newCreatorMessage, type CreatorMessageWrite } from './creator-message.js';
 import {
   clearPendingInboxFlag,
   hasPendingInbox,
@@ -56,17 +56,7 @@ export interface BuildLogStore {
   countBuildEvents(jobId: number): Promise<number>;
 
   // Queues a creator change request; `delivered` skips the inbox.
-  appendCreatorMessage(
-    jobId: number,
-    text: string,
-    opts?: {
-      origin?: CreatorMessageOrigin;
-      delivered?: boolean;
-      textLocalized?: string;
-      locale?: string;
-      proposal?: CreatorProposal;
-    },
-  ): Promise<CreatorMessage>;
+  appendCreatorMessage(jobId: number, text: string, opts?: CreatorMessageWrite): Promise<CreatorMessage>;
 
   // Posts only into the round and claim it was drawn for.
   appendProposalMessage(
@@ -193,17 +183,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     return this.buildEvents.get(jobId)?.length ?? 0;
   }
 
-  async appendCreatorMessage(
-    jobId: number,
-    text: string,
-    opts?: {
-      origin?: CreatorMessageOrigin;
-      delivered?: boolean;
-      textLocalized?: string;
-      locale?: string;
-      proposal?: CreatorProposal;
-    },
-  ): Promise<CreatorMessage> {
+  async appendCreatorMessage(jobId: number, text: string, opts?: CreatorMessageWrite): Promise<CreatorMessage> {
     const record = newCreatorMessage(text, opts);
     const existing = this.creatorMessages.get(jobId) ?? [];
     existing.push(record);
@@ -358,17 +338,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     return snap.data().count;
   }
 
-  async appendCreatorMessage(
-    jobId: number,
-    text: string,
-    opts?: {
-      origin?: CreatorMessageOrigin;
-      delivered?: boolean;
-      textLocalized?: string;
-      locale?: string;
-      proposal?: CreatorProposal;
-    },
-  ): Promise<CreatorMessage> {
+  async appendCreatorMessage(jobId: number, text: string, opts?: CreatorMessageWrite): Promise<CreatorMessage> {
     const record = newCreatorMessage(text, opts);
     const messageRef = this.messagesCollection(jobId).doc(record.id);
     if (!queuesCreatorInbox(opts)) {

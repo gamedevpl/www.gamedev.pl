@@ -16,6 +16,7 @@ import {
   verifyReferenceImageToken,
 } from './reference-image-url.js';
 import { VISUAL_TARGET_SHOT_LABEL } from '../platform/dream-shots.js';
+import { captureNoticeFor } from './capture-notice.js';
 
 // Round brief and creator-attached reference images the agent starts from.
 export interface AgentChannelBriefRoutesDeps {
@@ -24,6 +25,8 @@ export interface AgentChannelBriefRoutesDeps {
     reply: FastifyReply,
   ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   store: Store | undefined;
+  // Reads CAPTURE.json for the sketches notice; absent means no notice.
+  gamesStore?: { getSourceFile(slug: string, version: string, path: string): Promise<string | null> };
   // Signs the download URLs; without it the list stays inline only.
   agentTokenSecret?: string;
   now?: () => number;
@@ -59,6 +62,7 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
         constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
         locales: briefLocales(record.locale),
         ...seed,
+        ...(await captureNoticeFor(store, deps.gamesStore, record)),
         dispatchAttempt: await dispatchAttempt(store!, record),
         pendingMessages: pending.map((message) => ({
           id: message.id,

@@ -827,7 +827,13 @@ export class FirestoreStore extends OAuthFacade implements Store {
   async appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      dreamsOffer?: true;
+    },
   ): Promise<CreatorMessage> {
     return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
   }
@@ -1533,6 +1539,18 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async setGameDreamsOffAt(slug: string, at: string | null): Promise<void> {
     return this.contributionStore.setGameDreamsOffAt(slug, at);
+  }
+
+  async getGameDreamsWantedAt(slug: string): Promise<string | null> {
+    return this.contributionStore.getGameDreamsWantedAt(slug);
+  }
+
+  async setGameDreamsWantedAt(slug: string, at: string | null): Promise<void> {
+    return this.contributionStore.setGameDreamsWantedAt(slug, at);
+  }
+
+  async claimGameDreamsOffer(slug: string, at: string | null): Promise<boolean> {
+    return this.contributionStore.claimGameDreamsOffer(slug, at);
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {

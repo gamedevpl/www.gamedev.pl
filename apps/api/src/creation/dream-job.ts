@@ -18,6 +18,7 @@ import type { DreamFrame, DreamFrameGenerator, DreamFrameRequest } from './dream
 import { fitDreamSource, scaleHudRegions } from '../platform/dream-source.js';
 import { hudCoverage, PURE_UI_COVERAGE, type HudRegionsReader } from './hud-regions.js';
 import { dreamHistory } from './dream-history.js';
+import { CAPTURE_PLAN_FILE, offerDreamsSetup } from './dream-offer.js';
 import type { NextIdea, NextIdeaGenerator } from './next-ideas.js';
 import { currentOwnerUid, gameOwnerUid } from '../platform/game-access-resolve.js';
 
@@ -43,6 +44,7 @@ export type DreamOutcome =
   | 'muted'
   | 'no_capacity'
   | 'no_screenshot'
+  | 'no_capture'
   | 'pure_ui'
   | 'no_ideas'
   | 'no_frames'
@@ -68,7 +70,10 @@ export interface DreamLog {
 
 export interface DreamJobDeps {
   store: Store;
-  gamesStore: { getDerivedArtifact(slug: string, version: string, name: string): Promise<Buffer | null> };
+  gamesStore: {
+    getDerivedArtifact(slug: string, version: string, name: string): Promise<Buffer | null>;
+    getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
+  };
   availability: DreamAvailabilityGate;
   ideas: NextIdeaGenerator;
   frames: DreamFrameGenerator;
@@ -217,6 +222,11 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     };
     let halt = await stopped();
     if (halt) return halt;
+    // No capture plan means no still: ask the owner, once.
+    if (record.slug && !screenshotPath && !(await gamesStore.getSourceFile(record.slug, version, CAPTURE_PLAN_FILE))) {
+      await offerDreamsSetup(store, record, new Date(now()).toISOString());
+      return 'no_capture';
+    }
     if (!record.slug || !screenshotPath) return 'no_screenshot';
 
     const fitted = fitDreamSource(await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath));

@@ -1157,6 +1157,13 @@
       "holdHint": "Albo przytrzymaj obrazek, aby zobaczyć swoją grę.",
       "dreaming": "Szkicuję dwa kierunki na następną rundę…"
     },
+    "dreamsOffer": {
+      "yes": "Tak, przygotuj",
+      "no": "Nie, dziękuję",
+      "accepted": "Dobrze — w następnej rundzie builder doda zrzut rozgrywki, a potem zaczną się szkice.",
+      "declined": "OK — bez szkiców w tej grze. Włączysz je w panelu gry, w zakładce Przegląd.",
+      "failed": "Nie udało się zapisać odpowiedzi. Spróbuj ponownie."
+    },
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
       "caption": "Tak wygląda teraz Twoja gra",

@@ -2100,10 +2100,15 @@ export async function registerAgentChannelRoutes(
         }
 
         const fresh = store ? ((await store.getSubmission(jobId)) ?? record) : record;
+        const captureMissing =
+          !files.some((file) => file.path === 'CAPTURE.json') &&
+          Boolean(await store?.getGameDreamsWantedAt(slug).catch(() => null)) &&
+          !(await store?.getGameDreamsOffAt(slug).catch(() => null));
         return reply.send({
           accepted: true,
           mode,
           delivery: { slug, version },
+          ...(captureMissing ? { captureMissing: true } : {}),
           // True when Cloud Build accepted the create (build id and/or accepted:true).
           // False only when the trigger was missing or failed — not when the id was
           // unparseable from an otherwise successful create.
@@ -2295,7 +2300,7 @@ export async function registerAgentChannelRoutes(
     return imageSize(source);
   }
 
-  registerAgentChannelBriefRoutes(app, { resolveBuild, store, agentTokenSecret, now });
+  registerAgentChannelBriefRoutes(app, { resolveBuild, store, gamesStore: options.gamesStore, agentTokenSecret, now });
 
   registerAgentChannelProposalRoutes(app, {
     resolveBuild,
