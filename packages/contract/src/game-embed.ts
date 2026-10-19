@@ -419,8 +419,7 @@ const BRIDGE = `(function(){
   function init(){
     scheduleGameCanvasFit();
     // Bleed games reshape the bitmap after their own resize debounce; follow it.
-    var g=el('game');
-    if(g&&'MutationObserver'in window){new MutationObserver(fitGameCanvas).observe(g,{attributes:true,attributeFilter:['width','height']});}
+    var g=el('game');if(g&&'MutationObserver'in window){new MutationObserver(fitGameCanvas).observe(g,{attributes:true,attributeFilter:['width','height']});}
     sendMeta();
     var s=el('sound-toggle');
     if(s&&'MutationObserver'in window){new MutationObserver(sendSound).observe(s,{attributes:true,attributeFilter:['aria-pressed']});}
@@ -432,7 +431,6 @@ const BRIDGE = `(function(){
   }
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
   // Handle for the agent script, which cannot share this closure.
-
   // Grants the game nothing: it can already post, capture and stop itself.
   window.__GDPL_BRIDGE__={
     post:post,el:el,text:text,setPaused:setPaused,capturePng:capturePng,
