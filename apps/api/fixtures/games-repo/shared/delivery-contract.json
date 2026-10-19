@@ -19,7 +19,7 @@
   ],
   "extraModulePattern": "^[a-z0-9][a-z0-9/-]{0,60}\\.ts$",
   "reservedSegments": ["shared", "tools", "games", "node_modules", "dist", "references", "templates"],
-  "maxFiles": 200,
+  "maxFiles": 300,
   "maxUploadBytes": 2097152,
   "_notDelivered": "media/ is produced by the site's capture harness from the sources delivered here, so it is refused rather than uploaded. TRACE.json is the one entry above that is not source in the ordinary sense: the gate replays CAPTURE.json against the upstream engine and diffs against it, which is what proves the game behaves the same on our engine as it did on yours."
 }

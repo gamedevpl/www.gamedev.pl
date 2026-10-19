@@ -137,8 +137,8 @@ export const GAME_BUDGET_BYTES = 1404 * 1024;
 // 1593 → 2390 KiB: stay above ink-and-fury's expanded author budget.
 export const SOURCE_GRAPH_BUDGET_BYTES = 2390 * 1024;
 
-// Raw TypeScript source-graph module ceiling (github-client, seed-bundle).
-export const MAX_SOURCE_GRAPH_MODULES = 256;
+// Headroom for 300 delivered files plus shared simulation imports.
+export const MAX_SOURCE_GRAPH_MODULES = 512;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
@@ -305,7 +305,7 @@ export const DELIVERY_CONTRACT_VERSION = 1;
 export { DELIVERY_EXTRA_MODULE_PATTERN, DELIVERY_FIXED_FILES, DELIVERY_RESERVED_SEGMENTS } from '@gamedevpl/contract';
 
 /** Cap on files per delivery. */
-export const DELIVERY_MAX_FILES = 200;
+export const DELIVERY_MAX_FILES = 300;
 
 /** Total bytes one delivery may carry. */
 export const DELIVERY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

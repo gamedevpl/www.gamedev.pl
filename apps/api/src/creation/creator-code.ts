@@ -387,10 +387,10 @@ export async function registerCreatorCodeRoutes(
     agentAuthored: z.boolean().optional(),
   });
 
-  /** PUT /api/me/studio/games/:slug/sources/stage (CE-10) — the owner twin of the agent channel's stage route. */
+  // Owner staging shares the agent upload's correction headroom.
   app.put<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage',
-    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
@@ -457,7 +457,7 @@ export async function registerCreatorCodeRoutes(
   // Owner twin of the agent channel delete route (CE-10).
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/delete',
-    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
@@ -545,7 +545,7 @@ export async function registerCreatorCodeRoutes(
   /** POST /api/me/studio/games/:slug/sources/stage/patch (CE-10). */
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/patch',
-    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {

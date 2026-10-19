@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { embedGameHtml } from './gamePlayer.js';
 
-/*
- * jsdom is a devDependency here but ships no types, and the surface this file uses is
- * three members wide — cheaper to state than to take on `@types/jsdom` for one test.
- */
 type FrameWindow = Record<string, unknown> & {
   addEventListener(type: 'message', listener: (event: MessageEvent) => void): void;
   close(): void;
@@ -14,17 +10,7 @@ type JsdomOptions = { runScripts: 'dangerously'; pretendToBeVisual: boolean; bef
 // @ts-expect-error - jsdom ships no type declarations and this repo does not install them.
 const { JSDOM } = (await import('jsdom')) as { JSDOM: new (html: string, options: JsdomOptions) => JsdomLike };
 
-/*
- * The bridge ships as a source string injected into an opaque-origin game document, so
- * it is the one part of the player that no type-checker and no import graph can reach.
- * These tests run the document `embedGameHtml` actually produces, in a JSDOM that
- * executes scripts the way a browser does, and read what it posts.
- *
- * What it reports is the game's own account of its controls — the input the How-to-play
- * card trusts first. If the scraper silently stops finding rows, the card quietly falls
- * back to a catalog string that is English-only and absent on a deep link, and nothing
- * else in the suite would notice.
- */
+// Exercise the complete injected document, including its initial control report.
 
 type Posted = { type?: string; rows?: unknown; kit?: unknown; hint?: unknown };
 

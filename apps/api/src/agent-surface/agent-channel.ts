@@ -1368,18 +1368,11 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * File-by-file staging before a delivery.
-   *
-   * MCP clients (Claude Chat especially) often fail mid-serialization when emitting a
-   * huge `files[]` in one tool call. Staging lets them PUT one path at a time into a
-   * job-scoped buffer, then finalize with `fromStaged=true` — the gate still sees one
-   * assembled upload; only the wire shape changes.
-   */
+  // Staging leaves a second full pass for edits and retries.
   app.put(
     AGENT_CHANNEL_ROUTES.SOURCES_STAGE,
     {
-      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } },
       bodyLimit: 1_500_000,
     },
     async (request, reply) => {
@@ -1477,7 +1470,7 @@ export async function registerAgentChannelRoutes(
   app.put(
     AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD,
     {
-      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } },
       bodyLimit: 1_000_000 + 1024,
     },
     async (request, reply) => {
@@ -1582,7 +1575,7 @@ export async function registerAgentChannelRoutes(
   app.post(
     AGENT_CHANNEL_ROUTES.SOURCES_STAGE_PATCH,
     {
-      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } },
       bodyLimit: 500_000,
     },
     async (request, reply) => {
@@ -1867,7 +1860,7 @@ export async function registerAgentChannelRoutes(
    */
   app.post(
     AGENT_CHANNEL_ROUTES.SOURCES_STAGE_DELETE,
-    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: DELIVERY_MAX_FILES * 2, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;

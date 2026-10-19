@@ -17,10 +17,7 @@ const BRIDGE = `(function(){
   }
   function sendSound(){post({type:'sound',muted:isMuted()});}
   // --- controls (job 7) -------------------------------------------------------
-  // Everything below reads the game's *own* account of its controls and hands it to
-  // the host, which has no other way to get one: it hides this document's chrome and
-  // cannot see into an opaque origin. Three sources, best first. All of it is
-  // agent-authored text — the host validates and renders it as text, never as markup.
+  // The host validates agent-authored controls as text across the opaque origin.
   function text(node){return node?String(node.textContent||'').replace(/\\s+/g,' ').trim():'';}
   /** The shell's how-to-play popup: already a dt/dd key→action table, already localized. */
   function legendRows(){
