@@ -88,7 +88,7 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).not.toContain('do not call `get_sources`');
-    expect(lines).toContain('If it is not eng_new');
+    expect(lines).toContain('Submit with kitEngineRef eng_new');
     expect(lines).toMatch(/delete the kit directory.*npm ci --ignore-scripts` again/);
   });
 
@@ -112,7 +112,8 @@ describe('workspace kickoff', () => {
     const prompt = buildPrompt(brief, { shell: true, workspace, mountedSources: true });
     expect(prompt).toContain('start from the files already in `games/rocks/`');
     expect(prompt).toContain('do not call `get_sources`');
-    expect(prompt).toContain('then call `get_brief`, `read_inbox`, `creator_notes` (sessionKey only), and `get_kit`');
+    expect(prompt).toContain('2. `get_brief`, `read_inbox` and `creator_notes` (sessionKey only).');
+    expect(prompt).toContain('no `get_kit` call is needed');
     expect(prompt).not.toContain('Call `get_sources` before deciding anything');
     expect(buildPrompt(brief, { shell: true, workspace })).toContain('Call `get_sources` before deciding anything');
   });

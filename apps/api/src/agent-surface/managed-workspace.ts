@@ -91,7 +91,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   return [
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
-    `Call \`get_kit\` only for kitEngineRef. If it is not ${workspace.engineRef}, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
+    `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
   ];
 }

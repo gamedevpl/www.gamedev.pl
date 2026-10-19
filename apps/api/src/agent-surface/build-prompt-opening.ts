@@ -40,3 +40,16 @@ function undeliveredRequest(brief: BuildBrief): string {
     ? 'take the request from “What the creator asked for” below, which no tool can return'
     : 'take the request from `get_brief` and `read_inbox` together, reading `get_transcript` when the latest message is terse';
 }
+
+// A mounted workspace names the kit, so get_kit is not a read.
+export function openingSteps(brief: BuildBrief, workspace: boolean, mountedSources: boolean): string[] {
+  const reads = ['`get_brief`', '`read_inbox`', '`creator_notes` (sessionKey only)'];
+  if (!mountedSources) reads.push('`get_sources`');
+  if (!workspace) reads.push('`get_kit`');
+  return [
+    'Before your first edit, in this order:',
+    `1. \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
+    `2. ${reads.slice(0, -1).join(', ')} and ${reads.at(-1)}.`,
+    '3. One short `report_progress`, in the creator’s language, of what you will change.',
+  ];
+}
