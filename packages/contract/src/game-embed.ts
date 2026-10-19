@@ -17,10 +17,7 @@ const BRIDGE = `(function(){
   }
   function sendSound(){post({type:'sound',muted:isMuted()});}
   // --- controls (job 7) -------------------------------------------------------
-  // Everything below reads the game's *own* account of its controls and hands it to
-  // the host, which has no other way to get one: it hides this document's chrome and
-  // cannot see into an opaque origin. Three sources, best first. All of it is
-  // agent-authored text — the host validates and renders it as text, never as markup.
+  // The host validates agent-authored controls as text across the opaque origin.
   function text(node){return node?String(node.textContent||'').replace(/\\s+/g,' ').trim():'';}
   /** The shell's how-to-play popup: already a dt/dd key→action table, already localized. */
   function legendRows(){
@@ -38,7 +35,14 @@ const BRIDGE = `(function(){
     }
     return out;
   }
-  // Space and modifier keys need readable labels after whitespace normalization.
+  /**
+   * Keycaps, from the names GameKit reads keys by.
+   *
+   * Space arrives as " ", which survives a truthiness check but is whitespace — the host
+   * collapses and trims every reported field, so posting it raw loses the key entirely and
+   * "Space to fire" renders as an actionless row. The rest are lowercase internal names
+   * ("shift", "arrowup") that read as code rather than as something to press.
+   */
   var KEY_NAMES={' ':'Space',shift:'Shift',control:'Ctrl',alt:'Alt',meta:'Meta',enter:'Enter',
     escape:'Esc',tab:'Tab',backspace:'Backspace',arrowup:'Up',arrowdown:'Down',
     arrowleft:'Left',arrowright:'Right'};

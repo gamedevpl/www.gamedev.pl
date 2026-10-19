@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { embedGameHtml } from './gamePlayer.js';
 
-// Declare jsdom's small test surface locally; it ships without types.
 type FrameWindow = Record<string, unknown> & {
   addEventListener(type: 'message', listener: (event: MessageEvent) => void): void;
   close(): void;
@@ -11,7 +10,7 @@ type JsdomOptions = { runScripts: 'dangerously'; pretendToBeVisual: boolean; bef
 // @ts-expect-error - jsdom ships no type declarations and this repo does not install them.
 const { JSDOM } = (await import('jsdom')) as { JSDOM: new (html: string, options: JsdomOptions) => JsdomLike };
 
-// Execute the injected document to catch bridge and control-scraping regressions.
+// Exercise the complete injected document, including its initial control report.
 
 type Posted = { type?: string; rows?: unknown; kit?: unknown; hint?: unknown };
 
