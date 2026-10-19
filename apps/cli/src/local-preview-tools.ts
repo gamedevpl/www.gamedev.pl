@@ -6,12 +6,13 @@ import { formatError } from './errors.js';
 import type { AgentTask } from 'genaicode/agents';
 import type { ApproveTool } from './agent-approval.js';
 
-export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture_game({viewport: "desktop"}) (or "mobile"), then capture_status({jobId}) for its returned jobId. Poll until complete or failed; the completed result contains a PNG: inspect it. The local CLI host runs the browser and capture server, outside your shell sandbox; these tools do not require sandbox escalation or npm run capture. Prefer them for local screenshots even when shell commands report listen EPERM or no browser tool is available. They never publish and capture only the current game's initial rendered state, not an interactive playtest or the Creator Kit's deterministic capture plan. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
+export const LOCAL_PREVIEW_INSTRUCTIONS = `Use gamedevpl_local MCP tools for visual verification: preview_status, then capture_game({viewport: "desktop"}) (or "mobile"), then capture_status({jobId}) for its returned jobId. Poll until complete or failed; the completed result contains a PNG: inspect it. The local CLI host runs the browser and capture server, outside your shell sandbox; these tools do not require sandbox escalation or npm run capture. Prefer them for local screenshots even when shell commands report listen EPERM or no browser tool is available. They never publish. Without mark or plan they capture the initial rendered state. To reach a named CAPTURE.json moment use capture_game({mark: "opening"}); read the current game's CAPTURE.json to discover names. For a custom view supply plan: {seed: 1, fps: 30, maxFrames: 300, script: [{press: {key: "ArrowRight", frames: 30}}, {wait: 10}]}. The same CAPTURE.json DSL supports keys, normalized pointers, assertions, waitFor and repeat, without arbitrary JavaScript. Inline plans start fresh and capture their final state unless mark is supplied; they do not edit CAPTURE.json. Failed assertions or missing marks are errors, never successful verification. capture_status includes the frozen plan hash and reached frame. Do not claim visual verification if they report an error. Capture after a meaningful visual change, not after every edit; each task has a budget of ${MAX_CAPTURES_PER_TASK} captures. A browser timeout is transient: retry once, then continue.`;
 
 export async function localPreviewTools(input: {
   spec: AdapterSpec;
   previewUrl?: string;
   captureBudget?: { used: number };
+  readCapturePlan?: () => unknown;
   abort: AbortSignal;
   write: (line: string) => void;
   progress?: (text: string, blocked: boolean) => void;

@@ -102,6 +102,13 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **A valid PNG does not prove that a game rendered.** The former local capture
+  waited 1.5 seconds after navigation. A 6.6 MB GameKit 3D document returned an
+  all-white PNG with no console errors because its frame had not loaded yet;
+  a small synchronous canvas fixture passed. Wait for document and renderer
+  readiness plus paint frames, and assert decoded screenshot pixels in the native
+  regression. Exercise a real GameKit game too.
+
 - **A Claude Bash permission prompt does not prove a sandbox escape.** With
   sandbox auto-allow enabled, variable-prefixed commands and content-scoped ask
   rules can still prompt. Test ordinary Bash through the real local MCP endpoint,
@@ -128,6 +135,14 @@ repo in the same session.
 - **Build the contract before bundling.** CLI telemetry imports runtime values from
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.
+
+- **Check bundle size immediately after adding a runtime dependency.** Run
+  `npm test -w @gamedevpl/cli -- src/bundle.test.ts` before the full gate. It runs
+  the built CLI and enforces the 4.5 MB bundle budget. Release bundling removes
+  whitespace while retaining identifiers and legal notices; keep the size guard
+  rather than raising it to accommodate an unoptimized dependency.
+  Run CLI prebuild, type-check, test and bundle commands sequentially: their
+  shared UI generator writes and deletes the same `play-shell.mjs` file.
 
 - **Local Play browser tests need the generated UI and TypeScript worker.** After
   `npm ci` and `npm run build:packages`, run `npm run prebuild -w @gamedevpl/cli`

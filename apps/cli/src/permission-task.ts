@@ -6,6 +6,7 @@ import { taskPermissions, type PermissionMode } from './agent-permissions.js';
 import { approvalEnv } from './agent-approval.js';
 import { childEnv } from './delegate.js';
 import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
+import { readGameCapturePlan } from './capture-scenario.js';
 import type { taskOutput } from './task-output.js';
 
 export function claudeAbsolutePath(path: string): string {
@@ -70,6 +71,7 @@ export async function runPermissionTask(
       sandbox: { permissions: permitted.permissions, cwd: input.cwd },
       previewUrl: input.previewUrl,
       captureBudget: input.captureBudget,
+      readCapturePlan: () => readGameCapturePlan(ws.root, ws.slug),
       abort: signal,
       write: input.write,
       progress: input.output.progress,

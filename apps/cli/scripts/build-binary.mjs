@@ -31,6 +31,7 @@ await build({
   format: 'esm',
   outfile: join(outDir, 'gamedevpl.mjs'),
   packages: 'bundle',
+  minifyWhitespace: true,
   define: { __CLI_VERSION__: JSON.stringify(version) },
   alias: {
     'react-devtools-core': join(root, 'scripts/empty-devtools.mjs'),

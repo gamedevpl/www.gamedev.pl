@@ -5,9 +5,9 @@ import { once } from 'node:events';
 import { expect, it } from 'vitest';
 import { captureBrowser } from './local-capture-browser.js';
 
-it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
-  'blocks peer connections in real capture documents',
-  async () => {
+it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1').each(['srcdoc', 'http'])(
+  'blocks peer connections in real capture documents (%s)',
+  async (mode) => {
     const udp = createSocket('udp4');
     let packets = 0;
     udp.on('message', () => packets++);
@@ -34,7 +34,10 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
     parent.postMessage({ captureProbe: true, blocked }, '*');
   `;
     const child = `<body style="background:#23aa77">Game capture<script>${probe}</script>`;
-    const html = `<!doctype html><body><script>
+    const html = `<!doctype html><html data-gamedev-capture><body><script>
+    window.__GAMEDEV_CAPTURE_READY__ = false;
+    window.__GAMEDEV_CAPTURE_RESULT__ = { frame: 0, snapshot: {} };
+    setTimeout(() => { window.__GAMEDEV_CAPTURE_READY__ = true; }, 1500);
     let childBlocked;
     addEventListener('message', event => {
       if (event.source === game.contentWindow && event.data.captureProbe) { childBlocked = event.data.blocked;
@@ -49,15 +52,16 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
     fresh.contentDocument.body.append(freshProbe);
     const game = document.createElement('iframe');
     game.setAttribute('sandbox', 'allow-scripts allow-pointer-lock');
-    game.srcdoc = ${JSON.stringify(child).replaceAll('<', '\\u003c')}; document.body.append(game);
+    ${mode === 'http' ? "game.src = '/game?capture=1&seed=1';" : `game.srcdoc = ${JSON.stringify(child).replaceAll('<', '\\u003c')};`}
+    document.body.append(game);
   </script>`;
-    const server = createHttpServer((_request, response) => {
+    const server = createHttpServer((request, response) => {
       response.setHeader('Content-Type', 'text/html');
       response.setHeader(
         'Content-Security-Policy',
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'self'; connect-src 'none'",
       );
-      response.end(html);
+      response.end(request.url === '/game?capture=1&seed=1' ? child : html);
     });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
@@ -66,6 +70,7 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
       if (!address || typeof address === 'string') throw new Error('Missing test listener');
       const result = await captureBrowser({
         url: `http://127.0.0.1:${address.port}`,
+        ...(mode === 'http' ? { gameUrl: `http://127.0.0.1:${address.port}/game?capture=1&seed=1` } : {}),
         viewport: 'desktop',
         signal: AbortSignal.timeout(45000),
       });

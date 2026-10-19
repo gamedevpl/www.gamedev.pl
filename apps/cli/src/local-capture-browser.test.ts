@@ -39,7 +39,9 @@ vi.mock('node:child_process', () => ({
             ? { sessionId: 'page' }
             : method === 'Page.captureScreenshot'
               ? { data: Buffer.from('89504e470d0a1a0a', 'hex').toString('base64') }
-              : {};
+              : method === 'Runtime.evaluate'
+                ? { result: { value: true } }
+                : {};
       queueMicrotask(() => emit({ id, result }));
     });
     return Object.assign(child, {

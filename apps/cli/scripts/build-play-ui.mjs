@@ -118,6 +118,22 @@ const preview = await build({
   outfile: 'preview.js',
   write: false,
 });
+const scenario = await build({
+  entryPoints: [join(root, 'browser/capture-scenario.ts')],
+  bundle: true,
+  minify: true,
+  platform: 'browser',
+  format: 'iife',
+  globalName: 'GAMEDEV_CAPTURE_SCENARIO',
+  target: 'es2022',
+  write: false,
+});
+await writeFile(
+  join(generated, 'capture-scenario.ts'),
+  'export const CAPTURE_SCENARIO_SCRIPT = ' +
+    JSON.stringify(scenario.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')) +
+    ';\n',
+);
 await writeFile(
   join(generated, 'play-ui.ts'),
   'export const PLAY_MARKUP = ' +

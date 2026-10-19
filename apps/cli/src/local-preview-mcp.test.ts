@@ -6,6 +6,7 @@ import { MAX_CAPTURES_PER_TASK, startLocalPreviewMcp } from './local-preview-mcp
 import { capturePage, previewSource } from './local-preview-source.js';
 import { localPreviewAdapter } from './local-preview-adapter.js';
 import { readFileSync, existsSync } from 'node:fs';
+import { PNG } from 'pngjs';
 import type { AdapterSpec } from './adapters.js';
 
 const cleanup: Array<() => Promise<unknown> | void> = [];
@@ -29,7 +30,7 @@ async function fixture() {
   const previewUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;
   return { state, revision, controller, previewUrl };
 }
-async function bridge(captureBudget?: { used: number }) {
+async function bridge(captureBudget?: { used: number }, readCapturePlan?: () => unknown) {
   const f = await fixture();
   const capture = vi.fn(async ({ url }: { url: string }) => {
     const response = await fetch(url);
@@ -37,7 +38,14 @@ async function bridge(captureBudget?: { used: number }) {
     expect(await response.text()).toContain('sandbox="allow-scripts allow-pointer-lock"');
     return { png: 'test-png', errors: ['test console error'] };
   });
-  const mcp = await startLocalPreviewMcp({ ...f, abort: f.controller.signal, write: vi.fn(), capture, captureBudget });
+  const mcp = await startLocalPreviewMcp({
+    ...f,
+    abort: f.controller.signal,
+    write: vi.fn(),
+    capture,
+    captureBudget,
+    readCapturePlan,
+  });
   cleanup.push(() => mcp.close());
   const rpc = async (method: string, params = {}, extra: Record<string, string> = {}) => {
     const response = await fetch(mcp.url, {
@@ -75,6 +83,37 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   expect(JSON.parse(result.content[0].text).consoleErrors).toEqual(['test console error']);
   expect(f.capture).toHaveBeenCalledWith(expect.objectContaining({ viewport: 'mobile' }));
 });
+
+it('validates marks and inline actions before spending the shared capture budget', async () => {
+  const budget = { used: 0 };
+  const f = await bridge(budget, () => ({ seed: 42, script: [{ capture: 'opening' }] }));
+  const typo = (await f.rpc('tools/call', { name: 'capture_game', arguments: { mark: 'typo' } })).data.result;
+  expect(typo.isError).toBe(true);
+  expect(typo.content[0].text).toContain('Available: opening');
+  const invalid = (
+    await f.rpc('tools/call', { name: 'capture_game', arguments: { plan: { script: [{ eval: 'exec()' }] } } })
+  ).data.result;
+  expect(invalid.isError).toBe(true);
+  expect(budget.used).toBe(0);
+  expect(f.capture).not.toHaveBeenCalled();
+  const started = (await f.rpc('tools/call', { name: 'capture_game', arguments: { mark: 'opening' } })).data.result;
+  const { jobId } = JSON.parse(started.content[0].text);
+  const status = await vi.waitFor(async () => {
+    const result = (await f.rpc('tools/call', { name: 'capture_status', arguments: { jobId } })).data.result;
+    const value = JSON.parse(result.content[0].text);
+    expect(value.state).toBe('complete');
+    return value;
+  });
+  expect(status.scenario).toMatchObject({
+    source: 'CAPTURE.json',
+    mark: 'opening',
+    seed: 42,
+    hash: expect.stringMatching(/^[a-f0-9]{64}$/),
+  });
+  expect(f.capture).toHaveBeenCalledWith(
+    expect.objectContaining({ gameUrl: expect.stringMatching(/\/game\?capture=1&seed=42$/) }),
+  );
+});
 it('rejects cross-origin, unauthenticated, arbitrary URL and shell requests', async () => {
   const f = await bridge();
   expect((await f.rpc('tools/list', {}, { Authorization: 'Bearer wrong' })).response.status).toBe(403);
@@ -93,7 +132,7 @@ it('rejects cross-origin, unauthenticated, arbitrary URL and shell requests', as
   const oversized = await fetch(f.mcp.url, {
     method: 'POST',
     headers: { Authorization: f.mcp.authorization, 'Content-Type': 'application/json' },
-    body: 'x'.repeat(9000),
+    body: 'x'.repeat(66_000),
   });
   expect(oversized.status).toBe(400);
 });
@@ -210,13 +249,17 @@ it('retains the capture budget after an approval server is replaced', async () =
 });
 
 it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
-  'returns a real rendered game image through capture_game',
+  'waits for a delayed GameKit renderer and returns painted pixels through capture_game',
   async () => {
     const f = await fixture();
-    f.state.html = `<!doctype html><body style="margin:0;background:#23aa77"><canvas width="960" height="600"></canvas><script>
+    f.state.html = `<!doctype html><body style="margin:0;background:white"><canvas width="960" height="600"></canvas><script>
+      window.__GAME_HARNESS__ = { ready: false };
+      setTimeout(() => {
       const context = document.querySelector('canvas').getContext('2d');
       context.fillStyle = '#23aa77'; context.fillRect(0, 0, 960, 600);
-      console.error('MCP_CAPTURE_GAME_RENDERED');
+      window.__GAME_HARNESS__.ready = true;
+      console.error('MCP_CAPTURE_GAME_RENDERED ' + document.compatMode);
+      }, 2300);
     </script></body>`;
     const mcp = await startLocalPreviewMcp({ previewUrl: f.previewUrl, abort: f.controller.signal, write: vi.fn() });
     cleanup.push(() => mcp.close());
@@ -242,10 +285,151 @@ it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1')(
     );
     const status = JSON.parse(result.content[0].text);
     expect(status.revision).toBe(f.revision());
-    expect(status.consoleErrors.join(' ')).toContain('MCP_CAPTURE_GAME_RENDERED');
+    expect(status.consoleErrors.join(' ')).toContain('MCP_CAPTURE_GAME_RENDERED CSS1Compat');
     const png = Buffer.from(result.content[1].data, 'base64');
     expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([960, 600]);
+    const pixels = PNG.sync.read(png);
+    const center = (Math.floor(pixels.height / 2) * pixels.width + Math.floor(pixels.width / 2)) * 4;
+    expect([...pixels.data.subarray(center, center + 4)]).toEqual([35, 170, 119, 255]);
   },
   60_000,
+);
+
+const scenarioGame = `<!doctype html><body style="margin:0"><canvas id="game" width="960" height="600"></canvas><script>
+  const query = new URLSearchParams(location.search);
+  const seed = Number(query.get('seed'));
+  const canvas = document.getElementById('game');
+  const context = canvas.getContext('2d');
+  let held = false, x = 0, frame = 0, clicks = 0;
+  addEventListener('keydown', event => { if (event.key === 'ArrowRight') held = true; });
+  addEventListener('keyup', () => { held = false; });
+  canvas.addEventListener('click', () => { clicks++; });
+  const h = window.__GAME_HARNESS__ = {
+    ready: true, captureMode: query.get('capture') === '1', metadata: {},
+    step(dt) { frame++; if (held) x++; h.paint(); },
+    paint() { h.metadata = { frame, x, clicks, seed, targetX: 480, targetY: 300 };
+      context.fillStyle = 'rgb(' + frame + ',' + x + ',' + seed + ')'; context.fillRect(0,0,960,600); }
+  };
+  h.paint();
+</script></body>`;
+
+it.runIf(process.env.GAMEDEV_CAPTURE_BROWSER_TEST === '1').each([
+  {
+    name: 'stored nested mark',
+    args: { mark: 'view' },
+    frame: 8,
+    x: 5,
+    seed: 42,
+    source: 'CAPTURE.json',
+    failure: false,
+  },
+  {
+    name: 'inline final state',
+    args: {
+      viewport: 'mobile',
+      plan: { seed: 17, script: [{ press: { key: 'ArrowRight', frames: 3 } }, { wait: 2 }] },
+    },
+    frame: 5,
+    x: 3,
+    seed: 17,
+    source: 'inline',
+    failure: false,
+  },
+  {
+    name: 'inline selected mark',
+    args: {
+      mark: 'custom',
+      plan: { seed: 13, script: [{ wait: 4 }, { capture: 'custom' }, { assert: { field: 'frame', equals: -1 } }] },
+    },
+    frame: 4,
+    x: 0,
+    seed: 13,
+    source: 'inline',
+    failure: false,
+  },
+  {
+    name: 'failed assertion',
+    args: { plan: { script: [{ assert: { field: 'frame', equals: 9 } }] } },
+    frame: 0,
+    x: 0,
+    seed: 1,
+    source: 'inline',
+    failure: true,
+  },
+  {
+    name: 'frame budget exhaustion',
+    args: { plan: { maxFrames: 2, script: [{ wait: 3 }] } },
+    frame: 0,
+    x: 0,
+    seed: 1,
+    source: 'inline',
+    failure: true,
+  },
+])(
+  'replays $name through MCP and real sandboxed Chrome',
+  async (test) => {
+    const f = await fixture();
+    f.state.html = scenarioGame;
+    const mcp = await startLocalPreviewMcp({
+      previewUrl: f.previewUrl,
+      abort: f.controller.signal,
+      write: vi.fn(),
+      readCapturePlan: () => ({
+        seed: 42,
+        fps: 30,
+        maxFrames: 30,
+        script: [
+          { tap: 'ArrowRight' },
+          { repeat: { times: 2, actions: [{ press: { key: 'ArrowRight', frames: 2 } }] } },
+          { click: { fromMetadata: { x: 'targetX', y: 'targetY' } } },
+          { assert: { field: 'clicks', equals: 1 } },
+          { waitFor: { field: 'frame', greaterThanOrEqual: 8, maxFrames: 5 } },
+          { repeat: { times: 2, actions: [{ capture: 'view' }, { wait: 1 }] } },
+          { assert: { field: 'frame', equals: -1 } },
+        ],
+      }),
+    });
+    cleanup.push(() => mcp.close());
+    const rpc = async (name: string, args: unknown) => {
+      const response = await fetch(mcp.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: mcp.authorization },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+      });
+      return (await response.json()).result;
+    };
+    const started = await rpc('capture_game', test.args);
+    expect(started.isError).toBeFalsy();
+    const { jobId } = JSON.parse(started.content[0].text);
+    const result = await vi.waitFor(
+      async () => {
+        const result = await rpc('capture_status', { jobId });
+        expect(['complete', 'failed']).toContain(JSON.parse(result.content[0].text).state);
+        return result;
+      },
+      { timeout: 85_000, interval: 100 },
+    );
+    const status = JSON.parse(result.content[0].text);
+    if (test.failure) {
+      expect(result.isError).toBe(true);
+      expect(status.error).toMatch(/assertion failed|exceeded maxFrames/);
+      expect(result.content).toHaveLength(1);
+      return;
+    }
+    expect(status.error).toBeUndefined();
+    expect(status.revision).toBe(f.revision());
+    expect(status.consoleErrors).toEqual([]);
+    expect(status.scenario).toMatchObject({
+      source: test.source,
+      seed: test.seed,
+      frame: test.frame,
+      snapshot: { frame: test.frame, x: test.x, seed: test.seed },
+    });
+    const pixels = PNG.sync.read(Buffer.from(result.content[1].data, 'base64'));
+    expect([pixels.width, pixels.height]).toEqual(test.args.viewport === 'mobile' ? [390, 844] : [960, 600]);
+    const center = (100 * pixels.width + 100) * 4;
+    expect([...pixels.data.subarray(center, center + 4)]).toEqual([test.frame, test.x, test.seed, 255]);
+  },
+  90_000,
 );
