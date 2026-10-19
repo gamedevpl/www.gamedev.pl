@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.55.0 — 2026-10-19
+
 ### Added
 
 - Local `capture_game` can replay a named `CAPTURE.json` mark or a custom inline plan before taking a screenshot, without editing the plan or publishing media (#1906).
