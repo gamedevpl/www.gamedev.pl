@@ -1,0 +1,82 @@
+/* Tile zoom and loading placeholders for visual CreatorQA questions. */
+
+.qa-option-cell {
+  position: relative;
+  display: grid;
+}
+
+.qa-option__zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(10, 14, 18, 0.72);
+  color: #fff;
+  cursor: zoom-in;
+}
+
+.qa-option__zoom:hover,
+.qa-option__zoom:focus-visible {
+  border-color: var(--turquoise, #00e4ac);
+}
+
+.qa-option__art--loading {
+  background: linear-gradient(100deg, #0b0f12 30%, #1c2329 50%, #0b0f12 70%) 0 0 / 200% 100%;
+  animation: qa-tile-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes qa-tile-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-option__art--loading {
+    animation: none;
+  }
+}
+
+.qa-tiles-status {
+  margin: 0 0 12px;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.9rem;
+}
+
+.qa-tile-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 8, 10, 0.88);
+  cursor: zoom-out;
+}
+
+.qa-tile-zoom__image {
+  max-width: min(100%, 1024px);
+  max-height: 100%;
+  border-radius: 12px;
+  cursor: default;
+}
+
+.qa-tile-zoom__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(10, 14, 18, 0.8);
+  color: #fff;
+  cursor: pointer;
+}
