@@ -123,6 +123,10 @@ renderer context's canvas when testing pixel scale. Match geometry assertions to
 current renderer while retaining the observation, purity and replay checks. Reproduce
 these failures on the unchanged base before attributing them to another PR.
 
+Non-root cloud containers may still require the games kit's documented `CI=1`
+browser mode. Preflight `check:webgl` with the final environment before a long
+catalog gate: changing environment variables invalidates its resume checkpoint.
+
 For colored CLI output, sanitize untrusted metadata before adding ANSI styling.
 Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrapping:
 stripping all controls after formatting removes intended colors as well.
