@@ -17,6 +17,13 @@ export function isRetryableVertexError(err: unknown): boolean {
   return RETRYABLE.test(`${name} ${message}`);
 }
 
+// A slow primary is usually slow again a moment later.
+function isTimeout(err: unknown): boolean {
+  const name = err instanceof Error ? err.name : '';
+  const message = err instanceof Error ? err.message : String(err);
+  return /abort|timed? ?out|deadline/i.test(`${name} ${message}`);
+}
+
 export interface ResilientCallOptions<T> {
   // Model (undefined = primary) and the budget left.
   attempt: (model: string | undefined, timeoutMs: number) => Promise<T>;
@@ -44,8 +51,11 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
   const shares = options.fallbackModel ? [0.45, 0.2, 0.35] : [0.6, 0.4, 0];
   let lastError: unknown = new Error('no attempt was made');
 
+  let skipRetry = false;
+
   for (const [index, model] of [undefined, undefined, options.fallbackModel].entries()) {
     if (index === 2 && !options.fallbackModel) break;
+    if (index === 1 && skipRetry) continue;
     const remaining = deadline - now();
     if (remaining <= 0) break;
     if (index > 0) await sleep(Math.min(retryDelayMs, Math.max(0, remaining)));
@@ -55,7 +65,8 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
     if (left <= 0) break;
 
     // A share, not the remainder: a stalling first attempt must leave room.
-    const budget = Math.max(1, Math.min(left, Math.floor(options.timeoutMs * shares[index]!)));
+    const share = index === 2 ? left : Math.floor(options.timeoutMs * shares[index]!);
+    const budget = Math.max(1, Math.min(left, share)); // The stand-in, last, gets the rest.
 
     try {
       options.onAttempt?.(model);
@@ -63,6 +74,8 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
     } catch (err) {
       lastError = err;
       if (!isRetryableVertexError(err)) break;
+      // Waiting out a slow primary twice starves the stand-in.
+      if (index === 0 && options.fallbackModel && isTimeout(err)) skipRetry = true;
     }
   }
 

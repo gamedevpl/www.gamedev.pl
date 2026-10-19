@@ -52,6 +52,48 @@ describe('surviving a moment of no capacity', () => {
     expect(models).toEqual([undefined, undefined, 'stand-in']);
   });
 
+  it('goes straight to the stand-in when the primary times out', async () => {
+    const models: (string | undefined)[] = [];
+    const budgets: number[] = [];
+    let clock = 0;
+    const value = await callWithVertexResilience({
+      timeoutMs: 1_000,
+      retryDelayMs: 0,
+      fallbackModel: 'stand-in',
+      now: () => clock,
+      sleepImpl: async (ms) => {
+        clock += ms;
+      },
+      attempt: async (model, timeoutMs) => {
+        models.push(model);
+        budgets.push(timeoutMs);
+        clock += model === undefined ? timeoutMs : 0;
+        if (model === undefined) throw Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
+        return 'ok';
+      },
+    });
+
+    expect(value).toBe('ok');
+    expect(models).toEqual([undefined, 'stand-in']);
+    // Last in line, the stand-in gets the rest.
+    expect(budgets).toEqual([450, 550]);
+  });
+
+  it('still retries a timed-out primary when there is no stand-in', async () => {
+    let attempts = 0;
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 200,
+        retryDelayMs: 0,
+        attempt: async () => {
+          attempts += 1;
+          throw new Error('request timed out');
+        },
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(attempts).toBe(2);
+  });
+
   it('stops at the primary when no stand-in is configured', async () => {
     let attempts = 0;
     await expect(
@@ -175,7 +217,7 @@ describe('the budget after sleeping', () => {
 
 // The stand-in exists for a primary that stalls to its deadline.
 describe('leaving room for the stand-in', () => {
-  it('reaches the fallback even when every primary attempt burns its whole share', async () => {
+  it('reaches the fallback even when the primary burns its whole share', async () => {
     const tried: (string | undefined)[] = [];
     let clock = 0;
     await callWithVertexResilience({
@@ -194,7 +236,8 @@ describe('leaving room for the stand-in', () => {
       },
     });
 
-    expect(tried).toEqual([undefined, undefined, 'stand-in']);
+    // A stall skips the retry.
+    expect(tried).toEqual([undefined, 'stand-in']);
   });
 
   it('never hands one attempt the whole budget when a stand-in is configured', async () => {
