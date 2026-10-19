@@ -114,6 +114,16 @@ describe('CreatorQA option images', () => {
     expect(document.querySelectorAll('.qa-option__art--loading')).toHaveLength(3);
     expect(document.querySelector('.qa-tiles-status')).not.toBeNull();
     expect(document.querySelector<HTMLButtonElement>('.qa-next')?.disabled).toBe(true);
+
+    // Enter in the free-text field must not slip past the hold.
+    const heading = document.querySelector('.qa-title')?.textContent;
+    await act(async () => {
+      document
+        .querySelector('.qa-custom-input input')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await flushEffects();
+    });
+    expect(document.querySelector('.qa-title')?.textContent).toBe(heading);
   });
 
   it('stops holding once the wait runs out, leaving plain options', async () => {

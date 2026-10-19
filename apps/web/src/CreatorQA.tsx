@@ -508,7 +508,8 @@ export function CreatorQA({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        goTo(stepIndex + 1);
+                        // Same hold as the disabled Next button.
+                        if (!tilesPending) goTo(stepIndex + 1);
                       }
                     }}
                   />
