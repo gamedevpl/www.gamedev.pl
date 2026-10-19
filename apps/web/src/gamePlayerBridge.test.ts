@@ -279,4 +279,12 @@ describe('embedded canvas sizing', () => {
     );
     expect(html).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
   });
+
+  it('refits when the game reshapes its canvas after a resize', () => {
+    const html = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
+
+    expect(html).toContain(
+      "new MutationObserver(fitGameCanvas).observe(g,{attributes:true,attributeFilter:['width','height']})",
+    );
+  });
 });
