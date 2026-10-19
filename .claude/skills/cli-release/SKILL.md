@@ -136,6 +136,14 @@ repo in the same session.
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.
 
+- **Check bundle size immediately after adding a runtime dependency.** Run
+  `npm test -w @gamedevpl/cli -- src/bundle.test.ts` before the full gate. It runs
+  the built CLI and enforces the 4.5 MB bundle budget. Release bundling removes
+  whitespace while retaining identifiers and legal notices; keep the size guard
+  rather than raising it to accommodate an unoptimized dependency.
+  Run CLI prebuild, type-check, test and bundle commands sequentially: their
+  shared UI generator writes and deletes the same `play-shell.mjs` file.
+
 - **Local Play browser tests need the generated UI and TypeScript worker.** After
   `npm ci` and `npm run build:packages`, run `npm run prebuild -w @gamedevpl/cli`
   before `npm run e2e:play-code -w @gamedevpl/e2e`. Keep these fixtures in their own
