@@ -14,9 +14,11 @@ import {
 
 const BRIEF = { jobId: 9, slug: 'rocks', spec: 's', channelToken: 't', apiBaseUrl: 'https://x' } as BuildBrief;
 
+const pin = vi.fn(async (_jobId: number, ref: string) => ref);
+
 function deps(record: object | null, objects: Record<string, string>): ManagedWorkspaceDeps {
   return {
-    store: { getSubmission: async () => record } as unknown as ManagedWorkspaceDeps['store'],
+    store: { getSubmission: async () => record, pinRoundKitEngineRef: pin } as unknown as ManagedWorkspaceDeps['store'],
     gamesStore: {
       getManifest: async () => ({ sourceFiles: ['game.ts', 'GAME.json'] }),
       getSourceFile: async (_slug: string, _version: string, path: string) => `// ${path}`,
@@ -38,6 +40,7 @@ describe('managed workspace loader', () => {
     const load = createManagedWorkspaceLoader(deps({ slug: 'rocks', previewVersion: 'v3' }, KITS));
     const workspace = await load(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
+    expect(pin).toHaveBeenCalledWith(9, 'eng_new', false);
     expect(workspace?.slug).toBe('rocks');
     expect(workspace?.delivered).toBe(true);
     expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);

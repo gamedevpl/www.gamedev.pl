@@ -45,7 +45,7 @@ export class ManagedWorkspaceError extends ManagedAgentError {
 }
 
 export interface ManagedWorkspaceDeps {
-  store: Pick<Store, 'getSubmission'> & Parameters<typeof loadRoundSources>[0];
+  store: Pick<Store, 'getSubmission' | 'pinRoundKitEngineRef'> & Parameters<typeof loadRoundSources>[0];
   gamesStore: GamesStore;
   objectStore: Pick<GcsObjectStore, 'readObject'>;
   log: SourcesLog;
@@ -66,6 +66,9 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const engineRef = pinnedKit ? pinned! : current;
     const kit = pinnedKit ?? (await deps.objectStore.readObject(`kits/${current}.tgz`));
     if (!kit) return null;
+    // Pinned as get_kit would, so stage advisories know the kit.
+    const replace = outdated || (pinned !== undefined && pinned !== engineRef);
+    await deps.store.pinRoundKitEngineRef(brief.jobId, engineRef, replace).catch(() => null);
     const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }];
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
     if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, archives };
