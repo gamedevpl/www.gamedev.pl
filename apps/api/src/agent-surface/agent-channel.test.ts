@@ -1382,7 +1382,7 @@ describe('agent build channel', () => {
             files,
             totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
             maxBytes: 2 * 1024 * 1024,
-            maxFiles: 200,
+            maxFiles: 300,
             updatedAt: '2026-08-03T23:00:00.000Z',
           };
         },
@@ -1395,7 +1395,7 @@ describe('agent build channel', () => {
             files,
             totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
             maxBytes: 2 * 1024 * 1024,
-            maxFiles: 200,
+            maxFiles: 300,
             updatedAt: '2026-08-03T23:00:00.000Z',
           };
         },
@@ -1405,7 +1405,7 @@ describe('agent build channel', () => {
             files,
             totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
             maxBytes: 2 * 1024 * 1024,
-            maxFiles: 200,
+            maxFiles: 300,
             updatedAt: files.length ? '2026-08-03T23:00:00.000Z' : null,
           };
         },
@@ -3261,7 +3261,7 @@ describe('seed regeneration', () => {
         files,
         totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
         maxBytes: 2 * 1024 * 1024,
-        maxFiles: 200,
+        maxFiles: 300,
         updatedAt: files.length ? '2026-08-13T08:00:00.000Z' : null,
       }),
     } as unknown as GamesStore;

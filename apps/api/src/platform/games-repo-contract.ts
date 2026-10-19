@@ -305,7 +305,7 @@ export const DELIVERY_CONTRACT_VERSION = 1;
 export { DELIVERY_EXTRA_MODULE_PATTERN, DELIVERY_FIXED_FILES, DELIVERY_RESERVED_SEGMENTS } from '@gamedevpl/contract';
 
 /** Cap on files per delivery. */
-export const DELIVERY_MAX_FILES = 200;
+export const DELIVERY_MAX_FILES = 300;
 
 /** Total bytes one delivery may carry. */
 export const DELIVERY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

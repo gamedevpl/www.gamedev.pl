@@ -44,7 +44,7 @@ function fakeGamesStore(deliveries: SourceFile[][]): GamesStore {
         files: [...staged].map(([path, content]) => ({ path, bytes: Buffer.byteLength(content) })),
         totalBytes: [...staged.values()].reduce((sum, content) => sum + Buffer.byteLength(content), 0),
         maxBytes: 2 * 1024 * 1024,
-        maxFiles: 200,
+        maxFiles: 300,
         updatedAt: '2026-08-20T00:00:00.000Z',
       };
     },
