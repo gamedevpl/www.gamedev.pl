@@ -38,14 +38,7 @@ const BRIDGE = `(function(){
     }
     return out;
   }
-  /**
-   * Keycaps, from the names GameKit reads keys by.
-   *
-   * Space arrives as " ", which survives a truthiness check but is whitespace — the host
-   * collapses and trims every reported field, so posting it raw loses the key entirely and
-   * "Space to fire" renders as an actionless row. The rest are lowercase internal names
-   * ("shift", "arrowup") that read as code rather than as something to press.
-   */
+  // Space and modifier keys need readable labels after whitespace normalization.
   var KEY_NAMES={' ':'Space',shift:'Shift',control:'Ctrl',alt:'Alt',meta:'Meta',enter:'Enter',
     escape:'Esc',tab:'Tab',backspace:'Backspace',arrowup:'Up',arrowdown:'Down',
     arrowleft:'Left',arrowright:'Right'};

@@ -426,7 +426,7 @@
     "apps/web/src/gamePlayer.bridge.test.ts": 334,
     "apps/web/src/gamePlayer.hiddenFrame.test.tsx": 97,
     "apps/web/src/gamePlayer.ts": 854,
-    "apps/web/src/gamePlayerBridge.test.ts": 528,
+    "apps/web/src/gamePlayerBridge.test.ts": 385,
     "apps/web/src/gameSave.test.tsx": 281,
     "apps/web/src/gameSave.ts": 756,
     "apps/web/src/gameSaveApi.ts": 186,
