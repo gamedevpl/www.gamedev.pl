@@ -95,12 +95,13 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   const game = workspace.slug
     ? `the round's current files of this game in \`games/${workspace.slug}/\``
     : 'an empty `games/` — write the files `get_sources` returns into `games/<slug>/`';
+  const remount = `move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again`;
   return [
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
     workspace.kitOutdated
-      ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once, then submit with kitEngineRef ${workspace.engineRef}.`
-      : `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
+      ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`
+      : `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, ${remount}.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
   ];
 }

@@ -77,7 +77,9 @@ describe('managed workspace loader', () => {
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
     expect(pin).toHaveBeenLastCalledWith(9, 'eng_new', true);
     expect(workspace?.kitOutdated).toBe(true);
-    expect(workspaceKickoff('/mnt', workspace!).join('\n')).toContain('call `get_kit` once, then submit');
+    expect(workspaceKickoff('/mnt', workspace!).join('\n')).toMatch(
+      /call `get_kit` once\. If its kitEngineRef is not eng_new, move `games\/` aside.*Submit with get_kit's kitEngineRef/,
+    );
   });
 
   it('mounts nothing when the kit is not published', async () => {
