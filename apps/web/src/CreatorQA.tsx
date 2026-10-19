@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
 import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
+import { CreatorQAOptions } from './CreatorQAOptions.js';
 import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { CreatorQAReviewList } from './CreatorQAReviewList.js';
@@ -157,7 +158,7 @@ export function CreatorQA({
     [questions],
   );
 
-  const optionImages = useOptionImages(questions, initialConcept);
+  const { images: optionImages, loading: tilesLoading } = useOptionImages(questions, initialConcept);
 
   // Guards against a restored session pointing past the end of a shorter question list.
   const stepIndex = Math.min(step, stages.length - 1);
@@ -165,6 +166,8 @@ export function CreatorQA({
   const reviewIndex = stages.length - 1;
 
   const questionArt = stage.kind === 'question' ? pickQuestionArt(optionImages, stage.question) : undefined;
+  // Held until its tiles arrive or the wait runs out.
+  const tilesPending = stage.kind === 'question' && !questionArt && tilesLoading.has(stage.question.id);
 
   // Counts the funnel step, not the tiles: recordCreateStep fires once per visit.
   useEffect(() => {
@@ -481,36 +484,14 @@ export function CreatorQA({
               </h2>
               <p className="qa-stage-lede">{stage.question.multiple ? t('qa.pickSeveral') : t('qa.pickOneOrSkip')}</p>
 
-              <div className={`qa-options${questionArt ? ' qa-options--art' : ''}`}>
-                {stage.question.options.map((opt) => {
-                  // Stays lit while free text is typed: the two are now one answer,
-                  // and un-highlighting the option was how the old behaviour hid itself.
-                  const isSelected = (selectedAnswers[stage.question.id] ?? []).includes(opt.label);
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      // Selection lived only in a class, so a screen reader announced
-                      // every option identically whether or not it was chosen.
-                      aria-pressed={isSelected}
-                      className={`qa-option${isSelected ? ' qa-option--selected' : ''}${
-                        stage.question.multiple ? ' qa-option--multi' : ''
-                      }`}
-                      disabled={submitting}
-                      onClick={() => handleSelectOption(stage.question, opt.label)}
-                    >
-                      {questionArt && (
-                        <img className="qa-option__art" src={questionArt[opt.label]} alt="" loading="lazy" />
-                      )}
-                      <span className="qa-option__tick" aria-hidden="true" />
-                      <span className="qa-option__text">
-                        <span className="qa-option__label">{opt.label}</span>
-                        {opt.detail && <span className="qa-option__detail">{opt.detail}</span>}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <CreatorQAOptions
+                question={stage.question}
+                selected={selectedAnswers[stage.question.id] ?? []}
+                submitting={submitting}
+                art={questionArt}
+                artLoading={tilesPending}
+                onSelect={(label) => handleSelectOption(stage.question, label)}
+              />
 
               {stage.question.allowFreeText !== false && (
                 <div className="qa-custom-input">
@@ -631,7 +612,10 @@ export function CreatorQA({
             }`}
             onClick={() => goTo(stepIndex + 1)}
             disabled={
-              submitting || (stage.kind === 'name' && !titleReady) || (stage.kind === 'builder' && builderBlocked)
+              submitting ||
+              tilesPending ||
+              (stage.kind === 'name' && !titleReady) ||
+              (stage.kind === 'builder' && builderBlocked)
             }
           >
             {nextLabel()} <PixelIcon name="arrowRight" size={12} />

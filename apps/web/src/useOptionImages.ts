@@ -13,20 +13,48 @@ export interface OptionImageQuestion {
 // Question id, then option label, then the tile's data URI.
 export type OptionImageMap = Record<string, Record<string, string>>;
 
-// A refine returns zero, one or two visual questions.
-export function useOptionImages(questions: OptionImageQuestion[], concept: string): OptionImageMap {
-  const [images, setImages] = useState<OptionImageMap>({});
+export interface OptionImageState {
+  images: OptionImageMap;
+  // Visual questions whose tiles are still on their way.
+  loading: ReadonlySet<string>;
+}
 
-  // Keyed on ids so a re-render does not refetch.
-  const visualIds = questions
+// The wizard holds a visual question at most this long.
+export const TILE_WAIT_MS = 30_000;
+
+function visualIdsOf(questions: OptionImageQuestion[]): string {
+  return questions
     .filter((question) => question.visual && question.options.length > 0)
     .map((question) => question.id)
     .join('|');
+}
+
+// A refine returns zero, one or two visual questions.
+export function useOptionImages(questions: OptionImageQuestion[], concept: string): OptionImageState {
+  const [images, setImages] = useState<OptionImageMap>({});
+
+  // Keyed on ids so a re-render does not refetch.
+  const visualIds = visualIdsOf(questions);
+
+  // Seeded loading, so a visual question never opens unheld.
+  const [loading, setLoading] = useState<ReadonlySet<string>>(() => new Set(visualIds ? visualIds.split('|') : []));
 
   useEffect(() => {
     if (!visualIds) return;
     const controller = new AbortController();
     const wanted = questions.filter((question) => visualIds.split('|').includes(question.id));
+    setLoading(new Set(wanted.map((question) => question.id)));
+
+    const settle = (id: string) =>
+      setLoading((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
+    // Late tiles still land; the wizard just stops waiting.
+    const giveUp = setTimeout(() => setLoading(new Set()), TILE_WAIT_MS);
 
     // Started on mount: generation finishes before the creator arrives.
     for (const question of wanted) {
@@ -38,14 +66,20 @@ export function useOptionImages(questions: OptionImageQuestion[], concept: strin
             [question.id]: Object.fromEntries(tiles.map((tile) => [tile.label, tile.image])),
           }));
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          if (!controller.signal.aborted) settle(question.id);
+        });
     }
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      clearTimeout(giveUp);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visualIds, concept]);
 
-  return images;
+  return { images, loading };
 }
 
 // All or nothing: illustrating a subset would make those options look preferred.

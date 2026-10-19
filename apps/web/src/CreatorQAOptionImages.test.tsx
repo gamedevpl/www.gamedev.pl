@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OptionImage } from './optionImagesApi.js';
 import { CreatorQA } from './CreatorQA.js';
+import { TILE_WAIT_MS } from './useOptionImages.js';
 import i18n from './i18n/index.js';
 
 const { fetchOptionImages } = vi.hoisted(() => ({
@@ -103,5 +104,72 @@ describe('CreatorQA option images', () => {
 
     expect(fetchOptionImages).toHaveBeenCalledTimes(1);
     expect(fetchOptionImages.mock.calls[0]?.[0]?.question).toBe('What visual style fits best?');
+  });
+
+  it('holds the question with placeholders while its tiles are drawn', async () => {
+    fetchOptionImages.mockReturnValue(new Promise<OptionImage[]>(() => undefined));
+
+    await renderAtQuestion(VISUAL_QUESTION);
+
+    expect(document.querySelectorAll('.qa-option__art--loading')).toHaveLength(3);
+    expect(document.querySelector('.qa-tiles-status')).not.toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('.qa-next')?.disabled).toBe(true);
+  });
+
+  it('stops holding once the wait runs out, leaving plain options', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchOptionImages.mockReturnValue(new Promise<OptionImage[]>(() => undefined));
+      await renderAtQuestion(VISUAL_QUESTION);
+
+      await act(async () => {
+        vi.advanceTimersByTime(TILE_WAIT_MS);
+        await flushEffects();
+      });
+
+      expect(document.querySelectorAll('.qa-option__art--loading')).toHaveLength(0);
+      expect(document.querySelector<HTMLButtonElement>('.qa-next')?.disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets the creator move on when no tiles come back', async () => {
+    fetchOptionImages.mockResolvedValue([]);
+
+    await renderAtQuestion(VISUAL_QUESTION);
+
+    expect(document.querySelector('.qa-tiles-status')).toBeNull();
+    expect(document.querySelector<HTMLButtonElement>('.qa-next')?.disabled).toBe(false);
+  });
+
+  it('enlarges a tile without selecting its option, and closes on Escape', async () => {
+    fetchOptionImages.mockResolvedValue([
+      { label: 'Pixel Art', image: 'data:image/webp;base64,AAA' },
+      { label: 'Neon Arcade', image: 'data:image/webp;base64,BBB' },
+      { label: 'Flat 2D', image: 'data:image/webp;base64,CCC' },
+    ]);
+    await renderAtQuestion(VISUAL_QUESTION);
+
+    const zoom = document.querySelectorAll<HTMLButtonElement>('.qa-option__zoom')[1];
+    await act(async () => {
+      zoom?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(document.querySelector<HTMLImageElement>('.qa-tile-zoom__image')?.getAttribute('src')).toBe(
+      'data:image/webp;base64,BBB',
+    );
+    expect(document.querySelector('.qa-option--selected')).toBeNull();
+
+    await act(async () => {
+      document
+        .querySelector('.qa-tile-zoom')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(document.querySelector('.qa-tile-zoom')).toBeNull();
+    expect(document.activeElement).toBe(zoom);
   });
 });

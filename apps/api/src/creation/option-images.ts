@@ -31,8 +31,8 @@ export const DEFAULT_OPTION_IMAGE_BASE_URL = 'https://api.openai.com/v1';
 // OpenAI flare measured 16-19s per tile.
 export const DEFAULT_OPTION_IMAGE_TIMEOUT_MS = 30_000;
 
-// 480px measured at 68-83KB for three tiles.
-export const OPTION_IMAGE_WIDTH = 480;
+// The full 1024px frame, so the zoom view stays sharp.
+export const OPTION_IMAGE_WIDTH = 1024;
 
 // A survey with more tiles stops being scannable.
 export const MAX_OPTION_IMAGES = 4;
@@ -109,7 +109,7 @@ export class ImagesApiOptionImageGenerator implements OptionImageGenerator {
         model: this.options.model,
         prompt: buildPrompt(params, option),
         n: 1,
-        // Low is indistinguishable at 480px and half the price of medium.
+        // Low looked clean at full size in testing; medium costs twice.
         quality: 'low',
         // The wizard crops to 4:3; a square loses the HUD.
         size: '1024x768',
