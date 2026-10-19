@@ -117,6 +117,12 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
+before dynamically importing modules that read it at initialization, and include the
+renderer context's canvas when testing pixel scale. Match geometry assertions to the
+current renderer while retaining the observation, purity and replay checks. Reproduce
+these failures on the unchanged base before attributing them to another PR.
+
 For colored CLI output, sanitize untrusted metadata before adding ANSI styling.
 Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrapping:
 stripping all controls after formatting removes intended colors as well.
