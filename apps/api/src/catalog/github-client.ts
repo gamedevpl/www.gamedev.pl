@@ -1324,8 +1324,29 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         return [soundName, `data:${mime};base64,${Buffer.from(mp3Bytes).toString('base64')}`];
       };
 
+      const bundleStartedAt = Date.now();
+      const transpiledSources = [coreJs, ...availableModuleSources];
+      const gameJs = await bundleGameTypeScript(
+        publishTs ?? gameTs,
+        ref,
+        slug,
+        overrides,
+        undefined,
+        options,
+        publishTs === null ? 'game.ts' : 'publish.ts',
+      );
+      const bundleMs = Date.now() - bundleStartedAt;
+
+      // publish.ts is a slice of the game: GAME.json still lists every sound the full
+      // game plays, so embed only the ones the served code names as a string literal.
+      const reachable = publishTs === null ? null : [gameJs, ...transpiledSources].join('\n');
+      const sounds =
+        reachable === null
+          ? manifest.sounds
+          : manifest.sounds.filter((name) => ['"', "'", '`'].some((q) => reachable.includes(`${q}${name}${q}`)));
+
       const audioStartedAt = Date.now();
-      const audioAssets = await Promise.all(manifest.sounds.map(resolveSoundAsset));
+      const audioAssets = await Promise.all(sounds.map(resolveSoundAsset));
       const audioMs = Date.now() - audioStartedAt;
       if (audioAssets.some((asset) => asset === null)) {
         return null;
@@ -1399,18 +1420,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
-      const bundleStartedAt = Date.now();
-      const transpiledSources = [coreJs, ...availableModuleSources];
-      const gameJs = await bundleGameTypeScript(
-        publishTs ?? gameTs,
-        ref,
-        slug,
-        overrides,
-        undefined,
-        options,
-        publishTs === null ? 'game.ts' : 'publish.ts',
-      );
-      const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;
