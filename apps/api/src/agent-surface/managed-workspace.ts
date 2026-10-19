@@ -31,6 +31,8 @@ export interface ManagedWorkspace {
   slug?: string;
   // A seed still needs get_sources for its references and notes.
   delivered?: boolean;
+  // The last verdict was kit_outdated; get_kit marks the refresh.
+  kitOutdated?: boolean;
   archives: ManagedWorkspaceArchive[];
 }
 
@@ -45,7 +47,7 @@ export class ManagedWorkspaceError extends ManagedAgentError {
 }
 
 export interface ManagedWorkspaceDeps {
-  store: Pick<Store, 'getSubmission'> & Parameters<typeof loadRoundSources>[0];
+  store: Pick<Store, 'getSubmission' | 'pinRoundKitEngineRef'> & Parameters<typeof loadRoundSources>[0];
   gamesStore: GamesStore;
   objectStore: Pick<GcsObjectStore, 'readObject'>;
   log: SourcesLog;
@@ -66,11 +68,16 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const engineRef = pinnedKit ? pinned! : current;
     const kit = pinnedKit ?? (await deps.objectStore.readObject(`kits/${current}.tgz`));
     if (!kit) return null;
+    // Pinned as get_kit would; a failed pin drops the workspace.
+    const replace = outdated || (pinned !== undefined && pinned !== engineRef);
+    const held = await deps.store.pinRoundKitEngineRef(brief.jobId, engineRef, replace);
+    if (held && held !== engineRef) throw new Error(`round pinned ${held} while mounting ${engineRef}`);
     const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }];
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
-    if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, archives };
+    const kitOutdated = outdated || undefined;
+    if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, kitOutdated, archives };
     archives.push({ name: SOURCES_ARCHIVE, bytes: sourceArchive(sources.files, sources.slug) });
-    return { engineRef, slug: sources.slug, delivered: sources.kind === 'delivery', archives };
+    return { engineRef, slug: sources.slug, delivered: sources.kind === 'delivery', kitOutdated, archives };
   };
 }
 
@@ -88,10 +95,13 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   const game = workspace.slug
     ? `the round's current files of this game in \`games/${workspace.slug}/\``
     : 'an empty `games/` — write the files `get_sources` returns into `games/<slug>/`';
+  const remount = `move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again`;
   return [
     `Your workspace is already mounted. Run once: \`${unpack}\`.`,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
-    `Call \`get_kit\` only for kitEngineRef. If it is not ${workspace.engineRef}, move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again.`,
+    workspace.kitOutdated
+      ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`
+      : `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, ${remount}.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
   ];
 }

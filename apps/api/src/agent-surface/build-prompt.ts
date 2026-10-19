@@ -1,7 +1,7 @@
 // The brief every backend gives its agent. Rationale: docs/build-brief.md.
 
 import type { BuildBrief } from './agent-backend.js';
-import { buildPromptOpening, gateRepairPrompt } from './build-prompt-opening.js';
+import { buildPromptOpening, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false }): string {
@@ -86,7 +86,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '## This round is on a clock',
     '',
     `The session is cancelled after ${!lane.maxSeconds ? 'a hard time limit' : lane.maxSeconds < 120 ? `${Math.floor(lane.maxSeconds)} seconds` : `${Math.floor(lane.maxSeconds / 60)} minutes`}; without \`submit_sources\` by then it delivers nothing.`,
-    'Opening the creator’s images and a 2D capture take seconds: they are part of the round.',
+    'A typical revision takes minutes; the reads below, the creator’s images and a 2D capture take seconds each.',
     '',
     'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request with its images, and the sources. Only then edit.',
     ...(creating
@@ -100,7 +100,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, \`creator_notes\` (sessionKey only), ${mountedSources ? '' : '`get_sources` '}and \`get_kit\`. Once you know what you will change, send one short \`report_progress\` saying so in the creator’s language, before your first edit.`,
+          ...openingSteps(brief, Boolean(workspace), Boolean(mountedSources)),
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources ? [] : GET_SOURCES),

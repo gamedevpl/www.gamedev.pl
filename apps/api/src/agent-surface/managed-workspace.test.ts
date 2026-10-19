@@ -14,9 +14,11 @@ import {
 
 const BRIEF = { jobId: 9, slug: 'rocks', spec: 's', channelToken: 't', apiBaseUrl: 'https://x' } as BuildBrief;
 
+const pin = vi.fn(async (_jobId: number, ref: string) => ref);
+
 function deps(record: object | null, objects: Record<string, string>): ManagedWorkspaceDeps {
   return {
-    store: { getSubmission: async () => record } as unknown as ManagedWorkspaceDeps['store'],
+    store: { getSubmission: async () => record, pinRoundKitEngineRef: pin } as unknown as ManagedWorkspaceDeps['store'],
     gamesStore: {
       getManifest: async () => ({ sourceFiles: ['game.ts', 'GAME.json'] }),
       getSourceFile: async (_slug: string, _version: string, path: string) => `// ${path}`,
@@ -38,6 +40,11 @@ describe('managed workspace loader', () => {
     const load = createManagedWorkspaceLoader(deps({ slug: 'rocks', previewVersion: 'v3' }, KITS));
     const workspace = await load(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
+    expect(pin).toHaveBeenCalledWith(9, 'eng_new', false);
+    pin.mockRejectedValueOnce(new Error('contention'));
+    await expect(load(BRIEF)).rejects.toThrow('contention');
+    pin.mockResolvedValueOnce('eng_other');
+    await expect(load(BRIEF)).rejects.toThrow('round pinned eng_other');
     expect(workspace?.slug).toBe('rocks');
     expect(workspace?.delivered).toBe(true);
     expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);
@@ -68,6 +75,11 @@ describe('managed workspace loader', () => {
     const workspace = await createManagedWorkspaceLoader({ ...base, gamesStore })(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
+    expect(pin).toHaveBeenLastCalledWith(9, 'eng_new', true);
+    expect(workspace?.kitOutdated).toBe(true);
+    expect(workspaceKickoff('/mnt', workspace!).join('\n')).toMatch(
+      /call `get_kit` once\. If its kitEngineRef is not eng_new, move `games\/` aside.*Submit with get_kit's kitEngineRef/,
+    );
   });
 
   it('mounts nothing when the kit is not published', async () => {
@@ -88,7 +100,7 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).not.toContain('do not call `get_sources`');
-    expect(lines).toContain('If it is not eng_new');
+    expect(lines).toContain('Submit with kitEngineRef eng_new');
     expect(lines).toMatch(/delete the kit directory.*npm ci --ignore-scripts` again/);
   });
 
@@ -112,7 +124,8 @@ describe('workspace kickoff', () => {
     const prompt = buildPrompt(brief, { shell: true, workspace, mountedSources: true });
     expect(prompt).toContain('start from the files already in `games/rocks/`');
     expect(prompt).toContain('do not call `get_sources`');
-    expect(prompt).toContain('then call `get_brief`, `read_inbox`, `creator_notes` (sessionKey only), and `get_kit`');
+    expect(prompt).toContain('2. `get_brief`, `read_inbox` and `creator_notes` (sessionKey only).');
+    expect(prompt).toContain('no `get_kit` call is needed');
     expect(prompt).not.toContain('Call `get_sources` before deciding anything');
     expect(buildPrompt(brief, { shell: true, workspace })).toContain('Call `get_sources` before deciding anything');
   });
