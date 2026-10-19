@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseScenario, readGameCapturePlan, selectScenario } from './capture-scenario.js';
+import { parseScenario, readGameCapturePlan, selectScenario, MAX_CAPTURE_PLAN_BYTES } from './capture-scenario.js';
 
 it('selects nested marks, preserves seed, and freezes an inline plan independently of CAPTURE.json', () => {
   const raw = { seed: 42, fps: 30, maxFrames: 60, script: [{ repeat: { times: 2, actions: [{ capture: 'view' }] } }] };
@@ -58,8 +58,19 @@ it('reads only the bound game CAPTURE.json and refuses symlinks and oversized fi
     const path = join(game, 'CAPTURE.json');
     writeFileSync(path, '{"script":[{"capture":"opening"}]}');
     expect(readGameCapturePlan(root, 'demo')).toEqual({ script: [{ capture: 'opening' }] });
-    writeFileSync(path, ' '.repeat(65_537));
-    expect(() => readGameCapturePlan(root, 'demo')).toThrow('64 KiB');
+    const plan = {
+      seed: 42,
+      maxFrames: 18_000,
+      script: [{ capture: 'opening' }, ...Array.from({ length: 9000 }, () => ({ wait: 1 }))],
+    };
+    const content = JSON.stringify(plan);
+    expect(content.length).toBeGreaterThan(65_536);
+    writeFileSync(path, content);
+    const stored = readGameCapturePlan(root, 'demo');
+    expect(selectScenario({ mark: 'opening' }, () => stored)?.plan.script).toHaveLength(9001);
+    expect(() => selectScenario({ mark: 'opening', plan: stored })).toThrow('2000 actions');
+    writeFileSync(path, ' '.repeat(MAX_CAPTURE_PLAN_BYTES + 1));
+    expect(() => readGameCapturePlan(root, 'demo')).toThrow('2 MiB');
     rmSync(path);
     writeFileSync(join(root, 'secret.json'), '{}');
     symlinkSync(join(root, 'secret.json'), path);
@@ -67,4 +78,9 @@ it('reads only the bound game CAPTURE.json and refuses symlinks and oversized fi
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+it('still bounds expanded actions in file plans', () => {
+  const plan = { script: [{ repeat: { times: 500, actions: [{ repeat: { times: 500, actions: [{ wait: 0 }] } }] } }] };
+  expect(() => selectScenario({ mark: 'opening' }, () => plan)).toThrow('20000 actions');
 });

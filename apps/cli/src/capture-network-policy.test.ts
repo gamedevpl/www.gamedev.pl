@@ -7,6 +7,7 @@ it('forwards only the fixed capture document and denies proxy tunnels', async ()
   let hits = 0;
   const source = createServer((incoming, response) => {
     hits++;
+    response.setHeader('Content-Type', 'text/plain; charset=utf-8');
     response.end(incoming.url);
   });
   source.listen(0, '127.0.0.1');

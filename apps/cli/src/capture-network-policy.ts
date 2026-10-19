@@ -7,19 +7,20 @@ export async function captureNetworkPolicy(rawUrl: string, gameUrl?: string) {
   const url = new URL(rawUrl);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || url.username || url.password)
     throw new Error('Capture requires its local loopback document.');
-  const allowed = new Set([url.href]);
+  const allowed = [url];
   if (gameUrl) {
     const game = new URL(gameUrl);
     if (game.origin !== url.origin || game.username || game.password)
       throw new Error('Capture game document must use the capture server origin.');
-    allowed.add(game.href);
+    allowed.push(game);
   }
   const server = createServer((incoming, response) => {
-    if (incoming.method !== 'GET' || !allowed.has(incoming.url ?? '') || incoming.headers.host !== url.host) {
+    const target = allowed.find((document) => document.href === incoming.url);
+    if (incoming.method !== 'GET' || !target || incoming.headers.host !== url.host) {
       response.writeHead(403).end();
       return;
     }
-    const upstream = request(incoming.url!, { method: 'GET' }, (received) => {
+    const upstream = request(target, { method: 'GET' }, (received) => {
       response.writeHead(received.statusCode ?? 502, received.headers);
       received.pipe(response);
     });

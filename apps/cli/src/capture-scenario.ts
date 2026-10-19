@@ -5,6 +5,9 @@ import { gameSourcePath } from './source-project.js';
 import { kitPath } from './kit-install.js';
 import type { CapturePlan, PlanAction } from './capture-plan-runtime.js';
 
+export const MAX_CAPTURE_PLAN_BYTES = 2 * 1024 * 1024;
+const FILE_ACTIONS = 20_000;
+const INLINE_ACTIONS = 2000;
 const text = z.string().min(1).max(128);
 const frames = z.number().int().min(1).max(36_000);
 const key = z.union([text, z.object({ key: text, code: text.optional() }).strict()]);
@@ -47,7 +50,7 @@ const action: z.ZodType<PlanAction> = z.lazy(() =>
     z
       .object({
         repeat: z
-          .object({ times: z.number().int().min(1).max(500), actions: z.array(action).min(1).max(2000) })
+          .object({ times: z.number().int().min(1).max(500), actions: z.array(action).min(1).max(FILE_ACTIONS) })
           .strict(),
       })
       .strict(),
@@ -59,7 +62,7 @@ export const scenarioSchema = z
     seed: z.number().int().min(0).max(0xffff_ffff).default(1),
     fps: z.number().int().min(1).max(60).default(30),
     maxFrames: frames.default(3600),
-    script: z.array(action).min(1).max(2000),
+    script: z.array(action).min(1).max(FILE_ACTIONS),
   })
   .strict();
 
@@ -69,8 +72,8 @@ function bound(value: unknown, depth = 0, budget = { left: 20_000 }): void {
   if (value && typeof value === 'object') for (const child of Object.values(value)) bound(child, depth + 1, budget);
 }
 
-export function parseScenario(raw: unknown): CapturePlan {
-  bound(raw);
+export function parseScenario(raw: unknown, maxActions = INLINE_ACTIONS): CapturePlan {
+  bound(raw, 0, { left: maxActions * 12 });
   const result = scenarioSchema.safeParse(raw);
   if (!result.success) throw new Error(`Invalid capture plan: ${result.error.issues[0]?.message}`);
   const plan = result.data;
@@ -79,7 +82,7 @@ export function parseScenario(raw: unknown): CapturePlan {
   const count = (actions: PlanAction[], factor = 1): void => {
     for (const entry of actions) {
       expanded += factor;
-      if (expanded > 2000) throw new Error('Capture plan expands past 2000 actions.');
+      if (expanded > maxActions) throw new Error(`Capture plan expands past ${maxActions} actions.`);
       if ('repeat' in entry) count(entry.repeat.actions, factor * entry.repeat.times);
     }
   };
@@ -102,7 +105,7 @@ export function selectScenario(args: Record<string, unknown>, readPlan?: () => u
     const { seed, fps, maxFrames, script } = stored as Record<string, unknown>;
     raw = { seed, fps, maxFrames, script };
   }
-  const plan = parseScenario(raw);
+  const plan = parseScenario(raw, args.plan === undefined ? FILE_ACTIONS : INLINE_ACTIONS);
   const names: string[] = [];
   const scan = (actions: PlanAction[]): void => {
     for (const entry of actions) {
@@ -125,10 +128,16 @@ export function readGameCapturePlan(root: string, slug: string): unknown {
   const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > 65_536) throw new Error('CAPTURE.json must be a regular file under 64 KiB.');
-    const bytes = Buffer.alloc(65_537);
-    const size = readSync(fd, bytes, 0, bytes.length, 0);
-    if (size > 65_536) throw new Error('CAPTURE.json exceeds 64 KiB.');
+    if (!stat.isFile() || stat.size > MAX_CAPTURE_PLAN_BYTES)
+      throw new Error('CAPTURE.json must be a regular file under 2 MiB.');
+    const bytes = Buffer.alloc(MAX_CAPTURE_PLAN_BYTES + 1);
+    let size = 0;
+    while (size < bytes.length) {
+      const count = readSync(fd, bytes, size, bytes.length - size, size);
+      if (!count) break;
+      size += count;
+    }
+    if (size > MAX_CAPTURE_PLAN_BYTES) throw new Error('CAPTURE.json exceeds 2 MiB.');
     return JSON.parse(bytes.subarray(0, size).toString('utf8')) as unknown;
   } finally {
     closeSync(fd);

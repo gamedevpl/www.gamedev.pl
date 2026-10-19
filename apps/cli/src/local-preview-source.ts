@@ -4,6 +4,7 @@ import { holdPreview } from './play-presence.js';
 import { CAPTURE_READY_BRIDGE } from './capture-readiness.js';
 import { CAPTURE_SCENARIO_SCRIPT } from './generated/capture-scenario.js';
 import type { CaptureScenario } from './capture-scenario.js';
+import { parse } from 'parse5';
 
 export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
 export type PreviewSnapshot = { html: string; revision: string };
@@ -104,12 +105,13 @@ export function captureGameDocument(html: string, scenario?: CaptureScenario): s
   const bridge = scenario
     ? `<script>${CAPTURE_SCENARIO_SCRIPT}\nGAMEDEV_CAPTURE_SCENARIO.start(${JSON.stringify(scenario.plan).replace(/</g, '\\u003c')}, ${JSON.stringify(scenario.mark ?? null).replace(/</g, '\\u003c')});</script>`
     : CAPTURE_READY_BRIDGE;
-  const insertion = /<head\b[^>]*>/i.test(html) ? /<head\b[^>]*>/i : /<body\b[^>]*>/i;
-  return insertion.test(html)
-    ? html.replace(insertion, (open) => open + bridge)
-    : /<!doctype\b[^>]*>/i.test(html)
-      ? html.replace(/<!doctype\b[^>]*>/i, (open) => open + bridge)
-      : bridge + html;
+  const document = parse(html, { sourceCodeLocationInfo: true });
+  const root = document.childNodes.find((node) => node.nodeName === 'html');
+  const head = root && 'childNodes' in root ? root.childNodes.find((node) => node.nodeName === 'head') : undefined;
+  const doctype = document.childNodes.find((node) => node.nodeName === '#documentType');
+  const headEnd = head && 'tagName' in head ? head.sourceCodeLocation?.startTag?.endOffset : undefined;
+  const offset = headEnd ?? doctype?.sourceCodeLocation?.endOffset ?? 0;
+  return html.slice(0, offset) + bridge + html.slice(offset);
 }
 export function capturePage(html: string, gameUrl?: string): string {
   const document = gameUrl ? undefined : JSON.stringify(captureGameDocument(html)).replace(/</g, '\\u003c');

@@ -20,7 +20,8 @@ export function start(plan: CapturePlan, mark?: string): void {
 
 async function run(plan: CapturePlan, mark?: string): Promise<void> {
   const deadline = performance.now() + 60_000;
-  const notify = (type: string, value: unknown) => parent.postMessage({ source: 'gdpl-capture', type, value }, '*');
+  const notify = (type: string, value: unknown) =>
+    parent.postMessage({ source: 'gdpl-capture', type, value }, location.origin);
   try {
     const harness = () => (window as Window & { __GAME_HARNESS__?: Harness }).__GAME_HARNESS__;
     while (!harness()?.ready) {

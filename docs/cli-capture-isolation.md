@@ -8,6 +8,10 @@ waits for GameKit readiness when present and two animation frames before notifyi
 the host. The browser checks the expected document URL and readiness before taking
 the screenshot. A game that never becomes ready produces a timeout error, rather
 than a successful capture of the initial blank page.
+Without a GameKit harness, a 1.5-second fallback after load allows asynchronous
+startup to draw. The bridge is inserted using parsed HTML source locations,
+preserving comments, script literals and standards mode. Both bridges target the
+capture parent's origin rather than broadcasting execution results.
 
 Capture loads through a local proxy that forwards only its fixed document URLs.
 Initial captures use a srcdoc frame. Scripted captures also allow one fixed game
@@ -76,8 +80,10 @@ The DSL supports `wait`, `tap`, `press`, `keyDown`, `keyUp`, `click`, `move`, `d
 one of `equals`, `notEquals`, `greaterThan`, `greaterThanOrEqual`, `lessThan`,
 `lessThanOrEqual`, or `oneOf`; `waitFor` also requires `maxFrames`.
 
-Validation bounds requests and files to 64 KiB, nesting, expanded actions to
-2000, fps to 1–60, simulated play to 600 seconds / 36000 frames, and browser
+Validation bounds inline requests to 64 KiB and 2000 expanded actions. Local
+`CAPTURE.json` files may use 2 MiB and 20000 expanded actions, accommodating
+recorded catalog plans. Both modes bound nesting, fps to 1–60,
+simulated play to 600 seconds / 36000 frames, and browser
 execution to 60 seconds. The existing task capture budget and single-job limit
 apply to both modes. Failed assertions, exhausted frame budgets, missing harnesses
 and timeouts return a failed job without an image.

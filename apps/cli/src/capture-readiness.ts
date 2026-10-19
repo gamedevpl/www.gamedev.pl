@@ -4,16 +4,22 @@ type Evaluate = (method: string, params: Record<string, unknown>) => Promise<Rec
 
 export const CAPTURE_READY_BRIDGE = `<script>
 (() => {
+  let fallbackDeadline;
+  const parentOrigin = new URL(document.baseURI).origin;
   const ready = () => {
-    if (window.__GAME_HARNESS__ && window.__GAME_HARNESS__.ready !== true) {
+    const harness = window.__GAME_HARNESS__;
+    if (harness ? harness.ready !== true : performance.now() < fallbackDeadline) {
       setTimeout(ready, 50);
       return;
     }
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      parent.postMessage({ source: 'gdpl-capture', type: 'ready' }, '*');
+      parent.postMessage({ source: 'gdpl-capture', type: 'ready' }, parentOrigin);
     }));
   };
-  addEventListener('load', ready, { once: true });
+  addEventListener('load', () => {
+    fallbackDeadline = performance.now() + 1500;
+    ready();
+  }, { once: true });
 })();
 </script>`;
 
