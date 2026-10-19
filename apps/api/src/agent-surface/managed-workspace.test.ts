@@ -43,6 +43,8 @@ describe('managed workspace loader', () => {
     expect(pin).toHaveBeenCalledWith(9, 'eng_new', false);
     pin.mockRejectedValueOnce(new Error('contention'));
     await expect(load(BRIEF)).rejects.toThrow('contention');
+    pin.mockResolvedValueOnce('eng_other');
+    await expect(load(BRIEF)).rejects.toThrow('round pinned eng_other');
     expect(workspace?.slug).toBe('rocks');
     expect(workspace?.delivered).toBe(true);
     expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);
@@ -73,6 +75,9 @@ describe('managed workspace loader', () => {
     const workspace = await createManagedWorkspaceLoader({ ...base, gamesStore })(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
+    expect(pin).toHaveBeenLastCalledWith(9, 'eng_new', true);
+    expect(workspace?.kitOutdated).toBe(true);
+    expect(workspaceKickoff('/mnt', workspace!).join('\n')).toContain('call `get_kit` once, then submit');
   });
 
   it('mounts nothing when the kit is not published', async () => {
