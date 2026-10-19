@@ -41,6 +41,8 @@ describe('managed workspace loader', () => {
     const workspace = await load(BRIEF);
     expect(workspace?.engineRef).toBe('eng_new');
     expect(pin).toHaveBeenCalledWith(9, 'eng_new', false);
+    pin.mockRejectedValueOnce(new Error('contention'));
+    await expect(load(BRIEF)).rejects.toThrow('contention');
     expect(workspace?.slug).toBe('rocks');
     expect(workspace?.delivered).toBe(true);
     expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);

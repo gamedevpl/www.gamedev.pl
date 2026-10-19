@@ -66,9 +66,9 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const engineRef = pinnedKit ? pinned! : current;
     const kit = pinnedKit ?? (await deps.objectStore.readObject(`kits/${current}.tgz`));
     if (!kit) return null;
-    // Pinned as get_kit would, so stage advisories know the kit.
+    // Pinned as get_kit would; a failed pin drops the workspace.
     const replace = outdated || (pinned !== undefined && pinned !== engineRef);
-    await deps.store.pinRoundKitEngineRef(brief.jobId, engineRef, replace).catch(() => null);
+    await deps.store.pinRoundKitEngineRef(brief.jobId, engineRef, replace);
     const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }];
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
     if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, archives };
