@@ -96,6 +96,19 @@ wrong account's affinity.
 
 ## UI
 
+The featured card's **More like this** picks match specific genre families, such as
+rally/racing or shooter/shmup, rather than the broad browsing shelves. Exact genre
+matches rank first; ties retain the current catalog order. Generic labels such as
+`arcade` or `action`, shared multiplayer support, and the catch-all shelf do not
+establish similarity. The card shows up to three matches and hides the section
+when none qualify, without filling empty slots with unrelated games.
+
+Selection lives in
+[`catalogSimilarity.ts`](../apps/web/src/surfaces/catalog/catalogSimilarity.ts).
+Links retain `via=featured_similar`, so existing `play_started` visit events measure
+plays from these recommendations (first-minute and session-depth questions), without
+adding game identifiers to the visit stream.
+
 [`ArcadeCatalog`](../apps/web/src/surfaces/catalog/ArcadeCatalog.tsx) shows the My games / Not played
 toggles and Sort dropdown beside the Games heading, pins the creator’s published
 games first when My games is off, then filters/reorders the same grid. Logic lives

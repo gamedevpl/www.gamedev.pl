@@ -21,10 +21,8 @@ function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'tit
 }
 
 describe('categorizeCatalogEntry', () => {
-  it('maps a genre keyword to its shelf', () => {
-    expect(categorizeCatalogEntry(entry({ slug: 'a', title: 'A', genre: 'Vertical shmup' }))).toEqual([
-      'arcade_racing',
-    ]);
+  it.each(['Vertical shmup', 'rally time trial (3d)'])('maps %s to its shelf', (genre) => {
+    expect(categorizeCatalogEntry(entry({ slug: 'a', title: 'A', genre }))).toEqual(['arcade_racing']);
     expect(categorizeCatalogEntry(entry({ slug: 'b', title: 'B', genre: 'Western RPG' }))).toEqual(['rpg_adventure']);
     expect(categorizeCatalogEntry(entry({ slug: 'c', title: 'C', genre: 'City builder' }))).toEqual(['strategy_sim']);
     expect(categorizeCatalogEntry(entry({ slug: 'd', title: 'D', genre: 'Match-3 puzzle' }))).toEqual(['puzzle_story']);

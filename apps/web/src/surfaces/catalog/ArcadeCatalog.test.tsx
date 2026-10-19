@@ -120,7 +120,7 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
-/** Default AuthContext is `loading: true` — resolve auth so the shelf gate can finish. */
+// Resolve auth so the shelf gate can finish.
 function mockSignedOutAuth() {
   vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
     user: null,
@@ -720,7 +720,7 @@ describe('ArcadeCatalog shelves', () => {
       'gdpl.catalogSortSignals',
       JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
     );
-    // jsdom has no scrollIntoView; stub it first so spyOn can restore it.
+    // jsdom needs a scrollIntoView stub before spyOn can restore it.
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
       configurable: true,
       writable: true,
@@ -880,10 +880,10 @@ describe('ArcadeCatalog shelves', () => {
     await act(async () => root.unmount());
   });
 
-  it('fills the featured card with More like this picks from its own shelf', async () => {
-    const { container, root } = await renderShelves(shelfEntries, { featuredSlugs: ['arcade-1'] });
-
-    expect(container.querySelector('.featured-game-title')?.textContent).toBe('Pixel Dash');
+  it('recommends racing games for a featured rally game, excluding unrelated shelves', async () => {
+    const apex = makeEntry({ slug: 'apex-sprint', title: 'Apex Sprint', genre: 'rally time trial (3d)' });
+    const { container, root } = await renderShelves([...shelfEntries, apex], { featuredSlugs: [apex.slug] });
+    expect(container.querySelector('.featured-game-title')?.textContent).toBe('Apex Sprint');
     const thumbTitles = [...container.querySelectorAll('.more-like-this-thumb span')].map((el) => el.textContent);
     expect(thumbTitles).toEqual(['Kart Brawl']);
 

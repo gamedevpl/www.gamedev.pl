@@ -5,7 +5,7 @@ import './catalog.css';
 import { useAuth } from '../../AuthContext.js';
 import { type CatalogEntry } from '../../catalog.js';
 import { CatalogCard } from './CatalogCard.js';
-import { categorizeCatalogEntry, entriesInCategory } from './catalogCategory.js';
+import { similarCatalogEntries } from './catalogSimilarity.js';
 import { buildCatalogPageTokens } from './catalogPagination.js';
 import { catalogSortNeedsSignals } from './catalogSort.js';
 import { RAIL_CARD_LIMIT } from './CatalogRail.js';
@@ -69,7 +69,7 @@ export function ArcadeCatalog({
   useEffect(() => watchCatalogScrollIdle(), []);
 
   const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
-  // My games only makes sense when signed in and you have a published game of yours.
+  // Your-games filtering needs a signed-in creator with published games.
   const canFilterYourGames = Boolean(user) && mySlugs.size > 0;
   const showControls = hasCatalog;
   const yourGamesOnly = canFilterYourGames && filters.has('your_games');
@@ -78,7 +78,7 @@ export function ArcadeCatalog({
 
   const awaitingSignals =
     catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
-  // Hold the grid while auth is unknown, and while a signed-in shelf is still loading.
+  // Wait for auth and the signed-in shelf before rendering the grid.
   const awaitingCreatorShelf = authLoading || (Boolean(viewerUid) && !creatorGamesReady);
   const catalogPending = catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady;
   const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
@@ -133,14 +133,10 @@ export function ArcadeCatalog({
     [flagshipEntries, featuredEntry],
   );
 
-  // Fills the featured card's dead space with picks from its shelf.
-  const featuredMoreLikeThis = useMemo(() => {
-    if (!featuredEntry) return [];
-    const [primaryCategory] = categorizeCatalogEntry(featuredEntry);
-    return entriesInCategory(desiredOrder, primaryCategory)
-      .filter((entry) => entry.slug !== featuredEntry.slug)
-      .slice(0, 3);
-  }, [featuredEntry, desiredOrder]);
+  const featuredMoreLikeThis = useMemo(
+    () => (featuredEntry ? similarCatalogEntries(featuredEntry, desiredOrder) : []),
+    [featuredEntry, desiredOrder],
+  );
 
   // Not memoized — recomputes every render, cheap and always fresh.
   const continuePlayingBySlug = new Map(catalogEntries.map((entry) => [entry.slug, entry]));

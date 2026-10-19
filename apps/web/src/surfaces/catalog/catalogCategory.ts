@@ -36,7 +36,7 @@ const GENRE_KEYWORDS: ReadonlyArray<[Exclude<CatalogCategoryId, 'multiplayer_par
 // Genre gives one shelf; multiplayer_party is additive on top.
 export function categorizeCatalogEntry(entry: Pick<CatalogEntry, 'genre' | 'multiplayer'>): CatalogCategoryId[] {
   const categories: CatalogCategoryId[] = [];
-  const genre = entry.genre?.toLowerCase() ?? '';
+  const genre = (entry.genre?.toLowerCase() ?? '').replace(/\b(rally|driving|karting|karts?)\b/g, 'racing');
   const fromGenre = GENRE_KEYWORDS.find(([, keywords]) => keywords.some((keyword) => genre.includes(keyword)));
   categories.push(fromGenre ? fromGenre[0] : 'more_to_explore');
   if (entry.multiplayer) categories.push('multiplayer_party');
