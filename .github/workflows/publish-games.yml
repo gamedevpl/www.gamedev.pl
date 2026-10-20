@@ -117,7 +117,9 @@ jobs:
       - name: Resolve games-repo ref
         env:
           VALIDATED_SHA: ${{ needs.validate-games.outputs.games_sha }}
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
         run: |
+          set -euo pipefail
           # Bake exactly the tree the reusable gate checked, including nightly runs.
           case "$VALIDATED_SHA" in
             "")
@@ -126,6 +128,18 @@ jobs:
               ;;
             *[!0-9a-fA-F]*)
               echo "Error: games catalog gate returned an invalid commit SHA"
+              exit 1
+              ;;
+          esac
+          # Publish only commits already on the games default branch, whatever ref was dispatched.
+          relation=$(curl -sS -f --max-time 30 \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GAMES_REPO_TOKEN}" \
+            "https://api.github.com/repos/${GAMES_REPO}/compare/${VALIDATED_SHA}...main" | jq -r '.status // empty')
+          case "$relation" in
+            identical|ahead) ;;
+            *)
+              echo "Error: games commit ${VALIDATED_SHA:0:7} is not on main (${relation:-unknown}); refusing to publish"
               exit 1
               ;;
           esac
