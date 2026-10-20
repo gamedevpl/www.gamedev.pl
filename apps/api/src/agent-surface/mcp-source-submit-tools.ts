@@ -9,7 +9,6 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { canActOnSlug } from '../platform/game-access-permissions.js';
 import { PUBLISH_NOT_OWNER_REASON } from './agent-game-key.js';
 import type { GamesStore } from '../delivery/games-store.js';
-import { referenceHoldReply } from './reference-unseen.js';
 import {
   toolOk,
   toolErr,
@@ -50,7 +49,6 @@ export interface SourceSubmitToolsDeps {
   ) => Promise<{ statusCode: number; json: () => unknown }>;
   store: Store | undefined;
   gamesStore?: GamesStore;
-  holdForReference?: (ctx: ToolContext, jobId: number, roundGeneration: number) => Promise<boolean>;
 }
 
 export interface SourceSubmitToolEntry {
@@ -316,11 +314,6 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
 
         const requestedMode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
         const mode = await effectiveSubmitMode(requestedMode, fromLatestDelivery, auth.record, gamesStore);
-        const held = await deps.holdForReference?.(ctx, auth.jobId, auth.record.roundGeneration ?? 1);
-        if (held) {
-          const live = () => injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.INBOX, auth.channelToken);
-          return toolOk(await referenceHoldReply(mode, live));
-        }
         if (mode === 'publish' && auth.record.slug && store) {
           if (!(await canActOnSlug(store, auth.record.slug, auth.actorUid, 'publish'))) {
             return toolRefusal(PUBLISH_NOT_OWNER_REASON, 'not_owner');

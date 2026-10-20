@@ -40,26 +40,40 @@ async function call(name: string, args: Record<string, unknown>, authorization: 
   return (res.json() as { result: { structuredContent: Record<string, unknown> } }).result.structuredContent;
 }
 
-describe('the unseen-reference hold', () => {
+describe('managed session submit and end', () => {
   const submit = { files: [{ path: 'game.ts', content: 'export {};' }], mode: 'preview', kitEngineRef: 'a'.repeat(40) };
 
-  it('holds a managed shell lane once, carrying the live inbox, and never a public client', async () => {
-    const store = await round();
-    await store.appendCreatorMessage(JOB, 'Make the ship blue');
+  it('refuses the first end after an undelivered submit, then closes; a later submit is refused', async () => {
+    await round();
     const opener = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1, shell: true })}`;
     const started = await call('start', { key: mintAgentToken(JOB, secret, { roundGeneration: 1 }) }, opener);
-    const held = await call('submit_sources', { ...submit, sessionKey: started.sessionKey }, opener);
-    expect(held).toMatchObject({ ok: false, rejected: 'reference_unseen', mode: 'preview', stop: false });
-    expect(held.pendingMessages).toEqual([expect.objectContaining({ text: 'Make the ship blue' })]);
-    const again = await call('submit_sources', { ...submit, sessionKey: started.sessionKey }, opener);
-    expect(again.rejected).not.toBe('reference_unseen');
+    const sessionKey = started.sessionKey;
+    const refused = await call('submit_sources', { ...submit, sessionKey }, opener);
+    expect(refused.ok).not.toBe(true);
+    expect(refused.rejected).not.toBe('reference_unseen');
+    const first = await call('end', { sessionKey, summary: 'done' }, opener);
+    expect(first).toMatchObject({ ok: false, ended: false, rejected: 'nothing_delivered' });
+    expect(first.pendingMessages).toEqual([]);
+    const second = await call('end', { sessionKey, summary: 'nothing shipped' }, opener);
+    expect(second).toMatchObject({ ok: true, ended: true });
+    const late = await call('submit_sources', { ...submit, sessionKey }, opener);
+    expect(late).toMatchObject({ ok: false, rejected: 'session_ended', mode: 'preview' });
   });
 
-  it('does not hold a no-shell managed lane', async () => {
+  it('lets a managed session that never submitted end at once', async () => {
     await round();
     const opener = `Bearer ${mintManagedMcpOpener(JOB, secret, { roundGeneration: 1 })}`;
     const started = await call('start', { key: mintAgentToken(JOB, secret, { roundGeneration: 1 }) }, opener);
-    const reply = await call('submit_sources', { ...submit, sessionKey: started.sessionKey }, opener);
-    expect(reply.rejected).not.toBe('reference_unseen');
+    const ended = await call('end', { sessionKey: started.sessionKey, summary: 'answered' }, opener);
+    expect(ended).toMatchObject({ ok: true, ended: true });
+  });
+
+  it('leaves a public client exactly as before', async () => {
+    await round();
+    const key = `Bearer ${mintAgentToken(JOB, secret, { roundGeneration: 1 })}`;
+    const refused = await call('submit_sources', submit, key);
+    expect(refused.ok).not.toBe(true);
+    expect(await call('end', { summary: 'done' }, key)).toMatchObject({ ok: true, ended: true });
+    expect((await call('submit_sources', submit, key)).rejected).not.toBe('session_ended');
   });
 });

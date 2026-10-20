@@ -137,12 +137,8 @@ import { seedPayload } from './seed-status.js';
 import { captureNoticeFor } from './capture-notice.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
-import {
-  createReferenceHold,
-  createReferenceLookup,
-  REFERENCE_UNSEEN_WARNING,
-  REFERENCE_WRITE_TOOLS,
-} from './reference-unseen.js';
+import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
+import { createManagedCallRunner } from './managed-session-guard.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
@@ -429,7 +425,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
   const referenceLookup = store ? createReferenceLookup(store) : null;
-  const referenceHold = referenceLookup && store ? createReferenceHold(referenceLookup, store) : null;
   // Jobs that read get_kit since their last delivery.
   const refreshedKits = new Set<number>();
   // Note ids each job's read_inbox already returned.
@@ -1344,11 +1339,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       injectChannel,
       store,
       gamesStore: options.gamesStore,
-      // Only a managed shell lane can open the image; others are told.
-      holdForReference: async (ctx, jobId, generation) =>
-        managedOpenerClaims(ctx.bearerToken)?.shell === true &&
-        referenceHold !== null &&
-        referenceHold(jobId, generation),
     }),
 
     ...createRoundCardTools({ resolveAuth, injectChannel, store, now }),
@@ -1378,6 +1368,24 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createInboxTools({ resolveAuth, injectChannel, writePiggyback }),
     ...createProposalRoundTools({ resolveAuth, store, gamesStore: options.gamesStore, proposals: options.proposals }),
   };
+
+  // Public clients run every tool as before; managed sessions guard submit and end.
+  const runManagedCall = createManagedCallRunner({
+    store: store!,
+    now,
+    gamesStore: options.gamesStore,
+    resolveAuth,
+    injectChannel,
+    managedSessionId: (ctx, args) => {
+      const key = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
+      if (!store || !key || managedOpenerClaims(ctx.bearerToken) === null) return null;
+      try {
+        return verifyMcpSessionKey(key, agentTokenSecret!).sessionId;
+      } catch {
+        return null;
+      }
+    },
+  });
 
   // A managed-session opener's claims; null for every public client.
   function managedOpenerClaims(bearer: string | null): ManagedOpenerClaims | null {
@@ -1606,7 +1614,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
       const userAgent = headerValue(request.headers['user-agent']);
       try {
-        const rawResult = await tool.handler(args, ctx);
+        const rawResult = await runManagedCall(name, args, ctx, () => tool.handler(args, ctx));
         const result = await applySessionNudges(name, args, ctx, rawResult);
         // Echo session id on tool responses when we have one (transport correlator).
         if (sessionHeader) {

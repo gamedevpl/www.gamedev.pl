@@ -56,6 +56,7 @@ import type {
 import type { AgentEndedBy, BuilderHandoff } from './records/rounds.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './records/social.js';
 import type { SubmissionRecord } from './records/submission.js';
+import type { ManagedSessionOutcome, ManagedSessionStep } from './records/managed-session.js';
 import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { InMemoryAccessTokensStore } from './slices/access-tokens.js';
 import { InMemoryAccessStore } from './slices/access.js';
@@ -821,8 +822,8 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.buildMediaStore.markReferenceSeen(jobId, shotId);
   }
 
-  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
-    return this.buildMediaStore.claimReferenceHold(jobId, roundGeneration);
+  async stepManagedSession(...step: ManagedSessionStep): Promise<ManagedSessionOutcome> {
+    return this.buildMediaStore.stepManagedSession(...step);
   }
 
   async appendBuildPreview(
