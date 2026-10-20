@@ -459,7 +459,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   }
 }
 
-// A submit still marked running after this long is taken as lost.
+// Submits still marked running after this long are taken as lost.
 const RUNNING_SUBMIT_MS = 90_000;
 
 // Pure step: a null state leaves the record unchanged.
@@ -470,18 +470,19 @@ export function nextManagedSession(
   at: string,
 ): { state: ManagedSessionState | null; outcome: ManagedSessionOutcome } {
   const own = prev?.sessionId === sessionId ? prev : { sessionId };
+  const fresh = Date.parse(at) - Date.parse(own.submitAt ?? at) < RUNNING_SUBMIT_MS;
+  const running = fresh ? (own.running ?? 0) : 0;
   if (event === 'submit') {
     if (own.endedAt) return { state: null, outcome: 'ended' };
-    return { state: { ...own, submit: 'running', submitAt: at }, outcome: 'ok' };
+    return { state: { ...own, running: running + 1, submitAt: at }, outcome: 'ok' };
   }
   if (event === 'delivered' || event === 'refused') {
     if (own !== prev) return { state: null, outcome: 'ok' };
     const delivered = event === 'delivered' ? { delivered: true as const } : {};
-    return { state: { ...own, submit: event, ...delivered }, outcome: 'ok' };
+    return { state: { ...own, running: Math.max(0, running - 1), last: event, ...delivered }, outcome: 'ok' };
   }
-  const running = own.submit === 'running' && Date.parse(at) - Date.parse(own.submitAt ?? at) < RUNNING_SUBMIT_MS;
-  if (running) return { state: null, outcome: 'wait' };
-  if (own.submit && own.submit !== 'delivered' && !own.delivered && !own.endRefused) {
+  if (running > 0) return { state: null, outcome: 'wait' };
+  if (own.last === 'refused' && !own.delivered && !own.endRefused) {
     return { state: { ...own, endRefused: true }, outcome: 'refuse' };
   }
   return { state: { ...own, endedAt: at }, outcome: 'ok' };

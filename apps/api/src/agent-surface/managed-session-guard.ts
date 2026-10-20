@@ -36,6 +36,8 @@ const POLL_MS = 1_000;
 
 export const SESSION_ENDED_RETRY =
   'Not delivered: this session already called end, so it delivers nothing more. A new round starts a new session.';
+export const SUBMIT_RUNNING_REASON =
+  'Not ended: a submit_sources from this session is still running. Its reply says whether it delivered.';
 export const NOTHING_DELIVERED_REASON =
   'Not ended: nothing this session submitted was delivered; the last submit_sources was refused (its reply ' +
   'says why). This applies to the first end only; a second end closes the session.';
@@ -88,12 +90,13 @@ export async function guardManagedEnd(deps: ManagedSessionGuardDeps, call: Manag
     await sleep(POLL_MS);
     outcome = await deps.store.stepManagedSession(call.jobId, call.sessionId, 'end', at(deps));
   }
-  if (outcome !== 'refuse') return call.run();
+  if (outcome === 'ok') return call.run();
+  const running = outcome === 'wait';
   return toolOk({
     ok: false,
     ended: false,
-    rejected: 'nothing_delivered',
-    reason: NOTHING_DELIVERED_REASON,
+    rejected: running ? 'submit_running' : 'nothing_delivered',
+    reason: running ? SUBMIT_RUNNING_REASON : NOTHING_DELIVERED_REASON,
     ...(await liveFields(call.live)),
   });
 }

@@ -62,13 +62,27 @@ describe('managed session guard', () => {
     expect((await guardManagedEnd(deps, other)).structuredContent).toMatchObject({ ended: true });
   });
 
-  it('closes after a lost submit stays running past the wait', async () => {
+  it('refuses end while a submit still runs past the wait, and ends once it is lost', async () => {
     const { store, deps, call } = await setup();
     await store.stepManagedSession(5, 's1', 'submit', new Date(deps.now()).toISOString());
-    const ended = await guardManagedEnd(
-      { ...deps, waitMs: 3_000 },
-      call(async () => toolOk({ ended: true })),
-    );
-    expect(ended.structuredContent).toMatchObject({ ended: true });
+    const ended = () =>
+      guardManagedEnd(
+        { ...deps, waitMs: 3_000 },
+        call(async () => toolOk({ ended: true })),
+      );
+    expect((await ended()).structuredContent).toMatchObject({ ended: false, rejected: 'submit_running' });
+    await deps.sleep(90_000);
+    expect((await ended()).structuredContent).toMatchObject({ ended: true });
+  });
+
+  it('keeps waiting while any of two overlapping submits runs', async () => {
+    const { store, deps } = await setup();
+    const at = () => new Date(deps.now()).toISOString();
+    await store.stepManagedSession(5, 's1', 'submit', at());
+    await store.stepManagedSession(5, 's1', 'submit', at());
+    await store.stepManagedSession(5, 's1', 'delivered', at());
+    expect(await store.stepManagedSession(5, 's1', 'end', at())).toBe('wait');
+    await store.stepManagedSession(5, 's1', 'refused', at());
+    expect(await store.stepManagedSession(5, 's1', 'end', at())).toBe('ok');
   });
 });

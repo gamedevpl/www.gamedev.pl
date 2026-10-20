@@ -324,11 +324,12 @@ any visible description or `ROUND_SEQUENCE` mentions (proposal readers, `knowled
 
 **Managed submit and end.** Under a managed opener only (`managed-session-guard.ts`), each
 `submit_sources` and `end` steps `managedSession` on the submission record in a transaction
-(`stepManagedSession`). `end` waits up to 30 s for this session's running submit. The first `end`
-after a refused submit, with nothing this session delivered, is refused (`rejected:
-nothing_delivered`); a second `end` closes it. A `submit_sources` after this session's `end` is
-refused (`rejected: session_ended`). An `end` acknowledging a builder handoff is never refused.
-Public clients run both tools unchanged. `reference_unseen` is a warning only; nothing is held.
+(`stepManagedSession`), counting submits in flight. `end` waits up to 30 s for them; if one
+still runs it is refused (`rejected: submit_running`), until it returns or is 90 s old and taken
+as lost. The first `end` after a refused submit, with nothing this session delivered, is refused
+(`rejected: nothing_delivered`); a second `end` closes it. A `submit_sources` after this session's
+`end` is refused (`rejected: session_ended`). An `end` acknowledging a builder handoff is never
+refused. Public clients run both tools unchanged. `reference_unseen` is a warning only.
 
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
