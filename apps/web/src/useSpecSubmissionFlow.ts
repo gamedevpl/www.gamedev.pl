@@ -322,6 +322,8 @@ export function useSpecSubmissionFlow({
     if (!spec) return;
     // The name the creator settled on gates the build.
     recordCreateStep('title_confirmed');
+    // Busy before the conversion await, so Create and close stay locked.
+    setSubmissionStatus('loading');
     const attached = await attachVisualTarget(
       finalConcept,
       pendingReferenceImagesRef.current,

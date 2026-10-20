@@ -1,3 +1,4 @@
+import { MAX_CONCEPT_LENGTH } from './conceptLength.js';
 import { pickQuestionArt, type OptionImageMap } from './useOptionImages.js';
 
 // The API keeps four reference images and drops the rest silently.
@@ -49,7 +50,10 @@ export async function attachVisualTarget(
 ): Promise<{ concept: string; referenceImages: string[] | undefined }> {
   const own = referenceImages ?? [];
   if (!target || own.length >= MAX_REFERENCE_IMAGES) return { concept, referenceImages };
+  // No room for the label means no tile.
+  const labelled = `${concept.trim()}\n\n${visualTargetNote(target)}`;
+  if (labelled.length > MAX_CONCEPT_LENGTH) return { concept, referenceImages };
   const png = await toPng(target.dataUrl);
   if (!png) return { concept, referenceImages };
-  return { concept: `${concept.trim()}\n\n${visualTargetNote(target)}`, referenceImages: [...own, png] };
+  return { concept: labelled, referenceImages: [...own, png] };
 }

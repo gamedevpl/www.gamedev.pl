@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_CONCEPT_LENGTH } from './conceptLength.js';
 import { attachVisualTarget, MAX_REFERENCE_IMAGES, pickVisualTarget, type QaVisualTarget } from './qaVisualTarget.js';
 
 const STYLE = {
@@ -63,6 +64,16 @@ describe('attaching the tile for the agent', () => {
     const result = await attachVisualTarget('Toy cars', own, target, toPng);
 
     expect(result).toEqual({ concept: 'Toy cars', referenceImages: own });
+    expect(toPng).not.toHaveBeenCalled();
+  });
+
+  it('keeps a near-limit concept valid by leaving the tile out', async () => {
+    const long = 'x'.repeat(MAX_CONCEPT_LENGTH - 50);
+    const toPng = vi.fn(async () => 'PNG');
+    expect(await attachVisualTarget(long, ['OWN'], target, toPng)).toEqual({
+      concept: long,
+      referenceImages: ['OWN'],
+    });
     expect(toPng).not.toHaveBeenCalled();
   });
 

@@ -573,7 +573,7 @@
     "apps/web/src/CodeSurface.test.tsx": 1410,
     "apps/web/src/codeSurfaceEditorState.test.ts": 33,
     "apps/web/src/conceptLength.test.ts": 14,
-    "apps/web/src/conceptLength.ts": 6,
+    "apps/web/src/conceptLength.ts": 9,
     "apps/web/src/connectCollapse.ts": 24,
     "apps/web/src/contactApi.test.ts": 38,
     "apps/web/src/contactApi.ts": 26,
