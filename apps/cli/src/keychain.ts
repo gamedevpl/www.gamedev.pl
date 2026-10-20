@@ -162,25 +162,37 @@ export function encryptedFileStore(
   // Explicit file stores keep their key beside them, not in the vault.
   const vault = fileKeychainOptedIn(env) ? null : options.vault === undefined ? platformKeyVault() : options.vault;
   const account = resolvePath(path);
-  let cached: Buffer[] | null = null;
-  function knownKeys(): Buffer[] {
-    if (cached?.length) return cached;
-    cached = [vault?.load(account) ?? null, readKeyFile(keyPath)].filter((key): key is Buffer => key !== null);
-    return cached;
+  let cached: Buffer | null = null;
+  // The local key comes first, so a hanging vault never delays it.
+  const sources = [() => readKeyFile(keyPath), () => vault?.load(account) ?? null];
+  function firstKey(): Buffer | null {
+    for (const source of sources) {
+      const key = source();
+      if (key) return key;
+    }
+    return null;
   }
   function createKey(): Buffer {
-    const existing = knownKeys()[0];
-    if (existing) return existing;
+    cached ??= firstKey();
+    if (cached) return cached;
     const key = randomBytes(32);
     mkdirSync(dirname(path), { recursive: true });
     if (!vault?.save(account, key)) writeKeyFile(keyPath, key);
-    cached = [key];
+    cached = key;
     return key;
   }
   function decryptKnown(buf: Buffer): StoredTokens | null {
-    for (const key of knownKeys()) {
-      const tokens = decrypt(buf, key);
+    if (cached) {
+      const tokens = decrypt(buf, cached);
       if (tokens) return tokens;
+    }
+    for (const source of sources) {
+      const key = source();
+      const tokens = key ? decrypt(buf, key) : null;
+      if (key && tokens) {
+        cached = key;
+        return tokens;
+      }
     }
     return null;
   }
@@ -231,11 +243,13 @@ export function encryptedFileStore(
       if (!buf?.length) return null;
       const tokens = decryptKnown(buf);
       if (tokens) return tokens;
-      if (!decrypt(buf, legacyFileKey(env))) return null;
+      const legacy = decrypt(buf, legacyFileKey(env));
+      if (!legacy) return null;
       try {
-        return await migrateLegacy();
+        return (await migrateLegacy()) ?? legacy;
       } catch {
-        return null;
+        // A read-only store keeps working until it can migrate.
+        return legacy;
       }
     },
     async set(tokens) {

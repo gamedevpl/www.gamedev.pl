@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -103,5 +103,35 @@ describe('token stores', () => {
     expect(await encryptedFileStore({ HOME: home }, { vault }).get()).toEqual(tokens);
     expect(decryptsWith(path, homeKey(home))).toBe(false);
     expect(await encryptedFileStore({ HOME: home }, { vault }).get()).toEqual(tokens);
+  });
+
+  it('reads the local key without asking the vault', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'gamedev-cli-'));
+    await encryptedFileStore({ HOME: home }, { vault: fakeVault(false) }).set({
+      accessToken: 'gdpl_oat_secret',
+      tokenType: 'Bearer',
+      scope: 'creator',
+    });
+    const vault: KeyVault = {
+      load: () => {
+        throw new Error('vault asked');
+      },
+      save: () => false,
+    };
+    expect((await encryptedFileStore({ HOME: home }, { vault }).get())?.accessToken).toBe('gdpl_oat_secret');
+  });
+
+  it('still returns a legacy sign-in when migration cannot write', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'gamedev-cli-'));
+    const path = join(home, 'credentials.bin');
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', homeKey(home), iv);
+    const tokens = { accessToken: 'gdpl_oat_old', tokenType: 'Bearer', scope: 'creator' };
+    const data = Buffer.concat([cipher.update(JSON.stringify(tokens), 'utf8'), cipher.final()]);
+    writeFileSync(path, Buffer.concat([iv, cipher.getAuthTag(), data]));
+    // A non-empty directory at the key path fails the write.
+    mkdirSync(join(`${path}.key`, 'blocked'), { recursive: true });
+    expect(await encryptedFileStore({ HOME: home, GAMEDEV_TOKEN_FILE: path }).get()).toEqual(tokens);
+    expect(decryptsWith(path, homeKey(home))).toBe(true);
   });
 });
