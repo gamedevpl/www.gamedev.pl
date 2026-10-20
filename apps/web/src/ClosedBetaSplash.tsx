@@ -13,6 +13,7 @@ export function ClosedBetaSplash({ inviteCode }: { inviteCode?: string }) {
   const { t, i18n } = useTranslation();
   const { joinWaitlist, waitlistStatus } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [appleLinkRequired, setAppleLinkRequired] = useState(false);
   const [idToken, setIdToken] = useState<string | null>(null);
   // Which button produced `idToken`. The waitlist re-verifies it server-side, and the two
   // providers' tokens are not interchangeable — sending an Apple token to the Google
@@ -149,6 +150,7 @@ export function ClosedBetaSplash({ inviteCode }: { inviteCode?: string }) {
           )}
         </div>
 
+        {appleLinkRequired && <p className="beta-splash__signin-hint">{t('auth.appleLinkRequired')}</p>}
         <div className="beta-splash__signin">
           <GoogleSignInButton
             inviteCode={inviteCode}
@@ -160,8 +162,9 @@ export function ClosedBetaSplash({ inviteCode }: { inviteCode?: string }) {
           <AppleSignInButton
             inviteCode={inviteCode}
             onSuccess={isInvite ? handleInviteSignIn : undefined}
-            onError={(msg, token) => {
-              handleSignInError(msg, token, 'apple');
+            onError={(msg, token, code) => {
+              if (code === 'apple_link_required') setAppleLinkRequired(true);
+              else handleSignInError(msg, token, 'apple');
             }}
           />
         </div>

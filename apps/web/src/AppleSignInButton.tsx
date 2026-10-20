@@ -20,7 +20,7 @@ interface AppleSignInButtonProps {
   inviteCode?: string;
   // Mirrors GoogleSignInButton: the token travels with the error so a caller can offer
   // the waitlist without making a rejected user authenticate a second time.
-  onError?: (err: string, idToken?: string) => void;
+  onError?: (err: string, idToken?: string, code?: 'apple_link_required') => void;
 }
 
 export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignInButtonProps) {
@@ -83,7 +83,7 @@ export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignI
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Sign in failed';
         // No token here: this person has an account already and must not be waitlisted.
-        if (message === 'apple_link_required') onError?.(t('auth.appleLinkRequired'));
+        if (message === 'apple_link_required') onError?.(t('auth.appleLinkRequired'), undefined, message);
         else onError?.(message, idToken);
       }
     } catch (err) {

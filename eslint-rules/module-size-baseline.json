@@ -564,7 +564,7 @@
     "apps/web/src/catalog.ts": 267,
     "apps/web/src/ClaimHandleModal.tsx": 185,
     "apps/web/src/ClosedBetaSplash.test.ts": 432,
-    "apps/web/src/ClosedBetaSplash.tsx": 181,
+    "apps/web/src/ClosedBetaSplash.tsx": 184,
     "apps/web/src/codeMirrorColors.test.ts": 33,
     "apps/web/src/CodeMirrorEditor.test.tsx": 136,
     "apps/web/src/codeMirrorSearchPanel.test.ts": 81,
