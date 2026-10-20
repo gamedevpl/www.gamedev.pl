@@ -51,6 +51,18 @@ describe('creator memory on account erasure', () => {
     expect(dispatch?.memoryOwnerUid).toBeUndefined();
   });
 
+  it.each([
+    ['in memory', () => new InMemoryStore()],
+    ['firestore', () => new FirestoreStore(fakeFirestore().db)],
+  ])('keeps the memory owner of a same-uid signup after erasure (%s)', async (_name, make) => {
+    const store = make();
+    await store.createSubmission(9, 'g:stays', 'Back');
+    await store.beginAccountErasure('g:returner', '2000-01-01T00:00:00.000Z');
+    await store.upsertUser({ uid: 'g:returner' });
+    await store.recordDispatch(9, { backend: 'managed:anthropic', ref: 's3', memoryOwnerUid: 'g:returner' });
+    expect((await store.getSubmission(9))?.dispatch?.memoryOwnerUid).toBe('g:returner');
+  });
+
   it('fails the erasure and keeps the record when the vendor refuses', async () => {
     const store = new InMemoryStore();
     const uid = await creatorWithMemory(store);
