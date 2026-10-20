@@ -735,7 +735,7 @@ The browser console at `/admin` is gone, and every `/api/admin/*` route answers 
 browser. The operator console now runs locally from the private ops repo
 ([`console/`](https://github.com/gamedevpl/www.gamedev.pl-ops/tree/main/console)) on the
 operator's own gcloud credentials, reading and writing Firestore directly. The few actions
-that need this server (publish/preview/retry/cancel a job, regate/delete a game, remix,
+that need this server (publish/preview/retry/cancel a job, regate/delete a game,
 backfills, resolving a moderation flag, review sweeps and re-review, platform proposals)
 go through `/api/internal/ops/*` ([`ops-console.ts`](../apps/api/src/platform/ops-console.ts)),
 which admits a request only with a Google-signed ID token for the identity-only

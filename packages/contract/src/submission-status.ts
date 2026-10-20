@@ -165,8 +165,6 @@ export interface SubmissionStatusResponseBase {
   // This round's own job id, distinct from slug-scoped `recentBuilds[0]`.
   jobId?: number;
   slug?: string;
-  // 'remix' means a private save-as-yours fork that never gates.
-  draftOrigin?: 'remix';
   // Preview is green but nothing publishable exists yet; POST :token/seal makes one.
   canSeal?: true;
   // Signal to try loading a draft, not a 200 guarantee.

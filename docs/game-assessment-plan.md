@@ -19,7 +19,7 @@ judgment_ from someone who knows what the shelf should feel like.
 | Surface            | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                                                                |
 | Queue              | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private.                                                |
 | Gesture            | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                                                                      |
-| Preview            | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry, no remix).                                                    |
+| Preview            | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry).                                                              |
 | Mobile dock        | Note + Cut/Skip/Keep sit in a **bottom dock** (thumb zone). The desk owns the window like Studio; install/update banners join the column instead of covering the game.              |
 | Rationale          | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.                                                              |
 | Checklist          | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                                                                   |

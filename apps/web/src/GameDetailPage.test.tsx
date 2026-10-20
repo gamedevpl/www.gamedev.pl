@@ -6,11 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 
-const { recordRemixStep } = vi.hoisted(() => ({ recordRemixStep: vi.fn() }));
-
 let authUser: { uid: string; handle?: string } | null = null;
 
-vi.mock('./visitTelemetry.js', () => ({ recordRemixStep }));
 vi.mock('./VoteWidget.js', () => ({ VoteWidget: () => <button data-testid="vote">Like 7</button> }));
 vi.mock('./ShareGameButton.js', () => ({
   ShareGameButton: () => <button data-testid="share">Share</button>,
@@ -39,7 +36,6 @@ const game: CatalogEntry = {
   world: null,
   sensing: null,
   editor: 'content',
-  remixOn: true,
   orientation: 'any',
   touch: 'gamekit',
   submittedBy: 'Grzegorz',
@@ -53,7 +49,6 @@ beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   authUser = null;
-  recordRemixStep.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -68,11 +63,9 @@ function render(
   overrides: {
     game?: CatalogEntry;
     onPlay?: (entry: CatalogEntry) => void;
-    onRemix?: (entry: CatalogEntry) => void;
   } = {},
 ) {
   const onPlay = overrides.onPlay ?? vi.fn();
-  const onRemix = overrides.onRemix ?? vi.fn();
   root = createRoot(container);
   act(() => {
     root!.render(
@@ -81,12 +74,11 @@ function render(
         state: 'ready',
         onPlay,
         onPlayTogether: vi.fn(),
-        onRemix,
         onRetry: vi.fn(),
       }),
     );
   });
-  return { onPlay, onRemix };
+  return { onPlay };
 }
 
 describe('GameDetailPage', () => {
@@ -126,33 +118,6 @@ describe('GameDetailPage', () => {
     expect(thumbnails[0]?.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('opens Remix directly from the page and records the dedicated entry', () => {
-    const { onRemix } = render();
-
-    expect(recordRemixStep).toHaveBeenCalledWith('offered', { control: 'page' });
-    act(() => {
-      container.querySelector<HTMLButtonElement>('.game-page-remix')!.click();
-    });
-    expect(recordRemixStep).toHaveBeenCalledWith('opened', { control: 'page' });
-    expect(onRemix).toHaveBeenCalledWith(game);
-  });
-
-  it('hides Remix and records no_lane when the catalog has no editor', () => {
-    const { onRemix } = render({ game: { ...game, editor: null } });
-
-    expect(recordRemixStep).toHaveBeenCalledWith('no_lane', { control: 'page' });
-    expect(container.querySelector('.game-page-remix')).toBeNull();
-    expect(onRemix).not.toHaveBeenCalled();
-  });
-
-  it('hides Remix, recording nothing, until remix is switched on', () => {
-    const { onRemix } = render({ game: { ...game, remixOn: undefined } });
-
-    expect(recordRemixStep).not.toHaveBeenCalled();
-    expect(container.querySelector('.game-page-remix')).toBeNull();
-    expect(onRemix).not.toHaveBeenCalled();
-  });
-
   it('hides Open in Studio from visitors', () => {
     render();
     expect(container.querySelector('a[href="/studio/bridge-builder"]')).toBeNull();
@@ -175,7 +140,6 @@ describe('GameDetailPage', () => {
           state: 'ready',
           onPlay: vi.fn(),
           onPlayTogether: vi.fn(),
-          onRemix: vi.fn(),
           onRetry: vi.fn(),
         }),
       );

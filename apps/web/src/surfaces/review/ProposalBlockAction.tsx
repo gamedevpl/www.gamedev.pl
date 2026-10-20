@@ -31,7 +31,7 @@ export function ProposalBlockAction(props: { proposerUid: string; handle: string
         <div className="propose-actions">
           <button
             type="button"
-            className="remix-btn is-primary"
+            className="propose-btn is-primary"
             disabled={step === 'busy'}
             onClick={() => void block()}
           >
@@ -39,7 +39,7 @@ export function ProposalBlockAction(props: { proposerUid: string; handle: string
           </button>
           <button
             type="button"
-            className="remix-btn is-quiet"
+            className="propose-btn is-quiet"
             disabled={step === 'busy'}
             onClick={() => setStep('idle')}
           >
@@ -56,7 +56,7 @@ export function ProposalBlockAction(props: { proposerUid: string; handle: string
           {t('reviews.blockFailed')}
         </p>
       ) : null}
-      <button type="button" className="remix-btn is-quiet" onClick={() => setStep('confirm')}>
+      <button type="button" className="propose-btn is-quiet" onClick={() => setStep('confirm')}>
         {t('reviews.block')}
       </button>
     </>

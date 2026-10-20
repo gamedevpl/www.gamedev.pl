@@ -34,7 +34,7 @@ export type StagePosture = 'watch' | 'play';
 
 /**
  * What the stage is showing, for the strip/ribbon to read. `crashed` and `drew-nothing`
- * are detected here (the bridge's own uncaught-error report, already shipped for Remix —
+ * are detected here (the bridge's own uncaught-error report —
  * see gamePlayer.ts job 7 — needs no new bridge message) and surfaced so the ribbon can
  * name the worst exception without re-deriving it.
  */

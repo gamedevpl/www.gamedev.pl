@@ -216,7 +216,7 @@ kills any prompt-injection channel through event labels.
 - **Never auto-merge.** Autonomy means the agent may _initiate_ work (file the
   issue, open the PR, pass validation). Merge remains a human gate, always.
 - **The spec stays the source of truth.** An improvement that changes behavior
-  is a spec change first (remix path); a fix that restores spec'd behavior is
+  is a spec change first; a fix that restores spec'd behavior is
   a bug fix. The router must classify every action into one of these two —
   there is no third "just tweak the code" path.
 - **Creator owns the game.** Behavior/design changes are _suggestions_ to the
@@ -353,7 +353,7 @@ autonomous-eligible defect class.
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Defect** (implementation violates spec or crashes) | errors in N% of sessions, game never reaches ready, stalls mid-play, softlock reports corroborated by quit-at-same-point | **Autonomous-eligible**: a job is dispatched without waiting for the creator, who is notified. Still cannot self-publish — `publishing` is reachable only from `ready_for_review`. |
 | **Friction** (spec-compatible tuning)                | difficulty spike at a progression cliff, unreadable text, missing touch controls where the spec doesn't forbid them      | **Suggest by default**; autonomous only if the creator opted the game into "auto-tune" and the change is expressible as a small spec _clarification_, not a redesign               |
-| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a remix-path spec change issue                                                                                               |
+| **Design change** (spec must change)                 | "add a second enemy type", "make levels shorter", theme/feel feedback                                                    | **Always suggest.** Creator approval converts it into a spec change round                                                                                                          |
 | **Insufficient data / low value**                    | 4 opens this month                                                                                                       | Digest line only; no agent run spent                                                                                                                                               |
 
 Every routed action carries its **evidence block** (scorecard excerpts +
@@ -1032,11 +1032,11 @@ at all and feeds the only autonomous-eligible class.
   env-tunable limit (start 2/day/creator), exactly as `feedback` does today.
   Sharing the submission quota would make creators choose between improving and
   creating, suppressing the behavior the loop exists to encourage.
-- **Suggestions go to the original creator; remixers are notified.** ✅
+- **Suggestions go to the original creator.** ✅
   Confirmed. `submissions.ownerUid` is already the authority, and
-  `listSubmissionsByOwner` already backs the surface. A merged remix makes the
-  remixer a watcher (digest visibility, no approval rights). Avoids
-  multi-approver deadlock.
+  `listSubmissionsByOwner` already backs the surface. Only the owner approves —
+  no multi-approver deadlock. (Player remix was removed in 2026-10; players
+  propose changes instead.)
 - **Measured outcomes drive catalog _sort order_, not a second section.** The
   home arcade reorders by scorecard aggregates and signed-in play affinity
   ([recommendations.md](./recommendations.md)). Anonymous play telemetry still

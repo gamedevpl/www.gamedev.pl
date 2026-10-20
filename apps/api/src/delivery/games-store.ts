@@ -296,10 +296,10 @@ export function validateSourceUpload(
 
 // Copied origins skip Kit membership; agent delivery stays fail-closed.
 function copiedCandidateKitLookup(
-  origin: 'editor' | 'remix' | 'seal' | undefined,
+  origin: 'editor' | 'seal' | undefined,
   mode: DeliveryMode,
 ): KitSharedLookup | undefined {
-  return origin === 'editor' || origin === 'remix' || origin === 'seal' || mode === 'proposal' ? 'defer' : undefined;
+  return origin === 'editor' || origin === 'seal' || mode === 'proposal' ? 'defer' : undefined;
 }
 
 /** Provenance for one stored version. Answers "where did this come from?" years later. */
@@ -337,21 +337,12 @@ export interface VersionManifest {
    * committed TRACE.json golden predates this content and must be re-derived
    * (`npm run trace -- --accept`) before `check:game` replays it.
    *
-   * `'remix'` marks a private Studio draft forked from a published game via the
-   * player remix panel — sources copied (with baked editor defaults), no agent.
-   * Never a catalog publication by itself; see {@link forkedFrom}.
-   *
    * `'seal'` marks a green preview promoted to a publish candidate without an agent:
    * the same sources, re-delivered so the full gate judges them. It carries no
    * TRACE.json because no agent could record one — the gate derives it, the same way
    * it does for `'editor'`.
    */
-  origin?: 'editor' | 'remix' | 'seal';
-  /**
-   * Parent game this version was forked from, when {@link origin} is `'remix'`.
-   * Attribution / genealogy — not a publish path.
-   */
-  forkedFrom?: { slug: string; version?: string };
+  origin?: 'editor' | 'seal';
   /**
    * Which lane produced this version. Absent on legacy manifests (= publish).
    * Preview versions must never carry a publishable {@link gate}.green.
@@ -535,10 +526,8 @@ export interface GamesStore {
     engineRef?: string;
     /** Creator Kit engineRef the sources were built against (BY-06). */
     kitEngineRef?: string;
-    /** Content-only Studio publish, remix fork, or sealed preview — see {@link VersionManifest.origin}. */
-    origin?: 'editor' | 'remix' | 'seal';
-    /** Parent provenance for remix forks — see {@link VersionManifest.forkedFrom}. */
-    forkedFrom?: { slug: string; version?: string };
+    /** Content-only Studio publish or sealed preview — see {@link VersionManifest.origin}. */
+    origin?: 'editor' | 'seal';
     /** Preview skips TRACE/PLAYTEST; default publish. */
     mode?: DeliveryMode;
     /** Marks the version as somebody else's proposed change — see {@link DeliveryMode}. */
@@ -875,7 +864,6 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         deliveryMode: mode,
         ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
         ...(input.origin ? { origin: input.origin } : {}),
-        ...(input.forkedFrom ? { forkedFrom: input.forkedFrom } : {}),
         ...(input.proposal ? { proposal: input.proposal } : {}),
         ...(input.authorship ? { authorship: input.authorship } : {}),
         ...(input.summary ? { summary: input.summary } : {}),

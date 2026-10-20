@@ -83,27 +83,19 @@ spec freeze (now a hard precondition), spec refinement, a my-games rail, revisio
 history, a localized build log, stop-a-build and retry-an-idea controls, today's
 allowance display, and creator steering before a draft exists.
 
-## Phase 4 — Remix through spec changes 🚧
+## Phase 4 — Player remix (removed)
 
-**Goal:** let a player propose a change while preserving review and ownership.
+Player remix — editing someone else's published game (RemixPanel, code lane, share links,
+per-game remix switch) — was built, tried and **removed on 2026-10-20**: editing someone
+else's game invites copying, and a game belongs to its author. What stays is **proposals**:
 
-The **machinery is built and running, but only for the creator's own games.** For a game
-still building, `POST /api/submissions/:token/feedback` moderates and sanitizes the text and
-queues it into the agent inbox as a message explicitly marked as data-not-instructions. For a
-published game, `POST /api/submissions/:token/improve` (`creation/improve-routes.ts`) does the
-published-game equivalent — `feedback` 409s once `publishedAt` is set — moderating the text and
-opening a new round via `startImprovementRound`. Either way this is exactly the "capture a
-change request → agent round → preview in the same sandbox → never auto-merge" loop the phase
-describes (not a scoped issue or a PR).
+- A creator's coding agent can propose a code change via MCP.
+- A player can send a text-only **Propose a change** form (title + description) on games
+  whose creator enabled proposals. Accepting one starts the owner's own agent round; the
+  proposer's code is never copied.
+- Proposals on catalog games are feedback for admins.
 
-Still open, and this is the actual remaining work of the phase:
-
-- A **player**-facing (not owner-facing) change request against a published game's
-  `SPEC.md`. Today the token gates this to the submission's owner; "remix" appears in
-  the marketing copy but there is no player entry point.
-- Ownership and attribution rules for a remix that forks someone else's spec.
-
-See [`remix-to-pr.md`](./remix-to-pr.md).
+The owner-facing loop (`feedback` while building, `improve` once published) is unchanged.
 
 ## Phase 5 — Production delivery ✅ (with a known-gaps list)
 

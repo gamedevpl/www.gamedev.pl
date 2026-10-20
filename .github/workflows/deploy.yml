@@ -219,7 +219,6 @@ jobs:
           APPLE_CLIENT_IDS: ${{ vars.APPLE_CLIENT_IDS }}
           BETA_ALLOWED_EMAILS: ${{ vars.BETA_ALLOWED_EMAILS }}
           BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
-          CODE_LANE: ${{ vars.CODE_LANE }}
           CODE_SURFACE: ${{ vars.CODE_SURFACE }}
           CLI_CHAT_MODEL: ${{ vars.CLI_CHAT_MODEL }}
           CLI_SURFACE: ${{ vars.CLI_SURFACE }}
@@ -273,7 +272,6 @@ jobs:
           OPTION_IMAGE_MODEL: ${{ vars.OPTION_IMAGE_MODEL }}
           OPTION_IMAGE_TIMEOUT_MS: ${{ vars.OPTION_IMAGE_TIMEOUT_MS }}
           PUBLIC_PLAY_SLUGS: ${{ vars.PUBLIC_PLAY_SLUGS }}
-          REMIX_DEBUG: ${{ vars.REMIX_DEBUG }}
           REVIEWER_UIDS: ${{ vars.REVIEWER_UIDS }}
           SCORECARD_SWEEP_AUDIENCE: ${{ vars.SCORECARD_SWEEP_AUDIENCE }}
           SPEND_BRAKE_AUDIENCE: ${{ vars.SPEND_BRAKE_AUDIENCE }}
@@ -500,17 +498,6 @@ jobs:
             ENV_VARS="${ENV_VARS}|EDITOR_ASSIST=${EDITOR_ASSIST_VAL}"
           fi
 
-          # The code lane: a request that no setting can express becomes one scoped
-          # source edit, rebuilt server-side and swapped into the player's own frame.
-          # Separate from EDITOR_ASSIST because it is a different cost and a different
-          # blast radius — model-written code, even though it is ephemeral and never
-          # published — so it must be switchable on its own. Threaded, not hand-set,
-          # for the same reason as everything above.
-          CODE_LANE_VAL="${CODE_LANE}"
-          if [ -n "$CODE_LANE_VAL" ]; then
-            ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
-          fi
-
           # TA-01's ghost-text completion route: off unless set, same reasoning as
           # EDITOR_ASSIST above — a hand-set value would vanish on the next deploy.
           TAB_COMPLETE_VAL="${TAB_COMPLETE}"
@@ -569,30 +556,6 @@ jobs:
           APP_CSP_REPORT_ONLY_VAL="${APP_CSP_REPORT_ONLY}"
           if [ -n "$APP_CSP_REPORT_ONLY_VAL" ]; then
             ENV_VARS="${ENV_VARS}|APP_CSP_REPORT_ONLY=${APP_CSP_REPORT_ONLY_VAL}"
-          fi
-
-          # The remix code-lane trace: every step of a run, in the log and in the
-          # response — which region call 1 picked, what call 2 was shown, what it
-          # wrote back, and every build error. On by owner decision (2026-08-03)
-          # to answer one question: how often does the lane actually land, and
-          # why does it miss? It is not a permanent setting. It carries the
-          # player's own utterance, so leaving it on past that question turns a
-          # window into a habit.
-          #
-          # This variable only *opens* the window, and opening it should be slow
-          # and deliberate: the value is read here, at deploy time, so clearing
-          # it leaves the running revision exactly as it was until the next
-          # release. To *close* the window, set `remixTracePaused` on the
-          # creation-limits document — same place as the spend breaker, in
-          # effect within its TTL, no deploy involved.
-          #
-          # Threaded rather than hand-set for the same reason as everything here:
-          # --set-env-vars replaces the whole map, so a value typed onto the
-          # service would vanish on the next deploy and the trace would go quiet
-          # with nothing to explain it.
-          REMIX_DEBUG_VAL="${REMIX_DEBUG}"
-          if [ -n "$REMIX_DEBUG_VAL" ]; then
-            ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG_VAL}"
           fi
 
           # Threaded through the same way as ZONE_HOST_URL, and for the same reason:

@@ -8,12 +8,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
-import { RemixPanel, type RemixEditorStage } from './RemixPanel.js';
-import type { RemixSession } from './remixApi.js';
-import { useSharedTune } from './useSharedTune.js';
-import { resumeRemixForSlug, sessionFromResume } from './remixSessionPersist.js';
 import type { PlayVia } from './visitTelemetry.js';
-import './remix-host.css';
 
 type PublishedGameFrameProps = {
   slug: string;
@@ -32,27 +27,6 @@ type PublishedGameFrameProps = {
   // Hidden mounted frames must not accrue play time.
   active?: boolean;
   agentMode?: boolean;
-  /**
-   * Whether this surface offers Remix. Off for party mode and embeds, where the
-   * frame is not the player's alone to bend.
-   */
-  remixable?: boolean;
-  /**
-   * The theater's More-menu doors, as nonces so a re-chosen entry re-opens what
-   * the player closed. `remixOpenNonce` opens the remix sheet; `painterNonce`
-   * opens it with the level painter showing. The pause-moment invitation below
-   * is untouched by either — these add doors, they do not move the invitation.
-   */
-  remixOpenNonce?: number;
-  /** A landing-page request to start after the remix session is ready. */
-  initialRemixRequest?: string;
-  painterNonce?: number;
-  /** Reports whether this game's remix has a painter, for the menu to show its entry. */
-  onRemixCapabilities?: (caps: { painter: boolean }) => void;
-  // Hidden theater HUD docks remix instead of covering play.
-  theaterChromeHidden?: boolean;
-  // Expanding the dock should bring theater chrome back.
-  onRevealChrome?: () => void;
 };
 
 /**
@@ -71,13 +45,6 @@ export function PublishedGameFrame({
   via,
   active = true,
   agentMode = false,
-  remixable,
-  remixOpenNonce,
-  initialRemixRequest,
-  painterNonce,
-  onRemixCapabilities,
-  theaterChromeHidden,
-  onRevealChrome,
   agentBridge,
   agentBridgePending,
 }: PublishedGameFrameProps) {
@@ -91,40 +58,11 @@ export function PublishedGameFrame({
     loadAttempt === 0 ? loadedGame : undefined,
   );
   const html = game?.html ?? null;
-  /**
-   * A remix swaps the whole document — the only way new code can enter an
-   * opaque-origin, eval-free frame. Held apart from the fetched html so closing
-   * the remix returns the player to the published game rather than to a reload.
-   */
-  const [remixHtml, setRemixHtml] = useState<string | null>(null);
-  const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
-  const [remixUndoable, setRemixUndoable] = useState(false);
-  const [remixOpen, setRemixOpen] = useState(false);
-  // One-shot landing-page request, consumed above the panel so a reopen never
-  // replays the same (potentially paid) change.
-  const [pendingInitialRemixRequest, setPendingInitialRemixRequest] = useState(initialRemixRequest ?? null);
-  /**
-   * Level-editor stage: the painter leaves the remix sheet and owns the theater.
-   * Focus flips Edit ↔ Play without unmounting the iframe or the painter — the
-   * host only restyles which surface is full-bleed vs bottom-right PiP.
-   */
-  const [editorStage, setEditorStage] = useState<RemixEditorStage>({ active: false, focus: 'edit' });
-  const [restoreReady, setRestoreReady] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
-  const [sharedParams, clearSharedParams] = useSharedTune(slug, Boolean(remixable) && slots === undefined);
 
   // Open only when a published document is available.
-  useGameTelemetry(
-    slug,
-    activeFrameRef,
-    html !== null && remixHtml === null,
-    slots,
-    active,
-    via,
-    game?.artifactVersion,
-    agentMode,
-  );
+  useGameTelemetry(slug, activeFrameRef, html !== null, slots, active, via, game?.artifactVersion, agentMode);
 
   useEffect(() => {
     if (html === null || reviewVersion !== undefined) return;
@@ -134,43 +72,11 @@ export function PublishedGameFrame({
 
   useEffect(() => {
     setGameTitle(title);
-    setRemixHtml(null);
   }, [slug, title, loadAttempt]);
 
   useEffect(() => {
     if (game?.title) setGameTitle(game.title);
   }, [game]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRestoreReady(false);
-    const show = Boolean(remixable) && slots === undefined;
-    if (!show) {
-      setRestoreReady(true);
-      return;
-    }
-    void resumeRemixForSlug(slug).then((resumed) => {
-      if (cancelled) return;
-      if (resumed) {
-        setRemixSession(sessionFromResume(resumed.live));
-        if (resumed.live.html) setRemixHtml(resumed.live.html);
-        setRemixUndoable(Boolean(resumed.live.undoable));
-        setRemixOpen(resumed.snapshot.remixOpen);
-        onRemixCapabilities?.({ painter: Boolean(resumed.live.content || resumed.live.layers) });
-      }
-      setRestoreReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callback is stable
-  }, [slug, remixable, slots]);
-
-  // Either menu door opens the sheet; the painter door additionally tells the
-  // panel to show the brush (it carries the nonce through as `painterRequest`).
-  useEffect(() => {
-    if ((remixOpenNonce ?? 0) > 0 || (painterNonce ?? 0) > 0) setRemixOpen(true);
-  }, [remixOpenNonce, painterNonce]);
 
   if (error) {
     return (
@@ -186,60 +92,5 @@ export function PublishedGameFrame({
   if (html === null || agentBridgePending) {
     return <GameLoadScreen progress={progress} />;
   }
-  // `embed` describes chrome, not ownership — the theater always embeds — so the
-  // gate is the explicit prop plus "this frame is one player's", which a party
-  // session (slots) is not.
-  const showRemix = Boolean(remixable) && slots === undefined;
-  const frame = (
-    <GameFrame
-      title={gameTitle}
-      html={remixHtml ?? html}
-      frameRef={activeFrameRef}
-      embed={embed}
-      agentBridge={agentBridge}
-    />
-  );
-  if (!showRemix) return frame;
-
-  const hostClass = [
-    'remix-host',
-    editorStage.active ? 'is-editor-stage' : '',
-    editorStage.active ? `is-focus-${editorStage.focus}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return (
-    <div className={hostClass}>
-      {/*
-       * Slot wrapper is `display: contents` while the sheet is up so the iframe
-       * still fills the theater; editor-stage CSS turns it into the PiP/full
-       * surface without remounting the frame.
-       */}
-      <div className="remix-game-slot">{frame}</div>
-      {restoreReady && (remixOpen || sharedParams) ? (
-        <RemixPanel
-          slug={slug}
-          frameRef={activeFrameRef}
-          initialParams={sharedParams}
-          initialRequest={pendingInitialRemixRequest}
-          onInitialRequestConsumed={() => setPendingInitialRemixRequest(null)}
-          onSwapDocument={setRemixHtml}
-          session={remixSession}
-          onSession={setRemixSession}
-          undoable={remixUndoable}
-          onUndoable={setRemixUndoable}
-          onClose={() => {
-            setRemixOpen(false);
-            clearSharedParams();
-          }}
-          painterRequest={painterNonce}
-          onCapabilities={onRemixCapabilities}
-          onEditorStage={setEditorStage}
-          theaterChromeHidden={theaterChromeHidden}
-          onRevealChrome={onRevealChrome}
-        />
-      ) : null}
-    </div>
-  );
+  return <GameFrame title={gameTitle} html={html} frameRef={activeFrameRef} embed={embed} agentBridge={agentBridge} />;
 }

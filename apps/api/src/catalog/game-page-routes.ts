@@ -161,7 +161,6 @@ export async function registerGamePageRoutes(
     return {
       entry: {
         ...entry,
-        ...((await store.getRemixSettings(slug))?.mode === 'on' ? { remixOn: true as const } : {}),
         status: 'published',
         submittedBy: noAttribution ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
         creatorHandle: resolvedHandle,

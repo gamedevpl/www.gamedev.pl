@@ -62,8 +62,9 @@ actually work:
 - "Here's a spec for a new game" → an agent implements it.
 - "A player wants this change" → the spec is amended, then the implementation follows.
 
-It also makes the **remix loop** natural rather than bolted on: a remix is a proposed change
-to a spec, reviewed like any other change (see [`remix-to-pr.md`](./remix-to-pr.md)).
+It also makes **proposals** natural rather than bolted on: an accepted proposal becomes the
+owner's own round, reviewed like any other change. Player remix was tried and removed (2026-10): editing
+someone else's game invites copying; players propose changes instead.
 
 ## Why this replaced the previous design
 
@@ -122,7 +123,7 @@ play immediately.
 Two remain, and they're simpler than before.
 
 **1. Generated game code is still untrusted.** It's written by an agent, and later influenced
-by creator specs and player remix requests. It runs in the player's browser, so the existing
+by creator specs and accepted change proposals. It runs in the player's browser, so the existing
 invariant is unchanged and non-negotiable: `sandbox="allow-scripts allow-pointer-lock"` with **no
 `allow-same-origin`** (see [`security-model.md`](./security-model.md)). Serving games from a
 separate, cookieless origin remains the right call. Phone tilt (`GameKit.createSensing`) is

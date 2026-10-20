@@ -10,15 +10,15 @@ import {
 } from './editor-contract.js';
 import type { SourceFile } from '../delivery/games-store.js';
 
-// Bakes remix params/content into EDITOR.json for a proposal candidate.
+// Bakes params/content into EDITOR.json for a proposal candidate.
 
-export type RemixSaveParams = Record<string, string | number | boolean>;
-export type RemixSaveContent = Record<string, unknown>;
+export type EditorBakeParams = Record<string, string | number | boolean>;
+export type EditorBakeContent = Record<string, unknown>;
 
 export function collectEditorTextFields(
   definition: EditorDefinition | null,
   content?: Record<string, unknown>,
-  params?: RemixSaveParams,
+  params?: EditorBakeParams,
 ): string[] {
   if (!definition) return [];
   const fields: string[] = [];
@@ -65,7 +65,7 @@ export function collectEditorTextFields(
 }
 
 // The declaration's collections at their defaults, or a valid stored document.
-export function defaultCollections(definition: EditorDefinition | null, rawContent?: string): Record<string, unknown> {
+function defaultCollections(definition: EditorDefinition | null, rawContent?: string): Record<string, unknown> {
   if (!definition) return {};
   if (rawContent) {
     try {
@@ -81,35 +81,12 @@ export function defaultCollections(definition: EditorDefinition | null, rawConte
   return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
 }
 
-// Code overrides, or params/paint that differ from the declaration defaults.
-export function remixHasSavableChange(input: {
-  overrides: Record<string, string>;
-  definition: EditorDefinition | null;
-  params?: RemixSaveParams;
-  content?: RemixSaveContent;
-}): boolean {
-  if (Object.keys(input.overrides).length > 0) return true;
-  const specs = input.definition?.params;
-  if (specs && input.params) {
-    for (const [key, spec] of Object.entries(specs)) {
-      if (input.params[key] !== undefined && input.params[key] !== spec.default) return true;
-    }
-  }
-  if (input.definition && input.content) {
-    for (const [key, spec] of Object.entries(input.definition.content)) {
-      if (input.content[key] === undefined) continue;
-      if (JSON.stringify(input.content[key]) !== JSON.stringify(spec.defaults)) return true;
-    }
-  }
-  return false;
-}
-
 // Mirrors the Studio content-publish path so Check 31 stays satisfied.
-export function bakeRemixEditorDefaults(
+export function bakeEditorDefaults(
   files: SourceFile[],
   definition: EditorDefinition | null,
-  params?: RemixSaveParams,
-  content?: RemixSaveContent,
+  params?: EditorBakeParams,
+  content?: EditorBakeContent,
 ): SourceFile[] {
   const editor = files.find((file) => file.path === EDITOR_FILE);
   if (!editor || !definition) return files;

@@ -25,18 +25,8 @@ export interface CreationLimits {
   /** Refuse the real-time editing lanes (assist + code) outright. Play is untouched. */
   editingPaused: boolean;
   /**
-   * Stop emitting the remix code-lane trace, without waiting for a deploy.
-   *
-   * The trace is switched *on* by a deploy-threaded env flag, which is right for
-   * something deliberate — but it carries the player's own utterance, so "off"
-   * cannot wait for the next release. Clearing the variable does nothing to a
-   * running revision; this does, within the breaker's TTL, from the same
-   * document an operator already opens during an incident.
-   */
-  remixTracePaused?: boolean;
-  /**
    * Ceiling on paid editing model calls per UTC day, everyone together — the
-   * "worst day costs a known number" breaker the remix lanes require before any
+   * "worst day costs a known number" breaker the editing lanes require before any
    * flag goes on. Same null semantics as the submission cap.
    */
   globalDailyEditCap: number | null;
@@ -129,10 +119,6 @@ export interface UsageCounters {
   searchQueries: number;
   // World entries written today; each moderates its text fields.
   worldWrites: number;
-  // Remix model calls today. Studio's lanes count separately, under `assists`.
-  remixEdits: number;
-  // Remix code-lane edits that landed today; capped per account.
-  remixCodeEdits?: number;
   // CreatorQA tile requests today; each bills up to eight calls.
   optionImages: number;
 }

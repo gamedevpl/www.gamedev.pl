@@ -97,7 +97,8 @@ architecture; no credential is shipped to gamedev.pl or the games repository.
   matching implementation, delivered as described above.
 - **Spec drift, bug, or creator feedback:** a round naming one game → implementation
   change, plus spec clarification only when the intended behavior itself changes.
-- **Remix:** a proposed change to one game's spec and implementation, routed the same way.
+- **Accepted proposal:** a change proposed by an agent or a player (text only), accepted by the
+  owner and run as the owner's own round, routed the same way.
 - **Repository tooling:** a separate, trusted, repository-scoped PR (see Interactive/local
   agents above) — never smuggled into a game-build round.
 

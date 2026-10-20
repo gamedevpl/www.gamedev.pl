@@ -118,7 +118,10 @@ export interface ProposalDeps {
 }
 
 /** Best-effort notification. Never lets a delivery failure change a proposal's outcome. */
-async function tell(deps: ProposalDeps, event: Parameters<NonNullable<ProposalDeps['notify']>>[0]): Promise<void> {
+async function tell(
+  deps: Pick<ProposalDeps, 'notify' | 'log'>,
+  event: Parameters<NonNullable<ProposalDeps['notify']>>[0],
+): Promise<void> {
   if (!deps.notify) return;
   try {
     await deps.notify(event);
@@ -367,19 +370,24 @@ export async function reconcileProposalGate(deps: ProposalDeps, id: string): Pro
   // The reviewer is told only now, on green — which is the same boundary
   // `isReviewerVisible` draws. A red proposal never becomes somebody else's problem, and
   // that includes never becoming a notification.
-  if (verdict.green && record.targetOwnerUid) {
+  if (verdict.green) await announceAwaitingReview(deps, record);
+  return record;
+}
+
+// Tells the owner, or the admins for a platform game, that a review is waiting.
+export async function announceAwaitingReview(
+  deps: Pick<ProposalDeps, 'notify' | 'notifyOperators' | 'log'>,
+  record: ProposalRecord,
+): Promise<void> {
+  if (record.targetOwnerUid) {
     await tell(deps, {
       uid: record.targetOwnerUid,
       type: 'proposal.awaiting_review',
       proposalId: record.id,
       gameTitle: record.targetSlug,
     });
+    return;
   }
-  if (verdict.green && record.targetOwnerUid === null) await tellOperators(deps, record);
-  return record;
-}
-
-async function tellOperators(deps: ProposalDeps, record: ProposalRecord): Promise<void> {
   try {
     await deps.notifyOperators?.({ proposalId: record.id, gameTitle: record.targetSlug });
   } catch (error) {
@@ -410,7 +418,7 @@ export async function acceptProposal(
   const now = deps.now ?? Date.now;
   const record = await deps.store.getProposal(input.id);
   if (!record) return { ok: false, status: 404, error: 'not_found' };
-  if (!record.version) return { ok: false, status: 409, error: 'nothing_delivered' };
+  if (!record.version && record.kind !== 'text') return { ok: false, status: 409, error: 'nothing_delivered' };
   if (record.state !== 'in_review') return { ok: false, status: 409, error: 'not_reviewable' };
 
   const stampAccepted = (target: ProposalRecord, reason: 'accepted' | 'noted') => {
@@ -442,7 +450,9 @@ export async function acceptProposal(
   const publication = await deps.store.getPublication(record.targetSlug);
   // A taken-down game takes no new rounds.
   if (publication && !isPublished(publication)) return { ok: false, status: 409, error: 'not_published' };
-  if (record.base.kind === 'store' && isBaseStale(record.base.version, publication?.currentVersion)) {
+  const stale = record.base.kind === 'store' && isBaseStale(record.base.version, publication?.currentVersion);
+  // Text proposals describe intent, not a diff: never stale.
+  if (stale && record.kind !== 'text') {
     transitionProposal(record, 'superseded', 'system', new Date(now()).toISOString(), 'stale_base');
     await deps.store.putProposal(record);
     return { ok: false, status: 409, error: 'superseded' };
@@ -630,7 +640,7 @@ export async function supersedeStaleProposals(
   let superseded = 0;
   for (const record of open) {
     if (!countsAsOpen(record.state)) continue;
-    if (record.id === input.exceptProposalId || isNotedFeedback(record)) continue;
+    if (record.id === input.exceptProposalId || isNotedFeedback(record) || record.kind === 'text') continue;
     if (await roundStillBuilding(deps, record)) continue;
     if (record.base.kind === 'store' && !isBaseStale(record.base.version, input.currentVersion)) continue;
     if (!transitionProposal(record, 'superseded', 'system', at, 'target_published')) continue;

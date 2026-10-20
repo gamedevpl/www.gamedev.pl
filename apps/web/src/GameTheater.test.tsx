@@ -6,8 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { messageFromFrame } from './test-utils/frameMessage.js';
 
+const authState = vi.hoisted(() => ({ user: null as { uid: string } | null }));
 vi.mock('./AuthContext', () => ({
-  useAuth: () => ({ user: null, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
+  useAuth: () => ({ ...authState, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
+}));
+
+const proposalsApi = vi.hoisted(() => ({ checkContributions: vi.fn() }));
+vi.mock('./proposalsApi', async () => ({
+  ...(await vi.importActual<typeof import('./proposalsApi')>('./proposalsApi')),
+  checkContributions: proposalsApi.checkContributions,
 }));
 
 const votesApi = vi.hoisted(() => ({
@@ -27,25 +34,8 @@ vi.mock('./gamePlayer', async () => {
 });
 
 vi.mock('./PublishedGameFrame', () => ({
-  PublishedGameFrame: ({
-    frameRef,
-    remixOpenNonce,
-    initialRemixRequest,
-    theaterChromeHidden,
-  }: {
-    frameRef?: { current: HTMLIFrameElement | null };
-    remixOpenNonce?: number;
-    initialRemixRequest?: string;
-    theaterChromeHidden?: boolean;
-  }) => (
-    <iframe
-      className="game-frame"
-      title="game"
-      ref={frameRef as React.Ref<HTMLIFrameElement>}
-      data-remix-open={remixOpenNonce ?? 0}
-      data-remix-request={initialRemixRequest ?? ''}
-      data-chrome-hidden={theaterChromeHidden ? '1' : '0'}
-    />
+  PublishedGameFrame: ({ frameRef }: { frameRef?: { current: HTMLIFrameElement | null } }) => (
+    <iframe className="game-frame" title="game" ref={frameRef as React.Ref<HTMLIFrameElement>} />
   ),
 }));
 
@@ -54,6 +44,7 @@ vi.mock('./useScreenWakeLock', () => ({
 }));
 
 import { GameTheater, PLAYER_CHROME_IDLE_MS } from './GameTheater.js';
+import { resetProposeEligibilityCache } from './proposeEligibility.js';
 import { setVisitSessionForTesting, VisitSession, type WireVisitEvent } from './visitTelemetry.js';
 
 let container: HTMLDivElement;
@@ -63,6 +54,9 @@ const gameMessage = (init: MessageEventInit<unknown>) =>
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  authState.user = null;
+  resetProposeEligibilityCache();
+  proposalsApi.checkContributions.mockReset().mockResolvedValue({ canPropose: false });
   votesApi.fetchVotes.mockReset().mockResolvedValue({ up: 0, down: 0, mine: null });
   votesApi.castVote.mockReset();
   votesApi.clearVote.mockReset();
@@ -82,9 +76,6 @@ async function draw(
   props: {
     controls?: string;
     onExit?: () => void;
-    initialRemixOpen?: boolean;
-    initialRemixRequest?: string;
-    remixOn?: boolean;
   } = {},
 ) {
   root = createRoot(container);
@@ -95,12 +86,8 @@ async function draw(
         badge={{ icon: 'sparkle', label: 'AI' }}
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
-        editor="content"
-        remixOn={props.remixOn ?? true}
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
-        initialRemixOpen={props.initialRemixOpen}
-        initialRemixRequest={props.initialRemixRequest}
       />,
     );
   });
@@ -122,10 +109,28 @@ async function pressEscape() {
 }
 
 describe('GameTheater more menu', () => {
-  it('opens the remix surface with the request entered on the game page', async () => {
-    await draw({ initialRemixOpen: true, initialRemixRequest: 'make it faster' });
-    expect(container.querySelector('.game-frame')?.getAttribute('data-remix-open')).toBe('1');
-    expect(container.querySelector('.game-frame')?.getAttribute('data-remix-request')).toBe('make it faster');
+  it('offers Propose a change beside Leave feedback when the creator takes proposals', async () => {
+    authState.user = { uid: 'player-1' };
+    proposalsApi.checkContributions.mockResolvedValue({ canPropose: true });
+    await draw();
+    const panel = container.querySelector('.theater-more-panel')!;
+    const feedback = panel.querySelector('.feedback-widget:not(.propose-change-widget)');
+    const propose = panel.querySelector('.propose-change-widget');
+    expect(propose?.textContent).toContain('Propose a change');
+    expect(feedback?.nextElementSibling).toBe(propose);
+    expect(proposalsApi.checkContributions).toHaveBeenCalledWith('brick-storm');
+  });
+
+  it('hides Propose a change when proposals are closed or the player is signed out', async () => {
+    authState.user = { uid: 'player-1' };
+    await draw();
+    expect(container.querySelector('.propose-change-btn')).toBeNull();
+    act(() => root?.unmount());
+    authState.user = null;
+    proposalsApi.checkContributions.mockResolvedValue({ canPropose: true });
+    await draw();
+    expect(container.querySelector('.propose-change-btn')).toBeNull();
+    expect(proposalsApi.checkContributions).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the hamburger icon when open and highlights it instead of turning into an X', async () => {
@@ -372,31 +377,6 @@ describe('GameTheater how-to-play', () => {
     });
     await act(async () => {
       window.dispatchEvent(gameMessage({ data: { source: 'gdpl-player', type: 'exit-game' }, origin: 'null' }));
-    });
-
-    expect(onExit).toHaveBeenCalledTimes(1);
-  });
-
-  it('resumes exiting on Escape once a swapped-in document (a new loadId) reports no shell menu', async () => {
-    const onExit = vi.fn();
-    await draw({ controls: CONTROLS, onExit });
-
-    await act(async () => {
-      window.dispatchEvent(
-        gameMessage({
-          data: { source: 'gdpl-player', type: 'shell-menu', loadId: 'game-a' },
-          origin: 'null',
-        }),
-      );
-    });
-    // A different loadId simulates a remix swapping the document underneath.
-    await act(async () => {
-      window.dispatchEvent(
-        gameMessage({
-          data: { source: 'gdpl-player', type: 'key', key: 'Escape', loadId: 'game-b' },
-          origin: 'null',
-        }),
-      );
     });
 
     expect(onExit).toHaveBeenCalledTimes(1);
@@ -728,7 +708,6 @@ describe('GameTheater how-to-play visit telemetry', () => {
     await click(hide);
     expect(bar.classList.contains('is-idle')).toBe(true);
     expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
-    expect(container.querySelector('iframe')?.getAttribute('data-chrome-hidden')).toBe('1');
 
     await act(async () => {
       window.dispatchEvent(
@@ -848,86 +827,6 @@ describe('GameTheater how-to-play visit telemetry', () => {
       expect.objectContaining({ type: 'how_to_play_opened', via: 'bar', reopen: true }),
     ]);
     expect(opens[0]).not.toHaveProperty('reopen');
-  });
-
-  it('records the remix entry as offered on sight and opened with the control that was pressed', async () => {
-    await draw();
-    session.flush();
-    let steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
-    // Shown it, has not touched it. This is the denominator the whole move to a
-    // quieter entry has to be judged against.
-    expect(steps).toEqual([expect.objectContaining({ type: 'remix_step', step: 'offered' })]);
-
-    await click(container.querySelector('.remix-btn'));
-    session.flush();
-    steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
-    expect(steps).toContainEqual(expect.objectContaining({ type: 'remix_step', step: 'opened', control: 'bar' }));
-  });
-
-  it('hides the remix entry, unrecorded, until remix is switched on', async () => {
-    await draw({ remixOn: false });
-    session.flush();
-    expect(container.querySelector('.remix-btn')).toBeNull();
-    const steps = batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step');
-    expect(steps).toEqual([]);
-  });
-
-  it('does not offer a remix entry on a theater with no published slug', async () => {
-    // Same rule as how-to-play: drafts and generated playtests share the chrome
-    // but must not enter a numerator whose denominator is published plays.
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <GameTheater
-          title="Draft"
-          badge={{ icon: 'wrench', label: 'Draft' }}
-          source={{ html: '<html><body>draft</body></html>' }}
-          onExit={() => {}}
-        />,
-      );
-    });
-    session.flush();
-    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([]);
-    expect(container.querySelector('.remix-btn')).toBeNull();
-  });
-
-  it('records no_lane and hides remix for games without an editor', async () => {
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <GameTheater
-          title="No editor"
-          badge={{ icon: 'star', label: 'Play' }}
-          source={{ slug: 'no-editor' }}
-          reportSlug="no-editor"
-          editor={null}
-          onExit={() => undefined}
-        />,
-      );
-    });
-    session.flush();
-    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([
-      expect.objectContaining({ type: 'remix_step', step: 'no_lane' }),
-    ]);
-    expect(container.querySelector('.remix-btn')).toBeNull();
-  });
-
-  it('hides remix chrome and telemetry when remixable is false', async () => {
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <GameTheater
-          title="Review play"
-          badge={{ icon: 'star', label: 'Try play' }}
-          source={{ slug: 'sky-dodge' }}
-          onExit={() => {}}
-          remixable={false}
-        />,
-      );
-    });
-    session.flush();
-    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([]);
-    expect(container.querySelector('.remix-btn')).toBeNull();
   });
 
   it('does not record how_to_play_opened for a draft theater', async () => {

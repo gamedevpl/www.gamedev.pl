@@ -15,9 +15,6 @@ import {
   TRANSFER_STEPS,
   PARTY_VIAS,
   PLAY_VIAS,
-  REMIX_CONTROLS,
-  REMIX_PAINTED_VIAS,
-  REMIX_STEPS,
   SHARE_STEPS,
   STUDIO_STEP_DETAILS,
   STUDIO_STEPS,
@@ -65,9 +62,6 @@ const AssistStepSchema = z.enum(ASSIST_STEPS);
 const CodeStepSchema = z.enum(CODE_STEPS);
 const CodeCompletionKindSchema = z.enum(CODE_COMPLETION_KINDS);
 const CodeCompletionOutcomeSchema = z.enum(CODE_COMPLETION_OUTCOMES);
-const RemixStepSchema = z.enum(REMIX_STEPS);
-const RemixViaSchema = z.enum(REMIX_PAINTED_VIAS);
-const RemixControlSchema = z.enum(REMIX_CONTROLS);
 const HowToPlayViaSchema = z.enum(HOW_TO_PLAY_VIAS);
 const PlayViaSchema = z.enum(PLAY_VIAS);
 // Re-validated: a grouping key must not carry markup or an address.
@@ -131,13 +125,6 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('editor_step'), step: EditorStepSchema, ...offsetField }),
   z.object({ type: z.literal('assist_step'), step: AssistStepSchema, ...offsetField }),
-  z.object({
-    type: z.literal('remix_step'),
-    step: RemixStepSchema,
-    via: RemixViaSchema.optional(),
-    control: RemixControlSchema.optional(),
-    ...offsetField,
-  }),
   z.object({
     type: z.literal('code_step'),
     step: CodeStepSchema,
@@ -312,14 +299,6 @@ export async function registerVisitTelemetryRoutes(
             latencyMs: event.latencyMs,
             ...(event.candidateCount === undefined ? {} : { candidateCount: event.candidateCount }),
             ...(event.completionChars === undefined ? {} : { completionChars: event.completionChars }),
-          };
-        case 'remix_step':
-          return {
-            ...base,
-            type: event.type,
-            step: event.step,
-            ...(event.via === undefined ? {} : { via: event.via }),
-            ...(event.control === undefined ? {} : { control: event.control }),
           };
         case 'how_to_play_opened':
           return {

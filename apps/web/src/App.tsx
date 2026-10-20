@@ -49,7 +49,7 @@ import { navigateToOAuthReturn, parseOAuthReturnParam } from './oauthRedirect.js
 
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the studio (and everything it drags in — the code
-// editor, the remix panel), the review desk, or party's multiplayer client.
+// editor), the review desk, or party's multiplayer client.
 const CreatorStudioView = lazy(() =>
   import('./surfaces/studio/CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })),
 );
@@ -112,7 +112,6 @@ export function App() {
     stageContent,
     partyError,
     handlePlayGame,
-    handleRemixGame,
     handleExitCatalogTheater,
     handleExitPartyTheater,
     handlePlayTogether,
@@ -386,12 +385,11 @@ export function App() {
             onNavigate={navigate}
             onPlay={handlePlayGame}
             onPlayTogether={handlePlayTogether}
-            onRemix={handleRemixGame}
             onCanonicalPath={(path) => navigate(path, { replace: true })}
             onGameLoaded={setGameTitle}
           />
         </main>
-        {/* Play/Remix on this page set stageContent; without the overlay here the
+        {/* Play on this page set stageContent; without the overlay here the
             body scroll-locks (`player-open`) and nothing covers the page. */}
         {stageOverlay}
         {partyError && <p className="error party-error">{partyError}</p>}
@@ -534,7 +532,6 @@ export function App() {
                       state={catalogStatus}
                       onPlay={handlePlayGame}
                       onPlayTogether={handlePlayTogether}
-                      onRemix={handleRemixGame}
                       onRetry={handleRetryCatalog}
                     />
                   )

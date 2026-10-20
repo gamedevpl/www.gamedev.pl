@@ -30,12 +30,10 @@ export { CHAT_AGENT_SCOPES, type ChatAgentScope } from './chat-agent-scope.js';
 export {
   BETA_INVITE_STATUSES,
   CONTRIBUTION_MODES,
-  REMIX_MODES,
   VOTE_VALUES,
   WAITLIST_STATUSES,
   type BetaInviteStatus,
   type ContributionMode,
-  type RemixMode,
   type VoteValue,
   type WaitlistStatus,
 } from './community-vocab.js';
@@ -70,13 +68,6 @@ export { PREFLIGHT_KINDS, type PreflightKind } from './preflight-kind.js';
 export { PROPERTY_TYPES, type PropertyType } from './property-type.js';
 export { PROPOSAL_PUBLIC_STATES, type ProposalPublicState } from './proposal-public-state.js';
 export { RECOMMEND_REASONS, type RecommendReason } from './recommend-reason.js';
-export {
-  REMIX_SUGGESTION_DIRECTIONS,
-  REMIX_SUGGESTION_STARTERS,
-  type RemixSuggestion,
-  type RemixSuggestionDirection,
-  type RemixSuggestionStarterId,
-} from './remix-suggestion.js';
 export {
   ASSESSMENT_CHECKLIST_MARKS,
   ASSESSMENT_INPUT_METHODS,

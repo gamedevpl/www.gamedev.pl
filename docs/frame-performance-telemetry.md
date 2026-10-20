@@ -13,7 +13,7 @@ hardware. Missing values remain unknown; a Mac cannot reliably identify an M4.
 
 `game_opened.artifactVersion` is SHA-256 of the exact served HTML, computed once per
 cached document. Store builds, repository snapshots and assembled fallbacks share
-this identity. It describes content, not a source commit. Unshared drafts remain excluded; authorized review candidates are collected and flagged by the API; an in-session remix suspends published-game tracking.
+this identity. It describes content, not a source commit. Unshared drafts remain excluded; authorized review candidates are collected and flagged by the API.
 
 `alive.performance` version 1 includes:
 

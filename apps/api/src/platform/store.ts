@@ -187,7 +187,6 @@ import type {
   ProposalMessage,
   ProposalRecord,
   GameContributionSettings,
-  GameRemixSettings,
   ContributorBlockRecord,
 } from '../store/records/contribution.js';
 export type {
@@ -197,7 +196,6 @@ export type {
   ProposalMessage,
   ProposalRecord,
   GameContributionSettings,
-  GameRemixSettings,
   ContributorBlockRecord,
 };
 import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } from '../store/records/contribution.js';

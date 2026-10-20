@@ -349,18 +349,6 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # default pool's open egress. Empty is the default pool.
   ENV_VARS="${ENV_VARS}|GATE_WORKER_POOL=${GATE_WORKER_POOL:-}|GATE_EGRESS_PROXY=${GATE_EGRESS_PROXY:-}"
 fi
-# The remix code-lane trace. Threaded here as well as in the Actions workflow,
-# because --set-env-vars replaces the whole map: a deploy from this script would
-# otherwise drop a flag the workflow had set, and the trace would stop with
-# nothing to say why. Both supported paths carry it or neither should.
-#
-# Note this only opens the window. Closing it does not wait for either path —
-# `remixTracePaused` on the creation-limits document stops emission within the
-# breaker's TTL, because the interval between deciding to stop and stopping is
-# spent writing players' own words to the log.
-if [ -n "${REMIX_DEBUG:-}" ]; then
-  ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"
-fi
 # Default true since www moved behind Firebase Hosting (2026-09-06). Off, every per-IP
 # limiter collapses onto Google's frontend addresses; the peer check in client-address.ts
 # keeps the flag inert on the run.app URL, so true is safe on both deploy paths. Until
@@ -402,18 +390,17 @@ for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOW
 done
 # Feature flags the Actions workflow threads from repo variables but this script did not,
 # found by auditing the two paths against each other after the 2026-08-04 incident. A
-# deploy from here would silently drop them: the code lane and the editor assist would
-# switch off, and MCP clients would lose their authorization-server list — each looking
+# deploy from here would silently drop them: the editor assist would switch off, and MCP clients would lose their authorization-server list — each looking
 # like a spontaneous regression with a deploy as the only clue.
 #
 # SEED_DISPATCH used to head this list; it is gone, round 0 is unconditional now.
 # Its kill switch moved to the creation-limits document (seedingMode), not an env var —
 # see ops: seed-provider-selection-plan.md.
 #
-# The rule this file already states for REMIX_DEBUG applies to every one of them: both
+# The rule this file states for the Vertex levers applies to every one of them: both
 # supported paths carry a flag, or neither should.
 LOCAL_TAB_COMPLETE="${LOCAL_TAB_COMPLETE:-true}"
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE LOCAL_TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
+for FLAG_VAR in EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE LOCAL_TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
