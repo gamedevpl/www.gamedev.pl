@@ -68,7 +68,7 @@
     "apps/api/src/agent-surface/managed-availability.test.ts": 200,
     "apps/api/src/agent-surface/managed-availability.ts": 186,
     "apps/api/src/agent-surface/managed-backend.test.ts": 482,
-    "apps/api/src/agent-surface/managed-backend.ts": 403,
+    "apps/api/src/agent-surface/managed-backend.ts": 410,
     "apps/api/src/agent-surface/managed-provider-anthropic.test.ts": 239,
     "apps/api/src/agent-surface/managed-provider-anthropic.ts": 307,
     "apps/api/src/agent-surface/managed-provider-gemini.test.ts": 234,

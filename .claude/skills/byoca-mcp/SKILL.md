@@ -337,6 +337,14 @@ the newline-joined list. Each PUT names its file with `?path=`, which must be li
 (`stagePutPath`). A managed `tools/list` shows that shape (`managed` on the tool entry). Public
 clients keep one `uploads[]` entry per path, and a single-path token PUT without `?path=` as before.
 
+**Managed kickoff context.** On a lane with a mounted workspace, the loader also reads the
+round's pending creator messages and the creator notes (`workspace-context.ts`). The kickoff then
+carries them fenced as data, with message ids for `end`'s `ackInboxIds` and the notes revision
+for `creator_notes` writes. When there is no seed, no delivery and none generating, it says the
+game has no files yet. The opening steps then drop `read_inbox`, `creator_notes`, `get_sources`
+and, for a new game whose spec is inlined, `get_brief`. If reading that context fails, the
+kickoff falls back to the read tools.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens

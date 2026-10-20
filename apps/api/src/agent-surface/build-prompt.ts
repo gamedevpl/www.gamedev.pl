@@ -2,6 +2,7 @@
 
 import type { BuildBrief } from './agent-backend.js';
 import { buildPromptOpening, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
+import { requestSourceLines, type Inlined, type KickoffInlined } from './workspace-context.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false }): string {
@@ -62,11 +63,11 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
     );
   }
 
-  return finish(lines, brief);
+  return finish(lines, brief, lane.inlined);
 }
 
 // workspace: mounted-kit kickoff lines; mountedSources: the game is in them too.
-type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean; maxSeconds?: number };
+type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean; maxSeconds?: number } & Inlined;
 
 const GET_SOURCES = [
   "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
@@ -81,7 +82,7 @@ const SHELL_DOWNLOAD = [
 
 // The push contract: report and upload over the build channel, clocked.
 function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane): string[] {
-  const { shell, workspace, mountedSources } = lane;
+  const { shell, workspace, mountedSources, inlined } = lane;
   return [
     '## This round is on a clock',
     '',
@@ -100,10 +101,10 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          ...openingSteps(brief, Boolean(workspace), Boolean(mountedSources)),
+          ...openingSteps(brief, { workspace: Boolean(workspace), mountedSources: Boolean(mountedSources), inlined }),
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
-    ...(mountedSources ? [] : GET_SOURCES),
+    ...(mountedSources || inlined?.noFiles ? [] : GET_SOURCES),
     ...(shell
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),
@@ -137,7 +138,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
 }
 
 // The creator's words: inlined for a fresh round, pointed at tools.
-function finish(lines: string[], brief: BuildBrief): string {
+function finish(lines: string[], brief: BuildBrief, inlined?: KickoffInlined): string {
   // Queue write failed — inline directly; read_inbox/get_transcript have nothing.
   if (brief.feedback && brief.feedbackQueueFailed) {
     lines.push(
@@ -160,13 +161,7 @@ function finish(lines: string[], brief: BuildBrief): string {
       '',
       '## What the creator asked for',
       '',
-      'The creator’s request is not inlined in this prompt: a single relayed message can be the',
-      'terse tail of a much longer conversation, and building from the tail alone builds the',
-      'wrong game. Read the request through the tools instead:',
-      '',
-      '- `read_inbox` — the creator’s pending message(s): the request this round exists for.',
-      '  Apply them, then `ack_inbox`. An empty inbox means the request already reached the',
-      '  round another way — continue from the brief and the transcript.',
+      ...requestSourceLines(inlined),
       '- `get_brief` — the spec: what this game is meant to be.',
       '- `get_transcript` — the creator conversation and earlier rounds, in windows (most',
       '  recent first; pass cursor to page further back, never the whole thing at once).',

@@ -3,7 +3,8 @@ import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './a
 import { withoutRetiredPaths } from '@gamedevpl/contract';
 import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
-import { startWithWorkspace, type ManagedWorkspaceLoader } from './managed-workspace.js';
+import { startWithWorkspace, type ManagedWorkspace, type ManagedWorkspaceLoader } from './managed-workspace.js';
+import { inlinedBy } from './workspace-context.js';
 import { resolveCreatorMemory, type CreatorMemoryIndex } from './managed-creator-memory.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
@@ -178,8 +179,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(memoryStoreId ? { memoryStoreId } : {}),
     };
     const load = options.workspace ? () => options.workspace!(brief) : undefined;
-    const withWorkspace = (lines: string[], mountedSources: boolean) =>
-      buildPrompt(effectiveBrief, { shell, workspace: lines, mountedSources, maxSeconds: options.maxDurationSeconds });
+    const withWorkspace = (lines: string[], ws: ManagedWorkspace) =>
+      buildPrompt(effectiveBrief, {
+        shell,
+        workspace: lines,
+        mountedSources: ws.delivered === true,
+        inlined: inlinedBy(ws.context),
+        maxSeconds: options.maxDurationSeconds,
+      });
     const vendor = {
       workspaceArchiveDir: options.provider.workspaceArchiveDir,
       startSession: (r: ManagedSessionRequest) => ((requestedAt = Date.now()), options.provider.startSession(r)),

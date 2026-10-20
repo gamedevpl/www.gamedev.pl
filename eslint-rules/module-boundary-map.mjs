@@ -457,6 +457,8 @@ const FILE_BUCKET = {
   'mcp-proposal-tools': 'agent-surface',
   'mcp-source-stage-tools': 'agent-surface',
   'stage-upload-batch': 'agent-surface',
+  'workspace-context': 'agent-surface',
+  'workspace-context.test': 'agent-surface',
   'mcp-source-read-tools': 'agent-surface',
   'source-archive': 'agent-surface',
   'mcp-source-patch-tools': 'agent-surface',

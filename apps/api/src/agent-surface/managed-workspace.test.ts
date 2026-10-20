@@ -153,7 +153,7 @@ describe('startWithWorkspace', () => {
       REQUEST,
       promptWith,
     );
-    expect(promptWith).toHaveBeenCalledWith(expect.any(Array), true);
+    expect(promptWith).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ delivered: true }));
     expect(startSession).toHaveBeenCalledWith({ ...REQUEST, prompt: 'ws', workspaceArchives: WORKSPACE.archives });
   });
 

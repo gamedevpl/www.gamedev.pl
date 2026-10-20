@@ -1,4 +1,5 @@
 import type { BuildBrief } from './agent-backend.js';
+import type { KickoffInlined } from './workspace-context.js';
 
 // A refused delivery leaves the work staged; clearing blind destroyed it.
 const STAGED_FIRST =
@@ -41,15 +42,24 @@ function undeliveredRequest(brief: BuildBrief): string {
     : 'take the request from `get_brief` and `read_inbox` together, reading `get_transcript` when the latest message is terse';
 }
 
-// A mounted workspace names the kit, so get_kit is not a read.
-export function openingSteps(brief: BuildBrief, workspace: boolean, mountedSources: boolean): string[] {
-  const reads = ['`get_brief`', '`read_inbox`', '`creator_notes` (sessionKey only)'];
-  if (!mountedSources) reads.push('`get_sources`');
-  if (!workspace) reads.push('`get_kit`');
+// Reads the kickoff already carries are not asked for again.
+export function openingSteps(
+  brief: BuildBrief,
+  lane: { workspace: boolean; mountedSources: boolean; inlined?: KickoffInlined },
+): string[] {
+  const specInline = !brief.feedback && Boolean(brief.spec.trim());
+  const reads = [
+    ...(lane.inlined && specInline ? [] : ['`get_brief`']),
+    ...(lane.inlined?.inbox ? [] : ['`read_inbox`']),
+    ...(lane.inlined?.notes ? [] : ['`creator_notes` (sessionKey only)']),
+    ...(lane.mountedSources || lane.inlined?.noFiles ? [] : ['`get_sources`']),
+    ...(lane.workspace ? [] : ['`get_kit`']),
+  ];
+  const list = reads.length > 1 ? `${reads.slice(0, -1).join(', ')} and ${reads.at(-1)}` : reads[0];
   return [
     'Before your first edit, in this order:',
     `1. \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
-    `2. ${reads.slice(0, -1).join(', ')} and ${reads.at(-1)}.`,
-    '3. One short `report_progress`, in the creator’s language, of what you will change.',
+    ...(list ? [`2. ${list}.`] : []),
+    `${list ? 3 : 2}. One short \`report_progress\`, in the creator’s language, of what you will change.`,
   ];
 }
