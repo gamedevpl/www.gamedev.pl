@@ -107,7 +107,8 @@ jobs:
         id: read
         if: inputs.classify_push == '1'
         env:
-          BASELINE: ${{ needs.pointer.outputs.baseline }}
+          GCS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+          SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
         run: |
           set -euo pipefail
           baseline=
