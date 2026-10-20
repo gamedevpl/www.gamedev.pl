@@ -63,7 +63,7 @@ function filePath(env: NodeJS.ProcessEnv): string {
   return join(env.HOME ?? homedir(), '.config', 'gamedevpl', 'credentials.bin');
 }
 
-// Pre-vault files: the key came from HOME alone, so they are migrated on read.
+// Pre-vault key from HOME alone; such files migrate on read.
 function legacyFileKey(env: NodeJS.ProcessEnv): Buffer {
   return scryptSync(`gamedev-cli:${env.HOME ?? homedir()}`, 'gdpl-cli-v1', 32);
 }
@@ -159,7 +159,7 @@ export function encryptedFileStore(
 ): TokenStore {
   const path = filePath(env);
   const keyPath = `${path}.key`;
-  // An explicit file store keeps its key beside it; the default asks the OS vault.
+  // Explicit file stores keep their key beside them, not in the vault.
   const vault = fileKeychainOptedIn(env) ? null : options.vault === undefined ? platformKeyVault() : options.vault;
   const account = resolvePath(path);
   let cached: Buffer[] | null = null;
