@@ -35,6 +35,7 @@ describe('resolveCreatorMemory', () => {
     await index.claimCreatorMemory({ ownerUid: 'g:ada', vendor: 'anthropic', storeId: 'mem_won', createdAt: 't' });
     const racing = {
       getAccountErasure: async () => null,
+      getUser: async () => null,
       getCreatorMemory: async () => null,
       claimCreatorMemory: index.claimCreatorMemory.bind(index),
       deleteCreatorMemory: index.deleteCreatorMemory.bind(index),
@@ -48,6 +49,7 @@ describe('resolveCreatorMemory', () => {
     const vendor = provider(['mem_orphan']);
     const broken = {
       getAccountErasure: async () => null,
+      getUser: async () => null,
       deleteCreatorMemory: async () => undefined,
       getCreatorMemory: async () => null,
       claimCreatorMemory: async () => Promise.reject(new Error('firestore down')),
@@ -75,12 +77,20 @@ describe('resolveCreatorMemory', () => {
     expect(vendor.createMemoryStore).not.toHaveBeenCalled();
   });
 
+  it('gives a same-uid signup after erasure its own memory', async () => {
+    const index = new InMemoryStore();
+    await index.beginAccountErasure('g:ada', '2000-01-01T00:00:00.000Z');
+    await index.upsertUser({ uid: 'g:ada' });
+    expect(await resolveCreatorMemory(provider(['mem_new']), index, 'g:ada')).toBe('mem_new');
+  });
+
   it('undoes a claim that lands after erasure listed the stores', async () => {
     const index = new InMemoryStore();
     const vendor = provider(['mem_late']);
     let fenced = false;
     const racing = {
       getAccountErasure: async () => (fenced ? 't' : null),
+      getUser: async () => null,
       getCreatorMemory: index.getCreatorMemory.bind(index),
       claimCreatorMemory: async (record: Parameters<typeof index.claimCreatorMemory>[0]) => {
         const held = await index.claimCreatorMemory(record);

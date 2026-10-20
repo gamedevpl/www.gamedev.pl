@@ -163,12 +163,11 @@ export class InMemoryStore extends OAuthFacade implements Store {
     (slug, record) => this.gameAccessStore.access.set(slug, record),
     (ownerUid, at) => this.shelfGuard.tombstoneAt(ownerUid, at),
   );
-  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
+  private erasedIncarnation = (uid: string) =>
+    erasedIncarnation(this.identityStore.users.get(uid) ?? null, this.gameAccessStore.erasedAt.get(uid) ?? null);
+  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access, this.erasedIncarnation);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
-  private dispatchStore = new InMemoryDispatchStore(
-    this.submissions,
-    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
-  );
+  private dispatchStore = new InMemoryDispatchStore(this.submissions, this.erasedIncarnation);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected gameMembershipStore = new InMemoryGameMembershipStore(
     (slug) => this.gameAccessStore.access.get(slug) ?? null,

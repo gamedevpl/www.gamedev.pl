@@ -9,6 +9,7 @@ import type { BuilderHandoff } from '../records/rounds.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
 import type { GameAccessRecord } from '../records/game-access.js';
+import { erasedInTransaction } from './erasure-fence.js';
 import { epochForRound } from './round-epoch.js';
 import { clearRoundSignals, takeoverRecord } from './round-close.js';
 
@@ -66,6 +67,7 @@ export class InMemoryRoundsStore implements RoundsStore {
   constructor(
     private submissions: Map<number, SubmissionRecord>,
     private gameAccess: Map<string, GameAccessRecord>,
+    private erased: (uid: string) => boolean = () => false,
   ) {}
 
   async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
@@ -124,8 +126,8 @@ export class InMemoryRoundsStore implements RoundsStore {
     if (!sub || sub.builderHandoff) return false;
     const from = sub.builder ?? sub.defaultBuilder ?? 'platform';
     if (from === to) return false;
-    const builderHandoff = { from, to, requestedAt, awaitsAgentAck, ...(requestedByUid ? { requestedByUid } : {}) };
-    this.submissions.set(jobId, { ...sub, builderHandoff });
+    const by = requestedByUid && !this.erased(requestedByUid) ? { requestedByUid } : {};
+    this.submissions.set(jobId, { ...sub, builderHandoff: { from, to, requestedAt, awaitsAgentAck, ...by } });
     return true;
   }
 
@@ -315,7 +317,9 @@ export class FirestoreRoundsStore implements RoundsStore {
       if (current.builderHandoff) return false;
       const from = current.builder ?? current.defaultBuilder ?? 'platform';
       if (from === to) return false;
-      const builderHandoff = { from, to, requestedAt, awaitsAgentAck, ...(requestedByUid ? { requestedByUid } : {}) };
+      // An erasure that already scrubbed this uid must not see it return.
+      const keep = requestedByUid && !(await erasedInTransaction(this.db, tx, requestedByUid));
+      const builderHandoff = { from, to, requestedAt, awaitsAgentAck, ...(keep ? { requestedByUid } : {}) };
       tx.set(ref, { builderHandoff }, { merge: true });
       return true;
     });

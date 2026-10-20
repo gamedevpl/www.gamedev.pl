@@ -41,7 +41,7 @@ describe('creator memory on account erasure', () => {
   it.each([
     ['in memory', () => new InMemoryStore()],
     ['firestore', () => new FirestoreStore(fakeFirestore().db)],
-  ])('drops a fenced uid from a dispatch that lands after the scrub (%s)', async (_name, make) => {
+  ])('drops a fenced uid from a dispatch or handoff that lands after the scrub (%s)', async (_name, make) => {
     const store = make();
     await store.createSubmission(8, 'g:stays', 'Late');
     await store.beginAccountErasure('g:leaver', 't');
@@ -49,6 +49,23 @@ describe('creator memory on account erasure', () => {
     const dispatch = (await store.getSubmission(8))?.dispatch;
     expect(dispatch?.refs).toEqual(['s2']);
     expect(dispatch?.memoryOwnerUid).toBeUndefined();
+    await store.requestBuilderHandoff(8, 'self', 't', true, 'g:leaver');
+    expect((await store.getSubmission(8))?.builderHandoff).toMatchObject({ to: 'self' });
+    expect((await store.getSubmission(8))?.builderHandoff?.requestedByUid).toBeUndefined();
+  });
+
+  it.each([
+    ['in memory', () => new InMemoryStore()],
+    ['firestore', () => new FirestoreStore(fakeFirestore().db)],
+  ])('keeps the memory owner of a same-uid signup after erasure (%s)', async (_name, make) => {
+    const store = make();
+    await store.createSubmission(9, 'g:stays', 'Back');
+    await store.beginAccountErasure('g:returner', '2000-01-01T00:00:00.000Z');
+    await store.upsertUser({ uid: 'g:returner' });
+    await store.recordDispatch(9, { backend: 'managed:anthropic', ref: 's3', memoryOwnerUid: 'g:returner' });
+    expect((await store.getSubmission(9))?.dispatch?.memoryOwnerUid).toBe('g:returner');
+    await store.requestBuilderHandoff(9, 'self', 't', true, 'g:returner');
+    expect((await store.getSubmission(9))?.builderHandoff?.requestedByUid).toBe('g:returner');
   });
 
   it('fails the erasure and keeps the record when the vendor refuses', async () => {

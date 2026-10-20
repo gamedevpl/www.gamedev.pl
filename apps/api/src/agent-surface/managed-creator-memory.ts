@@ -2,13 +2,14 @@
 
 import { createHash } from 'node:crypto';
 import type { CreatorMemoryStore, Store } from '../platform/store.js';
+import { erasedIncarnation } from '../store/records/game-access.js';
 import type { ManagedAgentProvider } from './managed-agent.js';
 
 export type CreatorMemoryIndex = Pick<
   CreatorMemoryStore,
   'getCreatorMemory' | 'claimCreatorMemory' | 'deleteCreatorMemory'
 > &
-  Pick<Store, 'getAccountErasure'>;
+  Pick<Store, 'getAccountErasure' | 'getUser'>;
 
 // The vendor and the agent see this label, never the uid.
 export function creatorMemoryLabel(ownerUid: string): string {
@@ -23,9 +24,11 @@ export async function resolveCreatorMemory(
   now: () => Date = () => new Date(),
 ): Promise<string | undefined> {
   if (!index || !ownerUid || !provider.createMemoryStore) return undefined;
+  // A same-uid signup after erasure is a new, unfenced incarnation.
+  const erased = async () => erasedIncarnation(await index.getUser(ownerUid), await index.getAccountErasure(ownerUid));
   let unclaimed: string | undefined;
   try {
-    if (await index.getAccountErasure(ownerUid)) return undefined;
+    if (await erased()) return undefined;
     const existing = await index.getCreatorMemory(ownerUid, provider.vendor);
     if (existing) return existing.storeId;
     const storeId = await provider.createMemoryStore(creatorMemoryLabel(ownerUid));
@@ -40,7 +43,7 @@ export async function resolveCreatorMemory(
     // A concurrent round claimed the slot first; ours would be orphaned.
     if (held.storeId !== storeId) void provider.deleteMemoryStore?.(storeId).catch(() => undefined);
     // Erasure fences, then lists; a claim after its list must undo itself.
-    if (await index.getAccountErasure(ownerUid)) {
+    if (await erased()) {
       await provider.deleteMemoryStore?.(held.storeId);
       await index.deleteCreatorMemory(ownerUid, provider.vendor);
       return undefined;
