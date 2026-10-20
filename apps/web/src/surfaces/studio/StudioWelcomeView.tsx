@@ -16,33 +16,9 @@ import './studio-welcome.css';
 // Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function computeStartTime(status: SubmissionStatus | null): number | null {
-  const start = Date.parse(status?.roundStartedAt ?? '');
-  return Number.isFinite(start) && start > 0 ? start : null;
-}
-
-function computeEndTime(status: SubmissionStatus | null, startTime: number | null): number | null {
-  if (!status) return null;
-  if (status.agentEndedAt) {
-    const t = Date.parse(status.agentEndedAt);
-    if (!isNaN(t) && t > 0) return t;
-  }
-  const deliveries = (status.playable ?? [])
-    .filter((item) => item.origin !== 'seed' && item.origin !== 'staged')
-    .map((item) => Date.parse(item.createdAt ?? ''))
-    .filter((time) => Number.isFinite(time) && time > 0 && time >= (startTime ?? 0));
-  if (deliveries.length > 0) return Math.min(...deliveries);
-  if (status.events && status.events.length > 0) {
-    const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
-    if (times.length > 0) {
-      return Math.max(...times);
-    }
-  }
-  if (status.lastAgentSignalAt) {
-    const t = Date.parse(status.lastAgentSignalAt);
-    if (!isNaN(t) && t > 0) return t;
-  }
-  return null;
+function parseTimestamp(value: string | undefined): number | null {
+  const time = Date.parse(value ?? '');
+  return Number.isFinite(time) && time > 0 ? time : null;
 }
 
 function formatElapsed(elapsedMs: number): string {
@@ -190,8 +166,8 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
 
   const progress = welcomeProgressMessage(status, t);
   const label = welcomeStatusLabel(status, t);
-  const startTime = computeStartTime(status) ?? (isRunning ? mountedAtRef.current : null);
-  const endTime = isRunning ? now : computeEndTime(status, startTime);
+  const startTime = parseTimestamp(status?.roundStartedAt) ?? (isRunning ? mountedAtRef.current : null);
+  const endTime = isRunning ? now : parseTimestamp(status?.agentEndedAt);
   const elapsedText =
     startTime !== null && endTime !== null && endTime >= startTime ? formatElapsed(endTime - startTime) : null;
   const mascotEmotion = getMascotEmotion(status);

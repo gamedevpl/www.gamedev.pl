@@ -73,18 +73,47 @@ it('hides completed duration when the end predates the current round', async () 
   expect(timer).toBeNull();
 });
 
-it('counts from the server start while running, then freezes at delivery', async () => {
+it('counts from the server start and waits for an explicit end before showing completion', async () => {
   const status: SubmissionStatus = { status: 'building', roundStartedAt: startedAt };
   expect((await render(status))?.textContent).toBe('10m 25s');
   await act(async () => vi.advanceTimersByTime(1000));
   expect(document.querySelector('.studio-welcome-timer')?.textContent).toBe('10m 26s');
-  const timer = await render({
+  const readyStatus: SubmissionStatus = {
     ...status,
     playable: [
       { ref: 'preview-1', createdAt: endedAt },
       { ref: 'previous-round', createdAt: '2026-10-19T20:00:00.000Z' },
       { ref: 'seed', origin: 'seed', createdAt: startedAt },
     ],
-  });
-  expect(timer?.textContent).toBe('Completed in 5m 24s');
+  };
+  expect(await render(readyStatus)).toBeNull();
+  expect(document.querySelector('.studio-welcome-ready-callout')).toBeTruthy();
+  expect((await render({ ...readyStatus, agentEndedAt: endedAt }))?.textContent).toBe('Completed in 5m 24s');
+});
+
+it('keeps completion stable after the first preview and all messages have been pruned', async () => {
+  const status: SubmissionStatus = {
+    status: 'in_review',
+    roundStartedAt: startedAt,
+    agentEndedAt: endedAt,
+    playable: [{ ref: 'first-preview', createdAt: '2026-10-20T21:00:00.000Z' }],
+  };
+  expect((await render(status))?.textContent).toBe('Completed in 5m 24s');
+  const retained = Array.from({ length: 4 }, (_, i) => ({
+    ref: `preview-${i + 2}`,
+    createdAt: `2026-10-20T21:04:0${i}.000Z`,
+  }));
+  expect((await render({ ...status, playable: retained, events: [] }))?.textContent).toBe('Completed in 5m 24s');
+  expect((await render({ ...status, playable: [], events: [] }))?.textContent).toBe('Completed in 5m 24s');
+});
+
+it('does not report completion from a final message or heartbeat without an agent end', async () => {
+  expect(
+    await render({
+      status: 'in_review',
+      roundStartedAt: startedAt,
+      lastAgentSignalAt: endedAt,
+      events: [{ id: 'done', kind: 'done', text: 'Draft ready.', createdAt: endedAt }],
+    }),
+  ).toBeNull();
 });
