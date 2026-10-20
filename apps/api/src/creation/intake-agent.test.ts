@@ -46,7 +46,7 @@ describe('IntakeChatAgent', () => {
     expect(DEFAULT_INTAKE_MODEL).toBe('gemini-3.5-flash-lite');
   });
 
-  // 2026-10-19: a stalled Vertex used to end every CLI chat turn in the fail-closed reply.
+  // 2026-10-19: a stalled Vertex failed every CLI chat turn closed.
   it('answers from the OpenAI stand-in when Vertex stalls', async () => {
     const seen: string[] = [];
     const agent = new IntakeChatAgent({

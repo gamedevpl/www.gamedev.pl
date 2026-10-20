@@ -294,8 +294,7 @@ export const privacyEn: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderating and refining your game description; checking illustrations of clarifying-question ' +
-                'answers for safety; understanding your messages in the CLI chat; suggesting code completions in ' +
-                'the Code editor',
+                'answers for safety; reading your CLI chat messages; suggesting code completions in the Code editor',
               'USA / global — Standard Contractual Clauses',
             ],
             [

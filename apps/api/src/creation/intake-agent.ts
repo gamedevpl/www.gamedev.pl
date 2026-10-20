@@ -91,7 +91,7 @@ export class IntakeChatAgent implements IntakeAgent {
       client?: GenAIClient;
       model?: string;
       timeoutMs?: number;
-      // OpenAI stand-in for a stalled Vertex. An injected client has none unless given one.
+      // OpenAI stand-in; an injected client gets none unless given one.
       fallbackClient?: GenAIClient;
       fallbackModel?: string;
     } = {},

@@ -17,7 +17,7 @@ export function resolveRefineFallbackModel(env: NodeJS.ProcessEnv = process.env)
   return configured;
 }
 
-// The CLI intake stand-in: on wherever OpenAI is keyed; CLI_CHAT_FALLBACK_MODEL=none turns it off.
+// CLI intake stand-in: on when OpenAI is keyed; `none` disables.
 export function resolveIntakeFallbackModel(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const configured = env.CLI_CHAT_FALLBACK_MODEL?.trim() || OPENAI_REFINE_FALLBACK_MODEL;
   if (configured === 'none') return undefined;
