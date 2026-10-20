@@ -7,10 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.55.1 — 2026-10-20
+
 ### Fixed
 
-- Saved sign-ins are encrypted with a random key kept in the macOS Keychain or Secret Service (a private key file
-  beside the credentials otherwise); existing sign-ins move over on first use (#1922).
+- Saved sign-ins are encrypted with a random key kept in the macOS Keychain or Secret Service (a private key file beside the credentials otherwise); existing sign-ins move over on first use (#1922).
 
 ## 0.55.0 — 2026-10-19
 
