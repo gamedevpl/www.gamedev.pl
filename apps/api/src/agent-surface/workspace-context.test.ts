@@ -39,6 +39,8 @@ describe('kickoff context', () => {
     expect(fresh).toContain('2. `get_brief`.');
     expect(fresh).toContain('3. One short `report_progress`');
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
+    expect(fresh).toContain('give `GAME.json` a `touch` block');
+    expect(fresh).toContain('asserts on the core loop');
     const revision = buildPrompt(
       { ...BRIEF, feedback: 'faster', undelivered: true, previewVersion: 'v1' } as BuildBrief,
       {
@@ -51,6 +53,7 @@ describe('kickoff context', () => {
     expect(revision).toContain('2. `get_brief` and `read_inbox`.');
     expect(revision).toContain('Call `read_inbox` once as well');
     expect(revision).toContain('under “Creator messages not yet acknowledged”');
+    expect(revision).not.toContain('asserts on the core loop');
     expect(buildPrompt(BRIEF, { shell: true, workspace: lines })).toContain('`read_inbox`, `creator_notes`');
   });
 

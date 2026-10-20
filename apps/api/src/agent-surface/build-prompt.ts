@@ -2,7 +2,7 @@
 
 import type { BuildBrief } from './agent-backend.js';
 import { buildPromptOpening, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
-import { requestSourceLines, type Inlined, type KickoffInlined } from './workspace-context.js';
+import { NEW_GAME_CHECKS, requestSourceLines, type Inlined, type KickoffInlined } from './workspace-context.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false }): string {
@@ -105,6 +105,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources || inlined?.noFiles ? [] : GET_SOURCES),
+    ...(workspace && !brief.feedback && !brief.gateRepair ? NEW_GAME_CHECKS : []),
     ...(shell
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),

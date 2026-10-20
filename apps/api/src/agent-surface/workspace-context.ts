@@ -108,3 +108,10 @@ export function requestSourceLines(inlined: KickoffInlined | undefined): string[
     '  round another way — continue from the brief and the transcript.',
   ];
 }
+
+// A new game must play, on a phone too.
+export const NEW_GAME_CHECKS = [
+  'A new game must play on a phone: give `GAME.json` a `touch` block, as the kit’s games do. Leave it out only when the genre cannot use touch, and say why in `end.summary`.',
+  'Before the first preview, give `CAPTURE.json` asserts on the core loop (reaching the goal, winning, losing; the kit’s SKILL.md has the schema) and run the capture after your last edit. Fix what it shows broken, then submit even if polish remains.',
+  'When the first preview is delivered and more than ten minutes remain, play the loop again through the capture and submit a second preview with what it showed.',
+];
