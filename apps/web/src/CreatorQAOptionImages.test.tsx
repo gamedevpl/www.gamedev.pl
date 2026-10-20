@@ -22,7 +22,7 @@ async function flushEffects() {
 
 const tiles = () => document.querySelectorAll<HTMLImageElement>('img.qa-option__art');
 
-async function renderAtQuestion(question: Record<string, unknown>) {
+async function renderAtQuestion(question: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   const container = document.createElement('div');
@@ -33,6 +33,7 @@ async function renderAtQuestion(question: Record<string, unknown>) {
     initialConcept: 'Dodge the falling rocks and survive as long as possible',
     initialTitle: 'Rock Dodger',
     onSubmitWithConcept: () => undefined,
+    ...extra,
   };
   await act(async () => {
     root.render(createElement(CreatorQA, props as never));
@@ -73,6 +74,33 @@ describe('CreatorQA option images', () => {
     expect(tiles()).toHaveLength(3);
     // Decorative: the label beside it is what a screen reader reads.
     expect(tiles()[0]?.getAttribute('alt')).toBe('');
+  });
+
+  it.each([
+    ['platform', { label: 'Neon Arcade', dataUrl: 'data:image/webp;base64,BBB' }],
+    ['self', undefined],
+  ])('hands the picked tile on for a %s build only', async (builder, expected) => {
+    fetchOptionImages.mockResolvedValue([
+      { label: 'Pixel Art', image: 'data:image/webp;base64,AAA' },
+      { label: 'Neon Arcade', image: 'data:image/webp;base64,BBB' },
+      { label: 'Flat 2D', image: 'data:image/webp;base64,CCC' },
+    ]);
+    const onSubmitWithConcept = vi.fn();
+    await renderAtQuestion(VISUAL_QUESTION, { onSubmitWithConcept, initialBuilder: builder });
+
+    const click = async (element: Element | null | undefined) => {
+      await act(async () => {
+        element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+    };
+    await click(document.querySelectorAll('.qa-option')[1]);
+    await click(document.querySelector('.qa-shortcut'));
+    await click(document.querySelector('.btn-create-now'));
+
+    expect(onSubmitWithConcept).toHaveBeenCalledTimes(1);
+    const target = onSubmitWithConcept.mock.calls[0]?.[3];
+    expect(target).toEqual(expected ? { question: VISUAL_QUESTION.question, ...expected } : undefined);
   });
 
   it('shows no tiles at all when only some options came back', async () => {

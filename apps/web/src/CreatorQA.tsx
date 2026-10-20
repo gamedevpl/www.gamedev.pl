@@ -12,6 +12,7 @@ import { CreatorQASubmittingCard } from './CreatorQASubmittingCard.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PendingQaAnswers } from './pendingQa.js';
 import { pickQuestionArt, useOptionImages } from './useOptionImages.js';
+import { pickVisualTarget, type QaVisualTarget } from './qaVisualTarget.js';
 import { recordCreateStep } from './visitTelemetry.js';
 
 export interface QAOption {
@@ -38,7 +39,13 @@ interface CreatorQAProps {
    * when it had none. Editable here, and confirming it is what starts the build.
    */
   initialTitle: string;
-  onSubmitWithConcept: (finalConcept: string, title: string, builder: BuilderKind) => void;
+  onSubmitWithConcept: (
+    finalConcept: string,
+    title: string,
+    builder: BuilderKind,
+    // The picked tile, for the managed agent only.
+    visualTarget?: QaVisualTarget,
+  ) => void;
   /** Fires on every edit so the caller can park the name with the rest of the session. */
   onTitleChange?: (title: string) => void;
   onCancel?: () => void;
@@ -380,7 +387,10 @@ export function CreatorQA({
 
   const handleSubmit = () => {
     if (!titleReady) return;
-    onSubmitWithConcept(buildMergedConcept(), title.trim(), builder);
+    // Self builders never see tiles; that choice predates the managed exception.
+    const visualTarget =
+      builder === 'platform' ? pickVisualTarget(questions, optionImages, selectedAnswers) : undefined;
+    onSubmitWithConcept(buildMergedConcept(), title.trim(), builder, visualTarget);
   };
 
   const goTo = (next: number) => {

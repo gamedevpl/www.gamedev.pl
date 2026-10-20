@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { User } from './AuthContext.js';
+import { toBase64Png } from './attachmentImages.js';
 import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import { studioConnectPath, studioWelcomePath } from './core/router.js';
@@ -16,6 +17,7 @@ import type { QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import { saveSpec, type SavedSpec } from './mySpecs.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
+import { attachVisualTarget, type QaVisualTarget } from './qaVisualTarget.js';
 import { refineSpec, submitSpec, type PlatformBuilderAvailability, type SubmissionApiError } from './submissionApi.js';
 import { submissionErrorKey } from './submissionErrors.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
@@ -45,7 +47,12 @@ export type UseSpecSubmissionFlowResult = {
   platformBuilderAvailability: PlatformBuilderAvailability | undefined;
   setPlatformBuilderAvailability: Dispatch<SetStateAction<PlatformBuilderAvailability | undefined>>;
   handleSubmitSpec: (concept: string, displayName?: string, referenceImages?: string[]) => Promise<void>;
-  handleQaComplete: (finalConcept: string, title: string, builder: BuilderKind) => Promise<void>;
+  handleQaComplete: (
+    finalConcept: string,
+    title: string,
+    builder: BuilderKind,
+    visualTarget?: QaVisualTarget,
+  ) => Promise<void>;
   handleQaCancel: () => void;
   handleQaAnswersChange: (answers: PendingQaAnswers) => void;
   handleQaTitleChange: (title: string) => void;
@@ -240,7 +247,13 @@ export function useSpecSubmissionFlow({
   }
 
   // Creates the submission after the QA gate, then jumps to Studio.
-  async function submitRefinedSpec(title: string, concept: string, displayName: string, builder: BuilderKind) {
+  async function submitRefinedSpec(
+    title: string,
+    concept: string,
+    displayName: string,
+    builder: BuilderKind,
+    referenceImages: string[] | undefined = pendingReferenceImagesRef.current,
+  ) {
     setSubmissionStatus('loading');
     setSubmissionError(null);
 
@@ -252,7 +265,7 @@ export function useSpecSubmissionFlow({
         // The agent writes progress updates in the creator's language.
         locale: i18n.language,
         builder,
-        referenceImages: pendingReferenceImagesRef.current,
+        referenceImages,
       });
 
       // Save to localStorage
@@ -299,12 +312,23 @@ export function useSpecSubmissionFlow({
   }
 
   // The panel stays mounted until the submission lands, error included.
-  const handleQaComplete = async (finalConcept: string, title: string, builder: BuilderKind) => {
+  const handleQaComplete = async (
+    finalConcept: string,
+    title: string,
+    builder: BuilderKind,
+    visualTarget?: QaVisualTarget,
+  ) => {
     const spec = pendingSpec;
     if (!spec) return;
     // The name the creator settled on gates the build.
     recordCreateStep('title_confirmed');
-    await submitRefinedSpec(title, finalConcept, spec.displayName, builder);
+    const attached = await attachVisualTarget(
+      finalConcept,
+      pendingReferenceImagesRef.current,
+      visualTarget,
+      toBase64Png,
+    );
+    await submitRefinedSpec(title, attached.concept, spec.displayName, builder, attached.referenceImages);
   };
 
   const handleQaCancel = () => {
