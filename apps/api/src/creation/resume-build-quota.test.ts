@@ -1,7 +1,7 @@
 // Who pays for a managed round on a game that changed hands.
 
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryStore } from '../platform/store.js';
+import { DELETED_ACCOUNT_UID, InMemoryStore } from '../platform/store.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { roundAuthorityCurrent, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { verifyAgentToken } from '../platform/agent-token.js';
@@ -42,6 +42,7 @@ describe('managed quota on a transferred game', () => {
     const jobId = await transferredGame(store);
     const checkAndSpend = vi.fn(async () => ({ available: true as const }));
     const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
 
     const resumeBuild = createResumeBuild({
       store,
@@ -63,6 +64,8 @@ describe('managed quota on a transferred game', () => {
     expect(outcome.started).toBe(true);
     expect(checkAndSpend).toHaveBeenCalledTimes(1);
     expect(checkAndSpend.mock.calls[0]![0]).toBe('g:grace');
+    // The builder's memory follows the same person the quota does.
+    expect(dispatch.mock.calls[0]![0].ownerUid).toBe('g:grace');
   });
 });
 
@@ -108,5 +111,60 @@ describe('undelivered resume authority', () => {
     const brief = dispatch.mock.calls[0]![0];
     expect(verifyAgentToken(brief.channelToken, 'secret').roundGeneration).toBe(after.roundGeneration);
     expect(after.ownerUid).toBe('g:ada');
+  });
+});
+
+describe('creator memory on automatic continuations', () => {
+  it('keeps the round with the editor who started it, not the owner', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+    await store.setSubmissionSlug(jobId, 'sky-dodge');
+    const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
+    const resume = vi.spyOn(backend, 'resume');
+    const resumeBuild = createResumeBuild({
+      store,
+      submissionTokenSecret: 'secret',
+      now: Date.now,
+      notifyAppBaseUrl: 'https://example.test',
+      backendFor: async () => backend,
+      backendByStoredName: () => backend,
+      builderOf: () => 'platform',
+      recordSessionCost: async () => {},
+      releaseWorkspace: async () => {},
+      seedFromLatestDelivery: async () => undefined,
+    });
+
+    await resumeBuild({ jobId, feedback: 'faster', locale: 'en', log, ownerUid: 'g:editor' });
+    // The delivery nudge and gate repair pass no caller.
+    await resumeBuild({ jobId, feedback: '', locale: 'en', log, undelivered: true });
+
+    const briefs = [...dispatch.mock.calls, ...resume.mock.calls].map(([brief]) => brief.ownerUid);
+    expect(briefs).toEqual(['g:editor', 'g:editor']);
+    expect((await store.getSubmission(jobId))?.dispatch?.memoryOwnerUid).toBe('g:editor');
+  });
+
+  it('mounts no memory for a game an erased creator left behind', async () => {
+    const store = new InMemoryStore();
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, DELETED_ACCOUNT_UID, 'Orphan');
+    const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
+    const resumeBuild = createResumeBuild({
+      store,
+      submissionTokenSecret: 'secret',
+      now: Date.now,
+      notifyAppBaseUrl: 'https://example.test',
+      backendFor: async () => backend,
+      backendByStoredName: () => backend,
+      builderOf: () => 'platform',
+      recordSessionCost: async () => {},
+      releaseWorkspace: async () => {},
+      seedFromLatestDelivery: async () => undefined,
+    });
+    await resumeBuild({ jobId, feedback: '', locale: 'en', log, undelivered: true });
+    expect(dispatch.mock.calls[0]![0].ownerUid).toBeUndefined();
   });
 });

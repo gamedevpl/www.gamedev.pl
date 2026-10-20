@@ -37,6 +37,7 @@ export interface RoundsStore {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck?: boolean,
+    requestedByUid?: string,
   ): Promise<boolean>;
 
   acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string, generation?: number): Promise<BuilderHandoff | null>;
@@ -117,12 +118,14 @@ export class InMemoryRoundsStore implements RoundsStore {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
     const sub = this.submissions.get(jobId);
     if (!sub || sub.builderHandoff) return false;
     const from = sub.builder ?? sub.defaultBuilder ?? 'platform';
     if (from === to) return false;
-    this.submissions.set(jobId, { ...sub, builderHandoff: { from, to, requestedAt, awaitsAgentAck } });
+    const builderHandoff = { from, to, requestedAt, awaitsAgentAck, ...(requestedByUid ? { requestedByUid } : {}) };
+    this.submissions.set(jobId, { ...sub, builderHandoff });
     return true;
   }
 
@@ -302,6 +305,7 @@ export class FirestoreRoundsStore implements RoundsStore {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
@@ -311,7 +315,8 @@ export class FirestoreRoundsStore implements RoundsStore {
       if (current.builderHandoff) return false;
       const from = current.builder ?? current.defaultBuilder ?? 'platform';
       if (from === to) return false;
-      tx.set(ref, { builderHandoff: { from, to, requestedAt, awaitsAgentAck } }, { merge: true });
+      const builderHandoff = { from, to, requestedAt, awaitsAgentAck, ...(requestedByUid ? { requestedByUid } : {}) };
+      tx.set(ref, { builderHandoff }, { merge: true });
       return true;
     });
   }

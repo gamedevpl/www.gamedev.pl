@@ -109,6 +109,7 @@ import {
   registerManagedSessionRetentionRoutes,
   type ManagedSessionRetentionRoutesOptions,
 } from '../agent-surface/managed-session-retention-routes.js';
+import { createCreatorMemoryEraserFromEnv } from '../agent-surface/creator-memory-eraser.js';
 import {
   buildImprovementBrief,
   registerSuggestionInboxRoutes,
@@ -515,7 +516,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     }
                   : null;
               },
-              gameMemory: store,
+              creatorMemory: store,
               readCredentialRef: async (jobId: number, sessionRef: string) => {
                 const record = await store.getSubmission(jobId);
                 return record?.dispatch?.credentialRefs?.[sessionRef];
@@ -1066,6 +1067,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       createInternalAuthVerifierFromEnv(process.env, 'accountDeletionSweep'),
     now: options.accountDeletionRoutes?.now,
     graceMs: options.accountDeletionRoutes?.graceMs,
+    eraseMemoryStore: options.accountDeletionRoutes?.eraseMemoryStore ?? createCreatorMemoryEraserFromEnv(process.env),
   });
   // An alert can pause a lane itself.
   await registerSpendBrakeRoutes(app, {

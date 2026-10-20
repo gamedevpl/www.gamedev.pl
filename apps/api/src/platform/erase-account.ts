@@ -4,6 +4,8 @@ import { DELETED_ACCOUNT_UID, type AccountIdentityDeletionResult, type Store } f
 export interface EraseAccountResult {
   signals: ErasePlayerSignalsResult;
   identity: AccountIdentityDeletionResult;
+  // Vendor memory stores holding builder notes about this creator.
+  creatorMemoryStores: number;
 }
 
 export class OperatorAccountDeletionError extends Error {
@@ -27,10 +29,13 @@ export async function eraseAccount(options: {
   dryRun?: boolean;
   at?: string;
   adminUids?: ReadonlySet<string>;
+  eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
 }): Promise<EraseAccountResult> {
   if (options.adminUids?.has(options.uid)) throw new OperatorAccountDeletionError();
   const dryRun = options.dryRun ?? false;
   const signals = await erasePlayerSignals({ store: options.store, uid: options.uid, dryRun });
+  const at = options.at ?? new Date().toISOString();
+  const creatorMemoryStores = await eraseCreatorMemory({ ...options, at }, dryRun);
   const submissions = await options.store.listSubmissionsByOwner(options.uid);
   const preview: AccountIdentityDeletionResult = {
     publishedSlugs: submissions
@@ -46,7 +51,32 @@ export async function eraseAccount(options: {
     ? preview
     : await options.store.deleteAccountIdentity(options.uid, options.at ?? new Date().toISOString());
   if (!dryRun) await moveShelf(options.store, options.uid, identity);
-  return { signals, identity };
+  return { signals, identity, creatorMemoryStores };
+}
+
+// Before the identity goes, so a failure leaves the erasure due again.
+async function eraseCreatorMemory(
+  options: {
+    store: Store;
+    uid: string;
+    at: string;
+    eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
+  },
+  dryRun: boolean,
+): Promise<number> {
+  if (dryRun) return (await options.store.listCreatorMemory(options.uid)).length;
+  // Fence before listing: a round racing us sees it and backs out.
+  await options.store.beginAccountErasure(options.uid, options.at);
+  const records = await options.store.listCreatorMemory(options.uid);
+  // First, so no nudge or repair can remount what is deleted below.
+  await options.store.clearMemoryOwner(options.uid);
+  for (const record of records) {
+    if (!options.eraseMemoryStore) throw new Error('creator memory exists but no eraser is configured');
+    await options.eraseMemoryStore(record.vendor, record.storeId);
+    // Index last: a remount must never find a deleted store.
+    await options.store.deleteCreatorMemory(options.uid, record.vendor);
+  }
+  return records.length;
 }
 
 // Rounds moved owner, so both shelves are wrong.

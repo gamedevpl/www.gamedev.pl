@@ -29,6 +29,7 @@ export async function acknowledgeHandoff(
     log: input.log,
     builder: acknowledged.to,
     preserveRoundBudget: true,
+    ...(current.builderHandoff.requestedByUid ? { ownerUid: current.builderHandoff.requestedByUid } : {}),
     transition: {
       by: 'creator',
       reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',

@@ -21,14 +21,17 @@ const sessionBodies = (fetchImpl: ReturnType<typeof vi.fn>) =>
     .filter(([url]) => url.includes('/v1/sessions'))
     .map(([, init]) => JSON.parse(String(init.body)));
 
-describe('anthropic game memory', () => {
-  it('creates a store under the memory beta, named for the game', async () => {
+describe('anthropic creator memory', () => {
+  it('creates a store under the memory beta, named by the creator label', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ id: 'memstore_9' }));
-    expect(await provider(fetchImpl).createMemoryStore!('rocks')).toBe('memstore_9');
+    expect(await provider(fetchImpl).createMemoryStore!('0123456789abcdef')).toBe('memstore_9');
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.anthropic.com/v1/memory_stores');
     expect((init.headers as Record<string, string>)['anthropic-beta']).toBe('agent-memory-2026-07-22');
-    expect(JSON.parse(String(init.body))).toMatchObject({ name: 'game-rocks', metadata: { slug: 'rocks' } });
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      name: 'creator-0123456789abcdef',
+      metadata: { creator: '0123456789abcdef' },
+    });
   });
 
   it('mounts the store read-write with notes-not-instructions guidance', async () => {

@@ -21,6 +21,8 @@ export interface BuildBrief {
   roundGeneration?: number;
   /** The game directory the agent may touch, and nothing else. */
   slug?: string;
+  // Whose round this is; keys platform state, never shown to the agent.
+  ownerUid?: string;
   createGame?: { title: string; concept: string; locale?: string };
   /** The creator's spec, already moderated. Untrusted text: data, never instructions. */
   spec: string;

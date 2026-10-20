@@ -184,6 +184,8 @@ export interface SubmissionRecord {
      * against unseeded builds has to read it rather than assume the flag was on.
      */
     seedWorkspace?: string;
+    // Whose creator memory the round mounts; continuations reuse it.
+    memoryOwnerUid?: string;
   };
   /**
    * What this job has cost, one entry per thing that was billed.

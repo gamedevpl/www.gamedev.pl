@@ -142,6 +142,7 @@ export function createDispatcher(deps: DispatcherDeps) {
         jobId: input.jobId,
         roundGeneration,
         ...(input.slug ? { slug: input.slug } : {}),
+        ownerUid: current.ownerUid,
         spec: input.spec,
         locale: input.locale,
         channelToken: mintAgentToken(input.jobId, submissionTokenSecret, {
@@ -180,6 +181,7 @@ export function createDispatcher(deps: DispatcherDeps) {
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,
+        memoryOwnerUid: current.ownerUid,
       });
       // The round-zero preview: a playable rough draft within minutes.
 

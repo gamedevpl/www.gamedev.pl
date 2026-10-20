@@ -70,7 +70,7 @@ import {
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
-import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { InMemoryCreatorMemoryStore, type CreatorMemoryRecord } from './slices/creator-memory.js';
 import { InMemoryCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
@@ -165,7 +165,10 @@ export class InMemoryStore extends OAuthFacade implements Store {
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
-  private dispatchStore = new InMemoryDispatchStore(this.submissions);
+  private dispatchStore = new InMemoryDispatchStore(
+    this.submissions,
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
+  );
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected gameMembershipStore = new InMemoryGameMembershipStore(
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
@@ -198,7 +201,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   );
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
-  private gameMemoryStore = new InMemoryGameMemoryStore();
+  private creatorMemoryStore = new InMemoryCreatorMemoryStore();
   private creatorNotesStore = new InMemoryCreatorNotesStore((jobId) => this.submissions.get(jobId));
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
@@ -493,8 +496,9 @@ export class InMemoryStore extends OAuthFacade implements Store {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
-    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck);
+    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck, requestedByUid);
   }
 
   async claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null> {
@@ -585,7 +589,14 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void> {
     return this.dispatchStore.recordDispatch(jobId, dispatch);
   }
@@ -600,6 +611,10 @@ export class InMemoryStore extends OAuthFacade implements Store {
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
     return this.dispatchStore.listSeedOutcomesSince(since);
+  }
+
+  async clearMemoryOwner(uid: string): Promise<number> {
+    return this.dispatchStore.clearMemoryOwner(uid);
   }
 
   async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
@@ -658,12 +673,20 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async getGameMemory(slug: string, vendor: string): Promise<GameMemoryRecord | null> {
-    return this.gameMemoryStore.getGameMemory(slug, vendor);
+  async getCreatorMemory(ownerUid: string, vendor: string): Promise<CreatorMemoryRecord | null> {
+    return this.creatorMemoryStore.getCreatorMemory(ownerUid, vendor);
   }
 
-  async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
-    return this.gameMemoryStore.claimGameMemory(record);
+  async claimCreatorMemory(record: CreatorMemoryRecord): Promise<CreatorMemoryRecord> {
+    return this.creatorMemoryStore.claimCreatorMemory(record);
+  }
+
+  async listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]> {
+    return this.creatorMemoryStore.listCreatorMemory(ownerUid);
+  }
+
+  async deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void> {
+    return this.creatorMemoryStore.deleteCreatorMemory(ownerUid, vendor);
   }
 
   async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {

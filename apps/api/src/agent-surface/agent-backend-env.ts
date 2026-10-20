@@ -15,7 +15,7 @@ import type { KitDigestLoader } from './kit-digest.js';
 import type { ManagedWorkspaceLoader } from './managed-workspace.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
-import type { GameMemoryIndex } from './managed-game-memory.js';
+import type { CreatorMemoryIndex } from './managed-creator-memory.js';
 
 interface Logger {
   info: (context: object, message: string) => void;
@@ -57,7 +57,7 @@ export interface ManagedBackendDeps {
   readSignals?: (jobId: number) => Promise<ManagedRoundSignals | null>;
   readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
   // Used only when MANAGED_AGENT_GAME_MEMORY=true.
-  gameMemory?: GameMemoryIndex;
+  creatorMemory?: CreatorMemoryIndex;
 }
 
 const EFFORTS: readonly ManagedAgentEffort[] = ['low', 'medium', 'high'];
@@ -174,8 +174,8 @@ function buildManagedBackendForVendor(
     systemPrompt: deps?.systemPrompt ?? (async () => builderSystemPrompt({ shell: provider.shell === true })),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(deps?.workspace ? { workspace: deps.workspace } : {}),
-    ...(deps?.gameMemory && process.env.MANAGED_AGENT_GAME_MEMORY?.trim() === 'true'
-      ? { gameMemory: deps.gameMemory }
+    ...(deps?.creatorMemory && process.env.MANAGED_AGENT_GAME_MEMORY?.trim() === 'true'
+      ? { creatorMemory: deps.creatorMemory }
       : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
