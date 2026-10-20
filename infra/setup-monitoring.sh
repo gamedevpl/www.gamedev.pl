@@ -937,6 +937,21 @@ EOF
 #
 # Next recheck: a full clean working week after the CLI status watch backs off. If its
 # median lands near 1.5/s, drift belongs at ~4/s.
+#
+# RECALIBRATED 2026-10-21 -- drift 5/s -> 4/s; spike stays at 20/s.
+#   Oct 14 00:00 - Oct 21 00:00 UTC (the week after #1705/#1708/#1709 deployed), 999
+#   windows, ALIGN_RATE/600s, REDUCE_SUM: median 0.75/s, p95 3.78/s, p99 8.35/s, max 17.89/s.
+#   Longest unbroken run above 2/s was 160 min; above 3/s, 80 min. Nothing in the week
+#   comes near a 3h spell at any candidate threshold.
+# drift -- 4/s, not the 1.5/s that 2x the median gives. Evenings run 3-8x the daytime rate,
+#   and Oct 12-13 (real creator traffic: Studio staging, MCP sessions, status polls of live
+#   builds -- attributed by route, not a leak) held >3/s for over 3h. 4/s stays quiet on
+#   both, and replayed over Oct 4-9 it opens on three spells of the CLI client that polled
+#   a job's status every ~5s and refreshed its OAuth token on every poll (~4.1K /oauth/token
+#   calls in 6h on Oct 6). At 5/s that week never tripped drift at all; only the spike
+#   condition fired, in ten-minute bursts, which is exactly the blind spot drift exists for.
+# spike -- 20/s. The clean week's max is 17.89/s (Oct 16 23:00); lowering would put the bar
+#   inside an ordinary evening.
 cat > "${POLICY_DIR}/a30.json" <<EOF
 {
   "displayName": "A30 Firestore read rate",
@@ -965,7 +980,7 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 5,
+      "thresholdValue": 4,
       "duration": "10800s",
       "trigger": { "count": 1 }
     }
@@ -1023,6 +1038,22 @@ EOF
 # The clean sample is three days, one of them a Sunday. Recheck against a full clean
 # working week once the CLI status watch backs off, and if the busiest clean weekday is
 # well under 175K, lower this again -- toward 2x that day, never up to fit one.
+#
+# RECALIBRATED 2026-10-21 to 300000/day. UTC days, ALIGN_SUM hourly summed (QUERY/LOOKUP/
+# NOT_FOUND):
+#   Oct 14 Wed 103,484 (64,771/32,785/5,928)   Oct 15 Thu 81,751 (58,240/19,602/3,909)
+#   Oct 16 Fri 130,154 (88,841/33,184/8,129)   Oct 17 Sat 159,601 (100,533/51,202/7,866)
+#   Oct 18 Sun 128,661 (93,509/28,303/6,849)   Oct 19 Mon 88,580 (62,184/21,164/5,232)
+#   Oct 20 Tue 73,630 (52,876/16,259/4,495)
+# Busiest clean weekday 130K, busiest UTC day 160K. The condition slides, though, and
+# infra/recalibrate-firestore-alerts.sh 7d puts the worst trailing 24h at 198,064 (ending
+# Oct 17 22:20, carrying the Oct 16 23:00 evening burst). Its suggestion, 2x that = 400K,
+# is a raise and not taken. 2x the weekday is 260K, but Oct 12-13 ran 252K and 288K on
+# real creator traffic (see A30) and would have fired; 300K is ~1.5x the worst sliding day
+# and clears both. It still opens on Oct 5-8 (471-577K/day, the CLI
+# client polling every ~5s with an OAuth refresh per poll), where A31 did fire. The largest
+# steady consumer left is notify-sweep at ~75 metered reads a run (~54K/day), most of it the
+# open-rounds scan.
 
 # A31 incidents since creation (recovered from the monitoring ViolationOpen/AutoResolve
 # log entries, which is where the incident history lives -- there is no incidents API):
@@ -1046,7 +1077,7 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 350000,
+      "thresholdValue": 300000,
       "duration": "0s",
       "trigger": { "count": 1 }
     }
@@ -1054,7 +1085,7 @@ cat > "${POLICY_DIR}/a31.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore served more than 350K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. The app logs one 'firestore reads' line per request with route and fsReads -- sum fsReads by route over the worst hour and the writer names itself. A clean day as of 2026-09-24 is ~120-160K, so 350K means roughly one extra client-sized leak on top of it. The one seen most often is a client polling GET /api/submissions/:token every few seconds for hours (user agent 'node', the gamedevpl CLI). The fix is always the same shape: read a collection once per window, never per request, and never poll faster than the server's pollAfterMs.",
+    "content": "Firestore served more than 300K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. The app logs one 'firestore reads' line per request with route and fsReads -- sum fsReads by route over the worst hour and the writer names itself. A clean day as of 2026-10-21 is ~75-160K, so 300K means roughly one extra client-sized leak on top of it. The one seen most often is a client polling GET /api/submissions/:token every few seconds for hours (user agent 'node', the gamedevpl CLI). The fix is always the same shape: read a collection once per window, never per request, and never poll faster than the server's pollAfterMs.",
     "mimeType": "text/markdown"
   }
 }
