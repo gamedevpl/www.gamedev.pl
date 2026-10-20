@@ -164,6 +164,8 @@ export interface SubmissionStatusResponseBase {
   phase?: JobState;
   // This round's own job id, distinct from slug-scoped `recentBuilds[0]`.
   jobId?: number;
+  // Stable round start, independent of the capped event history.
+  roundStartedAt?: string;
   slug?: string;
   // Preview is green but nothing publishable exists yet; POST :token/seal makes one.
   canSeal?: true;
@@ -213,13 +215,11 @@ export interface SubmissionStatusResponseBase {
   // Soonest this answer could differ; a client must not poll faster.
   pollAfterMs?: number;
 }
-
 // A published build always carries its slug.
 export interface SubmissionPublishedResponse extends SubmissionStatusResponseBase {
   status: 'published';
   slug: string;
 }
-
 export type SubmissionStatusResponse = SubmissionStatusResponseBase | SubmissionPublishedResponse;
 
 // One of the creator's games from the mine listing.
