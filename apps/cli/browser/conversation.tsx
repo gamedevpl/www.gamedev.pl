@@ -1,6 +1,7 @@
 import { agentTranscriptLine } from '../src/transcript-line.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { headline, RichText, TranscriptLines, useFollowScroll } from './transcript-view.js';
+import { useFollowScroll } from 'genaicode/react';
+import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
 import { DiffFlyout } from './diff-flyout.js';
 
@@ -22,7 +23,7 @@ export function Conversation() {
     [],
   );
   const latestDiff = useRef(0);
-  const { box, onScroll } = useFollowScroll(lines, 40);
+  const { ref: box, onScroll } = useFollowScroll(lines, 40);
   useEffect(() => {
     const update = (event: Event) => {
       const data = (event as CustomEvent<Snapshot>).detail;
