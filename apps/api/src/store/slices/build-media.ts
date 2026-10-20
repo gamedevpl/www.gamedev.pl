@@ -3,12 +3,8 @@ import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
-import type {
-  ManagedSessionEvent,
-  ManagedSessionOutcome,
-  ManagedSessionState,
-  ManagedSessionStep,
-} from '../records/managed-session.js';
+import type { ManagedSessionOutcome, ManagedSessionStep } from '../records/managed-session.js';
+import { nextManagedSession } from './managed-session-step.js';
 import { byNewestFirst } from './build-log.js';
 import { DREAM_SOURCE_SHOT_LABEL } from '../../platform/dream-shots.js';
 
@@ -148,8 +144,8 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     const job = this.submissions?.get(jobId);
     // A stale round's call never moves state; its handler refuses it.
     if (!job || (job.roundGeneration ?? 1) !== generation) return 'ok';
-    const next = nextManagedSession(job.managedSession, sessionId, event, at);
-    if (next.state) this.submissions!.set(jobId, { ...job, managedSession: next.state });
+    const next = nextManagedSession(job, generation, sessionId, event, at);
+    if (next.state) this.submissions!.set(jobId, { ...job, managedSessions: next.state });
     return next.outcome;
   }
 
@@ -296,8 +292,8 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       const job = await transaction.get(this.jobRef(jobId));
       const record = job.data() as SubmissionRecord | undefined;
       if (!record || (record.roundGeneration ?? 1) !== generation) return 'ok';
-      const next = nextManagedSession(record.managedSession, sessionId, event, at);
-      if (next.state) transaction.update(this.jobRef(jobId), { managedSession: next.state });
+      const next = nextManagedSession(record, generation, sessionId, event, at);
+      if (next.state) transaction.update(this.jobRef(jobId), { managedSessions: next.state });
       return next.outcome;
     });
   }
@@ -452,33 +448,4 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     }
     return stale.length;
   }
-}
-
-// Submits still marked running after this long are taken as lost.
-const RUNNING_SUBMIT_MS = 90_000;
-
-// Pure step: a null state leaves the record unchanged.
-export function nextManagedSession(
-  prev: ManagedSessionState | undefined,
-  sessionId: string,
-  event: ManagedSessionEvent,
-  at: string,
-): { state: ManagedSessionState | null; outcome: ManagedSessionOutcome } {
-  const own = prev?.sessionId === sessionId ? prev : { sessionId };
-  const fresh = Date.parse(at) - Date.parse(own.submitAt ?? at) < RUNNING_SUBMIT_MS;
-  const running = fresh ? (own.running ?? 0) : 0;
-  if (event === 'submit') {
-    if (own.endedAt) return { state: null, outcome: 'ended' };
-    return { state: { ...own, running: running + 1, submitAt: at }, outcome: 'ok' };
-  }
-  if (event === 'delivered' || event === 'refused') {
-    if (own !== prev) return { state: null, outcome: 'ok' };
-    const delivered = event === 'delivered' ? { delivered: true as const } : {};
-    return { state: { ...own, running: Math.max(0, running - 1), last: event, ...delivered }, outcome: 'ok' };
-  }
-  if (running > 0) return { state: null, outcome: 'wait' };
-  if (own.last === 'refused' && !own.delivered && !own.endRefused) {
-    return { state: { ...own, endRefused: true }, outcome: 'refuse' };
-  }
-  return { state: { ...own, endedAt: at }, outcome: 'ok' };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
 import { guardManagedEnd, guardManagedSubmit, type ManagedCall } from './managed-session-guard.js';
 import { toolOk } from './mcp-tool-support.js';
+import { nextManagedSession } from '../store/slices/managed-session-step.js';
 
 async function setup() {
   const store = new InMemoryStore();
@@ -95,5 +96,32 @@ describe('managed session guard', () => {
     await store.stepManagedSession(5, 2, 's2', 'submit', at());
     await store.stepManagedSession(5, 1, 's1', 'submit', at());
     expect(await store.stepManagedSession(5, 2, 's2', 'end', at())).toBe('wait');
+  });
+
+  it('keeps every session of the round: end waits for the other session’s submit', async () => {
+    const { store, deps } = await setup();
+    const at = () => new Date(deps.now()).toISOString();
+    await store.stepManagedSession(5, 1, 's1', 'submit', at());
+    expect(await store.stepManagedSession(5, 1, 's2', 'end', at())).toBe('wait');
+    await store.stepManagedSession(5, 1, 's1', 'delivered', at());
+    expect(await store.stepManagedSession(5, 1, 's1', 'end', at())).toBe('ok');
+    expect(await store.stepManagedSession(5, 1, 's2', 'submit', at())).toBe('ok');
+    expect(await store.stepManagedSession(5, 1, 's1', 'submit', at())).toBe('ended');
+  });
+
+  it('lets end acknowledge a handoff the record shows, even mid-submit', () => {
+    const at = '2026-10-20T10:00:00.000Z';
+    const submitted = nextManagedSession({}, 1, 's1', 'submit', at).state!;
+    const handoff = { awaitsAgentAck: true } as never;
+    expect(nextManagedSession({ managedSessions: submitted }, 1, 's1', 'end', at).outcome).toBe('wait');
+    expect(
+      nextManagedSession({ managedSessions: submitted, builderHandoff: handoff }, 1, 's1', 'end', at).outcome,
+    ).toBe('ok');
+  });
+
+  it('forgets sessions of an earlier round generation', () => {
+    const at = '2026-10-20T10:00:00.000Z';
+    const earlier = nextManagedSession({}, 1, 's1', 'submit', at).state!;
+    expect(nextManagedSession({ managedSessions: earlier }, 2, 's2', 'end', at).outcome).toBe('ok');
   });
 });

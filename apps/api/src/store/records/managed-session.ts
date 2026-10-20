@@ -10,6 +10,12 @@ export interface ManagedSessionState {
   endedAt?: string;
 }
 
+// Every session of one round generation, by session id.
+export interface ManagedSessions {
+  generation: number;
+  byId: Record<string, ManagedSessionState>;
+}
+
 export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end';
 // wait: submit running; refuse: end before any delivery; ended: late submit.
 export type ManagedSessionOutcome = 'ok' | 'wait' | 'refuse' | 'ended';
