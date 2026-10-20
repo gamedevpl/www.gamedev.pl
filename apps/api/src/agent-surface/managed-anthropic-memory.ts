@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ManagedAgentError } from './managed-agent.js';
 
 // Memory store endpoints take this beta instead of managed-agents.
-const MEMORY_BETA_HEADER = 'agent-memory-2026-07-22';
+export const MEMORY_BETA_HEADER = 'agent-memory-2026-07-22';
 
 const StoreSchema = z.object({ id: z.string().min(1) });
 

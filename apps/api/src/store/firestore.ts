@@ -601,7 +601,14 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void> {
     return this.dispatchStore.recordDispatch(jobId, dispatch);
   }
@@ -680,6 +687,14 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async claimCreatorMemory(record: CreatorMemoryRecord): Promise<CreatorMemoryRecord> {
     return this.creatorMemoryStore.claimCreatorMemory(record);
+  }
+
+  async listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]> {
+    return this.creatorMemoryStore.listCreatorMemory(ownerUid);
+  }
+
+  async deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void> {
+    return this.creatorMemoryStore.deleteCreatorMemory(ownerUid, vendor);
   }
 
   async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {

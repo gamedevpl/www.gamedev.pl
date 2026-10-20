@@ -12,6 +12,9 @@ export interface CreatorMemoryStore {
   getCreatorMemory(ownerUid: string, vendor: string): Promise<CreatorMemoryRecord | null>;
   // First writer wins; returns the record that holds the slot.
   claimCreatorMemory(record: CreatorMemoryRecord): Promise<CreatorMemoryRecord>;
+  // Every vendor's record for a creator, for account erasure.
+  listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]>;
+  deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void>;
 }
 
 const key = (ownerUid: string, vendor: string) => `${vendor}:${ownerUid}`;
@@ -29,6 +32,14 @@ export class InMemoryCreatorMemoryStore implements CreatorMemoryStore {
     if (existing) return { ...existing };
     this.records.set(key(record.ownerUid, record.vendor), { ...record });
     return { ...record };
+  }
+
+  async listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]> {
+    return [...this.records.values()].filter((record) => record.ownerUid === ownerUid).map((record) => ({ ...record }));
+  }
+
+  async deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void> {
+    this.records.delete(key(ownerUid, vendor));
   }
 }
 
@@ -52,5 +63,15 @@ export class FirestoreCreatorMemoryStore implements CreatorMemoryStore {
       tx.create(ref, record);
       return record;
     });
+  }
+
+  async listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]> {
+    // Single-field equality; indexed without configuration.
+    const snap = await this.db.collection('creatorMemoryStores').where('ownerUid', '==', ownerUid).get();
+    return snap.docs.map((doc) => doc.data() as CreatorMemoryRecord);
+  }
+
+  async deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void> {
+    await this.doc(ownerUid, vendor).delete();
   }
 }

@@ -16,6 +16,7 @@ export interface AccountDeletionRoutesOptions {
   internalAuthVerifier: InternalAuthVerifier;
   now?: () => number;
   graceMs?: number;
+  eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
 }
 
 /** Self-service scheduling plus the OIDC-authenticated delayed cleanup sweep. */
@@ -58,7 +59,12 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
         return reply.status(401).send({ error: 'unauthorized' });
       }
 
-      const result = await runAccountDeletionSweep({ store, adminUids, now: options.now });
+      const result = await runAccountDeletionSweep({
+        store,
+        adminUids,
+        now: options.now,
+        eraseMemoryStore: options.eraseMemoryStore,
+      });
       for (const failure of result.failures) {
         request.log.error({ err: failure.error, uid: failure.uid }, 'account deletion sweep item failed');
       }

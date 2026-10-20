@@ -26,7 +26,14 @@ export interface DispatchStore {
   // Appends a dispatch ref -- which backend is building this job, and where.
   recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void>;
 
   // Appends one billed thing to the job's ledger; best-effort.
@@ -107,7 +114,14 @@ export class InMemoryDispatchStore implements DispatchStore {
 
   async recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void> {
     const sub = this.submissions.get(jobId);
     if (!sub) return;
@@ -122,6 +136,7 @@ export class InMemoryDispatchStore implements DispatchStore {
           : {}),
         workspace: dispatch.workspace ?? existing?.workspace,
         seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace,
+        memoryOwnerUid: dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid,
       },
     });
   }
@@ -265,7 +280,14 @@ export class FirestoreDispatchStore implements DispatchStore {
 
   async recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void> {
     const ref = this.ref(jobId);
     // Transactional -- a dispatch and a reconciler observation could land together.
@@ -287,6 +309,9 @@ export class FirestoreDispatchStore implements DispatchStore {
               : {}),
             ...((dispatch.seedWorkspace ?? existing?.seedWorkspace)
               ? { seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace }
+              : {}),
+            ...((dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid)
+              ? { memoryOwnerUid: dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid }
               : {}),
           },
         },

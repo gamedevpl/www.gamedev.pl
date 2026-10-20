@@ -113,3 +113,36 @@ describe('undelivered resume authority', () => {
     expect(after.ownerUid).toBe('g:ada');
   });
 });
+
+describe('creator memory on automatic continuations', () => {
+  it('keeps the round with the editor who started it, not the owner', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:ada' });
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:ada', 'Sky Dodge');
+    await store.setSubmissionSlug(jobId, 'sky-dodge');
+    const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
+    const resume = vi.spyOn(backend, 'resume');
+    const resumeBuild = createResumeBuild({
+      store,
+      submissionTokenSecret: 'secret',
+      now: Date.now,
+      notifyAppBaseUrl: 'https://example.test',
+      backendFor: async () => backend,
+      backendByStoredName: () => backend,
+      builderOf: () => 'platform',
+      recordSessionCost: async () => {},
+      releaseWorkspace: async () => {},
+      seedFromLatestDelivery: async () => undefined,
+    });
+
+    await resumeBuild({ jobId, feedback: 'faster', locale: 'en', log, ownerUid: 'g:editor' });
+    // The delivery nudge and gate repair pass no caller.
+    await resumeBuild({ jobId, feedback: '', locale: 'en', log, undelivered: true });
+
+    const briefs = [...dispatch.mock.calls, ...resume.mock.calls].map(([brief]) => brief.ownerUid);
+    expect(briefs).toEqual(['g:editor', 'g:editor']);
+    expect((await store.getSubmission(jobId))?.dispatch?.memoryOwnerUid).toBe('g:editor');
+  });
+});

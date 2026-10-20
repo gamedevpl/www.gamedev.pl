@@ -181,6 +181,7 @@ export function createDispatcher(deps: DispatcherDeps) {
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,
+        memoryOwnerUid: current.ownerUid,
       });
       // The round-zero preview: a playable rough draft within minutes.
 

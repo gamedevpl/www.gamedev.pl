@@ -116,6 +116,8 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     const access = record?.slug === undefined ? null : await resolveGameAccess(store, record.slug);
     const canonicalOwner = access?.owner.kind === 'creator' ? access.owner.uid : undefined;
     const spendingUid = input.ownerUid ?? canonicalOwner ?? record?.ownerUid;
+    // A nudge or repair has no caller; it keeps the round starter.
+    const memoryOwnerUid = (input.undelivered ? previous?.memoryOwnerUid : undefined) ?? spendingUid;
     // Skip for undelivered continuations — not a fresh dispatch.
     if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && spendingUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
@@ -174,8 +176,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         jobId: input.jobId,
         roundGeneration,
         slug: record?.slug,
-        // Memory follows whoever is asking, like the quota.
-        ...(spendingUid ? { ownerUid: spendingUid } : {}),
+        ...(memoryOwnerUid ? { ownerUid: memoryOwnerUid } : {}),
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
@@ -215,6 +216,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,
+        memoryOwnerUid,
       });
       await recordSessionCost(input.jobId, result.ref, selected, input.log);
       // The old workspace is spent once the new round has its own.

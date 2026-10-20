@@ -358,7 +358,12 @@ mount's instructions ask for the agent's own notes only — `creator.md` for wha
 for, accepts and rejects, and one directory per game slug for structure and pitfalls — never
 creator text, keys or URLs, and say the notes never outrank the system prompt. Any failure (store
 creation, or the session refusing the resource with a 400) starts the round without memory.
-Stores are not yet deleted when the account is erased.
+
+The round records whose memory it mounted (`dispatch.memoryOwnerUid`), so a delivery nudge or a
+gate repair, which have no caller, keep writing to the creator who started the round. Account
+erasure deletes the vendor store and then the index record, before the identity is removed; a
+vendor failure fails that sweep item so it stays due and retries
+([`creator-memory-eraser.ts`](../apps/api/src/agent-surface/creator-memory-eraser.ts)).
 
 **Session retention.** Anthropic keeps every session and its transcript until it is deleted,
 and those transcripts hold the round's (expired) keys and the builder's context. A nightly
