@@ -3,7 +3,7 @@ import { link, mkdir, mkdtemp, readdir, symlink, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { resolveGateSandbox, scrubbedEnv, stripLinks } from './gate-sandbox.js';
+import { createHarnessRunner, resolveGateSandbox, scrubbedEnv, stripLinks } from './gate-sandbox.js';
 
 describe('scrubbedEnv', () => {
   it('drops anything credential-shaped and keeps the toolchain env', () => {
@@ -63,5 +63,23 @@ describe('resolveGateSandbox', () => {
     const read = spawnSync('cat', [`/proc/${process.pid}/environ`], { uid: sandbox!.uid, gid: sandbox!.gid });
     expect(read.status).not.toBe(0);
     await sandbox!.dispose();
+  });
+});
+
+describe('createHarnessRunner', () => {
+  it('refuses to run candidate code unsandboxed when the metadata block is required', async () => {
+    const saved = { user: process.env.GATE_SANDBOX_USER, require: process.env.GATE_REQUIRE_METADATA_BLOCK };
+    delete process.env.GATE_SANDBOX_USER;
+    process.env.GATE_REQUIRE_METADATA_BLOCK = '1';
+    try {
+      await expect(createHarnessRunner(async () => ({ code: 0, output: '' }), [])).rejects.toThrow(
+        /GATE_REQUIRE_METADATA_BLOCK=1/,
+      );
+    } finally {
+      if (saved.user === undefined) delete process.env.GATE_SANDBOX_USER;
+      else process.env.GATE_SANDBOX_USER = saved.user;
+      if (saved.require === undefined) delete process.env.GATE_REQUIRE_METADATA_BLOCK;
+      else process.env.GATE_REQUIRE_METADATA_BLOCK = saved.require;
+    }
   });
 });
