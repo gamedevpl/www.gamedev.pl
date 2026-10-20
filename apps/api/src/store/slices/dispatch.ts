@@ -73,7 +73,10 @@ export interface DispatchStore {
 export class InMemoryDispatchStore implements DispatchStore {
   private nextJobId = JOB_ID_FLOOR;
 
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private erasedAt: (uid: string) => string | null = () => null,
+  ) {}
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const sub = this.submissions.get(jobId);
@@ -130,6 +133,9 @@ export class InMemoryDispatchStore implements DispatchStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return;
     const existing = sub.dispatch;
+    // An erasure that already scrubbed this uid must not see it return.
+    const memoryOwnerUid =
+      dispatch.memoryOwnerUid && this.erasedAt(dispatch.memoryOwnerUid) ? undefined : dispatch.memoryOwnerUid;
     this.submissions.set(jobId, {
       ...sub,
       dispatch: {
@@ -140,7 +146,7 @@ export class InMemoryDispatchStore implements DispatchStore {
           : {}),
         workspace: dispatch.workspace ?? existing?.workspace,
         seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace,
-        memoryOwnerUid: dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid,
+        memoryOwnerUid: memoryOwnerUid ?? existing?.memoryOwnerUid,
       },
     });
   }
@@ -162,10 +168,17 @@ export class InMemoryDispatchStore implements DispatchStore {
   async clearMemoryOwner(uid: string): Promise<number> {
     let cleared = 0;
     for (const [jobId, sub] of this.submissions) {
-      if (sub.dispatch?.memoryOwnerUid !== uid) continue;
-      const dispatch = { ...sub.dispatch };
-      delete dispatch.memoryOwnerUid;
-      this.submissions.set(jobId, { ...sub, dispatch });
+      const next = { ...sub };
+      if (sub.dispatch?.memoryOwnerUid === uid) {
+        next.dispatch = { ...sub.dispatch };
+        delete next.dispatch.memoryOwnerUid;
+      }
+      if (sub.builderHandoff?.requestedByUid === uid) {
+        next.builderHandoff = { ...sub.builderHandoff };
+        delete next.builderHandoff.requestedByUid;
+      }
+      if (next.dispatch === sub.dispatch && next.builderHandoff === sub.builderHandoff) continue;
+      this.submissions.set(jobId, next);
       cleared += 1;
     }
     return cleared;
@@ -237,11 +250,18 @@ export class FirestoreDispatchStore implements DispatchStore {
 
   async clearMemoryOwner(uid: string): Promise<number> {
     // Nested single-field equality; indexed without configuration.
-    const snap = await this.db.collection('submissions').where('dispatch.memoryOwnerUid', '==', uid).get();
-    for (const doc of snap.docs) {
+    const submissions = this.db.collection('submissions');
+    const [rounds, handoffs] = await Promise.all([
+      submissions.where('dispatch.memoryOwnerUid', '==', uid).get(),
+      submissions.where('builderHandoff.requestedByUid', '==', uid).get(),
+    ]);
+    for (const doc of rounds.docs) {
       await doc.ref.set({ dispatch: { memoryOwnerUid: FieldValue.delete() } }, { merge: true });
     }
-    return snap.size;
+    for (const doc of handoffs.docs) {
+      await doc.ref.set({ builderHandoff: { requestedByUid: FieldValue.delete() } }, { merge: true });
+    }
+    return rounds.size + handoffs.size;
   }
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
@@ -320,6 +340,11 @@ export class FirestoreDispatchStore implements DispatchStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).dispatch;
+      // Read in the transaction, so a fence set meanwhile retries us.
+      const fenced = dispatch.memoryOwnerUid
+        ? (await tx.get(this.db.collection('erasedAccounts').doc(dispatch.memoryOwnerUid))).exists
+        : false;
+      const memoryOwnerUid = fenced ? undefined : dispatch.memoryOwnerUid;
       tx.set(
         ref,
         {
@@ -335,8 +360,8 @@ export class FirestoreDispatchStore implements DispatchStore {
             ...((dispatch.seedWorkspace ?? existing?.seedWorkspace)
               ? { seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace }
               : {}),
-            ...((dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid)
-              ? { memoryOwnerUid: dispatch.memoryOwnerUid ?? existing?.memoryOwnerUid }
+            ...((memoryOwnerUid ?? existing?.memoryOwnerUid)
+              ? { memoryOwnerUid: memoryOwnerUid ?? existing?.memoryOwnerUid }
               : {}),
           },
         },

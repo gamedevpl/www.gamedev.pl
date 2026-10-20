@@ -165,7 +165,10 @@ export class InMemoryStore extends OAuthFacade implements Store {
   );
   private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
-  private dispatchStore = new InMemoryDispatchStore(this.submissions);
+  private dispatchStore = new InMemoryDispatchStore(
+    this.submissions,
+    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
+  );
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected gameMembershipStore = new InMemoryGameMembershipStore(
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
@@ -493,8 +496,9 @@ export class InMemoryStore extends OAuthFacade implements Store {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
-    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck);
+    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck, requestedByUid);
   }
 
   async claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null> {

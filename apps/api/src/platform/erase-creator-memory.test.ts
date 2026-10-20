@@ -24,8 +24,11 @@ describe('creator memory on account erasure', () => {
     // A round the leaver started as an editor elsewhere.
     await store.createSubmission(7, 'g:stays', 'Shared');
     await store.recordDispatch(7, { backend: 'managed:anthropic', ref: 's1', memoryOwnerUid: uid });
+    await store.requestBuilderHandoff(7, 'self', 't', true, uid);
 
     const result = await eraseAccount({ store, uid, eraseMemoryStore });
+    expect((await store.getSubmission(7))?.builderHandoff).toMatchObject({ to: 'self' });
+    expect((await store.getSubmission(7))?.builderHandoff?.requestedByUid).toBeUndefined();
 
     expect(result.creatorMemoryStores).toBe(1);
     expect((await store.getSubmission(7))?.dispatch).toMatchObject({ refs: ['s1'] });
@@ -33,6 +36,19 @@ describe('creator memory on account erasure', () => {
     expect(eraseMemoryStore).toHaveBeenCalledWith('anthropic', 'mem_1');
     expect(await store.listCreatorMemory(uid)).toEqual([]);
     expect(await store.getCreatorMemory('g:stays', 'anthropic')).toMatchObject({ storeId: 'mem_2' });
+  });
+
+  it.each([
+    ['in memory', () => new InMemoryStore()],
+    ['firestore', () => new FirestoreStore(fakeFirestore().db)],
+  ])('drops a fenced uid from a dispatch that lands after the scrub (%s)', async (_name, make) => {
+    const store = make();
+    await store.createSubmission(8, 'g:stays', 'Late');
+    await store.beginAccountErasure('g:leaver', 't');
+    await store.recordDispatch(8, { backend: 'managed:anthropic', ref: 's2', memoryOwnerUid: 'g:leaver' });
+    const dispatch = (await store.getSubmission(8))?.dispatch;
+    expect(dispatch?.refs).toEqual(['s2']);
+    expect(dispatch?.memoryOwnerUid).toBeUndefined();
   });
 
   it('fails the erasure and keeps the record when the vendor refuses', async () => {

@@ -6,6 +6,8 @@ export interface BuilderHandoff {
   requestedAt: string;
   awaitsAgentAck: boolean;
   acknowledgedAt?: string;
+  // Who asked; the resumed round mounts their creator memory.
+  requestedByUid?: string;
 }
 
 export type AgentEndedBy = 'submit' | 'end' | 'takeover';

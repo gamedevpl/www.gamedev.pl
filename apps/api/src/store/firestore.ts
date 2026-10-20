@@ -508,8 +508,9 @@ export class FirestoreStore extends OAuthFacade implements Store {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
-    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck);
+    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck, requestedByUid);
   }
 
   async claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null> {
