@@ -4,7 +4,7 @@ import { withoutRetiredPaths } from '@gamedevpl/contract';
 import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
 import { buildPrompt } from './build-prompt.js';
 import { startWithWorkspace, type ManagedWorkspaceLoader } from './managed-workspace.js';
-import { resolveGameMemory, type GameMemoryIndex } from './managed-game-memory.js';
+import { resolveCreatorMemory, type CreatorMemoryIndex } from './managed-creator-memory.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
@@ -30,8 +30,8 @@ export interface ManagedBackendOptions {
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   workspace?: ManagedWorkspaceLoader;
-  // Per-game memory store index; unset keeps rounds memoryless.
-  gameMemory?: GameMemoryIndex;
+  // Per-creator memory store index; unset keeps rounds memoryless.
+  creatorMemory?: CreatorMemoryIndex;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
   budget?: ManagedUsageBudget;
@@ -152,7 +152,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     // Set at the vendor call, after workspace assembly; vendors may end early.
     let requestedAt = Date.now();
     const shell = options.provider.shell === true;
-    const memoryStoreId = await resolveGameMemory(options.provider, options.gameMemory, brief.slug, options.log);
+    const memoryStoreId = await resolveCreatorMemory(
+      options.provider,
+      options.creatorMemory,
+      brief.ownerUid,
+      options.log,
+    );
     const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),

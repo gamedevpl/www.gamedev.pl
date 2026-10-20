@@ -70,7 +70,7 @@ import {
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
-import { InMemoryGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { InMemoryCreatorMemoryStore, type CreatorMemoryRecord } from './slices/creator-memory.js';
 import { InMemoryCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
@@ -198,7 +198,7 @@ export class InMemoryStore extends OAuthFacade implements Store {
   );
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
-  private gameMemoryStore = new InMemoryGameMemoryStore();
+  private creatorMemoryStore = new InMemoryCreatorMemoryStore();
   private creatorNotesStore = new InMemoryCreatorNotesStore((jobId) => this.submissions.get(jobId));
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
@@ -658,12 +658,12 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async getGameMemory(slug: string, vendor: string): Promise<GameMemoryRecord | null> {
-    return this.gameMemoryStore.getGameMemory(slug, vendor);
+  async getCreatorMemory(ownerUid: string, vendor: string): Promise<CreatorMemoryRecord | null> {
+    return this.creatorMemoryStore.getCreatorMemory(ownerUid, vendor);
   }
 
-  async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
-    return this.gameMemoryStore.claimGameMemory(record);
+  async claimCreatorMemory(record: CreatorMemoryRecord): Promise<CreatorMemoryRecord> {
+    return this.creatorMemoryStore.claimCreatorMemory(record);
   }
 
   async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {

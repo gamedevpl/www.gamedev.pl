@@ -515,7 +515,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                     }
                   : null;
               },
-              gameMemory: store,
+              creatorMemory: store,
               readCredentialRef: async (jobId: number, sessionRef: string) => {
                 const record = await store.getSubmission(jobId);
                 return record?.dispatch?.credentialRefs?.[sessionRef];

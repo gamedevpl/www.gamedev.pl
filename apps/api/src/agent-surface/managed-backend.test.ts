@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BuildBrief } from './agent-backend.js';
 import { normalizeManagedState, type ManagedAgentProvider, type ManagedSessionRequest } from './managed-agent.js';
 import { createManagedBackend } from './managed-backend.js';
+import { InMemoryCreatorMemoryStore } from '../store/slices/creator-memory.js';
 
 const ISSUE = 42;
 const SLUG = 'comet-courier';
@@ -62,6 +63,20 @@ describe('managed backend', () => {
   it('refuses a configuration with no MCP endpoint', () => {
     const { provider } = fakeProvider();
     expect(() => createManagedBackend({ provider, tools: {} })).toThrow(/needs an MCP endpoint/);
+  });
+
+  it('mounts the asking creator memory, shared across their games', async () => {
+    const ids = ['mem_ada', 'mem_bob'];
+    const { provider, started } = fakeProvider({ createMemoryStore: async () => ids.shift()! });
+    const creatorMemory = new InMemoryCreatorMemoryStore();
+    const backend = createManagedBackend({ provider, tools: TOOLS, creatorMemory });
+
+    await backend.dispatch(brief({ ownerUid: 'g:ada' }));
+    await backend.dispatch(brief({ jobId: 43, slug: 'other-game', ownerUid: 'g:ada' }));
+    await backend.dispatch(brief({ jobId: 44, ownerUid: 'g:bob' }));
+    await backend.dispatch(brief({ jobId: 45 }));
+
+    expect(started.map((request) => request.memoryStoreId)).toEqual(['mem_ada', 'mem_ada', 'mem_bob', undefined]);
   });
 
   it('dispatches over MCP; the agent submits for itself', async () => {

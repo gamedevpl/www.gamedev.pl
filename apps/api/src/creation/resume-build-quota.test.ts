@@ -42,6 +42,7 @@ describe('managed quota on a transferred game', () => {
     const jobId = await transferredGame(store);
     const checkAndSpend = vi.fn(async () => ({ available: true as const }));
     const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
 
     const resumeBuild = createResumeBuild({
       store,
@@ -63,6 +64,8 @@ describe('managed quota on a transferred game', () => {
     expect(outcome.started).toBe(true);
     expect(checkAndSpend).toHaveBeenCalledTimes(1);
     expect(checkAndSpend.mock.calls[0]![0]).toBe('g:grace');
+    // The builder's memory follows the same person the quota does.
+    expect(dispatch.mock.calls[0]![0].ownerUid).toBe('g:grace');
   });
 });
 

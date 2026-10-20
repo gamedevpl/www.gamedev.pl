@@ -40,8 +40,7 @@ export interface ManagedOpenAiTokenUsage extends ManagedTokenUsageBase {
 
 export type ManagedSessionUsage = ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage;
 
-export type ManagedUsageBudget =
-  { unit: 'tokens'; max: number } | { unit: 'cents'; max: number };
+export type ManagedUsageBudget = { unit: 'tokens'; max: number } | { unit: 'cents'; max: number };
 
 export interface ManagedBudgetStop {
   unit: ManagedUsageBudget['unit'];
@@ -89,7 +88,7 @@ export interface ManagedSessionRequest {
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: ManagedMcpBearerCredential;
-  // Game memory store; dropped if the vendor refuses it.
+  // Creator memory store; dropped if the vendor refuses it.
   memoryStoreId?: string;
 }
 
@@ -109,7 +108,8 @@ export interface ManagedAgentProvider {
   deleteSession?(sessionId: string): Promise<void>;
   deleteWorkspace?(workspace: string): Promise<void>;
   releaseCredential?(credentialRef: string): Promise<void>;
-  createMemoryStore?(slug: string): Promise<string>;
+  // `label` is an opaque per-creator name, never a uid.
+  createMemoryStore?(label: string): Promise<string>;
   deleteMemoryStore?(storeId: string): Promise<void>;
 }
 

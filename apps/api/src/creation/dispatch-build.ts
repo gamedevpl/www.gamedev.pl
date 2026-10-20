@@ -142,6 +142,7 @@ export function createDispatcher(deps: DispatcherDeps) {
         jobId: input.jobId,
         roundGeneration,
         ...(input.slug ? { slug: input.slug } : {}),
+        ownerUid: current.ownerUid,
         spec: input.spec,
         locale: input.locale,
         channelToken: mintAgentToken(input.jobId, submissionTokenSecret, {

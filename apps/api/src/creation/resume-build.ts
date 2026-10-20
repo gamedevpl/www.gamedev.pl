@@ -174,6 +174,8 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         jobId: input.jobId,
         roundGeneration,
         slug: record?.slug,
+        // Memory follows whoever is asking, like the quota.
+        ...(spendingUid ? { ownerUid: spendingUid } : {}),
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
