@@ -5,6 +5,7 @@ import type { JobState, JobTransition } from '../../creation/job-state.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import type { AgentEndedBy, BuilderHandoff, ReceiptRound } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
+import type { ManagedSessionState } from './managed-session.js';
 
 export interface SubmissionRecord {
   localActivity?: import('@gamedevpl/contract').LocalActivity & { generation: number };
@@ -154,8 +155,7 @@ export interface SubmissionRecord {
   agentEndedBy?: AgentEndedBy;
   // Legacy, no longer written: shots up to it count as downloaded.
   referenceSeenAt?: string;
-  // Round generation whose one unseen-reference delivery hold is spent.
-  referenceHoldGeneration?: number;
+  managedSession?: ManagedSessionState;
   /**
    * Latest MCP presence thought (closed vocabulary key + timestamp).
    *
