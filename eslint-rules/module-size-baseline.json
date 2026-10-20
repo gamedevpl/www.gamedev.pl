@@ -262,7 +262,6 @@
     "apps/api/src/creation/seed-provider-anthropic.ts": 17,
     "apps/api/src/creation/seed-provider-meta.ts": 21,
     "apps/api/src/creation/seed-provider-openai.ts": 17,
-    "apps/api/src/creation/seed-provider-openrouter.ts": 20,
     "apps/api/src/creation/seed-provider-vertex.ts": 19,
     "apps/api/src/creation/seed-provider.test.ts": 41,
     "apps/api/src/creation/seed-provider.ts": 45,

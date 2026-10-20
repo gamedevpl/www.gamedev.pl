@@ -5,7 +5,6 @@ import {
   DEFAULT_INTAKE_MODEL,
   gamesBlock,
   MAX_INTAKE_GAMES,
-  DEFAULT_VERTEX_INTAKE_MODEL,
   failClosedReply,
   IntakeChatAgent,
   StubIntakeAgent,
@@ -43,9 +42,40 @@ function failingClient(error: Error) {
 }
 
 describe('IntakeChatAgent', () => {
-  it('defaults to Gemini 3.5 Flash Lite', () => {
-    expect(DEFAULT_INTAKE_MODEL).toBe('google/gemini-3.5-flash-lite');
-    expect(DEFAULT_VERTEX_INTAKE_MODEL).toBe('gemini-3.5-flash-lite');
+  it('defaults to Gemini 3.5 Flash Lite on Vertex', () => {
+    expect(DEFAULT_INTAKE_MODEL).toBe('gemini-3.5-flash-lite');
+  });
+
+  // 2026-10-19: a stalled Vertex used to end every CLI chat turn in the fail-closed reply.
+  it('answers from the OpenAI stand-in when Vertex stalls', async () => {
+    const seen: string[] = [];
+    const agent = new IntakeChatAgent({
+      timeoutMs: 200,
+      client: genaicode({
+        name: 'stalled-vertex',
+        generate: (request) =>
+          new Promise((_resolve, reject) => {
+            seen.push('vertex');
+            request.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')));
+          }),
+      }),
+      fallbackModel: 'gpt-6-luna',
+      fallbackClient: genaicode({
+        name: 'stand-in',
+        async generate() {
+          seen.push('openai');
+          return replyResult('Jasne, opisz grę.');
+        },
+      }),
+    });
+    const decision = await agent.decide({ message: 'hej', history: [] });
+    expect(decision).toEqual({ kind: 'reply', text: 'Jasne, opisz grę.', model: 'gpt-6-luna' });
+    expect(seen).toEqual(['vertex', 'openai']);
+  });
+
+  it('has no stand-in for an injected client unless given one', async () => {
+    const agent = new IntakeChatAgent({ timeoutMs: 200, client: failingClient(new Error('503 UNAVAILABLE')) });
+    await expect(agent.decide({ message: 'hej', history: [] })).rejects.toThrow('503');
   });
 
   it('returns a reply and never creates on a greeting', async () => {

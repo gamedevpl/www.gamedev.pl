@@ -294,7 +294,8 @@ export const privacyEn: LegalDocument = {
             [
               'Google Cloud Vertex AI (Gemini)',
               'Moderating and refining your game description; checking illustrations of clarifying-question ' +
-                'answers for safety; suggesting code completions in the Code editor',
+                'answers for safety; understanding your messages in the CLI chat; suggesting code completions in ' +
+                'the Code editor',
               'USA / global — Standard Contractual Clauses',
             ],
             [
@@ -316,7 +317,7 @@ export const privacyEn: LegalDocument = {
               'OpenAI',
               'Generating a starting draft of your game; drawing illustrations for the answers to a clarifying ' +
                 'question about how your game should look; refining your description into a title and clarifying ' +
-                'questions if Gemini is unavailable; writing your game as the coding agent when selected; ' +
+                'questions, and answering your CLI chat messages, if Gemini is unavailable; writing your game as the coding agent when selected; ' +
                 'standing in for the Gemini classifier when unavailable, so moderation never simply stops',
               'USA — Standard Contractual Clauses',
             ],
