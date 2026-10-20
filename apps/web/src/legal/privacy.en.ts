@@ -198,8 +198,9 @@ export const privacyEn: LegalDocument = {
             'It is then refined by an AI model, which may ask you clarifying questions.',
             'When a clarifying question is about how your game should look, an OpenAI image model may draw an ' +
               'illustration for each answer, from your description and the answer options. A Google Gemini model ' +
-              'checks each illustration before you see it. We do not store the illustrations; they are not part ' +
-              'of your submission and never reach the coding agent.',
+              'checks each illustration before you see it. We store only the illustration you pick, and only when ' +
+              'our own coding agent builds your game: it is saved with your submission as a reference image for ' +
+              'that agent. The other illustrations are not stored and never reach any coding agent.',
             'An accepted description is handed as a task to a coding agent — an Anthropic, Google Gemini or OpenAI ' +
               'model, whichever we selected — which writes the game’s code. The code is kept in our private ' +
               'storage; submitting a description does not by itself make it publicly visible.',
@@ -249,7 +250,7 @@ export const privacyEn: LegalDocument = {
           items: [
             'the build brief for your game: title, your description and clarifying answers, your steering messages ' +
               'and feedback — including a paged transcript of that conversation covering earlier build rounds;',
-            'sketches and reference images you attached to the game;',
+            'sketches and reference images you attached to the game, and an illustration you picked for it;',
             'your game’s source files (published, draft and staged changes) and the platform’s own reference ' +
               'material (the Creator Kit);',
             'build records for your game: progress notes, screenshots, automated quality-gate verdicts, and the ' +

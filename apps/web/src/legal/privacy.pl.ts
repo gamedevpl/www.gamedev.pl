@@ -203,8 +203,9 @@ export const privacyPl: LegalDocument = {
             'Opis jest następnie doprecyzowywany przez model AI, który może zadać Ci pytania pomocnicze.',
             'Gdy pytanie pomocnicze dotyczy wyglądu gry, model graficzny OpenAI może narysować ilustrację do każdej ' +
               'odpowiedzi — na podstawie Twojego opisu i treści odpowiedzi. Każdą ilustrację, zanim ją zobaczysz, ' +
-              'sprawdza model Google Gemini. Nie przechowujemy tych ilustracji; nie są częścią Twojego zgłoszenia ' +
-              'i nie trafiają do agenta kodującego.',
+              'sprawdza model Google Gemini. Przechowujemy tylko ilustrację, którą wybierzesz, i tylko wtedy, gdy ' +
+              'grę buduje nasz agent kodujący: zapisujemy ją przy Twoim zgłoszeniu jako obraz referencyjny dla tego ' +
+              'agenta. Pozostałe ilustracje nie są przechowywane i nie trafiają do żadnego agenta kodującego.',
             'Zaakceptowany opis trafia jako zadanie do agenta kodującego — modelu Anthropic, Google Gemini lub ' +
               'OpenAI, zależnie od wyboru — który pisze kod gry. Kod jest przechowywany w naszym prywatnym ' +
               'magazynie; Twój opis nie staje się publicznie widoczny w wyniku samego zgłoszenia.',
@@ -255,7 +256,7 @@ export const privacyPl: LegalDocument = {
           items: [
             'brief Twojej gry: tytuł, Twój opis i odpowiedzi na pytania doprecyzowujące, Twoje wiadomości ' +
               'sterujące i opinie — w tym stronicowany zapis tej rozmowy obejmujący wcześniejsze rundy budowy;',
-            'szkice i obrazy referencyjne, które załączysz do gry;',
+            'szkice i obrazy referencyjne, które załączysz do gry, oraz wybraną przez Ciebie ilustrację;',
             'pliki źródłowe Twojej gry (opublikowane, robocze i zmiany w poczekalni) oraz materiały referencyjne ' +
               'platformy (Creator Kit);',
             'zapisy budowy Twojej gry: notatki o postępie, zrzuty ekranu, werdykty automatycznej bramki jakości ' +
