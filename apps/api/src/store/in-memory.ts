@@ -609,6 +609,10 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.dispatchStore.listSeedOutcomesSince(since);
   }
 
+  async clearMemoryOwner(uid: string): Promise<number> {
+    return this.dispatchStore.clearMemoryOwner(uid);
+  }
+
   async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
     return this.dispatchStore.recordJobCost(jobId, entry);
   }

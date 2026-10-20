@@ -60,6 +60,8 @@ async function eraseCreatorMemory(
 ): Promise<number> {
   const records = await options.store.listCreatorMemory(options.uid);
   if (dryRun) return records.length;
+  // First, so no nudge or repair can remount what is deleted below.
+  await options.store.clearMemoryOwner(options.uid);
   for (const record of records) {
     if (!options.eraseMemoryStore) throw new Error('creator memory exists but no eraser is configured');
     await options.eraseMemoryStore(record.vendor, record.storeId);

@@ -1,7 +1,7 @@
 // Who pays for a managed round on a game that changed hands.
 
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryStore } from '../platform/store.js';
+import { DELETED_ACCOUNT_UID, InMemoryStore } from '../platform/store.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import { roundAuthorityCurrent, resolveGameAccess } from '../platform/game-access-resolve.js';
 import { verifyAgentToken } from '../platform/agent-token.js';
@@ -144,5 +144,27 @@ describe('creator memory on automatic continuations', () => {
     const briefs = [...dispatch.mock.calls, ...resume.mock.calls].map(([brief]) => brief.ownerUid);
     expect(briefs).toEqual(['g:editor', 'g:editor']);
     expect((await store.getSubmission(jobId))?.dispatch?.memoryOwnerUid).toBe('g:editor');
+  });
+
+  it('mounts no memory for a game an erased creator left behind', async () => {
+    const store = new InMemoryStore();
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, DELETED_ACCOUNT_UID, 'Orphan');
+    const backend = backendStub();
+    const dispatch = vi.spyOn(backend, 'dispatch');
+    const resumeBuild = createResumeBuild({
+      store,
+      submissionTokenSecret: 'secret',
+      now: Date.now,
+      notifyAppBaseUrl: 'https://example.test',
+      backendFor: async () => backend,
+      backendByStoredName: () => backend,
+      builderOf: () => 'platform',
+      recordSessionCost: async () => {},
+      releaseWorkspace: async () => {},
+      seedFromLatestDelivery: async () => undefined,
+    });
+    await resumeBuild({ jobId, feedback: '', locale: 'en', log, undelivered: true });
+    expect(dispatch.mock.calls[0]![0].ownerUid).toBeUndefined();
   });
 });

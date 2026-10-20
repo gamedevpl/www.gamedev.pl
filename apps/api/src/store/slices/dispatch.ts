@@ -1,3 +1,4 @@
+import { FieldValue } from '@google-cloud/firestore';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import {
   nextRoundGeneration,
@@ -35,6 +36,9 @@ export interface DispatchStore {
       memoryOwnerUid?: string;
     },
   ): Promise<void>;
+
+  // Forgets an erased uid as a round's memory owner.
+  clearMemoryOwner(uid: string): Promise<number>;
 
   // Appends one billed thing to the job's ledger; best-effort.
   recordJobCost(jobId: number, entry: JobCostEntry): Promise<void>;
@@ -155,6 +159,18 @@ export class InMemoryDispatchStore implements DispatchStore {
     this.submissions.set(jobId, { ...sub, seedOutcome: outcome });
   }
 
+  async clearMemoryOwner(uid: string): Promise<number> {
+    let cleared = 0;
+    for (const [jobId, sub] of this.submissions) {
+      if (sub.dispatch?.memoryOwnerUid !== uid) continue;
+      const dispatch = { ...sub.dispatch };
+      delete dispatch.memoryOwnerUid;
+      this.submissions.set(jobId, { ...sub, dispatch });
+      cleared += 1;
+    }
+    return cleared;
+  }
+
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
     return [...this.submissions.values()]
       .map((sub) => sub.seedOutcome)
@@ -217,6 +233,15 @@ export class FirestoreDispatchStore implements DispatchStore {
 
   private ref(jobId: number) {
     return this.db.collection('submissions').doc(String(jobId));
+  }
+
+  async clearMemoryOwner(uid: string): Promise<number> {
+    // Nested single-field equality; indexed without configuration.
+    const snap = await this.db.collection('submissions').where('dispatch.memoryOwnerUid', '==', uid).get();
+    for (const doc of snap.docs) {
+      await doc.ref.set({ dispatch: { memoryOwnerUid: FieldValue.delete() } }, { merge: true });
+    }
+    return snap.size;
   }
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
