@@ -456,6 +456,7 @@ const FILE_BUCKET = {
   'mcp-gate-media-tools': 'agent-surface',
   'mcp-proposal-tools': 'agent-surface',
   'mcp-source-stage-tools': 'agent-surface',
+  'stage-upload-batch': 'agent-surface',
   'mcp-source-read-tools': 'agent-surface',
   'source-archive': 'agent-surface',
   'mcp-source-patch-tools': 'agent-surface',

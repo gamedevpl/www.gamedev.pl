@@ -1,6 +1,12 @@
 import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
+import {
+  BATCH_PATH_SEPARATOR,
+  batchUploadContract,
+  MANAGED_STAGE_UPLOAD_DESCRIPTION,
+  MANAGED_STAGE_UPLOAD_OUTPUT,
+} from './stage-upload-batch.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
 import { UPLOAD_REQUEST_PROPS, uploadRequest } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
@@ -60,11 +66,15 @@ export interface SourceStageToolsDeps {
   now: () => number;
   // N1: delivery's deliverable-path vocabulary, applied here without importing it.
   assertDeliverableSourcePath: (path: string) => string;
+  // Managed: one contract per batch; public: one per path.
+  batchUploads?: (ctx: ToolContext) => boolean;
 }
 
 export interface SourceStageToolEntry {
   annotations: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
+  // A managed tools/list shows this instead.
+  managed?: { description: string; outputSchema: Record<string, unknown> };
   description: string;
   inputSchema: Record<string, unknown>;
   handler: ToolHandler;
@@ -76,6 +86,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
 
   return {
     stage_upload_url: {
+      managed: { description: MANAGED_STAGE_UPLOAD_DESCRIPTION, outputSchema: MANAGED_STAGE_UPLOAD_OUTPUT },
       outputSchema: {
         type: 'object',
         properties: {
@@ -191,10 +202,8 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         // One clock read: advertised expiresAt must match the signed exp.
         const issuedAt = now();
         const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
-
-        if (hasPath) {
-          const path = validPaths[0]!;
-          const token = mintUploadToken(agentTokenSecret, {
+        const mint = (path: string) =>
+          mintUploadToken(agentTokenSecret, {
             jobId: auth.jobId,
             roundGeneration: generation,
             kind: 'stage',
@@ -204,6 +213,10 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             now: issuedAt,
             ttlSeconds,
           });
+
+        if (hasPath) {
+          const path = validPaths[0]!;
+          const token = mint(path);
           const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return toolOk({
             url,
@@ -215,17 +228,18 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           });
         }
 
-        const uploads = validPaths.map((path) => {
-          const token = mintUploadToken(agentTokenSecret, {
-            jobId: auth.jobId,
-            roundGeneration: generation,
-            kind: 'stage',
-            path,
-            actorUid: auth.actorUid,
-            actorRevision: auth.actorRevision,
-            now: issuedAt,
-            ttlSeconds,
+        if (deps.batchUploads?.(ctx)) {
+          const token = mint(validPaths.join(BATCH_PATH_SEPARATOR));
+          return toolOk({
+            batch: batchUploadContract(token, validPaths),
+            expiresAt,
+            expiresInSeconds: ttlSeconds,
+            ...(rejected.length ? { rejected } : {}),
           });
+        }
+
+        const uploads = validPaths.map((path) => {
+          const token = mint(path);
           const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
           return {
             path,
