@@ -776,6 +776,43 @@ describe('getGameSources', () => {
     );
   });
 
+  it('embeds only the sounds the publish entry names', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'GameKit.mount({ play: "coin" });'],
+      ['games/raid/publish.ts', 'GameKit.mount({ play: "fanfare" });'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['audio'] },
+          audio: { sounds: ['ui-toggle', 'coin', 'fanfare'], music: 'calm-theme' },
+        }),
+      ],
+      ['shared/audio/music.json', JSON.stringify({ tracks: { 'calm-theme': { loop: true, data: 'data:,' } } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/audio.ts', "GameKit.click = function (): string { return 'ui-toggle'; };"],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/assets/coin.wav', new Uint8Array([3, 4])],
+      ['shared/audio/assets/fanfare.wav', new Uint8Array([5, 6])],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const value = files.get(decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length)));
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const served = await client.getGameSources('main', 'raid', undefined, { entry: 'publish' });
+    expect(served?.gameJs).toContain('"fanfare":');
+    expect(served?.gameJs).toContain('"ui-toggle":');
+    expect(served?.gameJs).not.toContain('"coin":');
+    expect((await client.getGameSources('main', 'raid'))?.gameJs).toContain('"fanfare":');
+  });
+
   it('rejects an inherited Object.prototype name as a track', async () => {
     // The catalog comes from JSON.parse, so `tracks.constructor` is a function rather than
     // undefined and survives a truthiness check — and `constructor` is lowercase, so it
