@@ -331,6 +331,12 @@ as lost. The first `end` after a refused submit, with nothing this session deliv
 `end` is refused (`rejected: session_ended`). An `end` acknowledging a builder handoff is never
 refused. Public clients run both tools unchanged. `reference_unseen` is a warning only.
 
+**Managed stage uploads.** Under a managed opener, `stage_upload_url` with `paths` returns one
+contract, `batch: { url, method, headers, paths, maxBytes }`: one stage token whose signed path is
+the newline-joined list. Each PUT names its file with `?path=`, which must be listed
+(`stagePutPath`). A managed `tools/list` shows that shape (`managed` on the tool entry). Public
+clients keep one `uploads[]` entry per path, and a single-path token PUT without `?path=` as before.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens

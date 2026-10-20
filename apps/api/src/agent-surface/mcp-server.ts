@@ -937,6 +937,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       inputSchema: Record<string, unknown>;
       outputSchema: Record<string, unknown>;
       annotations?: Record<string, unknown>;
+      managed?: { description: string; outputSchema: Record<string, unknown> };
       handler: ToolHandler;
     }
   > = {
@@ -1330,7 +1331,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createSeedTools({ resolveAuth, injectChannel }),
 
     ...createSourceReadTools({ resolveAuth, injectChannel, agentTokenSecret, now }),
-    ...createSourceStageTools({ resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath }),
+    ...createSourceStageTools({
+      resolveAuth,
+      injectChannel,
+      agentTokenSecret,
+      now,
+      assertDeliverableSourcePath,
+      batchUploads: (ctx) => managedOpenerClaims(ctx.bearerToken) !== null,
+    }),
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),
@@ -1549,12 +1557,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                 : uiResourceUri
                   ? { 'openai/outputTemplate': uiResourceUri }
                   : null;
+              const shown = (opener !== null && tool.managed) || tool;
               return {
                 name,
-                description: tool.description,
+                description: shown.description,
                 inputSchema: tool.inputSchema,
                 // Declared once here, so a tool cannot forget that it can refuse.
-                outputSchema: withErrorBranch(tool.outputSchema),
+                outputSchema: withErrorBranch(shown.outputSchema),
                 ...(tool.annotations ? { annotations: tool.annotations } : {}),
                 ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
               };
