@@ -134,4 +134,29 @@ describe('token stores', () => {
     expect(await encryptedFileStore({ HOME: home, GAMEDEV_TOKEN_FILE: path }).get()).toEqual(tokens);
     expect(decryptsWith(path, homeKey(home))).toBe(true);
   });
+
+  it('asks a hung vault once while migrating a legacy file', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'gamedev-cli-'));
+    const path = join(home, '.config', 'gamedevpl', 'credentials.bin');
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', homeKey(home), iv);
+    const tokens = { accessToken: 'gdpl_oat_old', tokenType: 'Bearer', scope: 'creator' };
+    const data = Buffer.concat([cipher.update(JSON.stringify(tokens), 'utf8'), cipher.final()]);
+    mkdirSync(join(home, '.config', 'gamedevpl'), { recursive: true });
+    writeFileSync(path, Buffer.concat([iv, cipher.getAuthTag(), data]));
+    let calls = 0;
+    const vault: KeyVault = {
+      load: () => {
+        calls++;
+        throw new Error('timed out');
+      },
+      save: () => {
+        calls++;
+        throw new Error('timed out');
+      },
+    };
+    expect(await encryptedFileStore({ HOME: home }, { vault }).get()).toEqual(tokens);
+    expect(calls).toBe(1);
+    expect(decryptsWith(path, homeKey(home))).toBe(false);
+  });
 });

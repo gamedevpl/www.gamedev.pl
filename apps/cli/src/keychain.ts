@@ -68,7 +68,7 @@ function legacyFileKey(env: NodeJS.ProcessEnv): Buffer {
   return scryptSync(`gamedev-cli:${env.HOME ?? homedir()}`, 'gdpl-cli-v1', 32);
 }
 
-// Holds the random file key outside the credential file's directory.
+// Holds the file key; methods throw when the vault is unreachable.
 export interface KeyVault {
   load(account: string): Buffer | null;
   save(account: string, key: Buffer): boolean;
@@ -90,6 +90,7 @@ function macKeychain(): KeyVault {
         timeout: VAULT_TIMEOUT_MS,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
+      if (found.error) throw found.error;
       return found.status === 0 ? parseKey(found.stdout) : null;
     },
     save(account, key) {
@@ -101,6 +102,7 @@ function macKeychain(): KeyVault {
         timeout: VAULT_TIMEOUT_MS,
         stdio: ['pipe', 'ignore', 'ignore'],
       });
+      if (saved.error) throw saved.error;
       return saved.status === 0 && this.load(account)?.equals(key) === true;
     },
   };
@@ -115,6 +117,7 @@ function secretService(): KeyVault {
         timeout: VAULT_TIMEOUT_MS,
         stdio: ['ignore', 'pipe', 'ignore'],
       });
+      if (found.error) throw found.error;
       return found.status === 0 ? parseKey(found.stdout) : null;
     },
     save(account, key) {
@@ -124,6 +127,7 @@ function secretService(): KeyVault {
         timeout: VAULT_TIMEOUT_MS,
         stdio: ['pipe', 'ignore', 'ignore'],
       });
+      if (saved.error) throw saved.error;
       return saved.status === 0 && this.load(account)?.equals(key) === true;
     },
   };
@@ -163,8 +167,19 @@ export function encryptedFileStore(
   const vault = fileKeychainOptedIn(env) ? null : options.vault === undefined ? platformKeyVault() : options.vault;
   const account = resolvePath(path);
   let cached: Buffer | null = null;
+  // An unreachable vault is skipped for the rest of this process.
+  let vaultDown = !vault;
+  function fromVault<T>(call: (vault: KeyVault) => T, fallback: T): T {
+    if (vaultDown) return fallback;
+    try {
+      return call(vault!);
+    } catch {
+      vaultDown = true;
+      return fallback;
+    }
+  }
   // The local key comes first, so a hanging vault never delays it.
-  const sources = [() => readKeyFile(keyPath), () => vault?.load(account) ?? null];
+  const sources = [() => readKeyFile(keyPath), () => fromVault((v) => v.load(account), null)];
   function firstKey(): Buffer | null {
     for (const source of sources) {
       const key = source();
@@ -177,7 +192,7 @@ export function encryptedFileStore(
     if (cached) return cached;
     const key = randomBytes(32);
     mkdirSync(dirname(path), { recursive: true });
-    if (!vault?.save(account, key)) writeKeyFile(keyPath, key);
+    if (!fromVault((v) => v.save(account, key), false)) writeKeyFile(keyPath, key);
     cached = key;
     return key;
   }
