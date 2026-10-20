@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BuildBrief } from './agent-backend.js';
 import { normalizeManagedState, type ManagedAgentProvider, type ManagedSessionRequest } from './managed-agent.js';
 import { createManagedBackend } from './managed-backend.js';
-import { InMemoryCreatorMemoryStore } from '../store/slices/creator-memory.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const ISSUE = 42;
 const SLUG = 'comet-courier';
@@ -68,7 +68,7 @@ describe('managed backend', () => {
   it('mounts the asking creator memory, shared across their games', async () => {
     const ids = ['mem_ada', 'mem_bob'];
     const { provider, started } = fakeProvider({ createMemoryStore: async () => ids.shift()! });
-    const creatorMemory = new InMemoryCreatorMemoryStore();
+    const creatorMemory = new InMemoryStore();
     const backend = createManagedBackend({ provider, tools: TOOLS, creatorMemory });
 
     await backend.dispatch(brief({ ownerUid: 'g:ada' }));

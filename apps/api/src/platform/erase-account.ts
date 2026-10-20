@@ -34,7 +34,8 @@ export async function eraseAccount(options: {
   if (options.adminUids?.has(options.uid)) throw new OperatorAccountDeletionError();
   const dryRun = options.dryRun ?? false;
   const signals = await erasePlayerSignals({ store: options.store, uid: options.uid, dryRun });
-  const creatorMemoryStores = await eraseCreatorMemory(options, dryRun);
+  const at = options.at ?? new Date().toISOString();
+  const creatorMemoryStores = await eraseCreatorMemory({ ...options, at }, dryRun);
   const submissions = await options.store.listSubmissionsByOwner(options.uid);
   const preview: AccountIdentityDeletionResult = {
     publishedSlugs: submissions
@@ -55,11 +56,18 @@ export async function eraseAccount(options: {
 
 // Before the identity goes, so a failure leaves the erasure due again.
 async function eraseCreatorMemory(
-  options: { store: Store; uid: string; eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void> },
+  options: {
+    store: Store;
+    uid: string;
+    at: string;
+    eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
+  },
   dryRun: boolean,
 ): Promise<number> {
+  if (dryRun) return (await options.store.listCreatorMemory(options.uid)).length;
+  // Fence before listing: a round racing us sees it and backs out.
+  await options.store.beginAccountErasure(options.uid, options.at);
   const records = await options.store.listCreatorMemory(options.uid);
-  if (dryRun) return records.length;
   // First, so no nudge or repair can remount what is deleted below.
   await options.store.clearMemoryOwner(options.uid);
   for (const record of records) {
