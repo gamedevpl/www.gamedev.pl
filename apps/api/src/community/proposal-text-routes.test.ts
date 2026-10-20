@@ -5,6 +5,7 @@ import type { ContentChecker, ModerationVerdict } from '../platform/moderation.j
 import { InMemoryStore } from '../platform/store.js';
 import { MAX_PROPOSALS_PER_HOUR } from './proposal-text.js';
 import { MAX_OPEN_PROPOSALS_PER_TARGET } from './proposal-state.js';
+import { memoryGamesStore } from './proposal-round-fixture.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const OWNER = 'g:kasia';
@@ -39,9 +40,15 @@ describe('POST /api/games/:slug/proposals (text proposals)', () => {
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function app() {
+  async function app(withGamesStore = true) {
     const contentChecker: ContentChecker = { check: async () => verdict, checkFields: async () => verdict };
-    const built = await buildApp({ store, sessionSecret, adminUids: ADMIN, contentChecker });
+    const built = await buildApp({
+      store,
+      sessionSecret,
+      adminUids: ADMIN,
+      contentChecker,
+      ...(withGamesStore ? { submissionRoutes: { agentChannel: { gamesStore: memoryGamesStore() } } } : {}),
+    });
     apps.push(built);
     return built;
   }
@@ -144,6 +151,34 @@ describe('POST /api/games/:slug/proposals (text proposals)', () => {
     expect(outage.statusCode).toBe(503);
     expect(outage.json()).toMatchObject({ error: 'moderation_unavailable' });
     expect(await store.listProposals({ proposerUid: PROPOSER })).toHaveLength(0);
+  });
+
+  it('refuses to open one a reviewer could not act on (no games store)', async () => {
+    const response = await (
+      await app(false)
+    ).inject({
+      method: 'POST',
+      url: `/api/games/${SLUG}/proposals`,
+      headers: { cookie: cookie(PROPOSER) },
+      payload: BODY,
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'store_unavailable' });
+    expect(await store.listProposals()).toEqual([]);
+  });
+
+  it('declines a change request on a text proposal: nothing to resubmit', async () => {
+    const { proposal } = (await post(SLUG, PROPOSER)).json();
+    const response = await (
+      await app()
+    ).inject({
+      method: 'POST',
+      url: `/api/proposals/${proposal.id}/changes`,
+      headers: { cookie: cookie(OWNER) },
+      payload: { text: 'Please make it shorter.' },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'not_revisable' });
   });
 
   it('validates input and requires a session', async () => {

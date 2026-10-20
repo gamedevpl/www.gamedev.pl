@@ -29,6 +29,8 @@ export interface TextProposalRoutesOptions {
   notify?: TextProposalDeps['notify'];
   notifyOperators?: TextProposalDeps['notifyOperators'];
   readSnapshotPointer?: TextProposalDeps['readSnapshotPointer'];
+  // False without a games store: reviewers could not act on it.
+  manageable: boolean;
   now?: () => number;
 }
 
@@ -43,6 +45,7 @@ export async function registerTextProposalRoutes(
     async (request, reply) => {
       if (!request.user) return reply.status(401).send({ error: 'authentication required' });
       if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
+      if (!options.manageable) return reply.status(503).send({ error: 'store_unavailable' });
       const params = SlugParamsSchema.safeParse(request.params);
       if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
       const body = TextProposalSchema.safeParse(request.body);

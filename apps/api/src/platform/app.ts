@@ -952,6 +952,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     notify: notifyProposal,
     notifyOperators,
     readSnapshotPointer: async () => (await proposalBaseOptions.snapshotStore?.getPointer()) ?? null,
+    manageable: Boolean(gamesStore),
   });
 
   // Proposals: accepting a creator-game proposal starts the owner's own rebuild round.

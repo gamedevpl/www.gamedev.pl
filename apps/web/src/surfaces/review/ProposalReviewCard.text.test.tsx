@@ -72,6 +72,7 @@ describe('ProposalReviewCard text proposals', () => {
     expect(buttonWith(host, 'Play it')).toBeUndefined();
     expect(buttonWith(host, 'View changes')).toBeUndefined();
     expect(buttonWith(host, 'Accept')).toBeDefined();
+    expect(buttonWith(host, 'Request changes')).toBeUndefined();
     expect(host.querySelector('.propose-note')?.textContent).toContain("from the proposer's description");
   });
 

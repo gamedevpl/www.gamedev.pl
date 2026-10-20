@@ -557,6 +557,8 @@ export async function requestProposalChanges(
   const record = await deps.store.getProposal(input.id);
   if (!record) return { ok: false, status: 404, error: 'not_found' };
   if (record.state !== 'in_review') return { ok: false, status: 409, error: 'not_reviewable' };
+  // A text proposal has nothing to resubmit; decline it with a note instead.
+  if (record.kind === 'text') return { ok: false, status: 409, error: 'not_revisable' };
 
   const text = sanitizeCreatorText(input.text, { singleLine: false }).slice(0, MAX_PROPOSAL_MESSAGE_LENGTH);
   if (text.length < 2) return { ok: false, status: 400, error: 'text_too_short' };

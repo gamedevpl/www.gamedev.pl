@@ -172,9 +172,11 @@ export function ProposalReviewCard(props: {
             >
               {platform ? t('reviews.markNoted') : t('reviews.accept')}
             </button>
-            <button type="button" className="propose-btn is-quiet" disabled={busy} onClick={() => setMode('changes')}>
-              {t('reviews.requestChanges')}
-            </button>
+            {textOnly ? null : (
+              <button type="button" className="propose-btn is-quiet" disabled={busy} onClick={() => setMode('changes')}>
+                {t('reviews.requestChanges')}
+              </button>
+            )}
             <button type="button" className="propose-btn is-quiet" disabled={busy} onClick={() => setMode('decline')}>
               {t('reviews.decline')}
             </button>
