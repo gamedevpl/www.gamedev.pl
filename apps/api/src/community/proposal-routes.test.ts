@@ -76,7 +76,7 @@ async function seed(store: InMemoryStore) {
   await store.putContributionSettings({ slug: SLUG, mode: 'review', updatedAt: new Date(NOW).toISOString() });
 }
 
-/** Opens a proposal straight through the domain layer — the HTTP on-ramp is Remix's. */
+/** Opens a code proposal straight through the domain layer, as MCP does. */
 async function seedProposal(
   store: InMemoryStore,
   gamesStore: Fake,

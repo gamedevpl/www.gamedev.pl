@@ -112,7 +112,6 @@ export interface VisitEvent {
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'
-    | 'remix_step'
     | 'code_step'
     | 'code_completion'
     | 'cli_step';
@@ -126,7 +125,7 @@ export interface VisitEvent {
   route?: string;
   /**
    * `create_step` / `waitlist_step` / `framed_play_step` / `studio_step` / `editor_step` /
-   * `assist_step` / `remix_step` / `code_step`: which funnel step or outcome this
+   * `assist_step` / `code_step`: which funnel step or outcome this
    * visit reached. `code_step` never carries a file path or source text — see its
    * type definition in the web client for the closed vocabulary.
    */
@@ -144,23 +143,10 @@ export interface VisitEvent {
   detail?: string;
   /**
    * `how_to_play_opened`: which chrome surface opened the card (`bar` | `more`).
-   * `remix_step` with `step: 'painted'`: which door led to the painter
-   * (`redirect` | `menu`). Absent on events recorded before the field existed;
-   * never a game identity.
+   * Absent on events recorded before the field existed; never a game identity.
    */
   // party_step: bar is the host's party chrome, seat is the game.
   via?: string;
-  /**
-   * `remix_step` with `step: 'offered'` or `'opened'`: which control it was —
-   * `page` (the preview-first game page), `bar` (the chrome bar), or `more` (the
-   * overflow menu it sheds into on narrow screens).
-   *
-   * Its own field rather than a new meaning for `via` (what led someone to the
-   * painter) or `entry` (the route a visit landed on) — both already mean
-   * something, and a field with two meanings makes every historical row
-   * ambiguous. Absent on events recorded before it existed; never a game identity.
-   */
-  control?: string;
   kind?: string;
   outcome?: string;
   latencyMs?: number;

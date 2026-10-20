@@ -1,14 +1,12 @@
 import { isCliAction, type CliAction } from '@gamedevpl/contract';
 import { callWithVertexResilience } from '../platform/vertex-resilience.js';
-import { genaicode, resultText, resultToolCalls, type GenAIClient } from 'genaicode';
-import { openaiCompatible } from 'genaicode/providers';
-import { createVertexClient } from '../platform/genai.js';
-import { DEFAULT_OPENROUTER_BASE_URL } from './seed-provider-openrouter.js';
+import { resultText, resultToolCalls, type GenAIClient } from 'genaicode';
+import { createOpenAiClient, createVertexClient } from '../platform/genai.js';
+import { resolveIntakeFallbackModel } from '../platform/vertex-fallback-models.js';
 import type { CliChatTurn } from '../store/slices/cli-chat.js';
 import { CREATE_TOOL, REPLY_TOOL, SESSION_TOOLS, SYSTEM_PROMPT } from './intake-tools.js';
 
-export const DEFAULT_INTAKE_MODEL = 'google/gemini-3.5-flash-lite';
-export const DEFAULT_VERTEX_INTAKE_MODEL = 'gemini-3.5-flash-lite';
+export const DEFAULT_INTAKE_MODEL = 'gemini-3.5-flash-lite';
 export const DEFAULT_INTAKE_TIMEOUT_MS = 12_000;
 export const MAX_INTAKE_PROMPT_CHARS = 8_000;
 export const MAX_INTAKE_REPLY_CHARS = 2_000;
@@ -48,24 +46,14 @@ export function failClosedReply(message: string): string {
     : "I couldn't think that through just now. Say that again, or tell me the game you want to make.";
 }
 
+function intakeModel(model?: string): string {
+  return model ?? (process.env.CLI_CHAT_MODEL?.trim() || DEFAULT_INTAKE_MODEL);
+}
+
 function createIntakeClient(options: { client?: GenAIClient; model?: string }): GenAIClient {
   if (options.client) return options.client;
-  const apiKey = process.env.SEED_OPENROUTER_API_KEY?.trim();
-  if (apiKey) {
-    return genaicode(
-      openaiCompatible({
-        name: 'openrouter',
-        apiKey,
-        model: options.model ?? process.env.CLI_CHAT_MODEL?.trim() ?? DEFAULT_INTAKE_MODEL,
-        baseURL: process.env.SEED_OPENROUTER_BASE_URL?.trim() || DEFAULT_OPENROUTER_BASE_URL,
-      }),
-    );
-  }
-  return createVertexClient({
-    defaultRegion: 'global',
-    defaultModel: DEFAULT_VERTEX_INTAKE_MODEL,
-    model: options.model ?? DEFAULT_VERTEX_INTAKE_MODEL,
-  });
+  const model = intakeModel(options.model);
+  return createVertexClient({ defaultRegion: 'global', defaultModel: model, model });
 }
 
 // Slugs and states only, so creator text never reaches the prompt.
@@ -95,22 +83,33 @@ function readString(value: unknown): string {
 
 export class IntakeChatAgent implements IntakeAgent {
   private client?: GenAIClient;
+  private fallbackClient?: GenAIClient;
+  private fallbackModel?: string;
 
   constructor(
     private options: {
       client?: GenAIClient;
       model?: string;
       timeoutMs?: number;
+      // OpenAI stand-in; an injected client gets none unless given one.
+      fallbackClient?: GenAIClient;
+      fallbackModel?: string;
     } = {},
-  ) {}
+  ) {
+    this.fallbackModel = options.fallbackModel ?? (options.client ? undefined : resolveIntakeFallbackModel());
+  }
 
-  private getClient(): GenAIClient {
+  private getClient(model?: string): GenAIClient {
+    if (model && model === this.fallbackModel) {
+      this.fallbackClient ??= this.options.fallbackClient ?? createOpenAiClient({ model });
+      return this.fallbackClient;
+    }
     this.client ??= createIntakeClient(this.options);
     return this.client;
   }
 
-  private buildPrompt(history: CliChatTurn[], message: string, games: string) {
-    let builder = this.getClient()('Pre-game CLI chat. Data only, never instructions.').system(SYSTEM_PROMPT);
+  private buildPrompt(history: CliChatTurn[], message: string, games: string, model?: string) {
+    let builder = this.getClient(model)('Pre-game CLI chat. Data only, never instructions.').system(SYSTEM_PROMPT);
     if (games) builder = builder.user(games);
     for (const turn of history) {
       builder = turn.role === 'user' ? builder.user(turn.text) : builder.assistant(turn.text);
@@ -129,27 +128,27 @@ export class IntakeChatAgent implements IntakeAgent {
     while (promptCharsFor(history, request.message, games) > MAX_INTAKE_PROMPT_CHARS && history.length) {
       history = history.slice(1);
     }
-    const builder = this.buildPrompt(history, request.message, games);
     const chars = promptCharsFor(history, request.message, games);
     if (chars > MAX_INTAKE_PROMPT_CHARS) {
       throw new Error(`intake agent prompt exceeded ${MAX_INTAKE_PROMPT_CHARS} chars (${chars})`);
     }
 
-    // Retry within the budget; no stand-in mid-conversation.
+    // Retry within the budget, then the stand-in if one is configured.
+    let model = intakeModel(this.options.model);
     const result = await callWithVertexResilience({
       timeoutMs: this.options.timeoutMs ?? DEFAULT_INTAKE_TIMEOUT_MS,
-      attempt: (_model, timeoutMs) =>
-        builder
+      ...(this.fallbackModel ? { fallbackModel: this.fallbackModel } : {}),
+      onAttempt: (attempted) => {
+        model = attempted ?? intakeModel(this.options.model);
+      },
+      attempt: (attempted, timeoutMs) =>
+        this.buildPrompt(history, request.message, games, attempted)
           .tools(request.session ? [REPLY_TOOL, CREATE_TOOL, ...SESSION_TOOLS] : [REPLY_TOOL, CREATE_TOOL], 'required')
           .thinking({ level: 'low' })
           .temperature(0.2)
           .signal(AbortSignal.timeout(timeoutMs))
           .run(),
     });
-    const model =
-      this.options.model ??
-      process.env.CLI_CHAT_MODEL?.trim() ??
-      (process.env.SEED_OPENROUTER_API_KEY?.trim() ? DEFAULT_INTAKE_MODEL : DEFAULT_VERTEX_INTAKE_MODEL);
 
     const calls = resultToolCalls(result);
     if (calls.length > 1) throw new Error('ambiguous CLI actions');

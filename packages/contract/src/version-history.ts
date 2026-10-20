@@ -9,7 +9,7 @@ export type HistoryVersion = {
   summary?: string;
   backend?: string;
   model?: string;
-  origin?: 'editor' | 'remix' | 'seal';
+  origin?: 'editor' | 'seal';
   verdict: 'pending' | 'passed' | 'failed' | 'kit_outdated' | 'crashed' | 'timed_out';
 };
 

@@ -85,7 +85,7 @@ and belong to no bucket (below).
 | Bucket           | What it owns                                                                                                                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `platform/`      | Composition root (`app.ts`), auth, rate limits, moderation, OAuth, account deletion, and the Store. The bucket every other bucket may import.                                                                                  |
-| `creation/`      | Specs, drafts, remix, the Creator Studio's server half, job dispatch and reconciliation, scorecards                                                                                                                            |
+| `creation/`      | Specs, drafts, the Creator Studio's server half, job dispatch and reconciliation, scorecards                                                                                                                                   |
 | `agent-surface/` | The MCP server, the agent channel, agent keys, OAuth metadata — everything a coding agent talks to                                                                                                                             |
 | `delivery/`      | Receiving a delivery over the build channel and getting it to playable: staged sources, candidate versions, previews, bundling, assembly, the gate runner. Nothing is merged here — repo-lane merge-back lives in `community/` |
 | `catalog/`       | The games-repo client, catalog reads, game pages, recommendations, health sweeps                                                                                                                                               |
@@ -107,11 +107,9 @@ erased at compile time, so no runtime coupling. Buckets graduate from warn to er
 being appended to `ENFORCED_BUCKETS`; `telemetry`, `catalog`, `realtime` and `notifications`
 are at error today, the rest stay warn-only under `npm run module-boundary`.
 
-Two files are unmapped: `apps/api/src/submissions.ts` and `creation/remix-view.ts`.
-`submissions.ts` is left that way deliberately — it is the remaining mega-file, and leaving
+One file is unmapped: `apps/api/src/submissions.ts`. It is left that way deliberately — it is the remaining mega-file, and leaving
 it unclassified means every domain it reaches into surfaces as an honest warning rather than
-being quietly waved through. `remix-view.ts` is simply unclassified, and `npm run
-module-boundary` reports it as such.
+being quietly waved through.
 
 `platform/app.ts` is a single `buildApp` that registers everything — including the agent
 channel and the MCP server, which are mounted in the same app rather than in a sidecar.
@@ -181,7 +179,7 @@ the admin-only route in `creation/job-admin-routes.ts`.
 
 `community/proposal-base.ts` is the one place the difference is resolved **for a proposal's
 source base** — the serving paths below make their own lane decisions independently. So
-everything downstream of a proposal — the remix on-ramp, an agent's proposal round, the
+everything downstream of a proposal — an agent's proposal round, the
 diff — asks one question and gets back a file set plus a base to pin against.
 
 ## The flows
@@ -253,25 +251,22 @@ A round is **dispatched to an agent backend** and the agent delivers back over t
 channel**, calling `submit_sources`. It does not travel as a merged pull request:
 `GitHubClient` has no issue-creation method at all (the issue-first flow was retired — see
 `docs/steel-thread-plan.md`'s M4 history), and no managed provider opens a pull
-request, so the agent path opens none at all. The one
-production caller of `ensureOpenPullRequest` is `community/proposal-apply-bot.ts` — the
-repo-lane merge-back described just below, not agent mechanics; that PR follows the games
-repo's normal review-and-merge lifecycle, not any programmatic close (`GitHubClient` has no
-`closePullRequest` method). The agent's working branch is removed by `deleteWorkspace`, which
+request, so the agent path opens none at all. `GitHubClient` has no `closePullRequest`
+method either. The agent's working branch is removed by `deleteWorkspace`, which
 `managed-backend.ts`'s `cleanup` calls when a previous dispatch is released (a resume,
 cancellation or abandonment), not at job completion.
 
 `BuilderKind` is `'platform' | 'self'`: the platform's own hosted builder, or the creator's
 own agent connected over MCP.
 
-The one place a delivery becomes a git commit is the **repo lane's** merge-back:
-`community/proposal-apply-bot.ts` writes an accepted proposal's exact file contents into
-`games/<slug>/` and opens a PR. That is a mechanical overlay on purpose — the proposal already
-holds the file contents a green gate ran against, so asking an agent to "apply" them would
-make the merge unreviewable. From there the games repo's own `validate.yml` gates the PR,
-its CODEOWNERS puts a human on the merge, and the snapshot bake republishes.
+**Catalog (platform-owned) games: proposals are feedback.** A proposal on a catalog game is
+read by admins as feedback; accepting it closes it, and no proposer code is merged or copied
+into `games/<slug>/`. Changes to catalog games go through the games repo's normal
+review-and-merge flow (`validate.yml`, CODEOWNERS, snapshot bake).
 
-**Store lane, creator-owned games: accept never adopts code.** A proposal's own version
+**Store lane, creator-owned games: accept never adopts code.** Proposals reach a game only
+when its creator enabled them. A creator's agent can propose a code change via MCP; a player
+can send a text-only **Propose a change** form (title + description). A code proposal's own version
 stays in `proposal` mode forever. Accepting it (`community/proposal-round-start.ts`) opens
 the owner's own improvement round on the game's _live_ version — whichever builder their
 improve rounds normally use — with a brief that fences the proposer's title and description

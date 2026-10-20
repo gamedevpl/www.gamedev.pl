@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SourceFile } from '../delivery/games-store.js';
 import { contentDelivery } from '../creation/content-candidate.js';
-import { bakeRemixEditorDefaults, collectEditorTextFields } from '../creation/remix-bake.js';
+import { bakeEditorDefaults, collectEditorTextFields } from '../creation/editor-bake.js';
 import { InMemoryStore } from '../platform/store.js';
 import { settleProposalsOnPublish } from './proposal-lifecycle.js';
 import { createProposalRoundStarter } from './proposal-round-start.js';
 import { editorJson, gameFiles, memoryGamesStore } from './proposal-round-fixture.js';
+import { openTextProposal } from './proposal-text.js';
 import { acceptProposal, openProposal, reconcileProposalGate } from './proposals.js';
 
 const NOW = Date.parse('2026-08-04T12:00:00Z');
@@ -56,7 +57,7 @@ describe('accepting a creator-game proposal', () => {
       gamesStore,
       startImprovementRound: (input) => startImprovementRound(input),
       content: {
-        bake: bakeRemixEditorDefaults,
+        bake: bakeEditorDefaults,
         textFields: collectEditorTextFields,
         deliver: contentDelivery({ store, gamesStore, now: () => NOW, onSourcesDelivered: gate }),
       },
@@ -104,6 +105,25 @@ describe('accepting a creator-game proposal', () => {
     expect(brief).toContain('- game.ts (+1 −2)');
     expect(brief).toContain('get_proposal_summary');
     expect(brief).not.toContain('grip = 0.82');
+    expect(gate).not.toHaveBeenCalled();
+  });
+
+  it('opens an owner round from a text proposal, with the description fenced in the brief', async () => {
+    const opened = await openTextProposal(deps(), {
+      targetSlug: SLUG,
+      proposerUid: PROPOSER,
+      title: 'Double jump',
+      description: 'Let the dog jump again in mid-air so the high ledges are reachable.',
+    });
+    if (!opened.ok) throw new Error(opened.error);
+    const result = await accept(opened.proposal.id);
+    expect(result).toMatchObject({ ok: true, proposal: { state: 'accepted', acceptedVia: 'round' } });
+    expect(started).toHaveLength(1);
+    const brief = started[0]!.text;
+    expect(brief).toContain('Double jump');
+    expect(brief).toMatch(/```text\nTitle: Double jump\n\nLet the dog jump again/);
+    expect(brief).toContain('Text-only proposal: no files changed.');
+    expect(brief).not.toContain('get_proposal_diff');
     expect(gate).not.toHaveBeenCalled();
   });
 

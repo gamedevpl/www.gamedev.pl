@@ -133,7 +133,7 @@ apply in BigQuery: no shared key between the two tables, and no identity columns
   event type — so its field names are already spoken for across the whole stream.
   `entry` is the route a visit landed on; `via` is which surface opened a thing;
   `step`, `route`, `builder`, `detail`, `reopen` likewise. A new dimension gets a new
-  name (`control` for which remix button was pressed), never a second meaning on an
+  name (`control` for which share button was pressed), never a second meaning on an
   existing one — a field that means two things makes every row written before the
   second meaning ambiguous, and no migration can tell them apart afterwards.
 - **Bots are not people, and the data must know it.** Automation accounts live in the

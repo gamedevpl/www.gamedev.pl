@@ -103,6 +103,8 @@ steps:
       # the capture harness expects a browser on PATH, and one apt install beats a fetch
       # inside every gate run.
       - 'PUPPETEER_SKIP_DOWNLOAD=1'
+      # Candidate code must never reach the gate SA token (gate-sandbox.ts).
+      - 'GATE_REQUIRE_METADATA_BLOCK=1'
       # Empty is a supported shape: run-gate falls back to writing the manifest itself,
       # which is what a local run against a bucket you own wants.
       - 'GATE_VERDICT_URL=${_GATE_VERDICT_URL}'

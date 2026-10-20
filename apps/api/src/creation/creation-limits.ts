@@ -42,8 +42,7 @@ import { resolveDefaultGlobalDailyBotCallCap } from '../platform/bot-allowance.j
 export const DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP = 50;
 
 /**
- * The editing lanes' shared daily allowance of paid model calls (assist + code,
- * Studio + remix together). Generous against expected use — the cost model puts
+ * The editing lanes' shared daily allowance of paid model calls (Studio assist). Generous against expected use — the cost model puts
  * a heavy day in the hundreds — while capping the worst day at a number an
  * operator chose rather than one an incident discovers.
  */
@@ -246,23 +245,12 @@ export interface EditingGate {
   checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
   // Read-only headroom check, for use before a paid classifier runs.
   peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
-  /**
-   * Whether the operator has closed the code-lane trace window.
-   *
-   * The trace is turned *on* by a deploy-threaded env flag — deliberate and
-   * slow, which is right for opening it. Turning it off must not need a
-   * release: clearing the repository variable changes nothing on a revision
-   * already running, and the interval between "I turned it off" and "it is off"
-   * is spent writing players' words to the log. So off lives here, in the same
-   * document the breaker uses, and takes effect within its TTL.
-   */
-  isTracePaused(): Promise<boolean>;
 }
 
 /**
  * The editing lanes' circuit breaker — the same chassis as creation's, reading
  * the same document (one place to look during an incident), tripping a
- * different pair of fields. Built BEFORE the remix flags go on, deliberately:
+ * different pair of fields. Built before any editing flag goes on, deliberately:
  * the flag-on hand test is exactly the moment a runaway loop or a probing
  * script would first meet real spend, and the breaker is what makes that day
  * cost a known number.
@@ -279,7 +267,6 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
     globalDailySubmissionCap: null,
     editingPaused: false,
     globalDailyEditCap: null,
-    remixTracePaused: false,
     managedDailyCap: null,
     managedDailyUserCap: null,
   };
@@ -302,10 +289,6 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
   }
 
   return {
-    async isTracePaused() {
-      return (await limits()).remixTracePaused === true;
-    },
-
     async peek(uid, dateStr) {
       // Read-only by contract: spending here would charge automation for work that
       // may never happen, and charge it twice when checkAndSpend follows.

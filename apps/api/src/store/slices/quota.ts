@@ -48,7 +48,6 @@ export function emptyUsageCounters(): UsageCounters {
     tabCompletes: 0,
     searchQueries: 0,
     worldWrites: 0,
-    remixEdits: 0,
     optionImages: 0,
   };
 }
@@ -142,7 +141,6 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailySubmissionCap
           : (this.creationLimits?.globalDailySubmissionCap ?? null),
       editingPaused: patch.editingPaused ?? this.creationLimits?.editingPaused ?? false,
-      remixTracePaused: patch.remixTracePaused ?? this.creationLimits?.remixTracePaused ?? false,
       globalDailyEditCap:
         patch.globalDailyEditCap !== undefined
           ? patch.globalDailyEditCap
@@ -318,7 +316,6 @@ export class FirestoreQuotaStore implements QuotaStore {
       globalDailySubmissionCap:
         typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
       editingPaused: data?.editingPaused === true,
-      remixTracePaused: data?.remixTracePaused === true,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
@@ -377,7 +374,6 @@ export class FirestoreQuotaStore implements QuotaStore {
             ? patch.globalDailySubmissionCap
             : (existing.globalDailySubmissionCap ?? null),
         editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
-        remixTracePaused: patch.remixTracePaused ?? existing.remixTracePaused ?? false,
         globalDailyEditCap:
           patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
         chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,

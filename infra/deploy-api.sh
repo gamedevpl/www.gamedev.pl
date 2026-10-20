@@ -284,14 +284,6 @@ if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1;
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
   echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
 fi
-# describe only proves the secret container exists, not that it has a version
-# — a container created without a version passes describe but makes
-# --set-secrets fail deploy with "...versions/latest was not found"
-# (2026-08-21 incident). Check for an accessible version instead.
-if gcloud secrets versions access latest --secret=openrouter-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
-  SECRET_MAPPINGS+=("SEED_OPENROUTER_API_KEY=openrouter-api-key:latest")
-  echo "==> openrouter-api-key found; selectable as a seed provider once SEED_OPENROUTER_MODEL is also set."
-fi
 
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
@@ -349,18 +341,6 @@ if [ -n "${GAMES_STORE_BUCKET:-}" ]; then
   # default pool's open egress. Empty is the default pool.
   ENV_VARS="${ENV_VARS}|GATE_WORKER_POOL=${GATE_WORKER_POOL:-}|GATE_EGRESS_PROXY=${GATE_EGRESS_PROXY:-}"
 fi
-# The remix code-lane trace. Threaded here as well as in the Actions workflow,
-# because --set-env-vars replaces the whole map: a deploy from this script would
-# otherwise drop a flag the workflow had set, and the trace would stop with
-# nothing to say why. Both supported paths carry it or neither should.
-#
-# Note this only opens the window. Closing it does not wait for either path —
-# `remixTracePaused` on the creation-limits document stops emission within the
-# breaker's TTL, because the interval between deciding to stop and stopping is
-# spent writing players' own words to the log.
-if [ -n "${REMIX_DEBUG:-}" ]; then
-  ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"
-fi
 # Default true since www moved behind Firebase Hosting (2026-09-06). Off, every per-IP
 # limiter collapses onto Google's frontend addresses; the peer check in client-address.ts
 # keeps the flag inert on the run.app URL, so true is safe on both deploy paths. Until
@@ -383,7 +363,7 @@ fi
 # The moderation fallback lives here too: it is an incident lever — repoint the
 # classifier's stand-in without a deploy — and a lever only one path threads is wiped by
 # the next release through the other.
-for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL \
+for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL CLI_CHAT_FALLBACK_MODEL \
   MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER \
   MEDIA_DAILY_MINTS_PER_IP MEDIA_DAILY_MINTS_PER_INSTANCE REFINE_FALLBACK_MODEL; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
@@ -402,18 +382,17 @@ for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOW
 done
 # Feature flags the Actions workflow threads from repo variables but this script did not,
 # found by auditing the two paths against each other after the 2026-08-04 incident. A
-# deploy from here would silently drop them: the code lane and the editor assist would
-# switch off, and MCP clients would lose their authorization-server list — each looking
+# deploy from here would silently drop them: the editor assist would switch off, and MCP clients would lose their authorization-server list — each looking
 # like a spontaneous regression with a deploy as the only clue.
 #
 # SEED_DISPATCH used to head this list; it is gone, round 0 is unconditional now.
 # Its kill switch moved to the creation-limits document (seedingMode), not an env var —
 # see ops: seed-provider-selection-plan.md.
 #
-# The rule this file already states for REMIX_DEBUG applies to every one of them: both
+# The rule this file states for the Vertex levers applies to every one of them: both
 # supported paths carry a flag, or neither should.
 LOCAL_TAB_COMPLETE="${LOCAL_TAB_COMPLETE:-true}"
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE LOCAL_TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
+for FLAG_VAR in EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE LOCAL_TAB_COMPLETE CLI_SURFACE CREATOR_PERFORMANCE_MCP APP_CSP_REPORT_ONLY TELEMETRY_BACKEND; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
@@ -450,18 +429,14 @@ for SEED_VAR in \
   SEED_OPENAI_MODEL \
   SEED_META_MODEL \
   SEED_META_BASE_URL \
-  SEED_OPENROUTER_MODEL \
-  SEED_OPENROUTER_BASE_URL \
   SEED_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_MAX_OUTPUT_TOKENS \
   SEED_META_MAX_OUTPUT_TOKENS \
-  SEED_OPENROUTER_MAX_OUTPUT_TOKENS \
   SEED_PICK_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS \
-  SEED_META_PICK_MAX_OUTPUT_TOKENS \
-  SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS; do
+  SEED_META_PICK_MAX_OUTPUT_TOKENS; do
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"

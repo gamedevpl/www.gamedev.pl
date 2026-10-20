@@ -9,7 +9,7 @@ import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 
 /**
- * Play and a submitted Remix request on `/:handle/:slug` must mount the
+ * Play on `/:handle/:slug` must mount the
  * full-viewport theater.
  *
  * That route is an open-chrome early return in App. The handlers still set
@@ -35,7 +35,6 @@ const catalogEntry: CatalogEntry = {
   world: null,
   sensing: null,
   editor: 'content',
-  remixOn: true,
   orientation: 'any',
   touch: null,
   submittedBy: 'nightshift',
@@ -93,9 +92,6 @@ function mockApi(options: { entry?: CatalogEntry; signedIn?: boolean; partySessi
             }),
           );
     }
-    if (url.endsWith(`/api/games/${entry.slug}/remix`)) {
-      return new Response(JSON.stringify({ remixId: 'r1', values: {}, params: {}, suggestions: [] }));
-    }
     if (url.endsWith(`/api/games/${entry.slug}`)) {
       return new Response(JSON.stringify({ slug: entry.slug, title: entry.title, html: '<!doctype html><canvas>' }));
     }
@@ -127,63 +123,6 @@ describe('theater from the public game page', () => {
     localStorage.clear();
     window.history.pushState(null, '', '/');
     vi.restoreAllMocks();
-  });
-
-  it('keeps Remix on the page until the request is submitted, then opens the theater', async () => {
-    mockApi();
-    window.history.pushState(null, '', '/nightshift/sky-dodge');
-    const { container, root } = await renderApp();
-
-    expect(container.querySelector('.game-page h1')?.textContent).toBe('Sky Dodge');
-    expect(document.body.classList.contains('player-open')).toBe(false);
-
-    const remix = container.querySelector<HTMLButtonElement>('.game-page-remix');
-    expect(remix).not.toBeNull();
-    await act(async () => {
-      remix?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-      await flushEffects();
-    });
-
-    expect(document.body.classList.contains('player-open')).toBe(false);
-    expect(container.querySelector('.stage.is-playing-full-viewport')).toBeNull();
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-
-    const request = container.querySelector<HTMLTextAreaElement>('#game-page-remix-request');
-    expect(document.activeElement).toBe(request);
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(request, 'make it faster');
-      request?.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLFormElement>('.game-page-remix-form')
-        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      await flushEffects();
-      await flushEffects();
-    });
-
-    // The failure mode was: player-open with no theater. Once the request is
-    // submitted, both the scroll lock and theater must be present.
-    expect(document.body.classList.contains('player-open')).toBe(true);
-    expect(container.querySelector('.stage.is-playing-full-viewport')).not.toBeNull();
-    expect(container.querySelector('.exit-btn')).not.toBeNull();
-    expect(container.querySelector('.remix-panel, .remix-host')).not.toBeNull();
-
-    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
-    await act(async () => {
-      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
-    expect(document.body.classList.contains('player-open')).toBe(false);
-    expect(container.querySelector('.stage.is-playing-full-viewport')).toBeNull();
-    expect(window.location.pathname).toBe('/nightshift/sky-dodge');
-
-    await act(async () => {
-      root.unmount();
-    });
   });
 
   it('opens the theater from Play on the same route', async () => {

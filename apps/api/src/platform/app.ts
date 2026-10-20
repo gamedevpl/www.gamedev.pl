@@ -43,10 +43,9 @@ import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notif
 import { createFollowerFanout } from '../notifications/game-follow-notify.js';
 import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
+import { registerTextProposalRoutes } from '../community/proposal-text-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
-import { registerRemixSettingRoutes } from '../community/remix-setting-routes.js';
 import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
-import { invalidateRemixOnSlugs } from '../catalog/remix-on.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
@@ -68,16 +67,14 @@ import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { toRecentBuilds } from '../delivery/recent-builds.js';
 import { registerEditorRoutes } from '../creation/editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from '../creation/editor-assist.js';
-import { VertexCodeLane } from '../creation/code-lane.js';
 import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.js';
-import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
 import { createProposalLifecycle } from '../community/proposal-lifecycle.js';
 import { emitProposalFeedbackAlert } from '../notifications/proposal-feedback-alert.js';
 import { createProposalRoundStarter, loadProposalChange } from '../community/proposal-round-start.js';
 import { proposalDiffPage } from '../community/proposal-diff-pages.js';
 import { contentDelivery } from '../creation/content-candidate.js';
-import { bakeRemixEditorDefaults, collectEditorTextFields } from '../creation/remix-bake.js';
+import { bakeEditorDefaults, collectEditorTextFields } from '../creation/editor-bake.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
 import { createEditingGate, createGateRunGate, createTabCompleteGate } from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
@@ -229,17 +226,18 @@ export interface BuildAppOptions {
   accessTokenRoutes?: { now?: () => number };
 }
 
+// Fastify's router param cap; long tokens and share codes need headroom.
+const MAX_ROUTE_PARAM_LENGTH = 128;
+
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   // trustProxy stays 1, and raising it is a spoofing hole: see docs/deployment.md.
-  // maxParamLength: a remix id is a self-describing token (apps/api/src/remix.ts)
-  // that carries the game's slug, so it is longer than Fastify's 100-character
-  // default allows. Over the limit the router answers 414 before any handler runs
-  // — which would read as "every remix on a long-slugged game is broken" with
-  // nothing in the logs. MAX_REMIX_ID_LENGTH is the bound the minter respects.
+  // maxParamLength: some route params (tokens, share codes) exceed Fastify's
+  // 100-character default. Over the limit the router answers 414 before any
+  // handler runs, with nothing in the logs.
   const app = Fastify({
     logger: options.logger ?? false,
     trustProxy: (_address, hop) => hop === 0,
-    routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
+    routerOptions: { maxParamLength: MAX_ROUTE_PARAM_LENGTH },
     rewriteUrl: rewriteOpsUrl,
   });
 
@@ -364,19 +362,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     verifier: options.opsConsole?.verifier ?? createInternalAuthVerifierFromEnv(process.env, 'opsConsole'),
   });
 
-  /**
-   * `appleSignIn` tells the web app whether this server can verify an Apple token.
-   * The button also needs a Services ID baked in at build time.
-   */
-  app.get('/api/health', async () => ({
-    status: 'ok',
-    provider: 'mock',
-    privateBeta: !(await openToVisitors()),
-    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
-    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
-  }));
-
   if (relayOnly) {
+    app.get('/api/health', async () => ({ status: 'ok' }));
     await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
     await registerMultiplayerRoutes(app, {
       internalAuth: createInternalAuthVerifierFromEnv(process.env, 'mpRelay'),
@@ -385,6 +372,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
     return app;
   }
+
+  // Apple sign-in also needs a Services ID baked into the client.
+  app.get('/api/health', async () => ({
+    status: 'ok',
+    provider: 'mock',
+    privateBeta: !(await openToVisitors()),
+    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
+    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
+  }));
 
   // Where a delivered game is stored, and what verifies it. Resolved once and shared by
   // every registration that needs them: three copies of these expressions is three ways
@@ -410,7 +406,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
   if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore, onVerdict: proposals.onVerdict, objectStore });
   registerPublicKitRoutes(app, { objectStore, enabled: publicKitDownloadEnabled() });
-  // Wrapped once here so every entry point — delivery, editor, remix, proposals,
+  // Wrapped once here so every entry point — delivery, editor, proposals,
   // re-gate and the health sweep — starts builds through the same daily ceiling.
   const gateTrigger = withGateRunCeiling(
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
@@ -932,8 +928,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
   // as a content-only candidate through the same gate trigger deliveries use.
-  // The editing lanes' shared daily spend breaker. One gate instance across the
-  // Studio and remix routes, so "how much did editing cost today" is one number.
+  // The editing lane's shared daily spend breaker, so editing cost is one number.
   const editingGate = createEditingGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) });
 
   await registerEditorRoutes(app, {
@@ -948,28 +943,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     onSourcesDelivered: gateTrigger,
   });
 
-  // Remix: signed-in, ephemeral live editing; share links and proposals never publish.
-  await registerRemixRoutes(app, {
+  // Text proposals: a described change, reviewer-visible once moderated.
+  await registerTextProposalRoutes(app, {
     store,
-    gamesStore,
-    // N1: community's own domain call, wired here rather than imported by creation/.
-    openProposal,
-    editingGate,
-    // Signs share codes so a link cannot carry values nobody shared.
-    submissionTokenSecret,
-    githubClient: submissionSeams.githubClient ?? undefined,
-    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
-    publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
-    assistant: options.editorAssistant ?? new VertexEditorAssistant(),
-    codeLane: new VertexCodeLane(),
     contentChecker,
-    // Same resolver MCP proposal tools and the review diff use — catalog remix propose
-    // reads one game's archive at the live snapshot commit through this seam.
-    resolveProposalBase: resolveBaseForProposal,
-    // Same gate the delivery path uses: a proposal is checked by exactly the machinery a
-    // creator's own upload is, or the reviewer would be judging something unverified.
-    onSourcesDelivered: gateTrigger,
-    notifyProposal,
+    notify: notifyProposal,
+    notifyOperators,
+    readSnapshotPointer: async () => (await proposalBaseOptions.snapshotStore?.getPointer()) ?? null,
+    manageable: Boolean(gamesStore),
   });
 
   // Proposals: accepting a creator-game proposal starts the owner's own rebuild round.
@@ -988,7 +969,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             gamesStore,
             startImprovementRound: submissionSeams.startImprovementRound,
             content: {
-              bake: bakeRemixEditorDefaults,
+              bake: bakeEditorDefaults,
               textFields: collectEditorTextFields,
               deliver: contentDelivery({ store, gamesStore, now: Date.now, onSourcesDelivered: gateTrigger }),
             },
@@ -1024,15 +1005,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   await registerDreamSettingRoutes(app, { store });
-
-  await registerRemixSettingRoutes(app, {
-    store,
-    adminUids,
-    onChanged: (slug) => {
-      gamePageRoute.invalidateGameCache(slug);
-      invalidateRemixOnSlugs(store);
-    },
-  });
 
   // GO-02: transfer invitation initiate/cancel/inspect/accept/reject.
   await registerGameTransferRoutes(app, {

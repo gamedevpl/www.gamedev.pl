@@ -212,7 +212,6 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     world: entry.world === 'shared' ? 'shared' : null,
     sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
     editor: parseCatalogEditor(entry.editor),
-    ...(entry.remixOn === true ? { remixOn: true as const } : {}),
     orientation: parseCatalogOrientation(entry.orientation),
     touch: parseCatalogTouch(entry.touch),
     submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),
@@ -236,10 +235,6 @@ function parseCatalogTagline(value: unknown): CatalogEntry['tagline'] {
   const pl = typeof localized.pl === 'string' ? localized.pl.trim() : '';
   return en || pl ? { ...(en ? { en } : {}), ...(pl ? { pl } : {}) } : undefined;
 }
-
-// Offered only when the game declares an editor and remix is on.
-export const offersRemix = (entry: Pick<CatalogEntry, 'editor' | 'remixOn'>): boolean =>
-  entry.editor === 'content' && entry.remixOn === true;
 
 function parseCatalogEffort(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) return undefined;

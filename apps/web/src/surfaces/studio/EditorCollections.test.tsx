@@ -25,7 +25,6 @@ vi.mock('../../studioApi.js', async () => {
 vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
 
 import { EditorPanel } from './EditorPanel.js';
-import { RemixPainter } from '../../RemixPainter.js';
 import type { EditorContentPush } from '../../editorBridge.js';
 
 const mapItem: EditorItemContent = { properties: { name: 'Map 1' }, rows: ['..', '..'] };
@@ -132,39 +131,6 @@ describe('multi-collection editor surfaces', () => {
     expect(container.querySelector('.editor-item-list')?.textContent).not.toContain('Map 1');
     expect(putEditorDraft).not.toHaveBeenCalled();
   });
-
-  it('switches the remix painter collection and leaves the document untouched', async () => {
-    const onChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(<RemixPainter content={definition.content} doc={content} onChange={onChange} />);
-    });
-
-    const selector = container.querySelector('.editor-collection-selector select') as HTMLSelectElement;
-    expect(selector.value).toBe('maps');
-    expect(container.querySelector('.remix-painter-items')?.textContent).toContain('Map 1');
-
-    changeSelect(selector, 'routes');
-
-    expect(selector.value).toBe('routes');
-    expect(container.querySelector('.remix-painter-items')?.textContent).toContain('Route 1');
-    expect(container.querySelector('.remix-painter-items')?.textContent).not.toContain('Map 1');
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it('keeps the single-collection surfaces free of selector chrome', async () => {
-    const single = { maps: definition.content.maps };
-    fetchGameEditor.mockResolvedValue(
-      editorState({ definition: { version: 1, content: single }, content: { maps: [mapItem] } }),
-    );
-    await renderEditor();
-    expect(container.querySelector('.editor-collection-selector')).toBeNull();
-
-    act(() => {
-      root!.render(<RemixPainter content={single} doc={{ maps: [mapItem] }} onChange={vi.fn()} />);
-    });
-    expect(container.querySelector('.editor-collection-selector')).toBeNull();
-  });
 });
 
 describe('selected collection item reaches the preview', () => {
@@ -191,32 +157,6 @@ describe('selected collection item reaches the preview', () => {
 
     expect(push).toHaveBeenCalledWith(twoMaps, { collection: 'maps', index: 1 });
     expect(putEditorDraft).not.toHaveBeenCalled();
-  });
-
-  it('remix painter reports the selected item when the player switches maps', async () => {
-    const onChange = vi.fn();
-    const onSelectionChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter
-          content={definition.content}
-          doc={twoMaps}
-          onChange={onChange}
-          onSelectionChange={onSelectionChange}
-        />,
-      );
-    });
-    expect(onSelectionChange).toHaveBeenLastCalledWith({ collection: 'maps', index: 0 });
-
-    const second = Array.from(container.querySelectorAll('.remix-painter-item')).find(
-      (button) => button.textContent === 'Map 2',
-    ) as HTMLButtonElement;
-    await act(async () => {
-      second.click();
-    });
-    expect(onSelectionChange).toHaveBeenLastCalledWith({ collection: 'maps', index: 1 });
-    expect(onChange).not.toHaveBeenCalled();
   });
 });
 
@@ -288,46 +228,6 @@ describe('the entities widget', () => {
     expect(container.querySelector('.editor-check.is-bad')?.textContent).toContain('cost');
     expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(true);
   });
-
-  it('remix painter lets a remixer edit entity properties and see uniqueBy checks (no board)', async () => {
-    const onChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter content={entitiesDefinition.content} doc={{ cards: [cardOne, cardTwo] }} onChange={onChange} />,
-      );
-    });
-    expect(container.querySelector('.editor-board')).toBeNull();
-    expect(container.querySelector('.editor-palette')).toBeNull();
-    expect(container.querySelector('.remix-painter-items')?.textContent).toContain('Strike');
-
-    // Strike's "cost" field is editable, not just displayed.
-    const costInput = container.querySelector<HTMLInputElement>('.remix-painter-properties input[type="number"]');
-    expect(costInput).not.toBeNull();
-    expect(costInput!.value).toBe('1');
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-      setter.call(costInput, '2');
-      costInput!.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(onChange).toHaveBeenCalledWith({
-      cards: [{ properties: { name: 'Strike', cost: 2 } }, cardTwo],
-    });
-
-    // Collides with Guard's cost (2) — the uniqueBy check must surface here too.
-    act(() => root!.unmount());
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter
-          content={entitiesDefinition.content}
-          doc={{ cards: [{ properties: { name: 'Strike', cost: 2 } }, cardTwo] }}
-          onChange={vi.fn()}
-        />,
-      );
-    });
-    expect(container.querySelector('.remix-painter-checks .editor-check.is-bad')?.textContent).toContain('cost');
-  });
 });
 
 describe('the path widget', () => {
@@ -392,104 +292,5 @@ describe('the path widget', () => {
       { x: 0, y: 1 },
       { x: 1, y: 1 },
     ]);
-  });
-
-  it('lets Remix append by click and drag an existing point', async () => {
-    const onChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(<RemixPainter content={pathDefinition.content} doc={{ routes: [pathItem] }} onChange={onChange} />);
-    });
-    let painter = container.querySelector<SVGSVGElement>('.editor-path')!;
-    vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 400,
-      bottom: 300,
-      width: 400,
-      height: 300,
-      toJSON: () => ({}),
-    });
-    act(() => painter.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 250, clientY: 150 })));
-    const appended = onChange.mock.lastCall?.[0] as { routes: EditorItemContent[] };
-    expect(appended.routes[0]).toMatchObject({
-      points: [
-        { x: 0, y: 1 },
-        { x: 1, y: 1 },
-        { x: 2, y: 1 },
-      ],
-    });
-
-    await act(async () => {
-      root!.render(<RemixPainter content={pathDefinition.content} doc={appended} onChange={onChange} />);
-    });
-    painter = container.querySelector<SVGSVGElement>('.editor-path')!;
-    vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      left: 0,
-      top: 0,
-      right: 400,
-      bottom: 300,
-      width: 400,
-      height: 300,
-      toJSON: () => ({}),
-    });
-    const firstHit = container.querySelector<SVGCircleElement>('[data-point-index="0"] .editor-path-point-hit')!;
-    act(() => {
-      firstHit.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 150 }));
-      painter.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 350, clientY: 250 }));
-      painter.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 350, clientY: 250 }));
-      painter.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 350, clientY: 250 }));
-    });
-    expect(onChange.mock.lastCall?.[0].routes[0].points).toEqual([
-      { x: 3, y: 2 },
-      { x: 1, y: 1 },
-      { x: 2, y: 1 },
-    ]);
-  });
-
-  it('keeps extreme path grids large enough to edit inside a scrolling viewport', async () => {
-    const extremeDefinition: EditorDefinition = {
-      version: 1,
-      content: {
-        routes: {
-          widget: 'collection',
-          label: { en: 'Routes', pl: 'Trasy' },
-          itemLabel: { en: 'Route', pl: 'Trasa' },
-          min: 1,
-          max: 3,
-          item: {
-            widget: 'path',
-            gridCols: 64,
-            gridRows: 1,
-            minPoints: 2,
-            maxPoints: 8,
-            closed: false,
-            properties: { name: { type: 'text', max: 24 } },
-          },
-          defaults: [pathItem],
-        },
-      },
-    };
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter content={extremeDefinition.content} doc={{ routes: [pathItem] }} onChange={vi.fn()} />,
-      );
-    });
-
-    const viewport = container.querySelector('.editor-path-viewport');
-    const painter = container.querySelector<SVGSVGElement>('.editor-path');
-    expect(viewport).not.toBeNull();
-    expect(painter?.style.getPropertyValue('--editor-path-fit-width')).toBe('620px');
-    expect(painter?.style.getPropertyValue('--editor-path-min-width')).toBe('1536px');
-    expect(painter?.style.getPropertyValue('--editor-path-min-height')).toBe('24px');
-    expect(painter?.style.getPropertyValue('--editor-path-aspect')).toBe('64 / 1');
-    const point = painter?.querySelector('.editor-path-point');
-    expect(point?.querySelector('.editor-path-point-hit')?.getAttribute('r')).toBe('0.6');
-    expect(point?.querySelector('.editor-path-point-dot')?.getAttribute('r')).toBe('0.22');
   });
 });

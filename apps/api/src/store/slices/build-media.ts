@@ -3,6 +3,8 @@ import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import type { ManagedSessionOutcome, ManagedSessionStep } from '../records/managed-session.js';
+import { nextManagedSession } from './managed-session-step.js';
 import { byNewestFirst } from './build-log.js';
 import { DREAM_SOURCE_SHOT_LABEL } from '../../platform/dream-shots.js';
 
@@ -89,8 +91,8 @@ export interface BuildMediaStore {
 
   // An agent downloaded this reference image; stamps agentSeenAt on the shot.
   markReferenceSeen(jobId: number, shotId: string): Promise<void>;
-  // True once per round generation: the caller holds that round's delivery.
-  claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean>;
+  // Applies one submit or end step of a managed session, atomically.
+  stepManagedSession(...step: ManagedSessionStep): Promise<ManagedSessionOutcome>;
 
   appendBuildPreview(
     jobId: number,
@@ -136,11 +138,15 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     if (stored) stored.agentSeenAt ??= new Date().toISOString();
   }
 
-  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
+  async stepManagedSession(
+    ...[jobId, generation, sessionId, event, at]: ManagedSessionStep
+  ): Promise<ManagedSessionOutcome> {
     const job = this.submissions?.get(jobId);
-    if (!job || !holdClaimable(job, roundGeneration)) return false;
-    this.submissions!.set(jobId, { ...job, referenceHoldGeneration: roundGeneration });
-    return true;
+    // A stale round's call never moves state; its handler refuses it.
+    if (!job || (job.roundGeneration ?? 1) !== generation) return 'ok';
+    const next = nextManagedSession(job, generation, sessionId, event, at);
+    if (next.state) this.submissions!.set(jobId, { ...job, managedSessions: next.state });
+    return next.outcome;
   }
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
@@ -278,14 +284,17 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     await this.shotsCollection(jobId).doc(shotId).update({ agentSeenAt: new Date().toISOString() });
   }
 
-  // A transaction, so overlapping submits and instances claim it once.
-  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
+  // A transaction, so parallel submit and end calls see one order.
+  async stepManagedSession(
+    ...[jobId, generation, sessionId, event, at]: ManagedSessionStep
+  ): Promise<ManagedSessionOutcome> {
     return this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
       const record = job.data() as SubmissionRecord | undefined;
-      if (!record || !holdClaimable(record, roundGeneration)) return false;
-      transaction.update(this.jobRef(jobId), { referenceHoldGeneration: roundGeneration });
-      return true;
+      if (!record || (record.roundGeneration ?? 1) !== generation) return 'ok';
+      const next = nextManagedSession(record, generation, sessionId, event, at);
+      if (next.state) transaction.update(this.jobRef(jobId), { managedSessions: next.state });
+      return next.outcome;
     });
   }
 
@@ -439,9 +448,4 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     }
     return stale.length;
   }
-}
-
-// Only the current round may claim, and the marker never moves back.
-function holdClaimable(record: SubmissionRecord, roundGeneration: number): boolean {
-  return (record.roundGeneration ?? 1) === roundGeneration && (record.referenceHoldGeneration ?? 0) < roundGeneration;
 }

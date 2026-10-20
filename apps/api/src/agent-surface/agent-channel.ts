@@ -1,5 +1,6 @@
 import type { BuilderHandoffAckInput } from '../creation/builder-handoff-ack.js';
 import { stagedBudgetWarning } from './staged-budget.js';
+import { stagePutPath } from './stage-upload-batch.js';
 import { knowledgeCapWarning } from './agent-knowledge-warning.js';
 import { memberCapabilityAllowed } from '../platform/game-access-permissions.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -1486,9 +1487,10 @@ export async function registerAgentChannelRoutes(
         return reply.send({ accepted: false, rejected: 'stopped' });
       }
 
-      const path = upload.path?.trim() ?? '';
+      const queried = (request.query as { path?: unknown }).path;
+      const path = stagePutPath(upload.path?.trim() ?? '', typeof queried === 'string' ? queried.trim() : '');
       if (!path) {
-        return reply.status(400).send({ error: 'path is required' });
+        return reply.status(400).send({ error: 'path is required, and must be one this upload contract lists' });
       }
 
       const body = request.body;

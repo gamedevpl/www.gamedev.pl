@@ -1,4 +1,4 @@
-// Prior chat turns — same shape as remix-turns.ts's RemixTurn.
+// Prior chat turns kept for the Studio chat prompt.
 
 export type ChatTurn = {
   message: string;

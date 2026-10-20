@@ -1,7 +1,6 @@
-/* EditorKit: the content-editor grammar shared by the Studio's EditorPanel and the
-   remix painter. Lives at the top level because its two roots sit on different
-   surfaces (surfaces/studio/EditorPanel.tsx and RemixPainter.tsx); the board,
-   painter and layered surfaces below them are reached from both. */
+/* EditorKit: the content-editor grammar of the Studio's EditorPanel
+   (surfaces/studio/EditorPanel.tsx) and the board, painter and layered
+   surfaces below it. */
 
 /* ------------------------------------------------------------------------- *
  * Creator Studio content editor (EditorKit).
@@ -191,12 +190,6 @@
   margin: 0;
   color: var(--muted);
   font-size: 0.74rem;
-}
-.editor-layered-remix-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
-  gap: 14px;
-  min-width: 0;
 }
 .editor-layer-sidebar {
   display: flex;
@@ -403,10 +396,6 @@
   .editor-body {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .editor-layered-remix-grid {
-    grid-template-columns: 1fr;
   }
 }
 

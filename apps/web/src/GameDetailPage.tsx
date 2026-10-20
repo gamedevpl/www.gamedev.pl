@@ -1,20 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl, isPlatformAuthor, offersRemix, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { PLATFORM_HANDLE, creatorPath, studioPath } from './core/router.js';
-import { recordRemixStep } from './visitTelemetry.js';
 
 type GameDetailPageProps = {
   game: CatalogEntry | null;
   state: 'loading' | 'ready' | 'error';
   onPlay: (game: CatalogEntry) => void;
   onPlayTogether: (game: CatalogEntry) => void;
-  onRemix: (game: CatalogEntry) => void;
   onRetry: () => void;
 };
 
@@ -30,16 +28,10 @@ function previewScreenshot(game: CatalogEntry) {
  * Published play redirects Close onto the canonical game page ({@link GamePage}).
  * This surface never mounts the iframe.
  */
-export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, onRetry }: GameDetailPageProps) {
+export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRetry }: GameDetailPageProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [selectedScreenshotName, setSelectedScreenshotName] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!game) return;
-    if (game.editor !== 'content') recordRemixStep('no_lane', { control: 'page' });
-    else if (game.remixOn === true) recordRemixStep('offered', { control: 'page' });
-  }, [game]);
 
   if (state === 'loading') {
     // Fallback mascot if mounted while catalog still loads.
@@ -75,10 +67,6 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
 
   const play = () => onPlay(game);
   const playTogether = () => onPlayTogether(game);
-  const remix = () => {
-    recordRemixStep('opened', { control: 'page' });
-    onRemix(game);
-  };
 
   return (
     <article className="game-page">
@@ -103,11 +91,6 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
             <a className="secondary-btn game-page-studio" href={studioPath(game.slug)}>
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
-          ) : null}
-          {offersRemix(game) ? (
-            <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
-              <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
-            </button>
           ) : null}
           <ShareGameButton slug={game.slug} title={game.title} />
         </div>

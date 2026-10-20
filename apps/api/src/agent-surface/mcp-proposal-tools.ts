@@ -12,11 +12,7 @@ import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.j
 import type { ProposalRecord, Store, ProposalBase } from '../platform/store.js';
 
 import type { ContentChecker } from '../platform/moderation.js';
-import {
-  toolOk,
-  toolErr,
-  type ToolHandler,
-} from './mcp-tool-support.js';
+import { toolOk, toolErr, type ToolHandler } from './mcp-tool-support.js';
 
 const READS = {
   readOnlyHint: true,
@@ -192,7 +188,7 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
         // Checked before the fetch: a repo-lane base is a tarball download.
         const eligible = await canProposeTo(store, slug, proposer.uid);
         if (!eligible.ok) return toolErr(proposalRefusalHint(eligible.reason));
-        // Catalog/platform sources are never exported; feedback goes through Remix.
+        // Catalog sources are never exported; feedback is a text proposal.
         if (eligible.owner.kind !== 'creator') return toolErr(CATALOG_REFUSAL, { code: 'feature_unavailable' });
 
         const resolvedBase = await resolveProposalBase(slug);
@@ -270,6 +266,7 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
         const record = await store.getProposal(proposalId);
         // Same answer whether missing or not yours — existence stays private.
         if (!record || record.proposerUid !== proposer.uid) return toolErr('no such proposal');
+        if (record.kind === 'text') return toolErr('a text proposal carries no sources — open a new proposal instead');
         if (!isProposerTurn(record.state) && record.state !== 'draft') {
           return toolErr('this proposal is not yours to change right now');
         }

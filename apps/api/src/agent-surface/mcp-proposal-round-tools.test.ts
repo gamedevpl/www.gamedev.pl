@@ -105,3 +105,45 @@ describe('proposal round MCP tools', () => {
     }
   });
 });
+
+describe('proposal round MCP tools on a text-only proposal', () => {
+  it('summarizes the description with empty change lists and refuses a diff', async () => {
+    const store = new InMemoryStore();
+    const gamesStore = memoryGamesStore();
+    await store.setPublication({ slug: SLUG, state: 'published', currentVersion: 'live', publishedAt: 'x' });
+    gamesStore.put(SLUG, 'live', gameFiles());
+    const at = new Date().toISOString();
+    await store.putProposal({
+      id: 'text-1',
+      targetSlug: SLUG,
+      targetOwnerUid: 'g:owner',
+      proposerUid: 'g:proposer',
+      base: { kind: 'store', version: 'live' },
+      kind: 'text',
+      state: 'accepted',
+      stateSince: at,
+      transitions: [],
+      title: 'Add a double jump',
+      description: 'Let the dog jump again mid-air, so the high ledges are reachable.',
+      thread: [],
+      adoptedJobId: ROUND_JOB,
+      createdAt: at,
+      updatedAt: at,
+    });
+    const tools = createProposalRoundTools({
+      store,
+      gamesStore,
+      proposals: { loadProposalChange, proposalDiffPage },
+      resolveAuth: async () => ({ jobId: ROUND_JOB, record: { slug: SLUG } }),
+    });
+
+    const summary = await tools.get_proposal_summary!.handler({ sessionKey: 'mine' }, ctx);
+    expect(summary.isError).toBeUndefined();
+    expect(summary.structuredContent).toMatchObject({ proposalId: 'text-1', files: [], params: [], content: [] });
+    expect((summary.structuredContent as { description: string }).description).toContain('mid-air');
+
+    const diff = await tools.get_proposal_diff!.handler({ sessionKey: 'mine', path: 'game.ts' }, ctx);
+    expect(diff.isError).toBe(true);
+    expect(diff.structuredContent).toMatchObject({ code: 'invalid_arguments' });
+  });
+});

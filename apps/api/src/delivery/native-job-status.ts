@@ -54,9 +54,6 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
       ...(record.abandonedAt ? {} : { phase: state }),
       jobId: record.jobId,
       ...(record.slug ? { slug: record.slug } : {}),
-      ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
-        ? { draftOrigin: 'remix' as const }
-        : {}),
     };
     // Everything below decorates; the status itself is already decided.
     if (opts?.detail === false) return status;

@@ -25,7 +25,12 @@ it('serializes a public status when Firestore contains the unsupported ready sta
     const response = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(7, secret)}` });
 
     expect(response.statusCode, response.body).toBe(200);
-    expect(response.json()).toMatchObject({ status: 'in_review', phase: 'ready_for_review', slug: 'example-game' });
+    expect(response.json()).toMatchObject({
+      status: 'in_review',
+      phase: 'ready_for_review',
+      slug: 'example-game',
+      roundStartedAt: '2026-01-01T00:00:00Z',
+    });
     expect((await db.collection('submissions').doc('7').get()).data()?.state).toBe('ready');
   } finally {
     await app.close();

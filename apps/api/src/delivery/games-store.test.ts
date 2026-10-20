@@ -700,7 +700,7 @@ describe('GCS games store', () => {
   it('drops executable editors from server-side copies and refuses them from agents', async () => {
     const { impl, objects } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    for (const origin of ['seal', 'editor', 'remix'] as const) {
+    for (const origin of ['seal', 'editor'] as const) {
       const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR, origin });
       expect(objects.has(`games/g/versions/${version}/source/EDITOR.ts`)).toBe(false);
     }

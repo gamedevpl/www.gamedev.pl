@@ -56,6 +56,7 @@ import type {
 import type { AgentEndedBy, BuilderHandoff } from './records/rounds.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './records/social.js';
 import type { SubmissionRecord } from './records/submission.js';
+import type { ManagedSessionOutcome, ManagedSessionStep } from './records/managed-session.js';
 import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { InMemoryAccessTokensStore } from './slices/access-tokens.js';
 import { InMemoryAccessStore } from './slices/access.js';
@@ -163,12 +164,11 @@ export class InMemoryStore extends OAuthFacade implements Store {
     (slug, record) => this.gameAccessStore.access.set(slug, record),
     (ownerUid, at) => this.shelfGuard.tombstoneAt(ownerUid, at),
   );
-  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access);
+  private erasedIncarnation = (uid: string) =>
+    erasedIncarnation(this.identityStore.users.get(uid) ?? null, this.gameAccessStore.erasedAt.get(uid) ?? null);
+  private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access, this.erasedIncarnation);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
-  private dispatchStore = new InMemoryDispatchStore(
-    this.submissions,
-    (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
-  );
+  private dispatchStore = new InMemoryDispatchStore(this.submissions, this.erasedIncarnation);
   protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   protected gameMembershipStore = new InMemoryGameMembershipStore(
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
@@ -822,8 +822,8 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.buildMediaStore.markReferenceSeen(jobId, shotId);
   }
 
-  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
-    return this.buildMediaStore.claimReferenceHold(jobId, roundGeneration);
+  async stepManagedSession(...step: ManagedSessionStep): Promise<ManagedSessionOutcome> {
+    return this.buildMediaStore.stepManagedSession(...step);
   }
 
   async appendBuildPreview(
@@ -1596,9 +1596,6 @@ export class InMemoryStore extends OAuthFacade implements Store {
     return this.contributionStore.putContributionSettings(record);
   }
 
-  getRemixSettings: Store['getRemixSettings'] = (slug) => this.contributionStore.getRemixSettings(slug);
-  putRemixSettings: Store['putRemixSettings'] = (record) => this.contributionStore.putRemixSettings(record);
-  listRemixOnSlugs: Store['listRemixOnSlugs'] = () => this.contributionStore.listRemixOnSlugs();
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
     return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }

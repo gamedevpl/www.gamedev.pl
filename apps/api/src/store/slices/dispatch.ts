@@ -16,6 +16,7 @@ import {
   type JobCostEntry,
 } from '../records/dispatch.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import { erasedInTransaction } from './erasure-fence.js';
 import { clearRoundSignals, guardHolds, stampReceiptRound, type TransitionGuard } from './round-close.js';
 
 export type { TransitionGuard } from './round-close.js';
@@ -75,7 +76,7 @@ export class InMemoryDispatchStore implements DispatchStore {
 
   constructor(
     private submissions: Map<number, SubmissionRecord>,
-    private erasedAt: (uid: string) => string | null = () => null,
+    private erased: (uid: string) => boolean = () => false,
   ) {}
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
@@ -135,7 +136,7 @@ export class InMemoryDispatchStore implements DispatchStore {
     const existing = sub.dispatch;
     // An erasure that already scrubbed this uid must not see it return.
     const memoryOwnerUid =
-      dispatch.memoryOwnerUid && this.erasedAt(dispatch.memoryOwnerUid) ? undefined : dispatch.memoryOwnerUid;
+      dispatch.memoryOwnerUid && this.erased(dispatch.memoryOwnerUid) ? undefined : dispatch.memoryOwnerUid;
     this.submissions.set(jobId, {
       ...sub,
       dispatch: {
@@ -341,9 +342,8 @@ export class FirestoreDispatchStore implements DispatchStore {
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).dispatch;
       // Read in the transaction, so a fence set meanwhile retries us.
-      const fenced = dispatch.memoryOwnerUid
-        ? (await tx.get(this.db.collection('erasedAccounts').doc(dispatch.memoryOwnerUid))).exists
-        : false;
+      const uid = dispatch.memoryOwnerUid;
+      const fenced = uid ? await erasedInTransaction(this.db, tx, uid) : false;
       const memoryOwnerUid = fenced ? undefined : dispatch.memoryOwnerUid;
       tx.set(
         ref,

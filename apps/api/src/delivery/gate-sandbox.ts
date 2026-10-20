@@ -193,8 +193,14 @@ export async function createHarnessRunner(
     sandbox ? { HOME: sandbox.home, USER: sandbox.user, LOGNAME: sandbox.user } : {},
   );
   const chrome = process.env.GAME_CAPTURE_CHROME?.trim();
+  if (!sandbox && process.env.GATE_REQUIRE_METADATA_BLOCK === '1') {
+    throw new Error('GATE_REQUIRE_METADATA_BLOCK=1 needs GATE_SANDBOX_USER to run candidate code');
+  }
   if (sandbox) {
-    await sandbox.blockMetadata();
+    const blocked = await sandbox.blockMetadata();
+    if (!blocked && process.env.GATE_REQUIRE_METADATA_BLOCK === '1') {
+      throw new Error('metadata server cannot be blocked here and GATE_REQUIRE_METADATA_BLOCK=1');
+    }
     if (chrome) {
       const sandboxed = await probeChromeSandbox(sandbox, chrome, harnessEnv);
       if (!sandboxed && process.env.GATE_REQUIRE_CHROME_SANDBOX === '1') {

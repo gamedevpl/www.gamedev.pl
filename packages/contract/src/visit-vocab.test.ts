@@ -15,9 +15,6 @@ import {
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PLAY_VIAS,
-  REMIX_CONTROLS,
-  REMIX_PAINTED_VIAS,
-  REMIX_STEPS,
   STUDIO_STEP_DETAILS,
   STUDIO_STEPS,
   VISIT_ROUTE_KINDS,
@@ -155,35 +152,6 @@ describe('visit vocab', () => {
 
   it('lists assist steps', () => {
     expect(ASSIST_STEPS).toEqual(['asked', 'applied', 'handoff', 'rejected']);
-  });
-
-  it('lists remix steps in order', () => {
-    expect(REMIX_STEPS).toEqual([
-      'offered',
-      'opened',
-      'no_lane',
-      'typed',
-      'wall_shown',
-      'signed_in',
-      'tuned',
-      'painted',
-      'asked',
-      'applied',
-      'broken',
-      'undone',
-      'handoff',
-      'refused',
-      'shared',
-      'proposed',
-    ]);
-  });
-
-  it('lists remix painted-via doors', () => {
-    expect(REMIX_PAINTED_VIAS).toEqual(['redirect', 'menu', 'panel']);
-  });
-
-  it('lists remix entry controls', () => {
-    expect(REMIX_CONTROLS).toEqual(['page', 'bar', 'more']);
   });
 
   it('lists code-surface steps', () => {

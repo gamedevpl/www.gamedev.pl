@@ -9,8 +9,8 @@
 
 ### 1. Published game code
 
-Agent-written game code is untrusted, including code influenced by public specs or remix
-requests. It must render only in an iframe with `sandbox="allow-scripts allow-pointer-lock"` and **without**
+Agent-written game code is untrusted, including code influenced by public specs or change
+proposals. It must render only in an iframe with `sandbox="allow-scripts allow-pointer-lock"` and **without**
 `allow-same-origin`.
 
 This protects the parent app's DOM, cookies, and storage. It does not solve every browser risk:
@@ -130,7 +130,7 @@ remain as strings. It also re-emitted escaped `<\/script>` as a literal `</scrip
 truncates the inline script, and it runs synchronously for 5–50 s per game. Any future
 obfuscation pass must clear a frame-time A/B and the whole-document parse test first.
 
-Draft, remix and creator-preview documents go to the creator who owns the sources, so they
+Draft and creator-preview documents go to the creator who owns the sources, so they
 keep using the plain `assembleGameHtml`. The games repo's own gates check the readable
 build. The minified build is checked by running both builds of every game in a browser and
 comparing errors; run that again when you change the settings.

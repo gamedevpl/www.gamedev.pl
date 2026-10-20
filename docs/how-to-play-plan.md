@@ -94,7 +94,7 @@ games' hand-authored `index.html` already did. `canvas.ariaLabel` overrides the 
 **Delivery.** New work satisfies the markup requirement with a `howToPlay` carrying both
 `goal` and `hint`; agents cannot stage, patch, or directly submit `index.html`. Generation
 happens inside `getGameSources`, the single point every assembly path converges on (gate,
-staged preview, remix, seed preview, published serve, snapshot bake), so no caller needs to
+staged preview, seed preview, published serve, snapshot bake), so no caller needs to
 generate the file. A legacy `index.html` carried forward from an older delivery still wins,
 and stored snapshots keep working untouched — no backfill.
 

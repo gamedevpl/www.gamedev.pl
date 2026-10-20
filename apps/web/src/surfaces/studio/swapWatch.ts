@@ -1,6 +1,6 @@
 import { isFromGameFrame } from '../../frameMessage.js';
 
-// Matches RemixPanel's crash watch window.
+// Crash watch window after a document swap.
 const SWAP_WATCH_MS = 6_000;
 // Cap for a document that never sends its first heartbeat.
 const DREW_NOTHING_CHECK_MS = 15_000;

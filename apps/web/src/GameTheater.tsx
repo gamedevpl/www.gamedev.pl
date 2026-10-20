@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  gamePageHandle,
-  isPlatformAuthor,
-  type CatalogEditor,
-  type CatalogTouch,
-  type PublishedGame,
-} from './catalog.js';
+import { gamePageHandle, isPlatformAuthor, type CatalogTouch, type PublishedGame } from './catalog.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
 import { useAgentBridge } from './useAgentBridge.js';
@@ -18,11 +12,12 @@ import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { resolveControlRows } from './howToPlay.js';
 import { PlayerFeedbackWidget } from './PlayerFeedbackWidget.js';
 import { PlayerGameReport } from './PlayerGameReport.js';
+import { ProposeChangeWidget } from './ProposeChangeWidget.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
 import { useGamepadSpike } from './gamepadSpike.js';
-import { recordRemixStep, recordVisitEvent, type PlayVia } from './visitTelemetry.js';
+import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge, type BackdropFacing } from './sensing.js';
@@ -33,7 +28,6 @@ import { useAgentViewportTrack, useTheaterMidWidth, useTheaterNarrow } from './u
 import { useScreenWakeLock } from './useScreenWakeLock.js';
 import { useOrientationMismatch } from './useOrientationMismatch.js';
 import { creatorPath, gamePath } from './core/router.js';
-import './remix-result.css';
 
 /**
  * Shell-owned camera feed under the game iframe. Kept as a tiny component so the
@@ -104,16 +98,8 @@ type GameTheaterProps = {
   controls?: string;
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
   touch?: CatalogTouch | null;
-  editor?: CatalogEditor | null;
-  // The author or an admin switched remix on; off by default.
-  remixOn?: boolean;
   // Which home page surface launched this play, if it did.
   via?: PlayVia;
-  /** Open the remix sheet on the first frame (the game-page Remix entry). */
-  initialRemixOpen?: boolean;
-  /** A request written before theater entry; RemixPanel starts it once safely ready. */
-  initialRemixRequest?: string;
-  remixable?: boolean;
 };
 
 // Long enough that the bar never reacts like a hover tooltip, short enough to clear
@@ -139,12 +125,7 @@ export function GameTheater({
   creatorHandle = null,
   controls,
   touch = null,
-  editor = null,
-  remixOn = false,
   via,
-  initialRemixOpen = false,
-  initialRemixRequest,
-  remixable = true,
 }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -169,18 +150,6 @@ export function GameTheater({
   const [chromeIdle, setChromeIdle] = useState(false);
   const [chromeFocused, setChromeFocused] = useState(false);
   const [chromeManuallyHidden, setChromeManuallyHidden] = useState(false);
-  /**
-   * The always-available doors to Remix and its painter (ops repo,
-   * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
-   * the frame. They complement the pause-moment invitation, which is untouched.
-   * The painter entry appears only once the panel has reported this game
-   * declares paintable content — a door that opens onto nothing is the
-   * `no_lane` lesson, and this menu does not repeat it.
-   */
-  const [remixOpenNonce, setRemixOpenNonce] = useState(initialRemixOpen ? 1 : 0);
-  const [painterNonce, setPainterNonce] = useState(0);
-  const [remixHasPainter, setRemixHasPainter] = useState(false);
-  const onRemixCapabilities = useCallback((caps: { painter: boolean }) => setRemixHasPainter(caps.painter), []);
   // Per theater mount, not per visit: opening once in game A and once in game B is not
   // a "card did not answer" signal. The theater remounts when the slug changes (`key`),
   // so this resets with each published play without needing a game identity on the wire.
@@ -230,7 +199,7 @@ export function GameTheater({
   }, []);
 
   const notePlayerEnd = useCallback(() => {
-    // A terminal screen is another orientation moment: surface exit/feedback/remix
+    // A terminal screen is another orientation moment: surface exit/feedback
     // controls and keep them there until the next round begins with fresh input.
     setPlayerEngaged(false);
     if (!chromeManuallyHidden) setChromeIdle(false);
@@ -470,7 +439,6 @@ export function GameTheater({
     setMoreOpen(false);
     postGameHostMessage(frameRef.current, { type: 'pressEscape' });
   }, [frameRef]);
-  const canRemix = remixable && remixOn && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
     <button
@@ -510,50 +478,6 @@ export function GameTheater({
         <span className="btn-label">{micLabel}</span>
       </button>
     ) : null;
-
-  /**
-   * The way into Remix, in both places chrome lives.
-   *
-   * It used to be a pill that faded in over the bottom-right of the running game
-   * and pulsed twice. It was discoverable, and it was the only thing on the
-   * screen moving for its own sake — on top of the game it was advertising. A
-   * standard control asks for the space every other control gets.
-   *
-   * The trade is real and unmeasured, which is why `offered` exists beside
-   * `opened`: a quieter door is only worth it if the clicks it costs are visible
-   * rather than assumed, and the decision to make it quieter still (or louder
-   * again) should be made against a number.
-   */
-  const remixControl = (className: string, control: 'bar' | 'more') =>
-    canRemix ? (
-      <button
-        type="button"
-        className={className}
-        onClick={() => {
-          setMoreOpen(false);
-          setChromeManuallyHidden(false);
-          setChromeIdle(false);
-          setRemixOpenNonce((nonce) => nonce + 1);
-          // Recorded at the door rather than in the panel, because only the door
-          // knows which one it was. The panel still records `opened` for the path
-          // that has no door — a shared link that opens it on arrival — and the
-          // step dedupes, so whichever came first wins and a click always does.
-          recordRemixStep('opened', { control });
-        }}
-      >
-        <PixelIcon name="wrench" size={13} />
-        <span className="btn-label">{t('remix.button')}</span>
-      </button>
-    ) : null;
-
-  // Every visit shown the control, whether or not it pressed it — the denominator
-  // `opened` is read against. Fires on render, since being shown is the most the
-  // client can honestly claim to know.
-  useEffect(() => {
-    if (!remixable || !('slug' in source)) return;
-    if (editor !== 'content') recordRemixStep('no_lane');
-    else if (remixOn) recordRemixStep('offered');
-  }, [editor, remixable, remixOn, source]);
 
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
@@ -704,7 +628,6 @@ export function GameTheater({
                 "Mikrofon: …" labels otherwise clip the title at mid widths. */}
             {micControl('secondary-btn mic-btn mic-bar')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
-            {remixControl('secondary-btn remix-btn theater-desktop-chrome', 'bar')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
                 <button
@@ -753,29 +676,11 @@ export function GameTheater({
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
-                  {canRemix ? (
-                    <>
-                      {remixControl('theater-menu-item theater-mobile-chrome', 'more')}
-                      {remixHasPainter ? (
-                        <button
-                          type="button"
-                          className="theater-menu-item"
-                          role="menuitem"
-                          onClick={() => {
-                            setMoreOpen(false);
-                            setPainterNonce((nonce) => nonce + 1);
-                          }}
-                        >
-                          <PixelIcon name="pencil" size={13} />
-                          <span className="btn-label">{t('remix.editorButton')}</span>
-                        </button>
-                      ) : null}
-                    </>
-                  ) : null}
                   {reportSlug && (
                     <>
                       <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
                       <PlayerFeedbackWidget slug={reportSlug} />
+                      <ProposeChangeWidget slug={reportSlug} />
                       {/* The way out of the player and onto the game's own page —
                           releases, code, the board. Every published game has one. */}
                       <a className="theater-menu-item" href={gamePath(gamePageHandle({ creatorHandle }), reportSlug)}>
@@ -837,16 +742,9 @@ export function GameTheater({
             frameRef={frameRef}
             embed
             via={via}
-            remixable={canRemix}
             agentMode={agentOpen}
             agentBridge={agentBridge ?? null}
             agentBridgePending={agentBridge === undefined}
-            remixOpenNonce={remixOpenNonce}
-            initialRemixRequest={initialRemixRequest}
-            painterNonce={painterNonce}
-            onRemixCapabilities={onRemixCapabilities}
-            theaterChromeHidden={chromeManuallyHidden}
-            onRevealChrome={revealChrome}
           />
         ) : agentBridge === undefined ? (
           <GameLoadScreen onExit={onExit} />

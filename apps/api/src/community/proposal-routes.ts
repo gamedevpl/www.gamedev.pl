@@ -25,7 +25,8 @@ import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { diffProposal, type ProposalDiff } from './proposal-diff.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { resolveOwnerOfRecord } from './owner-of-record.js';
-import { DECLINE_REASONS, isReviewerVisible, toPublicProposalState, type DeclineReason } from './proposal-state.js';
+import { DECLINE_REASONS, isReviewerVisible, type DeclineReason } from './proposal-state.js';
+import { toPublicProposal } from './proposal-public.js';
 import {
   acceptProposal,
   canProposeTo,
@@ -101,39 +102,6 @@ function requireUser(request: FastifyRequest, reply: FastifyReply): boolean {
   return true;
 }
 
-/**
- * What a proposal looks like from outside.
- *
- * Both seats get the same shape, and neither gets the raw record: `transitions` is
- * internal bookkeeping, and the gate `report` is a build log that can run to megabytes and
- * name our infrastructure. The reviewer's card shows the verdict and the screenshot; the
- * proposer's tracker shows the same, plus whatever the reviewer wrote to them.
- */
-function toPublicProposal(record: ProposalRecord) {
-  return {
-    id: record.id,
-    targetSlug: record.targetSlug,
-    proposerUid: record.proposerUid,
-    state: toPublicProposalState(record.state),
-    title: record.title,
-    description: record.description,
-    base: record.base,
-    version: record.version,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
-    gate: record.gate
-      ? { green: record.gate.green, ranAt: record.gate.ranAt, screenshot: record.gate.screenshot }
-      : undefined,
-    behaviouralDiff: record.behaviouralDiff,
-    thread: record.thread,
-    decision: record.decision
-      ? { at: record.decision.at, reason: record.decision.reason, note: record.decision.note }
-      : undefined,
-    platformOwned: record.targetOwnerUid === null,
-    acceptedVia: record.acceptedVia,
-  };
-}
-
 export async function registerProposalRoutes(app: FastifyInstance, options: ProposalRoutesOptions): Promise<void> {
   const { store, contentChecker, adminUids } = options;
   const now = options.now ?? Date.now;
@@ -146,8 +114,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   }
 
   /**
-   * Whether this game takes proposals from this caller — the read behind Remix's
-   * "Propose this change" button.
+   * Whether this game takes proposals from this caller — the read behind the game
+   * page's "Propose a change" button.
    *
    * Answers with a reason rather than a bare boolean so the client can say why the door is
    * shut. `blocked` is deliberately *not* distinguished from `contributions_off` in the
@@ -211,13 +179,14 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     if (!requireUser(request, reply)) return reply;
     const params = IdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(404).send({ error: 'not_found' });
-    if (!gamesStore || !options.resolveBase) return reply.status(503).send({ error: 'store_unavailable' });
 
+    // A text proposal has no version, so it has no diff either.
     const record = await store.getProposal(params.data.id);
     if (!record?.version) return reply.status(404).send({ error: 'not_found' });
     const uid = request.user!.uid;
     const reviewer = await canSeeAsReviewer(record, uid, isAdminSession(request, adminUids));
     if (record.proposerUid !== uid && !reviewer) return reply.status(404).send({ error: 'not_found' });
+    if (!gamesStore || !options.resolveBase) return reply.status(503).send({ error: 'store_unavailable' });
 
     const manifest = await gamesStore.getManifest(record.targetSlug, record.version);
     if (!manifest) return reply.status(404).send({ error: 'not_found' });
@@ -399,8 +368,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   });
 
   /**
-   * The contributions switch — the creator-veto question for proposals only. Remix
-   * shares and remixing itself have their own switch (`remix-setting-routes.ts`).
+   * The contributions switch — the creator-veto question for proposals.
    *
    * Owner-only, and resolved through the same owner-of-record rule as everything else, so
    * a game that changed hands cannot be reopened to proposals by its previous owner.

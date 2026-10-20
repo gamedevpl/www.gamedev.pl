@@ -80,4 +80,25 @@ describe('ProposalsPage', () => {
     await draw([proposal({ platformOwned: false, acceptedVia: 'data' })]);
     expect(container.textContent).toContain('twórca zastosował twoje zmiany');
   });
+
+  it('shows a text proposal with its description', async () => {
+    await draw([
+      proposal({
+        kind: 'text',
+        state: 'in_review',
+        platformOwned: false,
+        description: 'Let the courier double-jump over rooftops.',
+      }),
+    ]);
+    expect(container.querySelector('.proposal-description.is-text')?.textContent).toBe(
+      'Let the courier double-jump over rooftops.',
+    );
+    expect(container.textContent).toContain('text suggestion');
+    expect(container.textContent).toContain('Withdraw');
+  });
+
+  it('points an empty tracker at the game menu', async () => {
+    await draw([]);
+    expect(container.querySelector('.proposals-empty')?.textContent).toContain("“Propose a change” in the game's menu");
+  });
 });
