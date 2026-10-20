@@ -192,6 +192,14 @@ describe('Apple subject binding', () => {
     expect((await store.findUserByAppleSub(APPLE_SUB))?.uid).toBe('g:one');
   });
 
+  it('is refused once the Apple ID has its own account', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:google-sub', email: 'creator@example.com' });
+    await store.upsertUser({ uid: `a:${APPLE_SUB}`, email: 'creator@example.com' });
+
+    expect(await store.setAppleSub('g:google-sub', APPLE_SUB)).toBe(false);
+  });
+
   it('is not created for an account that does not exist', async () => {
     const store = new InMemoryStore();
     await store.setAppleSub('g:missing', APPLE_SUB);

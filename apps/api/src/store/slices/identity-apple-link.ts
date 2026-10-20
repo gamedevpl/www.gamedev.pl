@@ -1,11 +1,12 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { appleUid } from '../../platform/apple-auth.js';
 import type { User } from '../records/identity.js';
 
 export interface AppleLinkStore {
   // Null on 0 or 2+ matches, like findUserByEmail.
   findUserByAppleSub(sub: string): Promise<User | null>;
 
-  // False when another account holds it; no-op without the account.
+  // False when another account or `a:<sub>` holds it.
   setAppleSub(uid: string, sub: string): Promise<boolean>;
 }
 
@@ -16,6 +17,7 @@ export function findUserByAppleSubInMemory(users: Map<string, User>, sub: string
 }
 
 export function setAppleSubInMemory(users: Map<string, User>, uid: string, sub: string): boolean {
+  if (users.has(appleUid(sub))) return false;
   if ([...users.values()].some((user) => user.uid !== uid && user.appleSub === sub)) return false;
   const existing = users.get(uid);
   if (existing) users.set(uid, { ...existing, appleSub: sub });
@@ -34,7 +36,14 @@ export async function setAppleSubFirestore(db: Firestore, uid: string, sub: stri
   const userRef = db.collection('users').doc(uid);
   const lockRef = db.collection('appleLinks').doc(sub);
   return db.runTransaction(async (transaction) => {
-    const [userSnap, lockSnap] = await Promise.all([transaction.get(userRef), transaction.get(lockRef)]);
+    // Reading `a:<sub>` serializes this with that account's creation.
+    const ownRef = db.collection('users').doc(appleUid(sub));
+    const [userSnap, lockSnap, ownSnap] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(lockRef),
+      transaction.get(ownRef),
+    ]);
+    if (ownSnap.exists) return false;
     const holder = lockSnap.exists ? (lockSnap.data() as { uid?: string }).uid : undefined;
     if (holder && holder !== uid) {
       // A lock left by an erased or relinked account is free.
