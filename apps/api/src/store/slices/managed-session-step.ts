@@ -46,18 +46,22 @@ export function nextManagedSession(
     const delivered = event === 'delivered' ? { delivered: true as const } : {};
     return { state: put({ ...own, running: Math.max(0, running - 1), last: event, ...delivered }), outcome: 'ok' };
   }
-  // The channel refused that end: the session stays open.
-  if (event === 'reopen') {
+  // An end attempt settled: one success keeps the session ended for good.
+  if (event === 'ended' || event === 'reopen') {
     if (!prev?.endedAt) return { state: null, outcome: 'ok' };
-    const { endedAt: _endedAt, ...open } = prev;
+    const ending = Math.max(0, (prev.ending ?? 1) - 1);
+    if (event === 'ended') return { state: put({ ...prev, ending, endConfirmed: true }), outcome: 'ok' };
+    if (ending > 0 || prev.endConfirmed) return { state: put({ ...prev, ending }), outcome: 'ok' };
+    const { endedAt: _endedAt, ending: _ending, ...open } = prev;
     return { state: put(open), outcome: 'ok' };
   }
   // A pending builder handoff is acknowledged by end, whatever ran.
   const handoff = record.builderHandoff;
-  if (handoff?.awaitsAgentAck === true && !handoff.acknowledgedAt) return { state: null, outcome: 'ok' };
+  if (handoff?.awaitsAgentAck === true && !handoff.acknowledgedAt) return { state: null, outcome: 'pass' };
   if (runningIn(sessions, at) > 0) return { state: null, outcome: 'wait' };
   if (own.last === 'refused' && !own.delivered && !own.endRefused) {
     return { state: put({ ...own, endRefused: true }), outcome: 'refuse' };
   }
-  return { state: put({ ...own, endedAt: at }), outcome: 'ok' };
+  const ending = (own.ending ?? 0) + 1;
+  return { state: put({ ...own, endedAt: own.endedAt ?? at, ending }), outcome: 'ok' };
 }

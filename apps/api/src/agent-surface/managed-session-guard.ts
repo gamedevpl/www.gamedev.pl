@@ -84,14 +84,14 @@ export async function guardManagedSubmit(deps: ManagedSessionGuardDeps, call: Ma
 
 // A refused end leaves the session open, so it may still submit.
 async function runEnd(deps: ManagedSessionGuardDeps, call: ManagedCall): Promise<ToolResult> {
-  const reopen = () =>
-    deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, 'reopen', at(deps));
+  const settle = (event: 'ended' | 'reopen') =>
+    deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, event, at(deps));
   try {
     const result = await call.run();
-    if (result.isError === true) await reopen();
+    await settle(result.isError === true ? 'reopen' : 'ended');
     return result;
   } catch (error) {
-    await reopen().catch(() => undefined);
+    await settle('reopen').catch(() => undefined);
     throw error;
   }
 }
@@ -105,6 +105,7 @@ export async function guardManagedEnd(deps: ManagedSessionGuardDeps, call: Manag
     await sleep(POLL_MS);
     outcome = await deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, 'end', at(deps));
   }
+  if (outcome === 'pass') return call.run();
   if (outcome === 'ok') return runEnd(deps, call);
   const running = outcome === 'wait';
   return toolOk({

@@ -8,6 +8,9 @@ export interface ManagedSessionState {
   delivered?: true;
   endRefused?: true;
   endedAt?: string;
+  // End attempts still running; a confirmed end is never rolled back.
+  ending?: number;
+  endConfirmed?: true;
 }
 
 // Every session of one round generation, by session id.
@@ -16,9 +19,9 @@ export interface ManagedSessions {
   byId: Record<string, ManagedSessionState>;
 }
 
-export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end' | 'reopen';
-// wait: submit running; refuse: end before any delivery; ended: late submit.
-export type ManagedSessionOutcome = 'ok' | 'wait' | 'refuse' | 'ended';
+export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end' | 'ended' | 'reopen';
+// pass: handoff end, untracked. wait: submit running. ended: late submit.
+export type ManagedSessionOutcome = 'ok' | 'pass' | 'wait' | 'refuse' | 'ended';
 export type ManagedSessionStep = [
   jobId: number,
   roundGeneration: number,

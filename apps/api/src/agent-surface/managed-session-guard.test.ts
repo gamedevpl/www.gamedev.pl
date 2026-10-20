@@ -116,7 +116,7 @@ describe('managed session guard', () => {
     expect(nextManagedSession({ managedSessions: submitted }, 1, 's1', 'end', at).outcome).toBe('wait');
     expect(
       nextManagedSession({ managedSessions: submitted, builderHandoff: handoff }, 1, 's1', 'end', at).outcome,
-    ).toBe('ok');
+    ).toBe('pass');
   });
 
   it('forgets sessions of an earlier round generation', () => {
@@ -152,5 +152,28 @@ describe('managed session guard', () => {
       record = { managedSessions: nextManagedSession(record, 1, `s${i}`, 'submit', at).state! };
     }
     expect(nextManagedSession(record, 1, 's1', 'submit', at).outcome).toBe('ended');
+  });
+
+  it('keeps the session ended when one of two overlapping ends succeeds', async () => {
+    const { store, deps } = await setup();
+    const at = () => new Date(deps.now()).toISOString();
+    const step = (event: 'end' | 'ended' | 'reopen' | 'submit') => store.stepManagedSession(5, 1, 's1', event, at());
+    await step('end');
+    await step('end');
+    await step('ended');
+    await step('reopen');
+    expect(await step('submit')).toBe('ended');
+  });
+
+  it('reopens only once every overlapping end was refused', async () => {
+    const { store, deps } = await setup();
+    const at = () => new Date(deps.now()).toISOString();
+    const step = (event: 'end' | 'reopen' | 'submit') => store.stepManagedSession(5, 1, 's1', event, at());
+    await step('end');
+    await step('end');
+    await step('reopen');
+    expect(await step('submit')).toBe('ended');
+    await step('reopen');
+    expect(await step('submit')).toBe('ok');
   });
 });
