@@ -50,7 +50,7 @@ describe('IntakeChatAgent', () => {
   it('answers from the OpenAI stand-in when Vertex stalls', async () => {
     const seen: string[] = [];
     const agent = new IntakeChatAgent({
-      timeoutMs: 200,
+      timeoutMs: 2_000,
       client: genaicode({
         name: 'stalled-vertex',
         generate: (request) =>
