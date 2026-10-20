@@ -136,7 +136,7 @@ describe('managed session guard', () => {
     expect(await store.stepManagedSession(5, 1, 's1', 'submit', at)).toBe('ok');
   });
 
-  it('never evicts a session whose submit is still running', () => {
+  it('keeps every session of the round, running or ended', () => {
     const at = '2026-10-20T10:00:00.000Z';
     let record = { managedSessions: nextManagedSession({}, 1, 's0', 'submit', at).state! };
     for (let i = 1; i <= 9; i += 1) {
@@ -146,5 +146,11 @@ describe('managed session guard', () => {
     }
     expect(Object.keys(record.managedSessions.byId)).toContain('s0');
     expect(nextManagedSession(record, 1, 's9', 'end', at).outcome).toBe('wait');
+    record = { managedSessions: nextManagedSession(record, 1, 's0', 'delivered', at).state! };
+    record = { managedSessions: nextManagedSession(record, 1, 's1', 'end', at).state! };
+    for (let i = 10; i <= 20; i += 1) {
+      record = { managedSessions: nextManagedSession(record, 1, `s${i}`, 'submit', at).state! };
+    }
+    expect(nextManagedSession(record, 1, 's1', 'submit', at).outcome).toBe('ended');
   });
 });
