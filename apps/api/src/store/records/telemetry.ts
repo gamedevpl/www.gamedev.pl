@@ -109,6 +109,7 @@ export interface VisitEvent {
     | 'party_step'
     | 'transfer_step'
     | 'beta_welcome_step'
+    | 'apple_link_step'
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'

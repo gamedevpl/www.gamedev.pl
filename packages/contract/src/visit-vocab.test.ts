@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  APPLE_LINK_STEPS,
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
   CLI_ADAPTERS,
@@ -94,6 +95,10 @@ describe('visit vocab', () => {
 
   it('lists beta welcome steps', () => {
     expect(BETA_WELCOME_STEPS).toEqual(['shown', 'continued', 'dismissed']);
+  });
+
+  it('lists Apple link steps', () => {
+    expect(APPLE_LINK_STEPS).toEqual(['required', 'linked', 'failed']);
   });
 
   it('lists how-to-play surfaces', () => {

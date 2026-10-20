@@ -1,6 +1,7 @@
 import type { WaitlistStatus as SharedWaitlistStatus } from '@gamedevpl/contract';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
+import { recordAppleLinkStep } from './visitTelemetry.js';
 
 export interface User {
   uid: string;
@@ -167,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const err = (await res.json().catch(() => null)) as { error?: string; waitlistStatus?: string } | null;
       if (res.status === 409 && err?.error === 'apple_link_required') {
         pendingAppleLink.current = idToken;
+        recordAppleLinkStep('required');
       }
       if (err?.waitlistStatus) {
         setWaitlistStatus(err.waitlistStatus as WaitlistStatus);
@@ -182,14 +184,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Best-effort: a failed link never fails the Google sign-in.
   const linkPendingApple = async () => {
     const idToken = pendingAppleLink.current;
-    pendingAppleLink.current = null;
     if (!idToken) return;
-    await fetch('/api/auth/apple/link', {
+    const res = await fetch('/api/auth/apple/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ idToken }),
-    }).catch(() => undefined);
+    }).catch(() => null);
+    // Keep the token for a retry only when the failure was transient.
+    if (!res || res.status === 429 || res.status >= 500) {
+      recordAppleLinkStep('failed');
+      return;
+    }
+    pendingAppleLink.current = null;
+    // A refused link re-prompts at the next Apple sign-in.
+    recordAppleLinkStep(res.ok ? 'linked' : 'failed');
   };
 
   const joinWaitlist = async (idToken: string, locale?: string, provider?: 'google' | 'apple') => {

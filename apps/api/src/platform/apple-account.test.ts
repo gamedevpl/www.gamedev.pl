@@ -182,6 +182,16 @@ describe('Apple subject binding', () => {
     expect((await store.findUserByAppleSub(APPLE_SUB))?.uid).toBe('g:google-sub');
   });
 
+  it('is held by one account at a time', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:one', email: 'creator@example.com' });
+    await store.upsertUser({ uid: 'g:two', email: 'creator@example.com' });
+
+    expect(await store.setAppleSub('g:one', APPLE_SUB)).toBe(true);
+    expect(await store.setAppleSub('g:two', APPLE_SUB)).toBe(false);
+    expect((await store.findUserByAppleSub(APPLE_SUB))?.uid).toBe('g:one');
+  });
+
   it('is not created for an account that does not exist', async () => {
     const store = new InMemoryStore();
     await store.setAppleSub('g:missing', APPLE_SUB);

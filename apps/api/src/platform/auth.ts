@@ -731,7 +731,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       if (refusal === 'already_linked') return { linked: true };
       if (refusal) return reply.status(409).send({ error: refusal });
 
-      await store.setAppleSub(account.uid, applePayload.sub);
+      if (!(await store.setAppleSub(account.uid, applePayload.sub))) {
+        return reply.status(409).send({ error: 'linked_elsewhere' });
+      }
       request.log.info({ appleSub: applePayload.sub, linkedUid: account.uid }, 'apple id linked to account');
       return { linked: true };
     },

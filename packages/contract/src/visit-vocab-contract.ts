@@ -1,4 +1,5 @@
 export {
+  APPLE_LINK_STEPS,
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
   CLI_ADAPTERS,
@@ -27,6 +28,7 @@ export {
   WAITLIST_STEPS,
   SHARE_STEPS,
   FRAMED_PLAY_STEPS,
+  type AppleLinkStep,
   type AssistStep,
   type BetaWelcomeStep,
   type CliAdapter,

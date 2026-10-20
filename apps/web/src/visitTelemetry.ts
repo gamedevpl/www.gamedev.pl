@@ -1,5 +1,6 @@
 import {
   PLAY_VIAS,
+  type AppleLinkStep,
   type AssistStep,
   type BetaWelcomeStep,
   type CliAdapter,
@@ -36,6 +37,7 @@ import { routeKind } from './visitRouteKind.js';
 export { routeKind } from './visitRouteKind.js';
 
 export type {
+  AppleLinkStep,
   AssistStep,
   BetaWelcomeStep,
   CliAdapter,
@@ -127,6 +129,7 @@ export type VisitEvent =
   // A game changing hands. No slug, no counterparty, no code.
   | { type: 'transfer_step'; step: TransferStep }
   | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
+  | { type: 'apple_link_step'; step: AppleLinkStep }
   // Studio / self-build facts; always `builder`, never slug or uid.
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
@@ -468,6 +471,14 @@ export function recordBetaInviteStep(step: InviteStep): void {
   currentSession.record({ type: 'invite_step', step });
 }
 
+let recordedAppleLinkSteps = new Set<AppleLinkStep>();
+
+export function recordAppleLinkStep(step: AppleLinkStep): void {
+  if (!currentSession || recordedAppleLinkSteps.has(step)) return;
+  recordedAppleLinkSteps.add(step);
+  currentSession.record({ type: 'apple_link_step', step });
+}
+
 let recordedBetaWelcomeSteps = new Set<BetaWelcomeStep>();
 
 export function recordBetaWelcomeStep(step: BetaWelcomeStep): void {
@@ -640,6 +651,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedImageExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
+  recordedAppleLinkSteps = new Set();
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();
@@ -686,6 +698,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   recordedImageExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
+  recordedAppleLinkSteps = new Set();
   recordedStudioSteps = new Set();
 
   if (identity.isNew) {
