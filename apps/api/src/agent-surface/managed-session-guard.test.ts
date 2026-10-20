@@ -16,6 +16,7 @@ async function setup() {
   };
   const call = (run: ManagedCall['run'], sessionId = 's1'): ManagedCall => ({
     jobId: 5,
+    roundGeneration: 1,
     sessionId,
     handoffPending: false,
     mode: 'preview',
@@ -64,7 +65,7 @@ describe('managed session guard', () => {
 
   it('refuses end while a submit still runs past the wait, and ends once it is lost', async () => {
     const { store, deps, call } = await setup();
-    await store.stepManagedSession(5, 's1', 'submit', new Date(deps.now()).toISOString());
+    await store.stepManagedSession(5, 1, 's1', 'submit', new Date(deps.now()).toISOString());
     const ended = () =>
       guardManagedEnd(
         { ...deps, waitMs: 3_000 },
@@ -78,11 +79,21 @@ describe('managed session guard', () => {
   it('keeps waiting while any of two overlapping submits runs', async () => {
     const { store, deps } = await setup();
     const at = () => new Date(deps.now()).toISOString();
-    await store.stepManagedSession(5, 's1', 'submit', at());
-    await store.stepManagedSession(5, 's1', 'submit', at());
-    await store.stepManagedSession(5, 's1', 'delivered', at());
-    expect(await store.stepManagedSession(5, 's1', 'end', at())).toBe('wait');
-    await store.stepManagedSession(5, 's1', 'refused', at());
-    expect(await store.stepManagedSession(5, 's1', 'end', at())).toBe('ok');
+    await store.stepManagedSession(5, 1, 's1', 'submit', at());
+    await store.stepManagedSession(5, 1, 's1', 'submit', at());
+    await store.stepManagedSession(5, 1, 's1', 'delivered', at());
+    expect(await store.stepManagedSession(5, 1, 's1', 'end', at())).toBe('wait');
+    await store.stepManagedSession(5, 1, 's1', 'refused', at());
+    expect(await store.stepManagedSession(5, 1, 's1', 'end', at())).toBe('ok');
+  });
+
+  it('ignores a step from a round that has moved on', async () => {
+    const { store, deps } = await setup();
+    const at = () => new Date(deps.now()).toISOString();
+    await store.stepManagedSession(5, 1, 's1', 'submit', at());
+    await store.bumpRoundGeneration(5);
+    await store.stepManagedSession(5, 2, 's2', 'submit', at());
+    await store.stepManagedSession(5, 1, 's1', 'submit', at());
+    expect(await store.stepManagedSession(5, 2, 's2', 'end', at())).toBe('wait');
   });
 });

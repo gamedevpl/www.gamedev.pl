@@ -13,4 +13,10 @@ export interface ManagedSessionState {
 export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end';
 // wait: submit running; refuse: end before any delivery; ended: late submit.
 export type ManagedSessionOutcome = 'ok' | 'wait' | 'refuse' | 'ended';
-export type ManagedSessionStep = [jobId: number, sessionId: string, event: ManagedSessionEvent, at: string];
+export type ManagedSessionStep = [
+  jobId: number,
+  roundGeneration: number,
+  sessionId: string,
+  event: ManagedSessionEvent,
+  at: string,
+];

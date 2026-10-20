@@ -143,13 +143,11 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   }
 
   async stepManagedSession(
-    jobId: number,
-    sessionId: string,
-    event: ManagedSessionEvent,
-    at: string,
+    ...[jobId, generation, sessionId, event, at]: ManagedSessionStep
   ): Promise<ManagedSessionOutcome> {
     const job = this.submissions?.get(jobId);
-    if (!job) return 'ok';
+    // A stale round's call never moves state; its handler refuses it.
+    if (!job || (job.roundGeneration ?? 1) !== generation) return 'ok';
     const next = nextManagedSession(job.managedSession, sessionId, event, at);
     if (next.state) this.submissions!.set(jobId, { ...job, managedSession: next.state });
     return next.outcome;
@@ -292,15 +290,12 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   // A transaction, so parallel submit and end calls see one order.
   async stepManagedSession(
-    jobId: number,
-    sessionId: string,
-    event: ManagedSessionEvent,
-    at: string,
+    ...[jobId, generation, sessionId, event, at]: ManagedSessionStep
   ): Promise<ManagedSessionOutcome> {
     return this.db.runTransaction(async (transaction) => {
       const job = await transaction.get(this.jobRef(jobId));
       const record = job.data() as SubmissionRecord | undefined;
-      if (!record) return 'ok';
+      if (!record || (record.roundGeneration ?? 1) !== generation) return 'ok';
       const next = nextManagedSession(record.managedSession, sessionId, event, at);
       if (next.state) transaction.update(this.jobRef(jobId), { managedSession: next.state });
       return next.outcome;

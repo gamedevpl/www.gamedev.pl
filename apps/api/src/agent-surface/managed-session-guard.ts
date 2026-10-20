@@ -23,6 +23,7 @@ export interface ManagedSessionGuardDeps {
 
 export interface ManagedCall {
   jobId: number;
+  roundGeneration: number;
   sessionId: string;
   // A builder handoff still waits for end to acknowledge it.
   handoffPending: boolean;
@@ -56,7 +57,7 @@ function at(deps: ManagedSessionGuardDeps): string {
 
 export async function guardManagedSubmit(deps: ManagedSessionGuardDeps, call: ManagedCall): Promise<ToolResult> {
   const step = (event: 'submit' | 'delivered' | 'refused') =>
-    deps.store.stepManagedSession(call.jobId, call.sessionId, event, at(deps));
+    deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, event, at(deps));
   if ((await step('submit')) === 'ended') {
     return toolOk({
       ok: false,
@@ -85,10 +86,10 @@ export async function guardManagedEnd(deps: ManagedSessionGuardDeps, call: Manag
   if (call.handoffPending) return call.run();
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const deadline = deps.now() + (deps.waitMs ?? END_WAIT_MS);
-  let outcome = await deps.store.stepManagedSession(call.jobId, call.sessionId, 'end', at(deps));
+  let outcome = await deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, 'end', at(deps));
   while (outcome === 'wait' && deps.now() < deadline) {
     await sleep(POLL_MS);
-    outcome = await deps.store.stepManagedSession(call.jobId, call.sessionId, 'end', at(deps));
+    outcome = await deps.store.stepManagedSession(call.jobId, call.roundGeneration, call.sessionId, 'end', at(deps));
   }
   if (outcome === 'ok') return call.run();
   const running = outcome === 'wait';
@@ -103,6 +104,7 @@ export async function guardManagedEnd(deps: ManagedSessionGuardDeps, call: Manag
 
 interface AuthedForGuard {
   jobId: number;
+  claims: { roundGeneration?: number };
   record: SubmissionRecord;
   channelToken: string;
 }
@@ -136,6 +138,7 @@ export function createManagedCallRunner(deps: ManagedCallRunnerDeps) {
     const requested = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
     const call: ManagedCall = {
       jobId: auth.jobId,
+      roundGeneration: auth.claims.roundGeneration ?? 1,
       sessionId,
       handoffPending: auth.record.builderHandoff?.awaitsAgentAck === true && !auth.record.builderHandoff.acknowledgedAt,
       mode: await effectiveSubmitMode(requested, args.fromLatestDelivery === true, auth.record, deps.gamesStore),
