@@ -10,21 +10,30 @@ import type {
 // Submits still marked running after this long are taken as lost.
 const RUNNING_SUBMIT_MS = 90_000;
 
-// Sessions kept per round; the oldest drop first.
+// Idle sessions kept per round; the oldest idle drop first.
 const MAX_SESSIONS = 8;
 
 type Sessions = ManagedSessions['byId'];
 
-// Submits in flight from any session of the round.
-function runningIn(sessions: Sessions, at: string): number {
-  return Object.values(sessions).reduce((sum, state) => {
-    const fresh = Date.parse(at) - Date.parse(state.submitAt ?? at) < RUNNING_SUBMIT_MS;
-    return sum + (fresh ? (state.running ?? 0) : 0);
-  }, 0);
+function runningOf(state: ManagedSessionState, at: string): number {
+  const fresh = Date.parse(at) - Date.parse(state.submitAt ?? at) < RUNNING_SUBMIT_MS;
+  return fresh ? (state.running ?? 0) : 0;
 }
 
-function withSession(sessions: Sessions, state: ManagedSessionState): Sessions {
-  const kept = Object.entries({ ...sessions, [state.sessionId]: state }).slice(-MAX_SESSIONS);
+// Submits in flight from any session of the round.
+function runningIn(sessions: Sessions, at: string): number {
+  return Object.values(sessions).reduce((sum, state) => sum + runningOf(state, at), 0);
+}
+
+// A session with a submit in flight is never evicted.
+function withSession(sessions: Sessions, state: ManagedSessionState, at: string): Sessions {
+  const entries = Object.entries({ ...sessions, [state.sessionId]: state });
+  let excess = entries.length - MAX_SESSIONS;
+  const kept = entries.filter(([id, entry]) => {
+    const evict = excess > 0 && id !== state.sessionId && runningOf(entry, at) === 0;
+    if (evict) excess -= 1;
+    return !evict;
+  });
   return Object.fromEntries(kept);
 }
 
@@ -40,9 +49,8 @@ export function nextManagedSession(
   const sessions = stored?.generation === generation ? stored.byId : {};
   const prev = sessions[sessionId];
   const own = prev ?? { sessionId };
-  const fresh = Date.parse(at) - Date.parse(own.submitAt ?? at) < RUNNING_SUBMIT_MS;
-  const running = fresh ? (own.running ?? 0) : 0;
-  const put = (state: ManagedSessionState) => ({ generation, byId: withSession(sessions, state) });
+  const running = runningOf(own, at);
+  const put = (state: ManagedSessionState) => ({ generation, byId: withSession(sessions, state, at) });
   if (event === 'submit') {
     if (own.endedAt) return { state: null, outcome: 'ended' };
     return { state: put({ ...own, running: running + 1, submitAt: at }), outcome: 'ok' };
@@ -51,6 +59,12 @@ export function nextManagedSession(
     if (!prev) return { state: null, outcome: 'ok' };
     const delivered = event === 'delivered' ? { delivered: true as const } : {};
     return { state: put({ ...own, running: Math.max(0, running - 1), last: event, ...delivered }), outcome: 'ok' };
+  }
+  // The channel refused that end: the session stays open.
+  if (event === 'reopen') {
+    if (!prev?.endedAt) return { state: null, outcome: 'ok' };
+    const { endedAt: _endedAt, ...open } = prev;
+    return { state: put(open), outcome: 'ok' };
   }
   // A pending builder handoff is acknowledged by end, whatever ran.
   const handoff = record.builderHandoff;

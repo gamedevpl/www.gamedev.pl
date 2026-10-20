@@ -16,7 +16,7 @@ export interface ManagedSessions {
   byId: Record<string, ManagedSessionState>;
 }
 
-export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end';
+export type ManagedSessionEvent = 'submit' | 'delivered' | 'refused' | 'end' | 'reopen';
 // wait: submit running; refuse: end before any delivery; ended: late submit.
 export type ManagedSessionOutcome = 'ok' | 'wait' | 'refuse' | 'ended';
 export type ManagedSessionStep = [

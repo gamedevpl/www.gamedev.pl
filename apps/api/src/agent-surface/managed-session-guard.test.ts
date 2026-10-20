@@ -124,4 +124,27 @@ describe('managed session guard', () => {
     const earlier = nextManagedSession({}, 1, 's1', 'submit', at).state!;
     expect(nextManagedSession({ managedSessions: earlier }, 2, 's2', 'end', at).outcome).toBe('ok');
   });
+
+  it('leaves the session open when the channel refuses its end', async () => {
+    const { store, deps, call } = await setup();
+    const refused = { isError: true, content: [], structuredContent: { error: 'summary too long' } };
+    await guardManagedEnd(
+      deps,
+      call(async () => refused as never),
+    );
+    const at = new Date(deps.now()).toISOString();
+    expect(await store.stepManagedSession(5, 1, 's1', 'submit', at)).toBe('ok');
+  });
+
+  it('never evicts a session whose submit is still running', () => {
+    const at = '2026-10-20T10:00:00.000Z';
+    let record = { managedSessions: nextManagedSession({}, 1, 's0', 'submit', at).state! };
+    for (let i = 1; i <= 9; i += 1) {
+      const id = `s${i}`;
+      record = { managedSessions: nextManagedSession(record, 1, id, 'submit', at).state! };
+      record = { managedSessions: nextManagedSession(record, 1, id, 'delivered', at).state! };
+    }
+    expect(Object.keys(record.managedSessions.byId)).toContain('s0');
+    expect(nextManagedSession(record, 1, 's9', 'end', at).outcome).toBe('wait');
+  });
 });
