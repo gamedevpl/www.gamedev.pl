@@ -118,7 +118,7 @@ serves `GET /.well-known/openai-apps-challenge` from `OPENAI_APPS_CHALLENGE_TOKE
 (404 when unset), and `.github/workflows/deploy.yml` — the actual CI/CD path, not
 `infra/deploy-api.sh` (that one is owner-run, local-only, never invoked by CI) —
 already threads it from the GitHub Actions repo **variable** `vars.OPENAI_APPS_CHALLENGE_TOKEN`
-into every automated deploy, same pattern as `MP_RELAY_URL`/`ZONE_HOST_URL`/`REMIX_DEBUG`.
+into every automated deploy, same pattern as `MP_RELAY_URL`/`ZONE_HOST_URL`.
 Confirmed live 2026-08-23: the endpoint already returns a token, so this variable is
 already set. Nothing to build, nothing to redo on every deploy — only owner steps:
 

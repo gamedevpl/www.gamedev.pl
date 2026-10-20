@@ -5,9 +5,8 @@ import { DECLINE_REASONS, type DeclineReason, type ProposalPublicState } from '@
 // The proposal state machine.
 //
 // A proposal is a change to a game somebody else owns: an immutable candidate version the
-// proposer cannot publish, plus the record of who decides and what they decided. It is the
-// contribute-back exit that Remix has never had — remixes stay ephemeral and still never
-// publish; a proposal is the earned, reviewed form of the same edit.
+// proposer cannot publish, plus the record of who decides and what they decided. A text
+// proposal carries no version at all: it is a described change the owner's agent builds.
 //
 // Everything here is pure — no I/O, no clock of its own — for the same reason `job-state`
 // is: the rules are read by the proposer's tracker, the reviewer's card, the ops queue,
@@ -28,7 +27,7 @@ import { DECLINE_REASONS, type DeclineReason, type ProposalPublicState } from '@
  * asymmetry is deliberate and load-bearing — see {@link isReviewerVisible}.
  */
 export const PROPOSAL_STATES = [
-  /** Being assembled by the proposer (remix session, fork, or agent round). Not yet sent. */
+  /** Being assembled by the proposer (an agent round). Not yet sent. */
   'draft',
   /** Sent. Text has passed moderation; the version is written; the gate has not run. */
   'submitted',

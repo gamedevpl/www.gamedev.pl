@@ -12,8 +12,6 @@ export type StageContent =
   | {
       type: 'catalog';
       game: CatalogEntry;
-      initialRemixOpen?: boolean;
-      initialRemixRequest?: string;
       // Which home page surface launched this play, if it did.
       via?: PlayVia;
     }
@@ -34,7 +32,6 @@ export type UseGameTheaterResult = {
   stageContent: StageContent | null;
   partyError: string | null;
   handlePlayGame: (game: CatalogEntry, via?: PlayVia) => void;
-  handleRemixGame: (game: CatalogEntry, initialRemixRequest?: string) => void;
   handleExitCatalogTheater: () => void;
   handleExitPartyTheater: () => void;
   handlePlayTogether: (game: CatalogEntry, via?: PlayVia) => Promise<void>;
@@ -124,14 +121,6 @@ export function useGameTheater({
     setRecommendationsRefreshKey((n) => n + 1);
   }
 
-  // The remix sheet opens on the first frame, no theater detour.
-  function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
-    setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
-    if (route.view !== 'game' && route.view !== 'creator') {
-      navigate(playPath(game.slug));
-    }
-  }
-
   function handleExitCatalogTheater() {
     if (route.view === 'play' && stageContent?.type === 'catalog') {
       const game = stageContent.game;
@@ -183,7 +172,6 @@ export function useGameTheater({
     stageContent,
     partyError,
     handlePlayGame,
-    handleRemixGame,
     handleExitCatalogTheater,
     handleExitPartyTheater,
     handlePlayTogether,

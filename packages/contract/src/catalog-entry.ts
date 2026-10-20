@@ -64,8 +64,6 @@ export interface CatalogEntry {
   world: CatalogWorld | null;
   sensing: CatalogSensing | null;
   editor: CatalogEditor | null;
-  // Set only when the author (or an admin) turned player remix on.
-  remixOn?: true;
   orientation: CatalogOrientation;
   // Absent on the SPEC-only GraphQL fallback, null once normalized.
   touch?: CatalogTouch | null;

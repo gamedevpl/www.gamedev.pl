@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bakeRemixEditorDefaults } from '../creation/remix-bake.js';
+import { bakeEditorDefaults } from '../creation/editor-bake.js';
 import { applyProposalData, summarizeProposalChange } from './proposal-change-set.js';
 import { PROPOSAL_DIFF_PAGE_BYTES, proposalDiffPage } from './proposal-diff-pages.js';
 import { buildProposalRoundBrief } from './proposal-round-brief.js';
@@ -18,7 +18,7 @@ describe('summarizeProposalChange', () => {
     const change = summarizeProposalChange(gameFiles(), proposed);
     expect(change.params).toEqual([{ key: 'dogScale', from: 1, to: 2 }]);
     expect(change.dataOnly).toBe(true);
-    const baked = applyProposalData(gameFiles(), proposed, change, bakeRemixEditorDefaults);
+    const baked = applyProposalData(gameFiles(), proposed, change, bakeEditorDefaults);
     expect(JSON.parse(baked!.find((file) => file.path === 'EDITOR.json')!.content).params.dogScale.default).toBe(2);
     expect(baked!.find((file) => file.path === 'game.ts')!.content).toBe(gameFiles()[1]!.content);
   });
@@ -26,7 +26,7 @@ describe('summarizeProposalChange', () => {
   it('treats a declaration change as code, not data', () => {
     const change = summarizeProposalChange(gameFiles(), gameFiles({ 'EDITOR.json': editorJson(2, 'Big dog') }));
     expect(change.dataOnly).toBe(false);
-    expect(applyProposalData(gameFiles(), gameFiles(), change, bakeRemixEditorDefaults)).toBeNull();
+    expect(applyProposalData(gameFiles(), gameFiles(), change, bakeEditorDefaults)).toBeNull();
   });
 });
 

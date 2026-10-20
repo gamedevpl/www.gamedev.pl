@@ -10,7 +10,7 @@ gamedev.pl is becoming a catalog and creation surface for AI-assisted browser ga
 4. A publish workflow makes the game immediately playable from the catalog.
 5. A creator can later propose changes to their own published game; an agent updates the
    spec and implementation, and a maintainer reviews before it republishes (no PR — see
-   [`architecture.md`](./architecture.md)). Player-facing remix is not built yet.
+   [`architecture.md`](./architecture.md)). Player remix was tried and removed (2026-10): editing someone else's game invites copying; players propose changes instead.
 
 This is intentionally **not** real-time generation. Creation is closer to commissioning a
 game: asynchronous, visible, and reviewable. (The local deterministic mock generator this
@@ -33,7 +33,7 @@ The new product inherits the established gamedev.pl identity from the legacy `ma
 | Font              | Proxima Nova                         |
 | Wordmark          | `gamedev.pl` with `.pl` in turquoise |
 
-## The three core loops
+## The two core loops
 
 ### 1. Create ✅
 
@@ -67,22 +67,8 @@ The game runs in the sandboxed iframe
 Live in production. Both catalog lanes serve this loop; see
 [`architecture.md`](./architecture.md#two-catalog-lanes).
 
-### 3. Remix 🚧
-
-```text
-Player proposes a behavior change
-        ↓
-The request becomes a proposed spec change
-        ↓
-An agent updates the spec and implementation
-        ↓
-Maintainers review; the agent never auto-merges
-        ↓
-Accepted change republishes the game
-```
-
-Built for the creator's own games; a player-facing entry point for someone else's published
-game is the open part. See [`remix-to-pr.md`](./remix-to-pr.md).
+A player who wants a change to someone else's game submits a text-only proposal (title + description) on games whose creator enabled proposals; accepting it
+starts the creator's own agent round. See [`roadmap.md`](./roadmap.md#phase-4--player-remix-removed).
 
 ## Why one games repository
 

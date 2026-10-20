@@ -202,7 +202,7 @@ describe('the creation breaker', () => {
   });
 });
 
-describe('editing gate (the remix/assist spend breaker)', () => {
+describe('editing gate (the assist spend breaker)', () => {
   it('spends slots until the cap, then refuses with over_capacity', async () => {
     const store = new InMemoryStore();
     const gate = createEditingGate({ store, ttlMs: 0, defaultGlobalDailyCap: 2 });

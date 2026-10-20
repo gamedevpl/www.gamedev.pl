@@ -212,7 +212,6 @@ describe('ReviewDesk', () => {
     expect(pauseSpy).toHaveBeenCalled();
     expect(theater?.querySelector('a.theater-author-link')?.getAttribute('href')).toBe('/sky-pilot');
     expect(theater?.textContent).toMatch(/sky-pilot/);
-    expect(theater?.querySelector('.remix-btn')).toBeNull();
     expect(document.body.classList.contains('player-open')).toBe(true);
 
     const exitBtn = theater!.querySelector('button.exit-btn') as HTMLButtonElement | null;

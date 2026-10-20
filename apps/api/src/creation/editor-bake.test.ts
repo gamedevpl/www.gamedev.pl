@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bakeRemixEditorDefaults, remixHasSavableChange } from './remix-bake.js';
+import { bakeEditorDefaults } from './editor-bake.js';
 import { parseEditorDefinition } from './editor-contract.js';
 
 const EDITOR_JSON = JSON.stringify({
@@ -30,51 +30,7 @@ const EDITOR_JSON = JSON.stringify({
   },
 });
 
-describe('remixHasSavableChange', () => {
-  const definition = parseEditorDefinition(EDITOR_JSON).definition!;
-
-  it('is false for an untouched remix', () => {
-    expect(
-      remixHasSavableChange({
-        overrides: {},
-        definition,
-        params: { dogScale: 1, tagline: 'go!' },
-        content: { maps: definition.content.maps.defaults },
-      }),
-    ).toBe(false);
-  });
-
-  it('is true for code overrides alone', () => {
-    expect(
-      remixHasSavableChange({
-        overrides: { 'game/runtime.ts': 'export function startGame() { return 0.08; }\n' },
-        definition,
-      }),
-    ).toBe(true);
-  });
-
-  it('is true when a param differs from its default', () => {
-    expect(
-      remixHasSavableChange({
-        overrides: {},
-        definition,
-        params: { dogScale: 2, tagline: 'go!' },
-      }),
-    ).toBe(true);
-  });
-
-  it('is true when painted content differs from defaults', () => {
-    expect(
-      remixHasSavableChange({
-        overrides: {},
-        definition,
-        content: { maps: [{ properties: {}, rows: ['###', '###', '###'] }] },
-      }),
-    ).toBe(true);
-  });
-});
-
-describe('bakeRemixEditorDefaults', () => {
+describe('bakeEditorDefaults', () => {
   it('writes param and content defaults into EDITOR.json and regenerates the L1 module', () => {
     const definition = parseEditorDefinition(EDITOR_JSON).definition!;
     const files = [
@@ -85,7 +41,7 @@ describe('bakeRemixEditorDefaults', () => {
       { path: 'game.ts', content: "import './game/runtime.ts';\n" },
     ];
 
-    bakeRemixEditorDefaults(
+    bakeEditorDefaults(
       files,
       definition,
       { dogScale: 2.5, tagline: 'woof' },

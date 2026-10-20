@@ -13,7 +13,6 @@
     "snapshot:publish": "tsx scripts/publish-snapshot.ts",
     "gate:run": "tsx scripts/run-gate.ts",
     "gate:capability": "tsx scripts/gate-capability.ts",
-    "remix:probe": "tsx scripts/remix-lane-probe.ts",
     "managed:probe": "tsx scripts/managed-probe.ts",
     "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
@@ -30,9 +29,6 @@
     "slug:backfill": "tsx scripts/slug-backfill.ts",
     "player:erase": "tsx scripts/erase-player-signals.ts",
     "verify:erase": "tsx scripts/verify-erase-signals.ts",
-    "remix:sweep": "tsx scripts/remix-lane-sweep.ts",
-    "remix:judge": "tsx scripts/remix-lane-judge.ts",
-    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts",
     "// build:assets": "tsc emits only .js; the MCP round card is real .html and has to be copied beside it.",
     "build:assets": "cp src/agent-surface/mcp-ui-round-status.html dist/agent-surface/"
   },

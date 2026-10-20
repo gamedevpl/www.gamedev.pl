@@ -13,8 +13,6 @@ const OPS_ROUTES: ReadonlyArray<{ method: string; path: RegExp }> = [
   { method: 'POST', path: new RegExp(`^/api/admin/jobs/${ID}/(publish|retry|cancel)$`) },
   { method: 'GET', path: new RegExp(`^/api/admin/jobs/${ID}/preview$`) },
   { method: 'POST', path: new RegExp(`^/api/admin/games/${ID}/(regate|delete)$`) },
-  { method: 'GET', path: new RegExp(`^/api/admin/games/${ID}/remix$`) },
-  { method: 'PUT', path: new RegExp(`^/api/admin/games/${ID}/remix$`) },
   { method: 'POST', path: /^\/api\/admin\/(slug|title|game-access)-backfill$/ },
   // Flag ids are `<slug>:<uid>`, sent percent-encoded.
   { method: 'POST', path: /^\/api\/admin\/moderation-flags\/[A-Za-z0-9_:%-]+\/resolve$/ },

@@ -1,11 +1,9 @@
 /* Proposal composer: title/description form reused by review and contribution settings. */
 
 /*
- * Proposals — the composer behind Remix's third exit, and the tracker.
+ * Proposals — the "Propose a change" form, the tracker, and the review card.
  *
- * Styled from the remix panel's own tokens rather than new ones: a proposal starts inside
- * that panel, and a form that looked like it came from somewhere else would read as a
- * different product asking for something.
+ * Plain panel tokens, so the form reads as part of whatever surface hosts it.
  */
 .propose-composer {
   display: grid;
@@ -79,4 +77,79 @@
   color: var(--text);
   font: inherit;
   font-weight: 400;
+}
+
+.propose-btn {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, #24313d);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.propose-btn.is-primary {
+  background: var(--accent, #62dcff);
+  border-color: transparent;
+  color: #06222b;
+}
+
+.propose-btn.is-quiet {
+  flex: 0 1 auto;
+  padding: 0 16px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.propose-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* "Propose a change" form inside the theater menu's feedback popover. */
+.propose-form {
+  display: grid;
+  gap: 10px;
+}
+
+.propose-field-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.propose-counter {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.propose-counter.is-short {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.propose-sent {
+  display: grid;
+  gap: 8px;
+}
+
+.propose-track {
+  color: var(--turquoise);
+  font-weight: 600;
+}
+
+/* A text proposal has no diff or build: its description is the proposal. */
+.proposal-description.is-text {
+  padding: 10px 12px;
+  border-left: 3px solid var(--turquoise);
+  border-radius: 6px;
+  background: var(--panel-card, rgba(255, 255, 255, 0.04));
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }

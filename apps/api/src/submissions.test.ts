@@ -3130,52 +3130,6 @@ describe('submission routes', () => {
     expect(status.statusCode).toBe(200);
     expect(status.json().status).toBe('in_review');
     expect(status.json().phase).toBe('ready_for_review');
-    expect(status.json().draftOrigin).toBeUndefined();
-
-    await app.close();
-  });
-
-  it('marks a remix-saved draft so Studio can skip gate-green copy', async () => {
-    const { githubClient } = createGithubClientStub({ jobId: 92 });
-    const { backend } = createBackendStub();
-    const { app, authHeaders, store } = await createApp({
-      githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-    });
-
-    await app.inject({
-      method: 'POST',
-      url: '/api/submissions',
-      headers: authHeaders,
-      payload: { title: 'A remix', concept: 'A sufficiently long concept about a private remix draft.' },
-    });
-    const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.jobId, {
-      to: 'queued',
-      at: new Date().toISOString(),
-      by: 'creator',
-      reason: 'remix_saved',
-    });
-    await store.recordJobTransition(job.jobId, {
-      to: 'ready_for_review',
-      at: new Date().toISOString(),
-      by: 'creator',
-      reason: 'remix_saved',
-    });
-
-    const status = await app.inject({
-      method: 'GET',
-      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
-      headers: authHeaders,
-    });
-
-    expect(status.statusCode).toBe(200);
-    expect(status.json()).toMatchObject({
-      status: 'in_review',
-      phase: 'ready_for_review',
-      draftOrigin: 'remix',
-    });
 
     await app.close();
   });

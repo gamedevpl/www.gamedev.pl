@@ -8,7 +8,7 @@
 //                baked from. There is no store version at all.
 //
 // This module is the single place that difference is resolved, so everything downstream —
-// the remix on-ramp, an agent's proposal round, the diff — asks one question and gets a
+// an agent's proposal round, the diff — asks one question and gets a
 // file set plus a base to pin the proposal to.
 //
 // **Scope is structural here, not advisory.** The repo-lane read filters the archive to

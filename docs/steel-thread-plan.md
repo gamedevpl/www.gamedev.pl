@@ -281,7 +281,7 @@ the submit→publish half unlocks once `github-token` is added (above)._
 
 ## 5. Deliberately out of scope (do not build these "while you're in there")
 
-Accounts/auth · remix-to-PR · moderation dashboards · webhooks (polling is fine) ·
+Accounts/auth · remix-to-PR (dropped) · moderation dashboards · webhooks (polling is fine) ·
 validation checks 7–8 (headless load, frame-escape grep) · replacing the old site at the
 root · a database · search/tags/ratings · email notifications · i18n of game content.
 
