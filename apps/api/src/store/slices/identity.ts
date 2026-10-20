@@ -203,6 +203,7 @@ export class InMemoryIdentityStore implements IdentityStore {
       deletionScheduledFor: existing?.deletionScheduledFor,
       // Never set by sign-in either; dropping it here orphaned the reservation.
       recipientCode: existing?.recipientCode,
+      appleSub: existing?.appleSub,
     };
 
     this.users.set(userData.uid, updated);

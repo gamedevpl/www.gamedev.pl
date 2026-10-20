@@ -57,6 +57,7 @@ export interface User {
   deletionScheduledFor?: string;
   // Opaque transfer/invite code (GO-02); minted lazily, not at sign-in.
   recipientCode?: string;
+  appleSub?: string;
 }
 
 /** Reservation row for a lowercase handle → owning uid. */

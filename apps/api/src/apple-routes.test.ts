@@ -75,11 +75,22 @@ describe('POST /api/auth/apple', () => {
     expect((await store.getUser(`a:${APPLE_SUB}`))?.email).toBe('creator@example.com');
   });
 
-  it('signs into the creator’s existing Google account instead of a new one', async () => {
-    // The defect this prevents: an established creator taps the new button and finds an
-    // empty account where their games used to be.
+  it('refuses to sign into an existing Google account by email alone', async () => {
     const { app, store } = await setup();
     await store.upsertUser({ uid: 'g:google-sub', email: 'creator@example.com', name: 'Creator' });
+
+    const res = await signIn(app);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('apple_link_required');
+    expect(res.cookies.some((c) => c.name === SESSION_COOKIE_NAME)).toBe(false);
+    expect(await store.getUser(`a:${APPLE_SUB}`)).toBeNull();
+  });
+
+  it('signs into the Google account once it has linked the Apple ID', async () => {
+    const { app, store } = await setup();
+    await store.upsertUser({ uid: 'g:google-sub', email: 'creator@example.com', name: 'Creator' });
+    await store.setAppleSub('g:google-sub', APPLE_SUB);
 
     const res = await signIn(app);
 
@@ -189,7 +200,7 @@ describe('POST /api/auth/apple', () => {
       expect((await signIn(app)).statusCode).toBe(200);
     });
 
-    it('admits a creator already allowlisted by their Google uid', async () => {
+    it('admits a linked creator already allowlisted by their Google uid', async () => {
       // The allowlist is checked against the *resolved* uid, so somebody already in the
       // beta is not turned away merely for arriving through a different button.
       const { app, store } = await setup(
@@ -197,6 +208,7 @@ describe('POST /api/auth/apple', () => {
         beta({ betaAllowedUids: new Set(['g:google-sub']) }),
       );
       await store.upsertUser({ uid: 'g:google-sub', email: 'creator@example.com' });
+      await store.setAppleSub('g:google-sub', APPLE_SUB);
 
       const res = await signIn(app);
 
@@ -212,6 +224,68 @@ describe('POST /api/auth/apple', () => {
 
       expect((await signIn(app)).statusCode).toBe(403);
     });
+  });
+});
+
+describe('POST /api/auth/apple/link', () => {
+  const GOOGLE = { sub: 'google-sub', email: 'creator@example.com', emailVerified: true };
+
+  async function signedIn(tokens: Record<string, AppleAuthPayload> = { 'apple-token': VERIFIED }) {
+    const ctx = await setup(tokens, { googleAuthVerifier: { verifyIdToken: async () => GOOGLE } });
+    const res = await ctx.app.inject({ method: 'POST', url: '/api/auth/google', payload: { idToken: 'g' } });
+    const cookie = res.cookies.find((c) => c.name === SESSION_COOKIE_NAME)!;
+    return { ...ctx, cookies: { [SESSION_COOKIE_NAME]: cookie.value } };
+  }
+
+  it('links the Apple ID so the next Apple sign-in lands on the Google account', async () => {
+    const { app, cookies } = await signedIn();
+
+    const link = await app.inject({
+      method: 'POST',
+      url: '/api/auth/apple/link',
+      cookies,
+      payload: { idToken: 'apple-token' },
+    });
+    expect(link.statusCode).toBe(200);
+
+    const res = await signIn(app);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.uid).toBe('g:google-sub');
+  });
+
+  it('requires a signed-in session', async () => {
+    const { app } = await setup();
+    const res = await app.inject({ method: 'POST', url: '/api/auth/apple/link', payload: { idToken: 'apple-token' } });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('refuses an Apple ID whose address is not the account’s', async () => {
+    const { app, cookies, store } = await signedIn({ 'apple-token': { ...VERIFIED, email: 'other@example.com' } });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/apple/link',
+      cookies,
+      payload: { idToken: 'apple-token' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(await store.findUserByAppleSub(APPLE_SUB)).toBeNull();
+  });
+
+  it('refuses a cross-site request', async () => {
+    const { app, cookies, store } = await signedIn();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/apple/link',
+      cookies,
+      headers: { origin: 'https://evil.example' },
+      payload: { idToken: 'apple-token' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(await store.findUserByAppleSub(APPLE_SUB)).toBeNull();
   });
 });
 

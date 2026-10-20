@@ -1,5 +1,5 @@
 import type { WaitlistStatus as SharedWaitlistStatus } from '@gamedevpl/contract';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
 
 export interface User {
@@ -91,6 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('unknown');
   const [showBetaWelcome, setShowBetaWelcome] = useState(false);
+  // Apple token awaiting a link at the next Google sign-in.
+  const pendingAppleLink = useRef<string | null>(null);
 
   const refreshUser = async () => {
     try {
@@ -150,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
     setShowBetaWelcome(data.betaWelcome === true);
+    await linkPendingApple();
   };
 
   const signInWithAppleToken = async (idToken: string, name?: string, inviteCode?: string) => {
@@ -162,6 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { error?: string; waitlistStatus?: string } | null;
+      if (res.status === 409 && err?.error === 'apple_link_required') {
+        pendingAppleLink.current = idToken;
+      }
       if (err?.waitlistStatus) {
         setWaitlistStatus(err.waitlistStatus as WaitlistStatus);
       }
@@ -171,6 +177,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
     setShowBetaWelcome(data.betaWelcome === true);
+  };
+
+  // Best-effort: a failed link never fails the Google sign-in.
+  const linkPendingApple = async () => {
+    const idToken = pendingAppleLink.current;
+    pendingAppleLink.current = null;
+    if (!idToken) return;
+    await fetch('/api/auth/apple/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ idToken }),
+    }).catch(() => undefined);
   };
 
   const joinWaitlist = async (idToken: string, locale?: string, provider?: 'google' | 'apple') => {
