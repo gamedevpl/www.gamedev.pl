@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Play's resize handles (panel width, preview height, file list width) also reset with Enter, and run on the shared resize and follow-scroll pieces from `genaicode/react`.
+- Play's resize handles (panel width, preview height, file list width) also reset with Enter, and run on the shared resize and follow-scroll pieces from `genaicode/react` (genaicode 2.14.0) (#1929).
 
 ## 0.55.1 — 2026-10-20
 
