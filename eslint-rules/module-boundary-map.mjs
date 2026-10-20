@@ -395,7 +395,6 @@ const FILE_BUCKET = {
   'seed-provider-anthropic': 'creation',
   'seed-provider-meta': 'creation',
   'seed-provider-openai': 'creation',
-  'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
   // The env half of round-0 seeding, split out of agent-surface's backend registry:
   // which seed vendor is configured is creation's question, not the agent surface's.

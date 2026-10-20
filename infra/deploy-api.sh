@@ -284,14 +284,6 @@ if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1;
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
   echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
 fi
-# describe only proves the secret container exists, not that it has a version
-# — a container created without a version passes describe but makes
-# --set-secrets fail deploy with "...versions/latest was not found"
-# (2026-08-21 incident). Check for an accessible version instead.
-if gcloud secrets versions access latest --secret=openrouter-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
-  SECRET_MAPPINGS+=("SEED_OPENROUTER_API_KEY=openrouter-api-key:latest")
-  echo "==> openrouter-api-key found; selectable as a seed provider once SEED_OPENROUTER_MODEL is also set."
-fi
 
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
@@ -383,7 +375,7 @@ fi
 # The moderation fallback lives here too: it is an incident lever — repoint the
 # classifier's stand-in without a deploy — and a lever only one path threads is wiped by
 # the next release through the other.
-for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL \
+for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL CLI_CHAT_FALLBACK_MODEL \
   MODERATION_FALLBACK_MODEL MODERATION_FALLBACK_PROVIDER \
   MEDIA_DAILY_MINTS_PER_IP MEDIA_DAILY_MINTS_PER_INSTANCE REFINE_FALLBACK_MODEL; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
@@ -450,18 +442,14 @@ for SEED_VAR in \
   SEED_OPENAI_MODEL \
   SEED_META_MODEL \
   SEED_META_BASE_URL \
-  SEED_OPENROUTER_MODEL \
-  SEED_OPENROUTER_BASE_URL \
   SEED_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_MAX_OUTPUT_TOKENS \
   SEED_META_MAX_OUTPUT_TOKENS \
-  SEED_OPENROUTER_MAX_OUTPUT_TOKENS \
   SEED_PICK_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS \
-  SEED_META_PICK_MAX_OUTPUT_TOKENS \
-  SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS; do
+  SEED_META_PICK_MAX_OUTPUT_TOKENS; do
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
