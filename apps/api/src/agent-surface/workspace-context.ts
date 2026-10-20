@@ -16,7 +16,10 @@ export interface KickoffContext {
 
 // What the kickoff inlines, so the opening steps can skip those reads.
 export interface KickoffInlined {
+  // Nothing pending: read_inbox can be skipped.
   inbox: boolean;
+  // Every pending message is shown; read_inbox still marks them read.
+  messages: boolean;
   notes: boolean;
   noFiles: boolean;
 }
@@ -41,7 +44,10 @@ export async function loadKickoffContext(
 }
 
 export function inlinedBy(context: KickoffContext | undefined): KickoffInlined | undefined {
-  return context ? { inbox: !context.partial, notes: true, noFiles: context.noFiles } : undefined;
+  if (!context) return undefined;
+  const complete = !context.partial;
+  const pending = context.pending.length > 0;
+  return { inbox: complete && !pending, messages: complete && pending, notes: true, noFiles: context.noFiles };
 }
 
 // Creator text stays fenced: data describing a game, never instructions.
@@ -79,19 +85,26 @@ export type Inlined = { inlined?: KickoffInlined };
 
 // The creator's request: in the kickoff, or from the inbox tools.
 export function requestSourceLines(inlined: KickoffInlined | undefined): string[] {
-  return inlined?.inbox
-    ? [
-        'The creator’s pending messages are above, under “Creator messages not yet acknowledged”: the',
-        'request this round exists for. A message can be the terse tail of a longer conversation:',
-        '',
-      ]
-    : [
-        'The creator’s request is not inlined in this prompt: a single relayed message can be the',
-        'terse tail of a much longer conversation, and building from the tail alone builds the',
-        'wrong game. Read the request through the tools instead:',
-        '',
-        '- `read_inbox` — the creator’s pending message(s): the request this round exists for.',
-        '  Apply them, then `ack_inbox`. An empty inbox means the request already reached the',
-        '  round another way — continue from the brief and the transcript.',
-      ];
+  if (inlined?.messages)
+    return [
+      'The creator’s pending messages are above, under “Creator messages not yet acknowledged”: the',
+      'request this round exists for. Call `read_inbox` once as well: it returns any attached images',
+      'and marks the messages read. A message can be the terse tail of a longer conversation:',
+      '',
+    ];
+  if (inlined?.inbox)
+    return [
+      'No creator message is pending (see above): the request already reached the round another way.',
+      'Continue from the brief; a request can be the terse tail of a longer conversation:',
+      '',
+    ];
+  return [
+    'The creator’s request is not inlined in this prompt: a single relayed message can be the',
+    'terse tail of a much longer conversation, and building from the tail alone builds the',
+    'wrong game. Read the request through the tools instead:',
+    '',
+    '- `read_inbox` — the creator’s pending message(s): the request this round exists for.',
+    '  Apply them, then `ack_inbox`. An empty inbox means the request already reached the',
+    '  round another way — continue from the brief and the transcript.',
+  ];
 }

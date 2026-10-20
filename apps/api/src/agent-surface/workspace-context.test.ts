@@ -25,6 +25,7 @@ describe('kickoff context', () => {
     expect(lines).toContain(`id \`${note.id}\`:`);
     expect(lines).toContain("Cars look bad '''x'''");
     expect(lines).toContain('revision 0 saves the first');
+    expect(inlinedBy(context)).toMatchObject({ inbox: false, messages: true });
   });
 
   it('drops the reads the kickoff already carries from the opening steps', () => {
@@ -32,16 +33,22 @@ describe('kickoff context', () => {
     const fresh = buildPrompt(BRIEF, {
       shell: true,
       workspace: lines,
-      inlined: { inbox: true, notes: true, noFiles: true },
+      inlined: { inbox: true, messages: false, notes: true, noFiles: true },
     });
     expect(fresh).toContain('1. `start`');
     expect(fresh).toContain('2. One short `report_progress`');
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
     const revision = buildPrompt(
       { ...BRIEF, feedback: 'faster', undelivered: true, previewVersion: 'v1' } as BuildBrief,
-      { shell: true, workspace: lines, mountedSources: true, inlined: { inbox: true, notes: true, noFiles: false } },
+      {
+        shell: true,
+        workspace: lines,
+        mountedSources: true,
+        inlined: { inbox: false, messages: true, notes: true, noFiles: false },
+      },
     );
-    expect(revision).toContain('2. `get_brief`.');
+    expect(revision).toContain('2. `get_brief` and `read_inbox`.');
+    expect(revision).toContain('Call `read_inbox` once as well');
     expect(revision).toContain('under “Creator messages not yet acknowledged”');
     expect(buildPrompt(BRIEF, { shell: true, workspace: lines })).toContain('`read_inbox`, `creator_notes`');
   });
@@ -52,7 +59,7 @@ describe('kickoff context', () => {
     for (let i = 0; i < 11; i += 1) await store.appendCreatorMessage(3, `note ${i}`);
     const context = await loadKickoffContext(store, (await store.getSubmission(3)) ?? record, 'none');
     expect(context.pending).toHaveLength(10);
-    expect(inlinedBy(context)).toMatchObject({ inbox: false, notes: true });
+    expect(inlinedBy(context)).toMatchObject({ inbox: false, messages: false, notes: true });
     expect(kickoffContextLines(context).join('\n')).toContain('`read_inbox` returns every pending message');
     const long = await loadKickoffContext(
       {
@@ -62,6 +69,6 @@ describe('kickoff context', () => {
       record,
       'none',
     );
-    expect(inlinedBy(long)?.inbox).toBe(false);
+    expect(inlinedBy(long)).toMatchObject({ inbox: false, messages: false });
   });
 });

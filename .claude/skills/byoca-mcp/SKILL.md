@@ -341,9 +341,11 @@ clients keep one `uploads[]` entry per path, and a single-path token PUT without
 round's pending creator messages and the creator notes (`workspace-context.ts`). The kickoff then
 carries them fenced as data, with message ids for `end`'s `ackInboxIds` and the notes revision
 for `creator_notes` writes. When there is no seed, no delivery and none generating, it says the
-game has no files yet. The opening steps then drop `read_inbox`, `creator_notes`, `get_sources`
-and, for a new game whose spec is inlined, `get_brief`. If reading that context fails, the
-kickoff falls back to the read tools.
+game has no files yet. The opening steps then drop `creator_notes`, `get_sources` and, for a new
+game whose spec is inlined, `get_brief`. `read_inbox` is dropped only when nothing is pending:
+pending messages stay unread in the session's nudge state (`inbox_pending`) until `read_inbox`
+returns them, and it also carries their images. If reading that context fails, the kickoff falls
+back to the read tools.
 
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
