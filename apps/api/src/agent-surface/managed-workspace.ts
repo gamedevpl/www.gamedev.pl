@@ -14,6 +14,7 @@ import {
   type ManagedSessionRequest,
 } from './managed-agent.js';
 import { sourceArchive } from './source-archive.js';
+import { kickoffContextLines, loadKickoffContext, type KickoffContext } from './workspace-context.js';
 
 export const KIT_ARCHIVE = 'kit.tgz';
 export const SOURCES_ARCHIVE = 'sources.tgz';
@@ -33,6 +34,8 @@ export interface ManagedWorkspace {
   delivered?: boolean;
   // The last verdict was kit_outdated; get_kit marks the refresh.
   kitOutdated?: boolean;
+  // Inlined round data; absent when it could not be read.
+  context?: KickoffContext;
   archives: ManagedWorkspaceArchive[];
 }
 
@@ -47,7 +50,8 @@ export class ManagedWorkspaceError extends ManagedAgentError {
 }
 
 export interface ManagedWorkspaceDeps {
-  store: Pick<Store, 'getSubmission' | 'pinRoundKitEngineRef'> & Parameters<typeof loadRoundSources>[0];
+  store: Pick<Store, 'getSubmission' | 'pinRoundKitEngineRef' | 'listPendingCreatorMessages' | 'getCreatorNotes'> &
+    Parameters<typeof loadRoundSources>[0];
   gamesStore: GamesStore;
   objectStore: Pick<GcsObjectStore, 'readObject'>;
   log: SourcesLog;
@@ -75,9 +79,10 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }];
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
     const kitOutdated = outdated || undefined;
-    if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, kitOutdated, archives };
+    const context = await loadKickoffContext(deps.store, record, sources.kind).catch(() => undefined);
+    if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, kitOutdated, context, archives };
     archives.push({ name: SOURCES_ARCHIVE, bytes: sourceArchive(sources.files, sources.slug) });
-    return { engineRef, slug: sources.slug, delivered: sources.kind === 'delivery', kitOutdated, archives };
+    return { engineRef, slug: sources.slug, delivered: sources.kind === 'delivery', kitOutdated, context, archives };
   };
 }
 
@@ -103,6 +108,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
       ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`
       : `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, ${remount}.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
+    ...(workspace.context ? kickoffContextLines(workspace.context) : []),
   ];
 }
 
@@ -122,7 +128,7 @@ export async function startWithWorkspace(
   provider: Pick<ManagedAgentProvider, 'startSession' | 'workspaceArchiveDir'>,
   load: (() => Promise<ManagedWorkspace | null>) | undefined,
   request: ManagedSessionRequest,
-  promptWith: (kickoff: string[], mountedSources: boolean) => string,
+  promptWith: (kickoff: string[], workspace: ManagedWorkspace) => string,
   log?: { warn: (context: object, message: string) => void },
   loadTimeoutMs = WORKSPACE_LOAD_TIMEOUT_MS,
 ): Promise<ManagedSession> {
@@ -136,7 +142,7 @@ export async function startWithWorkspace(
       : null;
   if (!dir || !workspace) return provider.startSession(request);
   try {
-    const prompt = promptWith(workspaceKickoff(dir, workspace), workspace.delivered === true);
+    const prompt = promptWith(workspaceKickoff(dir, workspace), workspace);
     return await provider.startSession({ ...request, prompt, workspaceArchives: workspace.archives });
   } catch (error) {
     if (!(error instanceof ManagedWorkspaceError)) throw error;
