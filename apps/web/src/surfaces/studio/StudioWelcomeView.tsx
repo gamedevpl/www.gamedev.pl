@@ -16,37 +16,22 @@ import './studio-welcome.css';
 // Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function computeStartTime(status: SubmissionStatus | null, mountedAt: number): number {
-  if (!status) return mountedAt;
-
-  if (status.events && status.events.length > 0) {
-    const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
-    if (times.length > 0) {
-      return Math.min(...times);
-    }
-  }
-
-  if (status.progress?.commits && status.progress.commits.length > 0) {
-    const times = status.progress.commits.map((c) => Date.parse(c.committedDate)).filter((t) => !isNaN(t) && t > 0);
-    if (times.length > 0) {
-      return Math.min(...times);
-    }
-  }
-
-  if (status.lastAgentSignalAt) {
-    const t = Date.parse(status.lastAgentSignalAt);
-    if (!isNaN(t) && t > 0 && t < mountedAt) return t;
-  }
-
-  return mountedAt;
+function computeStartTime(status: SubmissionStatus | null): number | null {
+  const start = Date.parse(status?.roundStartedAt ?? '');
+  return Number.isFinite(start) && start > 0 ? start : null;
 }
 
-function computeEndTime(status: SubmissionStatus | null): number | null {
+function computeEndTime(status: SubmissionStatus | null, startTime: number | null): number | null {
   if (!status) return null;
   if (status.agentEndedAt) {
     const t = Date.parse(status.agentEndedAt);
     if (!isNaN(t) && t > 0) return t;
   }
+  const deliveries = (status.playable ?? [])
+    .filter((item) => item.origin !== 'seed' && item.origin !== 'staged')
+    .map((item) => Date.parse(item.createdAt ?? ''))
+    .filter((time) => Number.isFinite(time) && time > 0 && time >= (startTime ?? 0));
+  if (deliveries.length > 0) return Math.min(...deliveries);
   if (status.events && status.events.length > 0) {
     const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
     if (times.length > 0) {
@@ -205,10 +190,10 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
 
   const progress = welcomeProgressMessage(status, t);
   const label = welcomeStatusLabel(status, t);
-  const startTime = computeStartTime(status, mountedAtRef.current);
-  const endTime = isRunning ? null : computeEndTime(status);
-  const elapsedMs = Math.max(0, (endTime ?? now) - startTime);
-  const elapsedText = formatElapsed(elapsedMs);
+  const startTime = computeStartTime(status) ?? (isRunning ? mountedAtRef.current : null);
+  const endTime = isRunning ? now : computeEndTime(status, startTime);
+  const elapsedText =
+    startTime !== null && endTime !== null && endTime >= startTime ? formatElapsed(endTime - startTime) : null;
   const mascotEmotion = getMascotEmotion(status);
 
   return createPortal(

@@ -403,7 +403,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
         : {}),
     };
     if (!record) return finishReceiptStatus(next, record, viewerOwns);
-
+    next.roundStartedAt = record.roundStartedAt ?? record.createdAt;
     // Must clear stale keys too — a resumed agent drops agentEndedAt/stall.
     if (record.lastAgentSignalAt) next.lastAgentSignalAt = record.lastAgentSignalAt;
     else delete next.lastAgentSignalAt;
