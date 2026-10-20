@@ -362,19 +362,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     verifier: options.opsConsole?.verifier ?? createInternalAuthVerifierFromEnv(process.env, 'opsConsole'),
   });
 
-  /**
-   * `appleSignIn` tells the web app whether this server can verify an Apple token.
-   * The button also needs a Services ID baked in at build time.
-   */
-  app.get('/api/health', async () => ({
-    status: 'ok',
-    provider: 'mock',
-    privateBeta: !(await openToVisitors()),
-    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
-    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
-  }));
-
   if (relayOnly) {
+    app.get('/api/health', async () => ({ status: 'ok' }));
     await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
     await registerMultiplayerRoutes(app, {
       internalAuth: createInternalAuthVerifierFromEnv(process.env, 'mpRelay'),
@@ -383,6 +372,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
     return app;
   }
+
+  // Apple sign-in also needs a Services ID baked into the client.
+  app.get('/api/health', async () => ({
+    status: 'ok',
+    provider: 'mock',
+    privateBeta: !(await openToVisitors()),
+    appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
+    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
+  }));
 
   // Where a delivered game is stored, and what verifies it. Resolved once and shared by
   // every registration that needs them: three copies of these expressions is three ways
