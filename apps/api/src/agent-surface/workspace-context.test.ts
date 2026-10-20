@@ -36,7 +36,8 @@ describe('kickoff context', () => {
       inlined: { inbox: true, messages: false, notes: true, noFiles: true },
     });
     expect(fresh).toContain('1. `start`');
-    expect(fresh).toContain('2. One short `report_progress`');
+    expect(fresh).toContain('2. `get_brief`.');
+    expect(fresh).toContain('3. One short `report_progress`');
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
     const revision = buildPrompt(
       { ...BRIEF, feedback: 'faster', undelivered: true, previewVersion: 'v1' } as BuildBrief,

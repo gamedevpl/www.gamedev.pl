@@ -47,9 +47,9 @@ export function openingSteps(
   brief: BuildBrief,
   lane: { workspace: boolean; mountedSources: boolean; inlined?: KickoffInlined },
 ): string[] {
-  const specInline = !brief.feedback && Boolean(brief.spec.trim());
+  // get_brief stays: start names it as the next call.
   const reads = [
-    ...(lane.inlined && specInline ? [] : ['`get_brief`']),
+    '`get_brief`',
     ...(lane.inlined?.inbox ? [] : ['`read_inbox`']),
     ...(lane.inlined?.notes ? [] : ['`creator_notes` (sessionKey only)']),
     ...(lane.mountedSources || lane.inlined?.noFiles ? [] : ['`get_sources`']),
