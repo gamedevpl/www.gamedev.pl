@@ -108,3 +108,9 @@ export function requestSourceLines(inlined: KickoffInlined | undefined): string[
     '  round another way — continue from the brief and the transcript.',
   ];
 }
+
+// A new game must play, on a phone too.
+export const NEW_GAME_CHECKS = [
+  'A new game must play on a phone: read input through `GameKit.createInput`, whose on-screen pad is on by default, and describe it in `GAME.json`’s `howToPlay.touch`. Turn the pad off only when touch arrives another way (tap play through `input.consumeClick()`, or phones as party controllers): then pass `{ touch: false }` to `createInput` and set `howToPlay.touch` to `false` or to the real touch control, and say so in `end.summary`.',
+  'Before the first preview, give `CAPTURE.json` asserts on the core loop (reaching the goal, winning, losing; the kit’s SKILL.md has the schema) and run the capture after your last edit. Fix what it shows broken, then submit even if polish remains.',
+];
