@@ -8,7 +8,7 @@
 # (fastify, @fastify/cors, @fastify/static, zod).
 
 # ---- builder: install everything and compile TS + build the web app ----
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 WORKDIR /app
 
 # Web build-time config (baked into the static bundle). Same-origin API, so no base URL.
@@ -52,7 +52,7 @@ RUN npm ci --ignore-scripts
 RUN npm run build
 
 # ---- runtime: prod deps only + built output ----
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
