@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { useFollowScroll } from 'genaicode/react';
 import { lineStyle, type LineStyle } from '../src/transcript-style.js';
 import { isMascotLine } from '../src/tui/mascot.js';
 import { checkoutLineStyle } from '../src/checkout-style.js';
@@ -111,7 +112,7 @@ export function headline(lines: string[]): { line: string; style: LineStyle } {
 
 export function SessionOutput() {
   const [lines, setLines] = useState<string[]>([]);
-  const { box, onScroll } = useFollowScroll(lines);
+  const { ref: box, onScroll } = useFollowScroll(lines);
   useEffect(() => {
     const update = (event: Event) => {
       const next = (event as CustomEvent<{ lines: string[] }>).detail.lines;
@@ -125,25 +126,4 @@ export function SessionOutput() {
       <TranscriptLines lines={lines} />
     </div>
   );
-}
-
-// Pins to the newest line unless scrolled up; re-pins when shown.
-export function useFollowScroll(content: unknown, slack = 30) {
-  const box = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const pin = () => {
-    if (follow.current && box.current) box.current.scrollTop = box.current.scrollHeight;
-  };
-  useEffect(pin, [content]);
-  useEffect(() => {
-    if (!box.current || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(pin);
-    observer.observe(box.current);
-    return () => observer.disconnect();
-  }, []);
-  const onScroll = () => {
-    const node = box.current!;
-    if (node.clientHeight) follow.current = node.scrollTop + node.clientHeight >= node.scrollHeight - slack;
-  };
-  return { box, onScroll };
 }

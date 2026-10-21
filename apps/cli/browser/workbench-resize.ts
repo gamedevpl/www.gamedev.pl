@@ -1,4 +1,4 @@
-import { installResizeHandle } from './resize-handle.js';
+import { installResizeHandle, storedSize } from 'genaicode/react';
 
 export function initializeWorkbenchResize() {
   const element = (id: string) => document.getElementById(id)!;
@@ -18,21 +18,18 @@ export function initializeWorkbenchResize() {
     key: string,
     variable: string,
     defaults: () => number,
-    config: {
+    {
+      storageBounds,
+      ...config
+    }: {
       axis: 'x' | 'y';
-      sign: () => number;
+      direction: () => number;
       bounds: () => [number, number];
       storageBounds: [number, number];
     },
   ) => {
-    let saved: number | undefined;
-    try {
-      const value = Number(localStorage.getItem(key));
-      if (Number.isFinite(value) && value > 0)
-        saved = Math.min(config.storageBounds[1], Math.max(config.storageBounds[0], value));
-    } catch {
-      // Preferences are optional when browser storage is unavailable.
-    }
+    const stored = storedSize(key, storageBounds);
+    let saved = stored.get();
     if (saved !== undefined) body.style.setProperty(variable, `${saved}px`);
     return installResizeHandle(element(id), {
       ...config,
@@ -40,23 +37,14 @@ export function initializeWorkbenchResize() {
       write: (value, save) => {
         saved = value;
         body.style.setProperty(variable, `${value}px`);
-        if (save)
-          try {
-            localStorage.setItem(key, String(value));
-          } catch {
-            // Preferences are optional when browser storage is unavailable.
-          }
+        if (save) stored.set(value);
       },
       reset: () => {
         saved = undefined;
         body.style.removeProperty(variable);
-        try {
-          localStorage.removeItem(key);
-        } catch {
-          // Preferences are optional when browser storage is unavailable.
-        }
+        stored.clear();
       },
-    });
+    }).sync;
   };
   const syncs = [
     bind(
@@ -66,7 +54,7 @@ export function initializeWorkbenchResize() {
       () => (focused() ? Math.min(390, innerWidth * 0.45) : 390),
       {
         axis: 'x',
-        sign: () => (body.dataset.dock === 'left' && code.dataset.view !== 'editor-preview' ? 1 : -1),
+        direction: () => (body.dataset.dock === 'left' && code.dataset.view !== 'editor-preview' ? 1 : -1),
         bounds: widthBounds,
         storageBounds: [300, 900],
       },
@@ -78,7 +66,7 @@ export function initializeWorkbenchResize() {
       () => Math.min(innerHeight * 0.32, 260),
       {
         axis: 'y',
-        sign: () => -1,
+        direction: () => -1,
         bounds: () => [64, Math.max(64, height() - 280)],
         storageBounds: [64, 10_000],
       },
@@ -90,7 +78,7 @@ export function initializeWorkbenchResize() {
       () => Math.min(240, element('code-workspace').clientWidth * 0.36 || 240),
       {
         axis: 'x',
-        sign: () => 1,
+        direction: () => 1,
         storageBounds: [140, 480],
         bounds: () => {
           const max = Math.min(480, element('code-workspace').clientWidth - 186);

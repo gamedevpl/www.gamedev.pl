@@ -33,7 +33,7 @@ export function CodeWorkspace({
         aria-label="Resize files"
         aria-orientation="vertical"
         aria-controls="code-files code-workspace"
-        title="Drag to resize · arrow keys adjust · double-click to reset"
+        title="Drag to resize · arrow keys adjust · Enter or double-click to reset"
       />
       {children}
     </div>
@@ -50,7 +50,7 @@ export function CodePreviewResizeHandle() {
       aria-label="Resize game preview"
       aria-orientation="horizontal"
       aria-controls="panel game"
-      title="Drag to resize · arrow keys adjust · double-click to reset"
+      title="Drag to resize · arrow keys adjust · Enter or double-click to reset"
     />
   );
 }
