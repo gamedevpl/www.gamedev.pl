@@ -44,9 +44,9 @@ export const KIT_SEARCH_MAX_FILES_SCANNED = 400;
 export const KIT_BATCH_MAX_FILES = 12;
 /** Aggregate raw-byte budget across a successful batch (not base64-expanded size). */
 export const KIT_BATCH_MAX_TOTAL_BYTES = 128 * 1024;
-/** Reject absurdly large kit tarballs rather than OOM. */
-export const KIT_TREE_MAX_BYTES = 8 * 1024 * 1024;
-/** Keep current + previous trees warm (N / N−1 window). */
+/** Reject oversized kit tarballs. */
+export const KIT_TREE_MAX_BYTES = 16 * 1024 * 1024;
+/** Keep N and N−1 trees warm. */
 const KIT_TREE_CACHE_CAPACITY = 2;
 
 export interface KitFileMeta {
@@ -462,6 +462,8 @@ export interface KitFileStore {
 
 export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
   const cache = new Map<string, KitTree>();
+  // One unpack per ref@sha; cold bursts share it.
+  const inflight = new Map<string, Promise<KitTree>>();
 
   function remember(tree: KitTree): KitTree {
     cache.set(tree.engineRef, tree);
@@ -577,15 +579,22 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
     if (cached && cached.sha256 === sha256) {
       return cached;
     }
-    const tarball = await objectStore.readObject(`kits/${requested}.tgz`);
-    if (!tarball) {
-      throw new KitFilesError(
-        'kit_artifact_missing',
-        `kits/${requested}.tgz is missing for the requested registry entry`,
-      );
-    }
-    const files = await unpackKitTarball(tarball);
-    return remember({ engineRef: requested, sha256, files });
+    const key = `${requested}@${sha256}`;
+    const pending = inflight.get(key);
+    if (pending) return pending;
+    const load = (async () => {
+      const tarball = await objectStore.readObject(`kits/${requested}.tgz`);
+      if (!tarball) {
+        throw new KitFilesError(
+          'kit_artifact_missing',
+          `kits/${requested}.tgz is missing for the requested registry entry`,
+        );
+      }
+      const files = await unpackKitTarball(tarball);
+      return remember({ engineRef: requested, sha256, files });
+    })().finally(() => inflight.delete(key));
+    inflight.set(key, load);
+    return load;
   }
 
   return {
