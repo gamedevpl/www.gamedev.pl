@@ -20,6 +20,7 @@ import { retryPendingNotificationEmails } from './notification-email-retry.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { resolveHealthVerdict } from './health-verdict.js';
 import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
+import { createOpenRoundsWindow } from './open-rounds-window.js';
 
 // Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
@@ -70,6 +71,8 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
   } = deps;
 
   const cadence = createSweepCadence();
+  // Scanning every open round each run dominated sweep reads.
+  const openRoundsWindow = store ? createOpenRoundsWindow({ store, now }) : null;
   let skipFalseInboxAt = 0;
   // An alert id is stable, so a remembered hit is final.
   const alertsAlreadyEmitted = new Set<string>();
@@ -107,7 +110,12 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       const closeDeps: CloseJobDeps = { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache };
       let closed = 0;
       const closedIds = new Set<number>();
-      const openRounds = await store.listOpenRounds();
+      // Only active rounds with work due are re-read between scans.
+      const openRounds = await openRoundsWindow!.read(
+        (record) =>
+          isSweepActive(record) &&
+          cadence.isDue({ jobId: record.jobId, now: now(), lastActivityAt: lastRoundActivityAt(record) }),
+      );
       const activityByJob = new Map<number, number>();
       for (const record of openRounds) {
         const activityAt = lastRoundActivityAt(record);

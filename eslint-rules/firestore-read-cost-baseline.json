@@ -13,6 +13,7 @@
     "GET /api/submissions/mine": 47,
     "GET /api/submissions/mine (derived-only owner)": 10,
     "GET /api/submissions/mine (document, steady state)": 2,
+    "POST /api/internal/notify-sweep (quiet queue, steady state)": 113,
     "POST /api/internal/notify-sweep (steady state)": 83
   }
 }
