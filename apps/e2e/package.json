@@ -13,7 +13,7 @@
     "e2e:play-code": "vitest run --config vitest.play-code.config.ts"
   },
   "devDependencies": {
-    "@types/node": "^20.14.15",
+    "@types/node": "^22.19.0",
     "esbuild": "0.25.12",
     "playwright-core": "^1.56.1",
     "typescript": "^5.5.4",
