@@ -21,7 +21,7 @@ export type ReferenceStore = Pick<
   'listBuildShots' | 'getBuildShot' | 'listPendingCreatorMessages' | 'markReferenceSeen'
 >;
 
-// First build: every image. Later rounds: those pending notes name.
+// First build: every image. Later: named by pending notes, or never seen.
 export async function loadReferenceArchives(
   store: ReferenceStore,
   record: SubmissionRecord,
@@ -32,7 +32,9 @@ export async function loadReferenceArchives(
   ]);
   const named = new Set(referenceShotIds(pending));
   const firstBuild = !record.deliveredVersion && !record.previewVersion;
-  const wanted = shots.filter((shot) => firstBuild || named.has(shot.id)).slice(0, MAX_MOUNTED);
+  const unseen = (shot: { agentSeenAt?: string; createdAt: string }) =>
+    !shot.agentSeenAt && !(record.referenceSeenAt && record.referenceSeenAt >= shot.createdAt);
+  const wanted = shots.filter((shot) => firstBuild || named.has(shot.id) || unseen(shot)).slice(0, MAX_MOUNTED);
   const loaded = (await Promise.all(wanted.map((shot) => store.getBuildShot(record.jobId, shot.id)))).flatMap((shot) =>
     shot?.data ? [shot] : [],
   );

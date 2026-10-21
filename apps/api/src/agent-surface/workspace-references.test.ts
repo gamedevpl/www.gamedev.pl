@@ -27,9 +27,11 @@ describe('mounted reference images', () => {
     expect((await store.getBuildShot(4, shot.id))?.agentSeenAt).toBeTruthy();
   });
 
-  it('mounts nothing on a later round unless a pending note names the image', async () => {
-    const { store } = await withReference();
+  it('on a later round mounts an image no builder saw, and not one already seen', async () => {
+    const { store, shot } = await withReference();
     const record = { ...(await store.getSubmission(4))!, previewVersion: 'v1' };
+    expect((await loadReferenceArchives(store, record)).archives).toHaveLength(1);
+    await store.markReferenceSeen(4, shot.id);
     expect((await loadReferenceArchives(store, record)).archives).toEqual([]);
   });
 
