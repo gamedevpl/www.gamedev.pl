@@ -124,9 +124,11 @@ describe('gamepad bridge', () => {
     const host = setup();
     try {
       host.send();
+      expect(host.post).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }), '*');
       act(() => window.dispatchEvent(new Event('blur')));
       expect(host.post).toHaveBeenLastCalledWith(
         expect.objectContaining({
+          active: false,
           pads: [
             expect.objectContaining({ index: 2, axes: [0, 0, 0, 0], buttons: Array(17).fill(0) }),
             expect.objectContaining({ index: 5, axes: [0, 0, 0, 0], buttons: Array(17).fill(0) }),

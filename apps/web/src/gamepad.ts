@@ -43,10 +43,11 @@ export function useGamepadBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       const inactive = document.visibilityState === 'hidden' || !document.hasFocus();
       if (!inactive) devices = readGamepads();
       const pads = inactive ? neutral() : devices;
-      const serialized = JSON.stringify(pads);
+      // `active: false` marks neutral frames, so the game keeps buttons held across focus changes latched.
+      const serialized = JSON.stringify({ pads, inactive });
       if (serialized !== last) {
         last = serialized;
-        reply({ ns: 'gdp', v: 1, t: 'gamepad:state', pads });
+        reply({ ns: 'gdp', v: 1, t: 'gamepad:state', pads, active: !inactive });
       }
       animation = requestAnimationFrame(poll);
     }
@@ -64,7 +65,7 @@ export function useGamepadBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
     }
     function release() {
       last = '';
-      if (active && requested) reply({ ns: 'gdp', v: 1, t: 'gamepad:state', pads: neutral() });
+      if (active && requested) reply({ ns: 'gdp', v: 1, t: 'gamepad:state', pads: neutral(), active: false });
     }
     window.addEventListener('message', onMessage);
     window.addEventListener('blur', release);
