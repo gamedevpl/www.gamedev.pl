@@ -53,7 +53,10 @@ async function injectRoute(app: FastifyInstance, route: PolledRoute): Promise<{ 
       headers: { cookie: sessionCookie(CREATOR_UID) },
     });
   }
-  if (route === 'POST /api/internal/notify-sweep (steady state)') {
+  if (
+    route === 'POST /api/internal/notify-sweep (steady state)' ||
+    route === 'POST /api/internal/notify-sweep (quiet queue, steady state)'
+  ) {
     return app.inject({
       method: 'POST',
       url: '/api/internal/notify-sweep',
@@ -132,6 +135,13 @@ export async function measurePolledRoute(route: PolledRoute): Promise<RouteReadM
       await injectRoute(app, route);
       // The production cadence: past a 2s cache, well inside a 60s one.
       clock += 4_000;
+    }
+    // Production's queue is mostly derived rounds, still for days.
+    if (route === 'POST /api/internal/notify-sweep (quiet queue, steady state)') {
+      await injectRoute(app, route);
+      clock += 2 * 24 * 60 * 60_000;
+      await injectRoute(app, route);
+      clock += 2 * 60_000;
     }
     // The first run derives every round; later runs defer the quiet ones.
     if (route === 'POST /api/internal/notify-sweep (steady state)') {

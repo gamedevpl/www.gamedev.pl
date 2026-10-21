@@ -32,6 +32,7 @@ export const POLLED_ROUTES = [
   'GET /api/review/status',
   'GET /api/notifications',
   'POST /api/internal/notify-sweep (steady state)',
+  'POST /api/internal/notify-sweep (quiet queue, steady state)',
 ] as const;
 
 export type PolledRoute = (typeof POLLED_ROUTES)[number];
