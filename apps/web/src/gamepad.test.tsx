@@ -2,7 +2,7 @@
 import { act, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readGamepads, useGamepadBridge } from './gamepad.js';
+import { microHat, padLayout, readGamepads, useGamepadBridge } from './gamepad.js';
 import { documentMessage } from './test-utils/frameMessage.js';
 import { markGameFrameNavigatedAway } from './frameMessage.js';
 
@@ -199,4 +199,64 @@ it('handles absent, denied and nonstandard APIs without throwing', () => {
     ],
   });
   expect(readGamepads()).toEqual([]);
+});
+
+function micro(index: number, pressed: number[] = [], hat = 9 / 7): Gamepad {
+  return {
+    id: '8BitDo Micro gamepad (Vendor: 2dc8 Product: 9020)',
+    index,
+    connected: true,
+    mapping: '',
+    axes: [-1 / 255, -1 / 255, -1 / 255, 0, -1, -1 / 255, 0, 0, 0, hat],
+    buttons: Array.from({ length: 16 }, (_, n) => ({
+      pressed: pressed.includes(n),
+      value: pressed.includes(n) ? 1 : 0,
+    })),
+  } as unknown as Gamepad;
+}
+
+describe('8BitDo Micro projection', () => {
+  it('decodes every hat direction and never walks on the released value', () => {
+    const expected = [[12], [12, 15], [15], [13, 15], [13], [13, 14], [14], [12, 14]];
+    expected.forEach((value, n) => expect(microHat(-1 + (n * 2) / 7)).toEqual(value));
+    for (const value of [9 / 7, NaN, Infinity, 0, -2]) expect(microHat(value)).toEqual([]);
+  });
+
+  it('projects the D-input layout onto standard slots without identity', () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [micro(4)] });
+    expect(readGamepads()).toEqual([{ index: 4, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array(17).fill(0) }]);
+    // Raw B/A/Y/X are physical bottom/right/left/top; 11 is Start, 7 is R.
+    vi.stubGlobal('navigator', { getGamepads: () => [micro(4, [1, 0, 4, 3, 11, 7], -1)] });
+    const [pad] = readGamepads();
+    expect([0, 1, 2, 3, 9, 5, 12].map((n) => pad.buttons[n])).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(JSON.stringify(pad)).not.toMatch(/Micro|9020/);
+  });
+
+  it('reads the digital cross from axes 0/1 when the hat stays neutral', () => {
+    const raw = micro(0);
+    const right = { ...raw, axes: [1, ...raw.axes.slice(1)] } as unknown as Gamepad;
+    vi.stubGlobal('navigator', { getGamepads: () => [right] });
+    const [pad] = readGamepads();
+    expect(pad.buttons[15]).toBe(1);
+    expect(pad.buttons[14]).toBe(0);
+  });
+
+  it('handles the MFi variant and refuses unknown raw layouts', () => {
+    const mfi = {
+      ...micro(3),
+      axes: [],
+      buttons: Array.from({ length: 15 }, (_, n) => ({
+        pressed: [10, 13].includes(n),
+        value: [10, 13].includes(n) ? 1 : 0,
+      })),
+    } as unknown as Gamepad;
+    expect(padLayout(mfi)).toBe('micro-d-mfi');
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [mfi, { ...micro(8), id: 'Unknown raw pad' }, { ...micro(1), axes: [0, 0] }],
+    });
+    const pads = readGamepads();
+    expect(pads.map((pad) => pad.index)).toEqual([3]);
+    expect(pads[0].buttons[12]).toBe(1);
+    expect(pads[0].buttons[5]).toBe(1);
+  });
 });
