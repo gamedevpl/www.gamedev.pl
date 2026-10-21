@@ -225,7 +225,7 @@ describe('8BitDo Micro projection', () => {
   it('projects the D-input layout onto standard slots without identity', () => {
     vi.stubGlobal('navigator', { getGamepads: () => [micro(4)] });
     expect(readGamepads()).toEqual([{ index: 4, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array(17).fill(0) }]);
-    // Raw B/A/Y/X are physical bottom/right/left/top; 11 is Start, 7 is R.
+    // Raw faces map by position; 11 is Start, 7 is R.
     vi.stubGlobal('navigator', { getGamepads: () => [micro(4, [1, 0, 4, 3, 11, 7], -1)] });
     const [pad] = readGamepads();
     expect([0, 1, 2, 3, 9, 5, 12].map((n) => pad.buttons[n])).toEqual([1, 1, 1, 1, 1, 1, 1]);

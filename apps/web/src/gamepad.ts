@@ -9,17 +9,17 @@ function isMicroPad(pad: Pick<Gamepad, 'id'>): boolean {
   return /^8bitdo micro(?: gamepad)?(?:$|[ (])/i.test(pad.id) || /vendor:\s*2dc8\s+product:\s*9020/i.test(pad.id);
 }
 
-/** Layouts we can project onto the standard mapping; unknown raw devices are never guessed. */
+// Unknown raw layouts are refused, never guessed.
 export function padLayout(pad: RawPad): 'standard' | 'micro-d-hid' | 'micro-d-mfi' | 'unsupported' {
   if (pad.mapping === 'standard') return 'standard';
   if (!isMicroPad(pad)) return 'unsupported';
   if (pad.axes.length === 10 && pad.buttons.length === 16) return 'micro-d-hid';
-  // macOS may expose the same Micro through its GameController/MFi profile.
+  // macOS exposes the same Micro through its MFi profile.
   if (pad.axes.length === 0 && pad.buttons.length === 15) return 'micro-d-mfi';
   return 'unsupported';
 }
 
-/** Decodes the raw HID hat before clamping; its released value lies outside [-1, 1]. */
+// Decode before clamping: the released hat value lies outside [-1, 1].
 export function microHat(value: number): number[] {
   if (!Number.isFinite(value) || value < -1.01 || value > 1.01) return [];
   const step = (value + 1) * 3.5;
@@ -28,7 +28,7 @@ export function microHat(value: number): number[] {
   return [[12], [12, 15], [15], [13, 15], [13], [13, 14], [14], [12, 14]][n];
 }
 
-// Standard slot -> raw Micro button (-1 = absent); faces follow physical bottom/right/left/top.
+// Standard slot to raw Micro button, by physical face position.
 const MICRO_ORDER = {
   'micro-d-hid': [1, 0, 4, 3, 6, 7, 8, 9, 10, 11, 13, 14, -1, -1, -1, -1, 12],
   'micro-d-mfi': [0, 1, 5, 6, 11, 13, 12, 14, 4, 3, -1, -1, 10, 7, 8, 9, 2],
@@ -55,7 +55,7 @@ function project(pad: Gamepad): StandardPad | null {
   }
   const buttons = MICRO_ORDER[layout].map((n) => (n < 0 ? 0 : button(n)));
   if (layout === 'micro-d-hid') {
-    // Chrome on macOS reports the digital cross on axes 0/1; other backends use the hat on axis 9.
+    // macOS Chrome puts the cross on axes; others use the hat.
     const cross: number[] = [];
     if (pad.axes[0] < -0.5) cross.push(14);
     if (pad.axes[0] > 0.5) cross.push(15);
@@ -98,7 +98,7 @@ export function useGamepadBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       const inactive = document.visibilityState === 'hidden' || !document.hasFocus();
       if (!inactive) devices = readGamepads();
       const pads = inactive ? neutral() : devices;
-      // `active: false` marks neutral frames, so the game keeps buttons held across focus changes latched.
+      // Marks neutral frames so games latch buttons held across focus changes.
       const serialized = JSON.stringify({ pads, inactive });
       if (serialized !== last) {
         last = serialized;
