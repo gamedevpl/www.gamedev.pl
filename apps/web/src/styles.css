@@ -3485,6 +3485,33 @@ a.user-name--profile:focus-visible {
   margin-bottom: 16px;
 }
 
+.apple-linked-notice {
+  position: fixed;
+  left: 50%;
+  /* Top, not bottom: the install and update banners own the bottom edge. */
+  top: calc(72px + env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--panel-card);
+  border: 1px solid var(--turquoise);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.apple-linked-notice button {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
 /* FULL SCREEN APP LOADING
    Covers site chrome when nested (unpublished /play, GameDetailPage). Same
    paint as the theater so /play never flashes the top bar. */

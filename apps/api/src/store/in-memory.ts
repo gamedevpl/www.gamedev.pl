@@ -76,6 +76,7 @@ import { InMemoryCreatorNotesStore, type CreatorNotesRecord } from './slices/cre
 import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
+import { findUserByAppleSubInMemory, setAppleSubInMemory } from './slices/identity-apple-link.js';
 import { InMemoryIdentityStore } from './slices/identity.js';
 import { InMemoryNotificationsStore } from './slices/notifications.js';
 import { InMemoryOAuthStore } from './slices/oauth.js';
@@ -416,6 +417,9 @@ export class InMemoryStore extends OAuthFacade implements Store {
   async getUserByRecipientCode(code: string): Promise<User | null> {
     return this.identityStore.getUserByRecipientCode(code);
   }
+
+  findUserByAppleSub = async (sub: string) => findUserByAppleSubInMemory(this.identityStore.users, sub);
+  setAppleSub = async (uid: string, sub: string) => setAppleSubInMemory(this.identityStore.users, uid, sub);
 
   // Constructed with `this`: the mirror rebuilds from this store's own reads.
   protected shelfMirror: ShelfMirror = createShelfMirror({ store: this, now: () => Date.now() });

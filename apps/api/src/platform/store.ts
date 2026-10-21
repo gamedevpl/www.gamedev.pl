@@ -67,6 +67,7 @@ import type {
 export type { User, HandleRecord, AccountIdentityDeletionResult, ClaimHandleResult };
 import { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay } from '../store/records/identity.js';
 export { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay };
+import type { AppleLinkStore } from '../store/slices/identity-apple-link.js';
 import type { IdentityStore } from '../store/slices/identity.js';
 export type { IdentityStore };
 import type { BuilderHandoff, AgentEndedBy } from '../store/records/rounds.js';
@@ -257,6 +258,7 @@ export interface GameSlugsStore {
 export interface Store
   extends
     IdentityStore,
+    AppleLinkStore,
     AccountErasureStore,
     RoundsStore,
     RoundBudgetStore,

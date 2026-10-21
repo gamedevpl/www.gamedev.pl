@@ -1356,6 +1356,8 @@
   "auth": {
     "signInWithGoogle": "Sign in with Google",
     "signInWithApple": "Sign in with Apple",
+    "appleLinkRequired": "An account with this email already exists. Sign in with Google and we will link your Apple ID to it.",
+    "appleLinked": "Your Apple ID is now linked to this account. Next time you can sign in with Apple.",
     "signOut": "Sign Out",
     "authWallTitle": "Sign in with Google to Build & Create",
     "authWallSubtitle": "Creating game specifications and instant mock previews requires a signed-in Google account.",

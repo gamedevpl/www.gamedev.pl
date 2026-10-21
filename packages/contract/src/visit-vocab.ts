@@ -63,6 +63,10 @@ export type InviteStep = (typeof INVITE_STEPS)[number];
 export const BETA_WELCOME_STEPS = ['shown', 'continued', 'dismissed'] as const;
 export type BetaWelcomeStep = (typeof BETA_WELCOME_STEPS)[number];
 
+// Apple sign-in sent to link via Google, then the outcome.
+export const APPLE_LINK_STEPS = ['required', 'linked', 'failed'] as const;
+export type AppleLinkStep = (typeof APPLE_LINK_STEPS)[number];
+
 export const HOW_TO_PLAY_VIAS = ['bar', 'more'] as const;
 export type HowToPlayVia = (typeof HOW_TO_PLAY_VIAS)[number];
 

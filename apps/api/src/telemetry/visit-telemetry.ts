@@ -1,4 +1,5 @@
 import {
+  APPLE_LINK_STEPS,
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
   CODE_COMPLETION_KINDS,
@@ -53,6 +54,7 @@ const PartyStepSchema = z.enum(PARTY_STEPS);
 const TransferStepSchema = z.enum(TRANSFER_STEPS);
 const PartyViaSchema = z.enum(PARTY_VIAS);
 const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
+const AppleLinkStepSchema = z.enum(APPLE_LINK_STEPS);
 const StudioStepSchema = z.enum(STUDIO_STEPS);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
 const BuilderDimensionSchema = z.enum(BUILDERS);
@@ -116,6 +118,7 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('transfer_step'), step: TransferStepSchema, ...offsetField }),
   z.object({ type: z.literal('beta_welcome_step'), step: BetaWelcomeStepSchema, ...offsetField }),
+  z.object({ type: z.literal('apple_link_step'), step: AppleLinkStepSchema, ...offsetField }),
   z.object({
     type: z.literal('studio_step'),
     step: StudioStepSchema,
@@ -267,6 +270,7 @@ export async function registerVisitTelemetryRoutes(
             ...(event.via === undefined ? {} : { via: event.via }),
           };
         case 'beta_welcome_step':
+        case 'apple_link_step':
           return { ...base, type: event.type, step: event.step };
         case 'studio_step':
           return {

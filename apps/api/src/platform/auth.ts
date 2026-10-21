@@ -8,7 +8,7 @@ import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token
 import { resolveBearerIdentity } from './oauth-request-auth.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { isReviewer, isReviewerSession } from '../community/review.js';
-import { resolveAppleAccount } from './apple-account.js';
+import { appleLinkRefusal, resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
 import { sessionWriteAllowed } from './session-csrf.js';
@@ -287,6 +287,10 @@ const AppleAuthSchema = z.object({
    * string into Firestore.
    */
   name: z.string().trim().max(80).optional(),
+});
+
+const AppleLinkSchema = z.object({
+  idToken: z.string().trim().min(1, 'idToken is required'),
 });
 
 const WaitlistSchema = z.object({
@@ -594,10 +598,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       try {
         const applePayload = await appleVerifier.verifyIdToken(parseResult.data.idToken);
 
-        // Resolves onto the creator's existing Google account when the verified,
-        // non-relay address matches exactly one. Reads only — nothing is written until
-        // the allowlist below has had its say.
+        // Resolves onto an existing account only through a binding that account made while
+        // signed in. Reads only — nothing is written until the allowlist below has had its say.
         const resolution = await resolveAppleAccount(store, applePayload);
+        if (resolution.linkRequired) {
+          // Signing in as the empty a:<sub> account would hide the creator's work; signing
+          // in as the matched one would trust the email alone. The client links instead.
+          return reply.status(409).send({ error: 'apple_link_required' });
+        }
         const uid = resolution.uid;
         const existingUser = await store.getUser(uid);
 
@@ -644,10 +652,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         const signInLocale = localeFromRequest(request);
         const user = await store.upsertUser({
           uid,
-          // Only ever the linkable address. Writing a relay address here would overwrite a
-          // linked account's real email with a forwarding alias, breaking the notification
-          // emails that account already receives.
-          email: resolution.email,
+          // Only ever the linkable address, and never onto a linked account: that account's
+          // own address is the one its notifications go to.
+          email: resolution.linkedTo ? undefined : resolution.email,
           // Apple sends the name once and never again, so an absent one must leave any
           // stored name alone — which `upsertUser` already does for undefined.
           name: parseResult.data.name || undefined,
@@ -659,10 +666,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         }
 
         if (resolution.linkedTo) {
-          request.log.info(
-            { appleSub: applePayload.sub, linkedUid: uid },
-            'apple sign-in linked to an existing account by verified email',
-          );
+          request.log.info({ appleSub: applePayload.sub, linkedUid: uid }, 'apple sign-in to a linked account');
         }
 
         reply.setCookie(SESSION_COOKIE_NAME, mintSessionToken(uid, effectiveSessionSecret), {
@@ -682,6 +686,56 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         const message = err instanceof Error ? err.message : 'apple token verification failed';
         return reply.status(401).send({ error: message });
       }
+    },
+  );
+
+  /**
+   * Binds an Apple ID to the signed-in account, so later Apple sign-ins land there.
+   *
+   * The only door from an Apple subject to an account it did not create. Session-only: a
+   * PAT or OAuth bearer may act for the creator, but not add a way to sign in as them.
+   */
+  app.post(
+    '/api/auth/apple/link',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!isAuthConfigured) {
+        return reply.status(503).send({ error: 'authentication is not configured' });
+      }
+      if (!isAppleConfigured) {
+        return reply.status(503).send({ error: 'sign in with apple is not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (request.authMethod !== 'session') {
+        return reply.status(403).send({ error: 'session required' });
+      }
+      if (tooManyAuthAttempts(request.clientIp)) {
+        return reply.status(429).send({ error: 'too many login attempts, please try again later' });
+      }
+
+      const parseResult = AppleLinkSchema.safeParse(request.body);
+      if (!parseResult.success) {
+        return reply.status(400).send({ error: parseResult.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      let applePayload: Awaited<ReturnType<AppleAuthVerifier['verifyIdToken']>>;
+      try {
+        applePayload = await appleVerifier.verifyIdToken(parseResult.data.idToken);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'apple token verification failed';
+        return reply.status(401).send({ error: message });
+      }
+
+      const account = request.user!;
+      const refusal = await appleLinkRefusal(store, account, applePayload);
+      if (refusal === 'already_linked') return { linked: true };
+      if (refusal) return reply.status(409).send({ error: refusal });
+
+      if (!(await store.setAppleSub(account.uid, applePayload.sub))) {
+        return reply.status(409).send({ error: 'linked_elsewhere' });
+      }
+      request.log.info({ appleSub: applePayload.sub, linkedUid: account.uid }, 'apple id linked to account');
+      return { linked: true };
     },
   );
 

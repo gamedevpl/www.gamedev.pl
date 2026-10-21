@@ -1366,6 +1366,8 @@
   "auth": {
     "signInWithGoogle": "Zaloguj się przez Google",
     "signInWithApple": "Zaloguj się przez Apple",
+    "appleLinkRequired": "Konto z tym adresem e-mail już istnieje. Zaloguj się przez Google, a połączymy z nim Twoje Apple ID.",
+    "appleLinked": "Połączono Apple ID z Twoim kontem. Następnym razem możesz logować się przez Apple.",
     "signOut": "Wyloguj się",
     "authWallTitle": "Zaloguj się przez Google, aby tworzyć gry",
     "authWallSubtitle": "Tworzenie specyfikacji gier i podglądu wymaga zalogowanego konta Google.",

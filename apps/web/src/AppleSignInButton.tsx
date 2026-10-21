@@ -20,7 +20,7 @@ interface AppleSignInButtonProps {
   inviteCode?: string;
   // Mirrors GoogleSignInButton: the token travels with the error so a caller can offer
   // the waitlist without making a rejected user authenticate a second time.
-  onError?: (err: string, idToken?: string) => void;
+  onError?: (err: string, idToken?: string, code?: 'apple_link_required') => void;
 }
 
 export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignInButtonProps) {
@@ -81,7 +81,10 @@ export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignI
         await signInWithAppleToken(idToken, name || undefined, inviteCode);
         onSuccess?.();
       } catch (err) {
-        onError?.(err instanceof Error ? err.message : 'Sign in failed', idToken);
+        const message = err instanceof Error ? err.message : 'Sign in failed';
+        // No token here: this person has an account already and must not be waitlisted.
+        if (message === 'apple_link_required') onError?.(t('auth.appleLinkRequired'), undefined, message);
+        else onError?.(message, idToken);
       }
     } catch (err) {
       // Apple rejects a cancelled popup as an error like any other. Closing the sheet is
@@ -93,7 +96,7 @@ export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignI
     } finally {
       setBusy(false);
     }
-  }, [busy, inviteCode, onError, onSuccess, signInWithAppleToken]);
+  }, [busy, inviteCode, onError, onSuccess, signInWithAppleToken, t]);
 
   if (!enabled) return null;
 

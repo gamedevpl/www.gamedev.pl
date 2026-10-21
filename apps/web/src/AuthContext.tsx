@@ -1,6 +1,7 @@
 import type { WaitlistStatus as SharedWaitlistStatus } from '@gamedevpl/contract';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
+import { recordAppleLinkStep } from './visitTelemetry.js';
 
 export interface User {
   uid: string;
@@ -60,6 +61,9 @@ interface AuthContextType {
   joinWaitlist: (idToken: string, locale?: string, provider?: 'google' | 'apple') => Promise<void>;
   acceptBetaInvite: (code: string) => Promise<void>;
   dismissBetaWelcome: () => void;
+  // True after the pending Apple ID was linked during this sign-in.
+  appleLinked: boolean;
+  dismissAppleLinked: () => void;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<{ deleteAfter: string }>;
   refreshUser: () => Promise<void>;
@@ -78,6 +82,8 @@ const AuthContext = createContext<AuthContextType>({
   joinWaitlist: async () => {},
   acceptBetaInvite: async () => {},
   dismissBetaWelcome: () => {},
+  appleLinked: false,
+  dismissAppleLinked: () => {},
   logout: async () => {},
   deleteAccount: async () => ({ deleteAfter: '' }),
   refreshUser: async () => {},
@@ -91,6 +97,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('unknown');
   const [showBetaWelcome, setShowBetaWelcome] = useState(false);
+  const [appleLinked, setAppleLinked] = useState(false);
+  const dismissAppleLinked = useCallback(() => setAppleLinked(false), []);
+  // Apple token awaiting a link at the next Google sign-in.
+  const pendingAppleLink = useRef<string | null>(null);
 
   const refreshUser = async () => {
     try {
@@ -150,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
     setShowBetaWelcome(data.betaWelcome === true);
+    await linkPendingApple();
   };
 
   const signInWithAppleToken = async (idToken: string, name?: string, inviteCode?: string) => {
@@ -162,6 +173,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       const err = (await res.json().catch(() => null)) as { error?: string; waitlistStatus?: string } | null;
+      if (res.status === 409 && err?.error === 'apple_link_required') {
+        pendingAppleLink.current = idToken;
+        recordAppleLinkStep('required');
+      }
       if (err?.waitlistStatus) {
         setWaitlistStatus(err.waitlistStatus as WaitlistStatus);
       }
@@ -171,6 +186,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
     setShowBetaWelcome(data.betaWelcome === true);
+  };
+
+  // Best-effort: a failed link never fails the Google sign-in.
+  const linkPendingApple = async () => {
+    const idToken = pendingAppleLink.current;
+    if (!idToken) return;
+    const res = await fetch('/api/auth/apple/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ idToken }),
+    }).catch(() => null);
+    // Keep the token for a retry only when the failure was transient.
+    if (!res || res.status === 429 || res.status >= 500) {
+      recordAppleLinkStep('failed');
+      return;
+    }
+    pendingAppleLink.current = null;
+    // A refused link re-prompts at the next Apple sign-in.
+    recordAppleLinkStep(res.ok ? 'linked' : 'failed');
+    setAppleLinked(res.ok);
   };
 
   const joinWaitlist = async (idToken: string, locale?: string, provider?: 'google' | 'apple') => {
@@ -250,6 +286,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         joinWaitlist,
         acceptBetaInvite,
         dismissBetaWelcome,
+        appleLinked,
+        dismissAppleLinked,
         logout,
         deleteAccount,
         refreshUser,

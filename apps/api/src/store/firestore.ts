@@ -71,6 +71,7 @@ import { FirestoreCreatorNotesStore, type CreatorNotesRecord } from './slices/cr
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
 import { FirestoreDispatchStore } from './slices/dispatch.js';
+import { findUserByAppleSubFirestore, setAppleSubFirestore } from './slices/identity-apple-link.js';
 import { FirestoreIdentityStore } from './slices/identity.js';
 import { FirestoreNotificationsStore } from './slices/notifications.js';
 import { FirestoreOAuthStore } from './slices/oauth.js';
@@ -329,6 +330,9 @@ export class FirestoreStore extends OAuthFacade implements Store {
         this.db.collection('recipientCodes').doc(user.recipientCode),
       );
     }
+    if (user?.appleSub) {
+      deleteRefs.set(`appleLinks/${user.appleSub}`, this.db.collection('appleLinks').doc(user.appleSub));
+    }
     deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
     deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
     deleteRefs.set(`creatorNotes/${uid}`, this.db.collection('creatorNotes').doc(uid));
@@ -426,6 +430,13 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async getUserByRecipientCode(code: string): Promise<User | null> {
     return this.identityStore.getUserByRecipientCode(code);
+  }
+
+  findUserByAppleSub = (sub: string) => findUserByAppleSubFirestore(this.db, sub);
+  async setAppleSub(uid: string, sub: string): Promise<boolean> {
+    const set = await setAppleSubFirestore(this.db, uid, sub);
+    this.identityStore.forgetUser(uid);
+    return set;
   }
 
   // Constructed with `this`: the mirror rebuilds from this store's own reads.

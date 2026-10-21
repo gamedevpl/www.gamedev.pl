@@ -11,18 +11,16 @@ import type { Store, User } from './store.js';
  * Nothing about that is recoverable by the creator, and support for it is a manual
  * Firestore edit.
  *
- * So an Apple sign-in resolves onto an existing account when it can prove it is the same
- * person, and only then.
+ * Email alone is not proof, so only a signed-in link (`/api/auth/apple/link`) joins them.
  */
 
 export interface AppleAccountResolution {
   /** The uid to sign in as. */
   uid: string;
-  /**
-   * Set when `uid` is an account that already existed under a different identity
-   * provider. Callers use it for logging; nothing branches on it.
-   */
+  // An account of another provider that linked this Apple ID.
   linkedTo?: User;
+  // Another account holds this address; refuse sign-in and ask for a link.
+  linkRequired?: true;
   /**
    * The address safe to persist and to test against the private-beta allowlist, or
    * undefined when Apple gave us nothing usable. Never a relay address.
@@ -55,27 +53,39 @@ export function linkableAppleEmail(payload: AppleAuthPayload): string | undefine
 }
 
 export async function resolveAppleAccount(
-  store: Pick<Store, 'getUser' | 'findUserByEmail'>,
+  store: Pick<Store, 'getUser' | 'findUserByEmail' | 'findUserByAppleSub'>,
   payload: AppleAuthPayload,
 ): Promise<AppleAccountResolution> {
   const own = appleUid(payload.sub);
   const email = linkableAppleEmail(payload);
 
-  // An account already standing at this uid IS this person's account, and it exists only
-  // because a previous sign-in declined to link. Re-running the match now could move them
-  // onto a different account between one sign-in and the next, so it is not attempted.
+  // Only a binding the account made itself moves Apple off its uid.
+  const bound = await store.findUserByAppleSub(payload.sub);
+  if (bound) return bound.uid === own ? { uid: own, email } : { uid: bound.uid, linkedTo: bound, email };
+
+  // An account already standing at this uid IS this person's account.
   const existing = await store.getUser(own);
   if (existing) return { uid: own, email };
 
   if (email) {
     const match = await store.findUserByEmail(email);
-    // `findUserByEmail` returns null on an ambiguous match, so a linked result is always
-    // exactly one account. Guarding the self-match too keeps this correct if the lookup
-    // ever starts seeing the `a:` account itself.
-    if (match && match.uid !== own) {
-      return { uid: match.uid, linkedTo: match, email };
-    }
+    if (match && match.uid !== own) return { uid: own, email, linkRequired: true };
   }
 
   return { uid: own, email };
+}
+
+// The token's verified address must equal the account's own.
+export async function appleLinkRefusal(
+  store: Pick<Store, 'getUser' | 'findUserByAppleSub'>,
+  account: User,
+  payload: AppleAuthPayload,
+): Promise<'already_linked' | 'linked_elsewhere' | 'has_own_account' | 'email_mismatch' | null> {
+  const bound = await store.findUserByAppleSub(payload.sub);
+  if (bound) return bound.uid === account.uid ? 'already_linked' : 'linked_elsewhere';
+  if (await store.getUser(appleUid(payload.sub))) return 'has_own_account';
+  const email = linkableAppleEmail(payload)?.toLowerCase();
+  const accountEmail = account.email?.trim().toLowerCase();
+  if (!email || !accountEmail || email !== accountEmail) return 'email_mismatch';
+  return null;
 }
