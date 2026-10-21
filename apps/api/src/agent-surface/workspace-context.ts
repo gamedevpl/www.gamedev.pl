@@ -111,7 +111,7 @@ export function requestSourceLines(inlined: KickoffInlined | undefined): string[
 
 // A new game must play, on a phone too.
 export const NEW_GAME_CHECKS = [
-  'A new game must play on a phone: give `GAME.json` a `touch` block, as the kit’s games do. Leave it out only when the genre cannot use touch, and say why in `end.summary`.',
+  'A new game must play on a phone: read input through `GameKit.createInput`, whose on-screen pad is on by default, and describe it in the `touch` entry of `GAME.json`’s controls. Pass `touch: false` only when touch arrives another way (tap play through `input.consumeClick()`, or phones as party controllers), and say so in `end.summary`.',
   'Before the first preview, give `CAPTURE.json` asserts on the core loop (reaching the goal, winning, losing; the kit’s SKILL.md has the schema) and run the capture after your last edit. Fix what it shows broken, then submit even if polish remains.',
   'When the first preview is delivered and more than ten minutes remain, play the loop again through the capture and submit a second preview with what it showed.',
 ];

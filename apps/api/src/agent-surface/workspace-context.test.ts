@@ -39,7 +39,7 @@ describe('kickoff context', () => {
     expect(fresh).toContain('2. `get_brief`.');
     expect(fresh).toContain('3. One short `report_progress`');
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
-    expect(fresh).toContain('give `GAME.json` a `touch` block');
+    expect(fresh).toContain('whose on-screen pad is on by default');
     expect(fresh).toContain('asserts on the core loop');
     const revision = buildPrompt(
       { ...BRIEF, feedback: 'faster', undelivered: true, previewVersion: 'v1' } as BuildBrief,
