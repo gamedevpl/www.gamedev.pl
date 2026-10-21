@@ -44,9 +44,9 @@ export const KIT_SEARCH_MAX_FILES_SCANNED = 400;
 export const KIT_BATCH_MAX_FILES = 12;
 /** Aggregate raw-byte budget across a successful batch (not base64-expanded size). */
 export const KIT_BATCH_MAX_TOTAL_BYTES = 128 * 1024;
-/** Reject absurdly large kit tarballs rather than OOM. */
+/** Reject oversized kit tarballs. */
 export const KIT_TREE_MAX_BYTES = 16 * 1024 * 1024;
-/** Keep current + previous trees warm (N / N−1 window). */
+/** Keep N and N−1 trees warm. */
 const KIT_TREE_CACHE_CAPACITY = 2;
 
 export interface KitFileMeta {
@@ -462,7 +462,7 @@ export interface KitFileStore {
 
 export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
   const cache = new Map<string, KitTree>();
-  // One unpack per ref@sha at a time: a cold burst would otherwise hold N copies.
+  // One unpack per ref@sha; cold bursts share it.
   const inflight = new Map<string, Promise<KitTree>>();
 
   function remember(tree: KitTree): KitTree {
