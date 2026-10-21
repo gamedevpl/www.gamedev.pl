@@ -37,7 +37,9 @@ describe('kickoff context', () => {
     });
     expect(fresh).toContain('1. `start`');
     expect(fresh).toContain('2. `get_brief`.');
-    expect(fresh).toContain('3. One short `report_progress`');
+    expect(fresh).toContain('3. One `knowledge_query`');
+    expect(buildPrompt(BRIEF, { shell: true })).not.toContain('One `knowledge_query`');
+    expect(fresh).toContain('4. One short `report_progress`');
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
     expect(fresh).toContain('whose on-screen pad is on by default');
     expect(fresh).toContain('asserts on the core loop');

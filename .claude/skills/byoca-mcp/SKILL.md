@@ -354,6 +354,10 @@ archives they count as seen, so `reference_unseen` stays quiet. A successful man
 `submit_sources` adds `notes_unsaved`, and the round guide then suggests `creator_notes` over `end`, until this
 round has written the creator notes. Public clients see neither.
 
+**Managed knowledge step.** The mounted-lane kickoff adds one numbered opening step: a single
+`knowledge_query` naming what the round needs most, before `report_progress`. The shell system prompt
+says `knowledge_query` is not one of the kit-browse tools it otherwise avoids. Other lanes are unchanged.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens
