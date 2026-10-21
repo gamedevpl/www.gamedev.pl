@@ -351,7 +351,7 @@ back to the read tools.
 images beside the kit as `reference-<n>.png` (`workspace-references.ts`): every one on a first build,
 later those pending notes name or no builder has seen. The kickoff lists their paths, and once the vendor takes the
 archives they count as seen, so `reference_unseen` stays quiet. A successful managed
-`submit_sources` adds `notes_unsaved` and suggests `creator_notes` instead of `end` until this
+`submit_sources` adds `notes_unsaved`, and the round guide then suggests `creator_notes` over `end`, until this
 round has written the creator notes. Public clients see neither.
 
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)

@@ -66,7 +66,6 @@ async function withNotesReminder(
   return toolOk({
     ...data,
     warnings: [...warnings, NOTES_UNSAVED_WARNING],
-    ...(data.nextSuggestedTool === 'end' ? { nextSuggestedTool: 'creator_notes' } : {}),
   });
 }
 
