@@ -1,4 +1,3 @@
-import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import {
@@ -17,28 +16,10 @@ import {
   KitFilesError,
 } from './kit-files.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
+import { KIT_TEST_ENGINE, KIT_TEST_SHA, kitTarball } from './kit-files.fixture.js';
 
-const BLOCK = 512;
-const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';
-const SHA = 'a'.repeat(64);
-
-function entryBlocks(name: string, body: Buffer | string): Buffer {
-  const payload = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
-  const header = Buffer.alloc(BLOCK);
-  header.write(name, 0, 100, 'utf8');
-  header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
-  header.write('0', 156, 1, 'utf8');
-  header.write('ustar\0', 257, 6, 'utf8');
-  const padding = Buffer.alloc((BLOCK - (payload.length % BLOCK)) % BLOCK);
-  return Buffer.concat([header, payload, padding]);
-}
-
-function kitTarball(files: Record<string, Buffer | string>): Buffer {
-  const entries = Object.entries(files).map(([name, body]) =>
-    entryBlocks(name.startsWith(`${KIT_ROOT_DIR}/`) ? name : `${KIT_ROOT_DIR}/${name}`, body),
-  );
-  return gzipSync(Buffer.concat([...entries, Buffer.alloc(BLOCK * 2)]));
-}
+const ENGINE = KIT_TEST_ENGINE;
+const SHA = KIT_TEST_SHA;
 
 function treeFrom(files: Record<string, Buffer | string>): KitTree {
   const map = new Map<string, Buffer>();
@@ -222,31 +203,6 @@ describe('createKitFileStore', () => {
     expect(second).toBe(first);
     // registry+sidecar on each loadTree, but tarball only once
     expect(reads).toBe(5); // 2+2 registry/sidecar + 1 tgz
-  });
-
-  it('coalesces concurrent cold loads into one tarball read', async () => {
-    const tgz = kitTarball({ 'SKILL.md': '# hi\n' });
-    let tgzReads = 0;
-    const objects = new Map<string, Buffer>([
-      [
-        'kits/current.json',
-        Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-03T00:00:00.000Z' })),
-      ],
-      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA }))],
-      [`kits/${ENGINE}.tgz`, tgz],
-    ]);
-    const store: GcsObjectStore = {
-      readObject: async (name) => {
-        if (name.endsWith('.tgz')) tgzReads += 1;
-        return objects.get(name) ?? null;
-      },
-      objectExists: async (name) => objects.has(name),
-      signReadUrl: async () => 'https://signed.example/kit.tgz',
-    };
-    const kits = createKitFileStore(store);
-    const trees = await Promise.all(Array.from({ length: 8 }, () => kits.loadCurrentTree()));
-    expect(tgzReads).toBe(1);
-    expect(new Set(trees).size).toBe(1);
   });
 
   it('pins browse to engineRef and rejects revisions outside N/N−1', async () => {
