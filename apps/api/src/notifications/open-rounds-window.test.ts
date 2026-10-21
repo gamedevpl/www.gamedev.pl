@@ -40,4 +40,15 @@ describe('open rounds window', () => {
     const rounds = await window.read((record) => record.jobId === 3);
     expect(rounds.map((record) => record.jobId)).toEqual([1, 2]);
   });
+
+  it('keeps the scanned copy when one re-read fails', async () => {
+    const store = await storeWithRounds();
+    let clock = 0;
+    const window = createOpenRoundsWindow({ store, now: () => clock });
+    await window.read(() => true);
+    vi.spyOn(store, 'getSubmission').mockRejectedValueOnce(new Error('unavailable'));
+    clock += 60_000;
+    const rounds = await window.read((record) => record.jobId === 2);
+    expect(rounds.map((record) => record.jobId)).toEqual([1, 2, 3]);
+  });
 });

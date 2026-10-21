@@ -32,7 +32,8 @@ export function createOpenRoundsWindow(deps: {
           records.push(cached);
           continue;
         }
-        const fresh = await deps.store.getSubmission(cached.jobId);
+        // One failed read keeps the scanned copy; it retries next run.
+        const fresh = await deps.store.getSubmission(cached.jobId).catch(() => cached);
         if (fresh && isRoundOpen(fresh)) records.push(fresh);
       }
       scan = { expiresAt: scan.expiresAt, records };
