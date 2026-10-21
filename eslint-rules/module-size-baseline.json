@@ -543,7 +543,7 @@
     "apps/web/src/AppUpdateBanner.test.tsx": 129,
     "apps/web/src/AppUpdateBanner.tsx": 91,
     "apps/web/src/attachmentImages.ts": 74,
-    "apps/web/src/AuthContext.tsx": 292,
+    "apps/web/src/AuthContext.tsx": 302,
     "apps/web/src/AuthModal.tsx": 53,
     "apps/web/src/BetaInvitePage.tsx": 66,
     "apps/web/src/betaSplashFit.test.ts": 67,

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { AppleLinkedNotice } from './AppleLinkedNotice.js';
 import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -78,6 +79,7 @@ export function StageOverlay({
       )}
 
       {showBetaWelcome && <BetaWelcomeSplash onContinue={onDismissBetaWelcome} />}
+      <AppleLinkedNotice />
     </>
   );
 }
