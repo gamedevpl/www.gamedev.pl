@@ -3488,7 +3488,8 @@ a.user-name--profile:focus-visible {
 .apple-linked-notice {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  /* Top, not bottom: the install and update banners own the bottom edge. */
+  top: calc(72px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   z-index: 1100;
   display: flex;
