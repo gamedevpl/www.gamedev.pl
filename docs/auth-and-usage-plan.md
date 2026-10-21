@@ -269,16 +269,21 @@ private-email relay service, which this product deliberately does not use.
 - **Account linking is the point, not a bonus.** Every beta creator's games hang off a
   `g:<sub>` uid. An Apple button that minted a fresh `a:<sub>` would drop the first person
   who tapped it into an empty account, with their work apparently gone and no
-  self-service way back. So `resolveAppleAccount` signs them into the existing account
-  when the Apple token carries a **verified, non-relay** address matching exactly one
-  user. An ambiguous match creates a new account instead of guessing — signing somebody
-  into the wrong account is unrecoverable, handing them a spare one is not.
+  self-service way back. But a matching email alone is not proof of the same person, so
+  linking is **session-bound**: when the Apple token carries a verified, non-relay address
+  matching exactly one other account and no binding exists yet, `/api/auth/apple` answers
+  `409 apple_link_required` and signs nobody in. The client keeps the Apple token, the
+  person signs in with Google, and `POST /api/auth/apple/link` (cookie session only,
+  same-origin, Apple email must equal the account's) stores the binding as
+  `users.appleSub` (uniqueness lock in `appleLinks/{sub}`). Later Apple sign-ins resolve
+  on that binding. An ambiguous email match creates a new `a:<sub>` account instead of
+  guessing. The funnel is measured as `apple_link_step` (`required` / `linked` / `failed`).
 - **Hide My Email is a known, accepted limitation.** A creator who picks it gets a
   per-app `@privaterelay.appleid.com` address that no allowlist and no existing account
   can match, so they land in a new account and, under private beta, are refused and sent
   to the waitlist. Correct, but it will read as a bug when it first happens — the fix is
-  an explicit "link an Apple ID" action on an already-signed-in account, not looser
-  matching.
+  an explicit "link an Apple ID" action on an already-signed-in account (built on
+  `/api/auth/apple/link`), not looser matching.
 - **`email_verified` arrives as a boolean _or_ the string `"true"`**, depending on the
   flow. `Boolean("false")` is `true`, so a direct read of that claim fails **open** on the
   one flag gating the allowlist. `appleClaimFlag` exists solely for this and is pinned by
