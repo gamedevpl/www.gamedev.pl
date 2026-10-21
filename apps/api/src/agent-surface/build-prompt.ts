@@ -83,6 +83,7 @@ const SHELL_DOWNLOAD = [
 // The push contract: report and upload over the build channel, clocked.
 function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane): string[] {
   const { shell, workspace, mountedSources, inlined } = lane;
+  const newGame = Boolean(workspace) && !brief.feedback && !brief.gateRepair;
   return [
     '## This round is on a clock',
     '',
@@ -105,7 +106,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources || inlined?.noFiles ? [] : GET_SOURCES),
-    ...(workspace && !brief.feedback && !brief.gateRepair ? NEW_GAME_CHECKS : []),
+    ...(newGame ? NEW_GAME_CHECKS : []),
     ...(shell
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),
@@ -134,7 +135,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
     '  game is playable, even if you can see things you would rather improve. A delivered rough',
     '  draft beats a better one that never arrived.',
-    '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
+    `- \`end\` straight after ${newGame ? 'your last submit (the second preview, when there is time for one)' : 'the submit'} returns. Do not wait on the gate. No one reads text after \`end\`: stop there.`,
   ];
 }
 
