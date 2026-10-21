@@ -135,7 +135,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
     '  game is playable, even if you can see things you would rather improve. A delivered rough',
     '  draft beats a better one that never arrived.',
-    `- \`end\` straight after ${newGame ? 'your last submit (the second preview, when there is time for one)' : 'the submit'} returns. Do not wait on the gate. No one reads text after \`end\`: stop there.`,
+    '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
   ];
 }
 

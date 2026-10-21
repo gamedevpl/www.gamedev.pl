@@ -41,7 +41,6 @@ describe('kickoff context', () => {
     expect(fresh).not.toContain('Call `get_sources` before deciding anything');
     expect(fresh).toContain('whose on-screen pad is on by default');
     expect(fresh).toContain('asserts on the core loop');
-    expect(fresh).toContain('straight after your last submit (the second preview');
     const revision = buildPrompt(
       { ...BRIEF, feedback: 'faster', undelivered: true, previewVersion: 'v1' } as BuildBrief,
       {
