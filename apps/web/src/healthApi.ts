@@ -125,22 +125,6 @@ export interface VisitFunnel {
       p90LatencyMs: number | null;
     }>;
   };
-  /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
-  remixing?: Array<{ step: string; visits: number }>;
-  /** Which door brought painting visits to the brush. Optional, same reason. */
-  remixPaintedVia?: Array<{ via: string; visits: number }>;
-  /**
-   * Whether the remix entry earns its place: visits shown the control, visits
-   * that pressed it, which control, and how far into the visit. Optional for the
-   * same client-outlives-deploy reason as its neighbours.
-   */
-  remixEntry?: {
-    offered: number;
-    opened: number;
-    byControl: Array<{ control: string; visits: number }>;
-    /** null means nobody opened one — not that they opened it instantly. */
-    medianSecondsToOpen: number | null;
-  };
   /** How to play card usage — open rate, repeats, and where it was opened. */
   howToPlay: HowToPlayFunnel;
   // Which surface started each play; optional, same client-outlives-deploy reason.

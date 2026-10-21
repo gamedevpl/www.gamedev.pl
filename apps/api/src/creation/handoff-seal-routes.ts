@@ -185,7 +185,13 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       const neverDispatched = !record.dispatch?.refs?.length;
       const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched && !roundAlreadyClosed;
       const requestedAt = new Date(now()).toISOString();
-      const accepted = await store.requestBuilderHandoff(jobId, requestedBuilder, requestedAt, awaitsAgentAck);
+      const accepted = await store.requestBuilderHandoff(
+        jobId,
+        requestedBuilder,
+        requestedAt,
+        awaitsAgentAck,
+        callerUid,
+      );
       if (!accepted) {
         return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
       }

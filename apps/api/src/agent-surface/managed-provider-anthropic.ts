@@ -295,7 +295,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       );
     },
 
-    createMemoryStore: (slug: string) => createAnthropicMemoryStore(call, slug),
+    createMemoryStore: (label: string) => createAnthropicMemoryStore(call, label),
     deleteMemoryStore: (storeId: string) => deleteAnthropicMemoryStore(call, storeId),
 
     async releaseCredential(credentialRef: string): Promise<void> {

@@ -78,12 +78,57 @@ concurrency:
   group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
   cancel-in-progress: true
 
+# No job that checks out or runs games-repo code may mint a GitHub OIDC token:
+# only the pointer job below, which never checks the games repo out, gets one.
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+  pointer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      baseline: ${{ steps.read.outputs.baseline }}
+    steps:
+      - name: Authenticate to GCP for snapshot pointer
+        if: inputs.classify_push == '1'
+        id: gcp_auth
+        continue-on-error: true
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+          token_format: access_token
+
+      - name: Read last published games SHA
+        id: read
+        if: inputs.classify_push == '1'
+        env:
+          GCS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+          SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
+        run: |
+          set -euo pipefail
+          baseline=
+          if [ -n "${GCS_TOKEN:-}" ]; then
+            if pointer=$(curl -sS -f --max-time 30 \
+              -H "Authorization: Bearer ${GCS_TOKEN}" \
+              "https://storage.googleapis.com/storage/v1/b/${SNAPSHOT_BUCKET}/o/current.json?alt=media"); then
+              baseline=$(printf '%s' "$pointer" | jq -r '.commitSha // empty')
+              baseline="${baseline,,}"
+            else
+              echo "Could not read snapshot pointer — full catalog gate"
+            fi
+          fi
+          if [ "${#baseline}" -ne 40 ] || printf '%s' "$baseline" | grep -q '[^0-9a-f]'; then
+            baseline=
+          fi
+          echo "baseline=$baseline" >> "$GITHUB_OUTPUT"
+
   resolve:
+    needs: pointer
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -192,16 +237,6 @@ jobs:
         working-directory: games-repo
         run: echo "games_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Authenticate to GCP for snapshot pointer
-        if: steps.resolve.outputs.classify_push == '1'
-        id: gcp_auth
-        continue-on-error: true
-        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
-        with:
-          workload_identity_provider: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-          service_account: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
-          token_format: access_token
-
       - name: Classify merge scope
         id: scope
         working-directory: games-repo
@@ -210,8 +245,7 @@ jobs:
           GAMES_REPO: ${{ env.GAMES_REPO }}
           SHA: ${{ steps.checkout_sha.outputs.games_sha }}
           CLASSIFY_PUSH: ${{ steps.resolve.outputs.classify_push }}
-          GCS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
-          SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
+          BASELINE: ${{ needs.pointer.outputs.baseline }}
           INPUT_MODE: ${{ inputs.mode }}
           INPUT_SLUGS: ${{ inputs.slugs }}
           INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
@@ -290,17 +324,7 @@ jobs:
             # Cumulative range since the live snapshot, not HEAD^: a cancelled
             # full gate for runtime A plus game-only B would otherwise classify
             # only B and bake A's unvalidated modules into every game.
-            baseline=
-            if [ -n "${GCS_TOKEN:-}" ]; then
-              if pointer=$(curl -sS -f --max-time 30 \
-                -H "Authorization: Bearer ${GCS_TOKEN}" \
-                "https://storage.googleapis.com/storage/v1/b/${SNAPSHOT_BUCKET}/o/current.json?alt=media"); then
-                baseline=$(printf '%s' "$pointer" | jq -r '.commitSha // empty')
-                baseline="${baseline,,}"
-              else
-                echo "Could not read snapshot pointer — full catalog gate"
-              fi
-            fi
+            baseline="${BASELINE:-}"
             if [ "${#baseline}" -ne 40 ] || printf '%s' "$baseline" | grep -q '[^0-9a-f]'; then
               echo "No published snapshot SHA — full catalog gate"
               MODE=full

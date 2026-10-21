@@ -9,7 +9,6 @@ import {
   type ParamSpec,
   type ParamValue,
 } from './editor-contract.js';
-import { formatRemixTurns } from './remix-turns.js';
 
 /**
  * The assist router: one utterance in, a validated params patch out.
@@ -64,11 +63,6 @@ export interface AssistRequest {
   /** Title/genre grounding, so "the dog" has something to attach to. */
   game?: { title?: string; genre?: string };
   locale?: string;
-  /**
-   * Prior remix turns (oldest first). Optional — Studio drafts have no thread,
-   * and a first remix ask has nothing prior.
-   */
-  history?: Array<{ utterance: string; summary?: string }>;
 }
 
 export interface EditorAssistant {
@@ -195,7 +189,6 @@ export class VertexEditorAssistant implements EditorAssistant {
       .map(([key, spec]) => describeParam(key, spec, values[key]))
       .join('\n');
     const collections = Object.keys(request.definition.content);
-    const prior = formatRemixTurns(request.history ?? []);
 
     const prompt = `You route a creator's request about their own small browser game into one lane. You never write code and never invent settings.
 
@@ -219,7 +212,6 @@ Rules:
   Write real Polish in "pl" (not an English copy)${
     request.locale ? `. The player's UI language is ${request.locale}` : ''
   }.
-${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON:
 {"lane":"params","patches":[{"key":"someKey","value":1.3}],"summary":{"en":"...","pl":"..."}}
 

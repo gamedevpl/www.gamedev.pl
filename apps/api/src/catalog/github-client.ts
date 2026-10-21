@@ -344,8 +344,8 @@ export interface GitHubClient {
    *
    * `overrides` replaces individual game-relative TypeScript files (e.g.
    * `game/runtime.ts`) with in-memory text instead of what the ref holds. It is
-   * how the remix code lane rebuilds a game around one edited region without
-   * forking the assembler: the engine, CSP, provenance marking, credential scan
+   * how candidate and staged sources are assembled without forking the
+   * assembler: the engine, CSP, provenance marking, credential scan
    * and byte caps all stay exactly where serve policy is owned. Only paths
    * inside the game directory are consultable — an override for anything else is
    * never looked at, because the bundler only ever asks for game-root paths.
@@ -363,38 +363,9 @@ export interface GitHubClient {
    * cost a full assembly. `getGameSources` fetches the engine, every module,
    * every audio asset and then bundles — minutes of work in bytes for a question
    * two reads answer. Errors are *not* swallowed: a 403 or a rate limit must not
-   * be indistinguishable from a missing file, which is exactly the confusion
-   * that made every remix answer "game not found".
+   * be indistinguishable from a missing file.
    */
   getGameFile(ref: string, slug: string, path: string): Promise<string | null>;
-  /**
-   * Every TypeScript source a game actually uses, keyed by its game-relative
-   * path — the game's own code, never the engine's.
-   *
-   * The set comes from the bundler's own walk of the import graph rather than
-   * from a directory listing, which makes it exactly the files that end up in
-   * the running game: a stale module nobody imports is not part of the game and
-   * should not be offered to an editor as if it were. The same caps that bound
-   * an assembly bound this, because it *is* an assembly — the output is thrown
-   * away and only the sources are kept.
-   *
-   * Exists so a repo-era game can be edited at all. A store-era game hands over
-   * its files at publish; a repo-era one keeps them on the ref, and without this
-   * the whole catalog could only be tuned through declared parameters.
-   */
-  getGameSourceMap(ref: string, slug: string): Promise<Record<string, string> | null>;
-  /**
-   * `shared/game-kit.d.ts` — the ambient declaration every game is written
-   * against.
-   *
-   * Not part of any game's sources (it is ambient, and the bundler never loads
-   * it), but it is what a game's code actually has to satisfy, so the code lane
-   * needs it twice over: to show the editing call what `GameKit` really offers
-   * instead of letting it guess, and to type-check the result. Cached per ref
-   * because it changes only when the engine does, and both uses are on the
-   * player's critical path.
-   */
-  getGameKitDeclaration(ref: string): Promise<string | null>;
   /**
    * Reads the agent's own progress journal for a game on `ref`
    * (`games/<slug>/PROGRESS.md`). This is how the coding agent narrates what it is
@@ -693,8 +664,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   // (`games-repo-archive.ts`) so a whole snapshot costs one download instead of a
   // read per file, and every line of assembly below stays the same either way.
   const readRawFile = options.files ? options.files.readText : readRawFileFromApi;
-  // Kit declaration cached per resolved SHA, not the mutable ref.
-  const gameKitBySha = new Map<string, string | null>();
   const readRawBytes = options.files ? options.files.readBytes : readRawBytesFromApi;
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -1196,35 +1165,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return raw === null ? null : raw.slice(0, 4096);
     },
 
-    async getGameSourceMap(ref, slug) {
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return null;
-      const entry = await readRawFile(`games/${slug}/game.ts`, ref);
-      // No entry point is the only absence this reports. Everything else — a read
-      // that fails, a bundle that will not build — *throws*, because the first
-      // version of this swallowed both into the same null and the caller turned
-      // that null into "this game cannot be remixed that deeply yet". A game with
-      // an entry point and a broken pipeline then looked exactly like a game we
-      // had chosen not to support, which is the same laundering that made every
-      // remix answer "game not found" (see the note on `getGameFile`).
-      if (entry === null) return null;
-      const collected = new Map<string, string>([['game.ts', entry]]);
-      // The bundle output is discarded — this runs the walk for its trail. Doing
-      // it any other way (a directory listing, a hand-rolled import parser)
-      // would be a second, quietly different answer to "what is this game made
-      // of", and the two would drift the first time an import convention moved.
-      await bundleGameTypeScript(entry, ref, slug, undefined, collected);
-      return Object.fromEntries(collected);
-    },
-
-    async getGameKitDeclaration(ref) {
-      const sha = await resolveEngineSha(ref);
-      const cached = gameKitBySha.get(sha);
-      if (cached !== undefined) return cached;
-      const source = await readRawFile('shared/game-kit.d.ts', sha);
-      rememberBounded(gameKitBySha, sha, source, ENGINE_CACHE_CAPACITY);
-      return source;
-    },
-
     async getGameFile(ref, slug, path) {
       // Same slug guard as getGameSources, plus a closed file list: this reads
       // whatever a caller names, so the names are ours rather than theirs.
@@ -1242,7 +1182,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       // A game file comes from `overrides` when one was supplied and from the ref
       // otherwise. That is what lets a caller assemble a game whose content lives
-      // somewhere else entirely — the games store, or a remix's edited copy —
+      // somewhere else entirely — the games store, or a staged candidate —
       // while the *engine* half below still comes from the pinned ref, so serve
       // policy and the kit are never the caller's to substitute.
       const gameFile = async (relative: string): Promise<string | null> => {

@@ -21,8 +21,8 @@ export type { CatalogEnrichmentStore };
 import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
 export type { CatalogEnrichmentRecord };
 import type { GameAccessStore } from '../store/slices/game-access.js';
-import type { GameMemoryStore, GameMemoryRecord } from '../store/slices/game-memory.js';
-export type { GameMemoryStore, GameMemoryRecord };
+import type { CreatorMemoryStore, CreatorMemoryRecord } from '../store/slices/creator-memory.js';
+export type { CreatorMemoryStore, CreatorMemoryRecord };
 import type { CreatorNotesStore, CreatorNotesRecord } from '../store/slices/creator-notes.js';
 export type { CreatorNotesStore, CreatorNotesRecord };
 export type { GameAccessStore };
@@ -188,7 +188,6 @@ import type {
   ProposalMessage,
   ProposalRecord,
   GameContributionSettings,
-  GameRemixSettings,
   ContributorBlockRecord,
 } from '../store/records/contribution.js';
 export type {
@@ -198,7 +197,6 @@ export type {
   ProposalMessage,
   ProposalRecord,
   GameContributionSettings,
-  GameRemixSettings,
   ContributorBlockRecord,
 };
 import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } from '../store/records/contribution.js';
@@ -289,7 +287,7 @@ export interface Store
     AgentKeysStore,
     GameAdmissionStore,
     CatalogEnrichmentStore,
-    GameMemoryStore,
+    CreatorMemoryStore,
     CreatorNotesStore,
     GameAccessStore,
     GameTransferStore,

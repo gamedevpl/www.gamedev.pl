@@ -1,4 +1,4 @@
-import type { ContributionMode, RemixMode } from '@gamedevpl/contract';
+import type { ContributionMode } from '@gamedevpl/contract';
 import type { DeclineReason, ProposalState, ProposalTransition } from '../../community/proposal-state.js';
 
 /**
@@ -129,11 +129,12 @@ export interface ProposalRecord {
   targetOwnerUid: string | null;
   proposerUid: string;
   base: ProposalBase;
+  // 'text': a described change only — no version, no gate, never base-stale.
+  kind?: 'text';
   /**
    * The stored version carrying the change, once one exists.
    *
-   * Absent only in `draft`: a proposal that has never been sent has no version, which is
-   * also why nothing but `draft` may be missing it.
+   * Absent in `draft` (nothing sent yet) and on every text proposal, which carries none.
    */
   version?: string;
   state: ProposalState;
@@ -198,14 +199,6 @@ export interface GameContributionSettings {
   mode: ContributionMode;
   updatedAt: string;
   /** Who last changed it. Absent on platform defaults nobody has touched. */
-  updatedByUid?: string;
-}
-
-// The per-game player remix switch, stored beside `contributions`.
-export interface GameRemixSettings {
-  slug: string;
-  mode: RemixMode;
-  updatedAt: string;
   updatedByUid?: string;
 }
 

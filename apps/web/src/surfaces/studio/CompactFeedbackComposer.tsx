@@ -101,7 +101,7 @@ export function CompactFeedbackComposer({
           autoGrow();
         }}
         onKeyDown={(event) => {
-          // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
+          // Enter sends; Shift+Enter keeps a newline.
 
           // Skip while IME is composing — Enter confirms a candidate there.
           const native = event.nativeEvent;

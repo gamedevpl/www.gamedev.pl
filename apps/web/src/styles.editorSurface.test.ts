@@ -31,7 +31,6 @@ describe('layered editor surface CSS contract', () => {
   it('keeps the picker readable beside the stacked board', () => {
     expect(declarations('.editor-layer-picker')).toMatch(/display:\s*flex/);
     expect(declarations('.editor-layer-picker-item.is-active')).toMatch(/border-color:/);
-    expect(declarations('.editor-layered-remix-grid')).toMatch(/grid-template-columns:/);
   });
 
   it('pins the edit overlay dock posture used by layered definitions', () => {

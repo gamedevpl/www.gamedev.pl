@@ -4,7 +4,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { InMemoryStore } from '../platform/store.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { mintReferenceImageToken, REFERENCE_IMAGE_DOWNLOAD_ROUTE } from './reference-image-url.js';
-import { createReferenceHold, createReferenceLookup, referenceUnseen } from './reference-unseen.js';
+import { createReferenceLookup, referenceUnseen } from './reference-unseen.js';
 
 const SECRET = 'test-secret';
 const NOW = Date.parse('2026-10-11T23:00:00.000Z');
@@ -175,25 +175,5 @@ describe('reference_unseen', () => {
     }
     const listed = await server.inject({ method: 'GET', url: `${AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES}?urls=1` });
     expect((listed.json().images as Array<{ id: string }>).map((image) => image.id)).toContain(newer.id);
-  });
-});
-
-describe('createReferenceHold', () => {
-  it('holds one delivery per round while a reference is unseen, durably, never a second', async () => {
-    const store = new InMemoryStore();
-    await store.createSubmission(1, 'g:owner', 'Game');
-    let unseen = true;
-    const hold = createReferenceHold(async () => unseen, store);
-    const [first, overlapping] = await Promise.all([hold(1, 1), hold(1, 1)]);
-    expect([first, overlapping].filter(Boolean)).toHaveLength(1);
-    // Another instance shares the store, so it cannot hold again.
-    expect(await createReferenceHold(async () => true, store)(1, 1)).toBe(false);
-    // Only the current round claims; stale ones never move it back.
-    expect(await hold(1, 2)).toBe(false);
-    const current = (await store.bumpRoundGeneration(1))!;
-    expect(await hold(1, current - 1)).toBe(false);
-    expect(await hold(1, current)).toBe(true);
-    unseen = false;
-    expect(await hold(1, current + 1)).toBe(false);
   });
 });

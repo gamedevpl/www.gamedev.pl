@@ -36,6 +36,8 @@ export type Proposal = {
   state: ProposalState;
   title: string;
   description: string;
+  // `text`: a player's written suggestion with no code attached.
+  kind?: 'text' | 'code';
   base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
   version?: string;
   createdAt: string;
@@ -51,11 +53,8 @@ export type Proposal = {
   acceptedVia?: 'data' | 'round';
 };
 
-/** Why the "Propose this change" door is shut, when it is. */
-export type ContributionRefusal =
-  'contributions_off' | 'own_game' | 'not_published' | 'too_many_open_here' | 'too_many_open' | 'no_changes';
-
-export type ContributionEligibility = { canPropose: true } | { canPropose: false; reason: ContributionRefusal };
+// `reason` says why "Propose a change" is not offered; open-ended.
+export type ContributionEligibility = { canPropose: boolean; reason?: string };
 
 export type DiffLine = { kind: 'context' | 'add' | 'del'; text: string; a?: number; b?: number };
 
@@ -125,23 +124,16 @@ export function checkContributions(slug: string): Promise<ContributionEligibilit
   return request<ContributionEligibility>(`/api/games/${encodeURIComponent(slug)}/contributions`);
 }
 
-/**
- * Turn the current remix session into a proposal.
- *
- * Code overrides stay on the session; params and painted content live only in the
- * browser (same as save), so they travel with this request for the server to bake into
- * the candidate. Nothing the browser holds is compiled as game code.
- */
-export function proposeFromRemix(
-  remixId: string,
-  input: {
-    title: string;
-    description: string;
-    params?: Record<string, string | number | boolean>;
-    content?: Record<string, unknown>;
-  },
-): Promise<{ proposal: { id: string; state: ProposalState } }> {
-  return post(`/api/remixes/${encodeURIComponent(remixId)}/propose`, input);
+// Server-enforced text proposal limits, mirrored for the live counters.
+export const PROPOSAL_TITLE_MIN = 3;
+export const PROPOSAL_TITLE_MAX = 120;
+export const PROPOSAL_DESCRIPTION_MIN = 20;
+export const PROPOSAL_DESCRIPTION_MAX = 2000;
+
+// A player's written suggestion; no code, the creator's agent builds it.
+export async function proposeChange(slug: string, input: { title: string; description: string }): Promise<Proposal> {
+  const { proposal } = await post<{ proposal: Proposal }>(`/api/games/${encodeURIComponent(slug)}/proposals`, input);
+  return proposal;
 }
 
 export async function myProposals(): Promise<Proposal[]> {

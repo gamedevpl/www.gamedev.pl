@@ -2,9 +2,15 @@
 
 Every natural-language REPL message goes to `POST /api/cli/chat`, before and after a
 game exists. The binary holds no model keys. The existing server-side intake model
-(OpenRouter Gemini 3.5 Flash Lite, with Vertex fallback and `CLI_CHAT_MODEL` override)
-interprets the message using conversation history, the creator's shelf and CLI context.
+(Gemini 3.5 Flash Lite on Vertex, `CLI_CHAT_MODEL` override) interprets the message using
+conversation history, the creator's shelf and CLI context.
 Slash commands such as `/play` bypass the model and remain available during chat outages.
+
+When Vertex stalls or runs out of capacity inside the 12 s budget, the same prompt goes to
+OpenAI `gpt-6-luna` directly (the refine stand-in, PR #1919). It is on wherever
+`OPENAI_API_KEY` is set; `CLI_CHAT_FALLBACK_MODEL=none` turns it off without a code change.
+OpenRouter used to front Gemini here; its key never reached production after 2026-08-21,
+and it was removed on 2026-10-20.
 
 The client sends its active submission token, optional checkout slug and installed agent
 names. The server verifies the token and ownership, resolves the game's state and builder,

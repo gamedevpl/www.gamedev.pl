@@ -2,7 +2,7 @@ import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js'
 import { isRetiredBackend } from './retired-backends.js';
 import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
-import type { Store, SubmissionRecord } from '../platform/store.js';
+import { DELETED_ACCOUNT_UID, type Store, type SubmissionRecord } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';
 import { canTransition, type JobTransition } from './job-state.js';
 import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-access-resolve.js';
@@ -116,6 +116,10 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     const access = record?.slug === undefined ? null : await resolveGameAccess(store, record.slug);
     const canonicalOwner = access?.owner.kind === 'creator' ? access.owner.uid : undefined;
     const spendingUid = input.ownerUid ?? canonicalOwner ?? record?.ownerUid;
+    // A nudge or repair has no caller; it keeps the round starter.
+    const memoryUid = (input.undelivered ? previous?.memoryOwnerUid : undefined) ?? spendingUid;
+    // An erased creator's games pass to the platform: no memory.
+    const memoryOwnerUid = memoryUid === DELETED_ACCOUNT_UID ? undefined : memoryUid;
     // Skip for undelivered continuations — not a fresh dispatch.
     if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && spendingUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
@@ -174,6 +178,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         jobId: input.jobId,
         roundGeneration,
         slug: record?.slug,
+        ...(memoryOwnerUid ? { ownerUid: memoryOwnerUid } : {}),
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
@@ -213,6 +218,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,
+        memoryOwnerUid,
       });
       await recordSessionCost(input.jobId, result.ref, selected, input.log);
       // The old workspace is spent once the new round has its own.

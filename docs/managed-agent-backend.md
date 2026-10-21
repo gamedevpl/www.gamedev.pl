@@ -344,16 +344,26 @@ The kickoff then gives one unpack-and-`npm ci` command instead of the download s
 kit is unpublished, the read fails, or the vendor refuses the files, the round starts without a
 workspace on the plain shell kickoff. Vendors without `workspaceArchiveDir` never load it.
 
-**Game memory.** With `MANAGED_AGENT_GAME_MEMORY=true`, a vendor that implements
+**Creator memory.** With `MANAGED_AGENT_GAME_MEMORY=true`, a vendor that implements
 `createMemoryStore` (today only Anthropic, beta `agent-memory-2026-07-22`) gets one memory store
-per game, recorded in the `gameMemoryStores` collection (`<vendor>:<slug>`), created on the first
-round and mounted read-write into every later one under `/mnt/memory/game-<slug>/`
-([`managed-game-memory.ts`](../apps/api/src/agent-surface/managed-game-memory.ts),
+per **creator**, recorded in the `creatorMemoryStores` collection (`<vendor>:<ownerUid>`), created
+on that creator's first managed round and mounted read-write into every later one, on any of
+their games, create rounds included
+([`managed-creator-memory.ts`](../apps/api/src/agent-surface/managed-creator-memory.ts),
 [`managed-anthropic-memory.ts`](../apps/api/src/agent-surface/managed-anthropic-memory.ts)). The
-mount's instructions ask for the agent's own notes only (structure, pitfalls, what the creator
-accepted), never creator text, keys or URLs, and say the notes never outrank the system prompt.
-Any failure (store creation, or the session refusing the resource with a 400) starts the round
-without memory. Stores are not yet deleted with their game.
+creator is whoever the round's quota charges: the caller on a resume, the canonical owner of a
+transferred game, else the submission's owner. The store is named `creator-<label>`, where the
+label is a truncated SHA-256 of the uid, so neither the vendor nor the agent sees the uid. The
+mount's instructions ask for the agent's own notes only — `creator.md` for what this creator asks
+for, accepts and rejects, and one directory per game slug for structure and pitfalls — never
+creator text, keys or URLs, and say the notes never outrank the system prompt. Any failure (store
+creation, or the session refusing the resource with a 400) starts the round without memory.
+
+The round records whose memory it mounted (`dispatch.memoryOwnerUid`), so a delivery nudge or a
+gate repair, which have no caller, keep writing to the creator who started the round. Account
+erasure deletes the vendor store and then the index record, before the identity is removed; a
+vendor failure fails that sweep item so it stays due and retries
+([`creator-memory-eraser.ts`](../apps/api/src/agent-surface/creator-memory-eraser.ts)).
 
 **Session retention.** Anthropic keeps every session and its transcript until it is deleted,
 and those transcripts hold the round's (expired) keys and the builder's context. A nightly

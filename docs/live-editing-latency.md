@@ -49,9 +49,6 @@ Logs one `info` line per successful assembly (`'staged preview assembled'`), wit
 
 ## What this does NOT instrument yet
 
-- The remix code lane (`code-lane.ts`) — its own bench (`remix-lane-bench.ts`) already
-  measures the model round trip, but that bench fakes GitHub at the fetch layer, so the
-  network fan-out this doc is about is explicitly excluded from that number.
 - The Code surface's client-side timers (`AUTOSAVE_MS`, `PREVIEW_DEBOUNCE_MS`,
   `STAGE_REBUILD_COOLDOWN_MS` in `CodeSurface.tsx`) and the server scheduler
   (`STAGED_PREVIEW_DEBOUNCE_MS`, `STAGED_PREVIEW_MIN_GAP_MS`) are already known constants,

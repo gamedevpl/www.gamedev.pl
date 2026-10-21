@@ -51,6 +51,7 @@ import type {
 import type { AgentEndedBy, BuilderHandoff } from './records/rounds.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './records/social.js';
 import type { SubmissionRecord } from './records/submission.js';
+import type { ManagedSessionOutcome, ManagedSessionStep } from './records/managed-session.js';
 import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
@@ -65,7 +66,7 @@ import {
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
-import { FirestoreGameMemoryStore, type GameMemoryRecord } from './slices/game-memory.js';
+import { FirestoreCreatorMemoryStore, type CreatorMemoryRecord } from './slices/creator-memory.js';
 import { FirestoreCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
@@ -145,7 +146,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
-  private gameMemoryStore: FirestoreGameMemoryStore;
+  private creatorMemoryStore: FirestoreCreatorMemoryStore;
   private creatorNotesStore: FirestoreCreatorNotesStore;
   private cliChatStore: FirestoreCliChatStore;
 
@@ -187,7 +188,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     this.buildLogStore = new FirestoreBuildLogStore(this.db);
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
-    this.gameMemoryStore = new FirestoreGameMemoryStore(this.db);
+    this.creatorMemoryStore = new FirestoreCreatorMemoryStore(this.db);
     this.creatorNotesStore = new FirestoreCreatorNotesStore(this.db);
     this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
@@ -519,8 +520,9 @@ export class FirestoreStore extends OAuthFacade implements Store {
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
+    requestedByUid?: string,
   ): Promise<boolean> {
-    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck);
+    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck, requestedByUid);
   }
 
   async claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null> {
@@ -612,7 +614,14 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async recordDispatch(
     jobId: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
+    dispatch: {
+      backend: string;
+      ref: string;
+      workspace?: string;
+      seedWorkspace?: string;
+      credentialRef?: string;
+      memoryOwnerUid?: string;
+    },
   ): Promise<void> {
     return this.dispatchStore.recordDispatch(jobId, dispatch);
   }
@@ -623,6 +632,10 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
     return this.dispatchStore.listSeedOutcomesSince(since);
+  }
+
+  async clearMemoryOwner(uid: string): Promise<number> {
+    return this.dispatchStore.clearMemoryOwner(uid);
   }
 
   async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
@@ -685,12 +698,20 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async getGameMemory(slug: string, vendor: string): Promise<GameMemoryRecord | null> {
-    return this.gameMemoryStore.getGameMemory(slug, vendor);
+  async getCreatorMemory(ownerUid: string, vendor: string): Promise<CreatorMemoryRecord | null> {
+    return this.creatorMemoryStore.getCreatorMemory(ownerUid, vendor);
   }
 
-  async claimGameMemory(record: GameMemoryRecord): Promise<GameMemoryRecord> {
-    return this.gameMemoryStore.claimGameMemory(record);
+  async claimCreatorMemory(record: CreatorMemoryRecord): Promise<CreatorMemoryRecord> {
+    return this.creatorMemoryStore.claimCreatorMemory(record);
+  }
+
+  async listCreatorMemory(ownerUid: string): Promise<CreatorMemoryRecord[]> {
+    return this.creatorMemoryStore.listCreatorMemory(ownerUid);
+  }
+
+  async deleteCreatorMemory(ownerUid: string, vendor: string): Promise<void> {
+    return this.creatorMemoryStore.deleteCreatorMemory(ownerUid, vendor);
   }
 
   async getCreatorNotes(uid: string): Promise<CreatorNotesRecord | null> {
@@ -811,8 +832,8 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.buildMediaStore.markReferenceSeen(jobId, shotId);
   }
 
-  async claimReferenceHold(jobId: number, roundGeneration: number): Promise<boolean> {
-    return this.buildMediaStore.claimReferenceHold(jobId, roundGeneration);
+  async stepManagedSession(...step: ManagedSessionStep): Promise<ManagedSessionOutcome> {
+    return this.buildMediaStore.stepManagedSession(...step);
   }
 
   async appendBuildPreview(
@@ -1610,9 +1631,6 @@ export class FirestoreStore extends OAuthFacade implements Store {
     return this.contributionStore.putContributionSettings(record);
   }
 
-  getRemixSettings: Store['getRemixSettings'] = (slug) => this.contributionStore.getRemixSettings(slug);
-  putRemixSettings: Store['putRemixSettings'] = (record) => this.contributionStore.putRemixSettings(record);
-  listRemixOnSlugs: Store['listRemixOnSlugs'] = () => this.contributionStore.listRemixOnSlugs();
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
     return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }

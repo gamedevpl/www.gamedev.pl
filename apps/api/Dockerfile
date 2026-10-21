@@ -72,8 +72,8 @@ COPY apps/web/package.json apps/web/
 # so every `build()` and `transform()` in this container threw at runtime.
 #
 # Nothing noticed for months: published games are served from the pre-baked snapshot, so the
-# server never assembled one. The remix code lane is the first feature that needs to, and it
-# answered "this game cannot be remixed that deeply yet" for every game on the site.
+# server never assembled one. The first feature that needed to (a since-removed live editing
+# lane) failed for every game on the site.
 #
 # --ignore-scripts still does the job the flag was reached for: isolated-vm arrives as source
 # and is never compiled, which costs disk and nothing else, while esbuild's engine is a

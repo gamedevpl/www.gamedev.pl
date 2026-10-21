@@ -18,7 +18,6 @@ vi.mock('../../studioApi.js', async () => {
 vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
 
 import { EditorPanel } from './EditorPanel.js';
-import { RemixPainter } from '../../RemixPainter.js';
 
 const layeredDefinition: EditorDefinition = {
   version: 2,
@@ -161,30 +160,5 @@ describe('layered editor surfaces', () => {
     await act(async () => objects.click());
     expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Objects');
     expect(putEditorDraft).not.toHaveBeenCalled();
-  });
-
-  it('renders Remix layers stacked and keeps lower layers read-only', async () => {
-    const onChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter
-          layers={layeredDefinition.layers}
-          constraints={layeredDefinition.constraints}
-          doc={layeredContent}
-          onChange={onChange}
-        />,
-      );
-    });
-
-    expect(container.querySelectorAll('.editor-layer-board')).toHaveLength(2);
-    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Triggers');
-    const terrain = Array.from(container.querySelectorAll('.editor-layer-picker-item')).find((button) =>
-      button.textContent?.includes('Terrain'),
-    ) as HTMLButtonElement;
-    await act(async () => terrain.click());
-    expect(container.textContent).toContain('Only the top layer can be edited');
-    expect(container.querySelector<HTMLButtonElement>('.editor-layer-board.is-active button')?.disabled).toBe(true);
-    expect(onChange).not.toHaveBeenCalled();
   });
 });

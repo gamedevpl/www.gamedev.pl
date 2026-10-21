@@ -2141,6 +2141,53 @@ declare const GameKit: { defineGame(): unknown };
     expect(staged.map((file) => file.path)).toContain('game/typeless.ts');
   });
 
+  it('gives a managed session one upload contract per batch; public clients keep one per path', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setRoundBuilder(ISSUE, 'platform');
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const managed = {
+      'mcp-session-id': sessionId,
+      authorization: `Bearer ${mintManagedMcpOpener(ISSUE, secret, { roundGeneration: 1 })}`,
+    };
+    const listed = (await mcpCall(app, 'tools/list', {}, managed)).json().result.tools as Array<{
+      name: string;
+      description: string;
+    }>;
+    expect(listed.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/one upload contract/);
+    const publicList = (await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId })).json().result
+      .tools as Array<{ name: string; description: string }>;
+    expect(publicList.find((t) => t.name === 'stage_upload_url')?.description).not.toMatch(/one upload contract/);
+    const started = await callTool(app, 'start', { slug: 'comet-courier' }, managed);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const minted = await callTool(app, 'stage_upload_url', { sessionKey, paths: ['game/a.ts', 'game/b.ts'] }, managed);
+    const { batch } = minted.structured as { batch: { url: string; headers: Record<string, string>; paths: string[] } };
+    expect(batch.paths).toEqual(['game/a.ts', 'game/b.ts']);
+    const put = (query: string) =>
+      app!.inject({
+        method: 'PUT',
+        url: `${batch.url.replace(/^https?:\/\/[^/]+/, '')}${query}`,
+        headers: { authorization: batch.headers.Authorization, 'content-type': batch.headers['Content-Type'] },
+        payload: Buffer.from('export {};\n', 'utf8'),
+      });
+    expect((await put('?path=game/a.ts')).json()).toMatchObject({ accepted: true, path: 'game/a.ts' });
+    expect((await put('?path=game/b.ts')).json()).toMatchObject({ accepted: true, path: 'game/b.ts' });
+    expect((await put('?path=game/c.ts')).statusCode).toBe(400);
+    expect((await put('')).statusCode).toBe(400);
+    const publicStart = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const publicKey = (publicStart.structured as { sessionKey: string }).sessionKey;
+    const perPath = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey: publicKey, paths: ['game/a.ts'] },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(perPath.structured).toHaveProperty('uploads');
+    expect(perPath.structured).not.toHaveProperty('batch');
+  });
+
   it('stage_upload_url + raw PUT stages without content in a tool argument', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

@@ -164,7 +164,7 @@ twice would read as a sound heard twice.
   when the account can open agent mode. Events recorded while its panel is open
   carry `agentMode: true`. Performance queries exclude those events; engagement
   queries exclude reviewer sessions and sessions containing active-agent events.
-  Drafts, remixes and the editorial review desk remain outside published play.
+  Drafts and the editorial review desk remain outside published play.
 
 ## The reviewer gate
 

@@ -8,9 +8,8 @@ import { describe, expect, it } from 'vitest';
  * cannot be reproduced anywhere a test runs: every machine that runs this suite
  * has a full node_modules, so esbuild works here and only here. In the container
  * it did not, for months, and nothing noticed — published games are served from
- * the pre-baked snapshot, so the server never assembled one until the remix code
- * lane asked it to, and then every game on the site answered "this game cannot be
- * remixed that deeply yet".
+ * the pre-baked snapshot, so the server never assembled one until a live editing
+ * lane asked it to, and then it failed for every game on the site.
  */
 
 const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');

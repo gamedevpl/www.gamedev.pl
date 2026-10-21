@@ -1092,11 +1092,9 @@ describe('getGameSources', () => {
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
 
     await client.getGameSources('main', 'game-a');
-    await client.getGameKitDeclaration('main');
     fetchImpl.mockClear();
 
     const sourcesB = await client.getGameSources('main', 'game-b');
-    await client.getGameKitDeclaration('main');
 
     expect(sourcesB?.gameJs).toContain('GameKit.createInput');
     const enginePaths = fetchImpl.mock.calls
@@ -1582,9 +1580,6 @@ describe('getGameSources', () => {
     const sources = await client.getGameSources('main', 'sim-game');
     expect(sources?.gameJs).toContain('ok: true');
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
-
-    const sourceMap = await client.getGameSourceMap('main', 'sim-game');
-    expect(Object.keys(sourceMap ?? {})).toEqual(['game.ts']);
   });
 
   it.each([
@@ -1645,53 +1640,6 @@ describe('getGameSources', () => {
     await expect(client.getGameSources('main', 'modular', overrides, { noRefFallback: true })).rejects.toThrow(
       /module not found.*extra\.ts/,
     );
-  });
-});
-
-describe('getGameSourceMap', () => {
-  it('returns exactly the game modules the import graph reaches, keyed relatively', async () => {
-    const files = new Map<string, string | Uint8Array>([
-      ['games/orchard/game.ts', "import { start } from './game/runtime.ts';\nstart();\n"],
-      [
-        'games/orchard/game/runtime.ts',
-        "import { speed } from './model.ts';\nexport function start(): number { return speed; }\n",
-      ],
-      ['games/orchard/game/model.ts', 'export const speed: number = 3;\n'],
-      // Present on the ref, imported by nobody — not part of the running game.
-      ['games/orchard/game/abandoned.ts', 'export const dead: number = 0;\n'],
-    ]);
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const pathname = new URL(String(input)).pathname;
-      const marker = '/contents/';
-      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
-      const value = files.get(path);
-      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
-    }) as unknown as typeof fetch;
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
-
-    const sources = await client.getGameSourceMap('main', 'orchard');
-
-    // The walk is the answer, not a directory listing: offering an editor a
-    // module the game does not import invites an edit nobody can see.
-    expect(Object.keys(sources ?? {}).sort()).toEqual(['game.ts', 'game/model.ts', 'game/runtime.ts']);
-    expect(sources?.['game/model.ts']).toContain('speed: number = 3');
-  });
-
-  it('returns null for a game with no entry point rather than an empty map', async () => {
-    const fetchImpl = vi.fn(async () => new Response('not found', { status: 404 })) as unknown as typeof fetch;
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
-
-    // An empty map would read as "this game has no code", which the caller would
-    // hand to a symbol map and turn into a confident edit of nothing.
-    expect(await client.getGameSourceMap('main', 'ghost')).toBeNull();
-  });
-
-  it('refuses a slug that could address anything but a game directory', async () => {
-    const fetchImpl = vi.fn(async () => new Response('', { status: 200 })) as unknown as typeof fetch;
-    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
-
-    expect(await client.getGameSourceMap('main', '../shared')).toBeNull();
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 

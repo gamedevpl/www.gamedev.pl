@@ -145,7 +145,7 @@ export function PlayShell() {
         aria-valuemax={900}
         aria-valuenow={390}
         tabIndex={0}
-        title="Drag to resize · double-click to reset"
+        title="Drag to resize · arrow keys adjust · Enter or double-click to reset"
       />
       <aside id="workbench-tools" hidden aria-labelledby="drawer-title">
         <header className="panel-head">

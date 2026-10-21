@@ -1,10 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { RoomRegistry } from '../realtime/mp.js';
+import type { Store } from './store.js';
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe('relay-only app', () => {
+  it.each(['environment', 'option'])('serves health without store access in %s mode', async (mode) => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MP_RELAY_ONLY', mode === 'environment' ? '1' : undefined);
+    vi.stubEnv('PRIVATE_BETA', mode === 'environment' ? 'false' : 'true');
+    vi.stubEnv('MP_ROOM_SECRET', 'room-key');
+    const accessStore = vi.fn(() => {
+      throw new Error('relay has no Firestore access');
+    });
+    const store = new Proxy({} as Store, { get: () => accessStore });
+    const app = await buildApp({
+      store,
+      multiplayerRoutes: {
+        relayOnly: mode === 'option',
+        registry: new RoomRegistry({ secret: 'room-key' }),
+        internalAuth: { verify: async () => true },
+      },
+    });
+    try {
+      for (const method of ['GET', 'GET', 'HEAD'] as const) {
+        const response = await app.inject({ method, url: '/api/health' });
+        expect(response.statusCode).toBe(200);
+        if (method === 'GET') expect(response.json()).toEqual({ status: 'ok' });
+      }
+      expect(accessStore).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('boots without a session key and serves only relay and probe routes', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('MP_RELAY_ONLY', '1');

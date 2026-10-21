@@ -22,9 +22,6 @@ import {
   type TransferStep,
   type PartyVia,
   type PlayVia,
-  type RemixControl,
-  type RemixPaintedVia,
-  type RemixStep,
   type ShareStep,
   type StudioStep,
   type StudioStepDetail,
@@ -54,9 +51,6 @@ export type {
   HowToPlayVia,
   InviteStep,
   PlayVia,
-  RemixControl,
-  RemixPaintedVia,
-  RemixStep,
   ShareStep,
   StudioStep,
   StudioStepDetail,
@@ -134,7 +128,6 @@ export type VisitEvent =
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
-  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
   | { type: 'code_step'; step: CodeStep; codeSurface?: CodeTelemetrySurface }
   | {
       type: 'cli_step';
@@ -620,24 +613,6 @@ export function recordCodeCompletion(input: {
   });
 }
 
-let recordedRemixSteps = new Set<string>();
-
-export function recordRemixStep(step: RemixStep, options?: { via?: RemixPaintedVia; control?: RemixControl }): void {
-  if (!currentSession) return;
-  if (recordedRemixSteps.has(step)) return;
-  recordedRemixSteps.add(step);
-  // Dedupe means the via is the *first* door of the visit — which is the right
-  // reading: the question is which door brought someone to the brush at all.
-  // The same applies to `control`, and the offset the session stamps on the event
-  // is therefore the time to the *first* open, which is the "when" worth having.
-  currentSession.record({
-    type: 'remix_step',
-    step,
-    ...(options?.via ? { via: options.via } : {}),
-    ...(options?.control ? { control: options.control } : {}),
-  });
-}
-
 /** Test seam: installs a session without touching the DOM. */
 export function setVisitSessionForTesting(session: VisitSession | null): void {
   currentSession = session;
@@ -655,7 +630,6 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();
-  recordedRemixSteps = new Set();
   recordedCodeSteps = new Set();
   recordedCliSteps = new Set();
 }

@@ -124,32 +124,6 @@ export type EditorStep = (typeof EDITOR_STEPS)[number];
 export const ASSIST_STEPS = ['asked', 'applied', 'handoff', 'rejected'] as const;
 export type AssistStep = (typeof ASSIST_STEPS)[number];
 
-export const REMIX_STEPS = [
-  'offered',
-  'opened',
-  'no_lane',
-  'typed',
-  'wall_shown',
-  'signed_in',
-  'tuned',
-  'painted',
-  'asked',
-  'applied',
-  'broken',
-  'undone',
-  'handoff',
-  'refused',
-  'shared',
-  'proposed',
-] as const;
-export type RemixStep = (typeof REMIX_STEPS)[number];
-
-export const REMIX_PAINTED_VIAS = ['redirect', 'menu', 'panel'] as const;
-export type RemixPaintedVia = (typeof REMIX_PAINTED_VIAS)[number];
-
-export const REMIX_CONTROLS = ['page', 'bar', 'more'] as const;
-export type RemixControl = (typeof REMIX_CONTROLS)[number];
-
 export const CODE_STEPS = [
   'offered',
   'opened',

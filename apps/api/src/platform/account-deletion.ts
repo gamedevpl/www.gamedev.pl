@@ -38,6 +38,7 @@ export async function runAccountDeletionSweep(options: {
   adminUids?: ReadonlySet<string>;
   now?: () => number;
   batchSize?: number;
+  eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
 }): Promise<AccountDeletionSweepResult> {
   const at = new Date(options.now?.() ?? Date.now()).toISOString();
   const due = await options.store.listAccountsDueForDeletion(at, options.batchSize ?? ACCOUNT_DELETION_SWEEP_BATCH);
@@ -57,6 +58,7 @@ export async function runAccountDeletionSweep(options: {
           uid: user.uid,
           at,
           adminUids: options.adminUids,
+          eraseMemoryStore: options.eraseMemoryStore,
         }),
       );
     } catch (error) {
