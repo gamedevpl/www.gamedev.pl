@@ -184,6 +184,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         shell,
         workspace: lines,
         mountedSources: ws.delivered === true,
+        mountedReferences: Boolean(ws.references?.length),
         inlined: inlinedBy(ws.context),
         maxSeconds: options.maxDurationSeconds,
       });

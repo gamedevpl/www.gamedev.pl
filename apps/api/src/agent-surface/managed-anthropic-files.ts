@@ -25,7 +25,11 @@ export interface MountedFile {
 
 async function upload(client: AnthropicFilesClient, archive: ManagedWorkspaceArchive): Promise<MountedFile> {
   const form = new FormData();
-  form.append('file', new Blob([new Uint8Array(archive.bytes)], { type: 'application/gzip' }), archive.name);
+  form.append(
+    'file',
+    new Blob([new Uint8Array(archive.bytes)], { type: archive.type ?? 'application/gzip' }),
+    archive.name,
+  );
   // Backstop for a lost file id or failed deletes; the API minimum.
   form.append('expires_in_seconds', String(UPLOAD_EXPIRY_SECONDS));
   const response = await client.fetchImpl(`${client.baseUrl}/v1/files`, {

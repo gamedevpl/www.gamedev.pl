@@ -95,5 +95,7 @@ export function nextSuggestedTool(state: NextStepState): string | undefined {
   // A delivery whose gate never started is not one to close on.
   if (codes.has('gate_not_started')) return undefined;
   const delivered = state.tool === 'submit_sources' || state.tool === 'get_gate_verdict';
-  return codes.has('call_end') && delivered ? 'end' : undefined;
+  if (!codes.has('call_end') || !delivered) return undefined;
+  // Managed rounds only: the notes come before the close.
+  return codes.has('notes_unsaved') ? 'creator_notes' : 'end';
 }

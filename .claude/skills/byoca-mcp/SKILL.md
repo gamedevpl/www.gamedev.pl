@@ -347,6 +347,17 @@ pending messages stay unread in the session's nudge state (`inbox_pending`) unti
 returns them, and it also carries their images. If reading that context fails, the kickoff falls
 back to the read tools.
 
+**Managed reference images and notes.** On the same lane the loader mounts the creator's reference
+images beside the kit as `reference-<n>.png` (`workspace-references.ts`): every one on a first build,
+later those pending notes name or no builder has seen. The kickoff lists their paths, and once the vendor takes the
+archives they count as seen, so `reference_unseen` stays quiet. A successful managed
+`submit_sources` adds `notes_unsaved`, and the round guide then suggests `creator_notes` over `end`, until this
+round has written the creator notes. Public clients see neither.
+
+**Managed knowledge step.** The mounted-lane kickoff adds one numbered opening step: a single
+`knowledge_query` naming what the round needs most, before `report_progress`. The shell system prompt
+says `knowledge_query` is not one of the kit-browse tools it otherwise avoids. Other lanes are unchanged.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens
@@ -1344,7 +1355,7 @@ the state alone justifies a step: `end` on `stop` with `builder_handoff` or `gat
 `get_kit` for a `kit_outdated` refusal until this instance has answered a `get_kit` (then
 nothing, since a breaking kit can need code changes); `read_inbox` for notes that arrived since the last
 read; `get_transcript` / `get_sources` for unread context; `end` on the `submit_sources` or
-`get_gate_verdict` reply that carries `call_end`, unless `gate_not_started` rides with it. It is omitted otherwise — never
+`get_gate_verdict` reply that carries `call_end`, unless `gate_not_started` rides with it, or `creator_notes` instead when managed `notes_unsaved` rides with it. It is omitted otherwise — never
 `submit_sources`, because `must_deliver` / `must_fix_gate` say what must happen before the
 round can finish, not that the sources are ready, and never while a staged file carries a
 known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
@@ -1353,6 +1364,7 @@ known defect (`patch_incomplete`, `typecheck_hint`, `game_manifest_invalid`,
 | Code                    | Meaning                                                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `call_end`              | Call `end` when finished iterating this round                                                                                                                                                                                                                                                                                                                                                    |
+| `notes_unsaved`         | Managed only: delivered, but this round has not written `creator_notes` — call it with `notes` and the revision before `end`                                                                                                                                                                                                                                                                     |
 | `must_fix_gate`         | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card                                                                                                                                                                                                                       |
 | `must_deliver`          | Nothing delivered yet — submit before finishing                                                                                                                                                                                                                                                                                                                                                  |
 | `gate_not_started`      | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                                                                                                                                                                                                                                       |

@@ -42,6 +42,12 @@ function undeliveredRequest(brief: BuildBrief): string {
     : 'take the request from `get_brief` and `read_inbox` together, reading `get_transcript` when the latest message is terse';
 }
 
+// The mounted lane greps the kit; it skipped this search.
+const KNOWLEDGE_STEP =
+  'One `knowledge_query` with what this round needs most, in plain words (for a racer: "lap timing, checkpoints ' +
+  'and car handling"). It searches the kit docs, skills and example games at once; check any signature it names ' +
+  'in the unpacked kit before you use it.';
+
 // Reads the kickoff already carries are not asked for again.
 export function openingSteps(
   brief: BuildBrief,
@@ -56,10 +62,11 @@ export function openingSteps(
     ...(lane.workspace ? [] : ['`get_kit`']),
   ];
   const list = reads.length > 1 ? `${reads.slice(0, -1).join(', ')} and ${reads.at(-1)}` : reads[0];
-  return [
-    'Before your first edit, in this order:',
-    `1. \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
-    ...(list ? [`2. ${list}.`] : []),
-    `${list ? 3 : 2}. One short \`report_progress\`, in the creator’s language, of what you will change.`,
+  const steps = [
+    `\`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
+    ...(list ? [`${list}.`] : []),
+    ...(lane.workspace ? [KNOWLEDGE_STEP] : []),
+    'One short `report_progress`, in the creator’s language, of what you will change.',
   ];
+  return ['Before your first edit, in this order:', ...steps.map((step, index) => `${index + 1}. ${step}`)];
 }

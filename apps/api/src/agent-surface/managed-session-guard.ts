@@ -15,7 +15,7 @@ import {
 type Live = () => Promise<{ statusCode: number; json: () => unknown }>;
 
 export interface ManagedSessionGuardDeps {
-  store: Pick<Store, 'stepManagedSession'>;
+  store: Pick<Store, 'stepManagedSession'> & Partial<Pick<Store, 'getCreatorNotes'>>;
   now: () => number;
   sleep?: (ms: number) => Promise<void>;
   waitMs?: number;
@@ -25,6 +25,7 @@ export interface ManagedCall {
   jobId: number;
   roundGeneration: number;
   sessionId: string;
+  ownerUid?: string;
   // A builder handoff still waits for end to acknowledge it.
   handoffPending: boolean;
   mode: 'preview' | 'publish';
@@ -42,6 +43,31 @@ export const SUBMIT_RUNNING_REASON =
 export const NOTHING_DELIVERED_REASON =
   'Not ended: nothing this session submitted was delivered; the last submit_sources was refused (its reply ' +
   'says why). This applies to the first end only; a second end closes the session.';
+
+export const NOTES_UNSAVED_WARNING = {
+  code: 'notes_unsaved',
+  message:
+    'Delivered, but creator_notes has not been written this round. Before end, call creator_notes with notes ' +
+    'and the revision you read, for the next builder.',
+};
+
+// After a delivery, steer to the notes; a failed read stays silent.
+async function withNotesReminder(
+  deps: ManagedSessionGuardDeps,
+  call: ManagedCall,
+  result: ToolResult,
+): Promise<ToolResult> {
+  if (!call.ownerUid || !deps.store.getCreatorNotes) return result;
+  const notes = await deps.store.getCreatorNotes(call.ownerUid).catch(() => undefined);
+  if (notes === undefined) return result;
+  if (notes?.jobId === call.jobId && notes.roundGeneration === call.roundGeneration) return result;
+  const data = result.structuredContent as Record<string, unknown>;
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+  return toolOk({
+    ...data,
+    warnings: [...warnings, NOTES_UNSAVED_WARNING],
+  });
+}
 
 async function liveFields(live: Live): Promise<Record<string, unknown>> {
   const res = await live().catch(() => null);
@@ -75,7 +101,7 @@ export async function guardManagedSubmit(deps: ManagedSessionGuardDeps, call: Ma
     const result = await call.run();
     const ok = (result.structuredContent as { ok?: unknown } | undefined)?.ok === true;
     await step(ok ? 'delivered' : 'refused');
-    return result;
+    return ok ? await withNotesReminder(deps, call, result) : result;
   } catch (error) {
     await step('refused').catch(() => undefined);
     throw error;
@@ -155,6 +181,7 @@ export function createManagedCallRunner(deps: ManagedCallRunnerDeps) {
       jobId: auth.jobId,
       roundGeneration: auth.claims.roundGeneration ?? 1,
       sessionId,
+      ownerUid: auth.record.ownerUid,
       handoffPending: auth.record.builderHandoff?.awaitsAgentAck === true && !auth.record.builderHandoff.acknowledgedAt,
       mode: await effectiveSubmitMode(requested, args.fromLatestDelivery === true, auth.record, deps.gamesStore),
       live: () => deps.injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.INBOX, auth.channelToken),
