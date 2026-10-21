@@ -462,6 +462,8 @@ export interface KitFileStore {
 
 export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
   const cache = new Map<string, KitTree>();
+  // One unpack per ref@sha at a time: a cold burst would otherwise hold N copies.
+  const inflight = new Map<string, Promise<KitTree>>();
 
   function remember(tree: KitTree): KitTree {
     cache.set(tree.engineRef, tree);
@@ -577,15 +579,22 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
     if (cached && cached.sha256 === sha256) {
       return cached;
     }
-    const tarball = await objectStore.readObject(`kits/${requested}.tgz`);
-    if (!tarball) {
-      throw new KitFilesError(
-        'kit_artifact_missing',
-        `kits/${requested}.tgz is missing for the requested registry entry`,
-      );
-    }
-    const files = await unpackKitTarball(tarball);
-    return remember({ engineRef: requested, sha256, files });
+    const key = `${requested}@${sha256}`;
+    const pending = inflight.get(key);
+    if (pending) return pending;
+    const load = (async () => {
+      const tarball = await objectStore.readObject(`kits/${requested}.tgz`);
+      if (!tarball) {
+        throw new KitFilesError(
+          'kit_artifact_missing',
+          `kits/${requested}.tgz is missing for the requested registry entry`,
+        );
+      }
+      const files = await unpackKitTarball(tarball);
+      return remember({ engineRef: requested, sha256, files });
+    })().finally(() => inflight.delete(key));
+    inflight.set(key, load);
+    return load;
   }
 
   return {
