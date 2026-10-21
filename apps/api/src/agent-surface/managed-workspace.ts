@@ -15,6 +15,7 @@ import {
 } from './managed-agent.js';
 import { sourceArchive } from './source-archive.js';
 import { kickoffContextLines, loadKickoffContext, type KickoffContext } from './workspace-context.js';
+import { loadReferenceArchives, referenceKickoffLines, type ReferenceStore } from './workspace-references.js';
 
 export const KIT_ARCHIVE = 'kit.tgz';
 export const SOURCES_ARCHIVE = 'sources.tgz';
@@ -23,6 +24,8 @@ const WORKSPACE_ROOT = '/workspace';
 
 export interface ManagedWorkspaceArchive {
   name: string;
+  // Upload media type; archives are gzip.
+  type?: string;
   bytes: Uint8Array;
 }
 
@@ -36,6 +39,10 @@ export interface ManagedWorkspace {
   kitOutdated?: boolean;
   // Inlined round data; absent when it could not be read.
   context?: KickoffContext;
+  // Mounted creator reference images, newest first.
+  references?: string[];
+  // Runs once the vendor took the archives.
+  onMounted?: () => Promise<void>;
   archives: ManagedWorkspaceArchive[];
 }
 
@@ -51,6 +58,7 @@ export class ManagedWorkspaceError extends ManagedAgentError {
 
 export interface ManagedWorkspaceDeps {
   store: Pick<Store, 'getSubmission' | 'pinRoundKitEngineRef' | 'listPendingCreatorMessages' | 'getCreatorNotes'> &
+    ReferenceStore &
     Parameters<typeof loadRoundSources>[0];
   gamesStore: GamesStore;
   objectStore: Pick<GcsObjectStore, 'readObject'>;
@@ -80,9 +88,24 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
     const kitOutdated = outdated || undefined;
     const context = await loadKickoffContext(deps.store, record, sources.kind).catch(() => undefined);
-    if (sources.kind !== 'seed' && sources.kind !== 'delivery') return { engineRef, kitOutdated, context, archives };
+    // Images are a bonus: a failed read leaves the get_reference_images path.
+    const refs = await loadReferenceArchives(deps.store, record).catch(() => null);
+    const mounted = refs?.archives.length
+      ? { references: refs.archives.map((ref) => ref.name), onMounted: refs.markSeen }
+      : {};
+    archives.push(...(refs?.archives ?? []));
+    if (sources.kind !== 'seed' && sources.kind !== 'delivery')
+      return { engineRef, kitOutdated, context, ...mounted, archives };
     archives.push({ name: SOURCES_ARCHIVE, bytes: sourceArchive(sources.files, sources.slug) });
-    return { engineRef, slug: sources.slug, delivered: sources.kind === 'delivery', kitOutdated, context, archives };
+    return {
+      engineRef,
+      slug: sources.slug,
+      delivered: sources.kind === 'delivery',
+      kitOutdated,
+      context,
+      ...mounted,
+      archives,
+    };
   };
 }
 
@@ -108,6 +131,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
       ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`
       : `Submit with kitEngineRef ${workspace.engineRef}; no \`get_kit\` call is needed. Only if \`submit_sources\` refuses it with kit_outdated: call \`get_kit\`, ${remount}.`,
     'Edit there and typecheck from the kit root before each submit, as the system prompt describes.',
+    ...referenceKickoffLines(dir, workspace.references ?? []),
     ...(workspace.context ? kickoffContextLines(workspace.context) : []),
   ];
 }
@@ -143,7 +167,11 @@ export async function startWithWorkspace(
   if (!dir || !workspace) return provider.startSession(request);
   try {
     const prompt = promptWith(workspaceKickoff(dir, workspace), workspace);
-    return await provider.startSession({ ...request, prompt, workspaceArchives: workspace.archives });
+    const session = await provider.startSession({ ...request, prompt, workspaceArchives: workspace.archives });
+    await workspace
+      .onMounted?.()
+      .catch((error: unknown) => log?.warn({ err: error }, 'mounted references not marked seen'));
+    return session;
   } catch (error) {
     if (!(error instanceof ManagedWorkspaceError)) throw error;
     log?.warn({ err: error }, 'managed workspace upload failed; starting without it');

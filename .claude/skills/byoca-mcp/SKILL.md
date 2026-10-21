@@ -347,6 +347,13 @@ pending messages stay unread in the session's nudge state (`inbox_pending`) unti
 returns them, and it also carries their images. If reading that context fails, the kickoff falls
 back to the read tools.
 
+**Managed reference images and notes.** On the same lane the loader mounts the creator's reference
+images beside the kit as `reference-<n>.png` (`workspace-references.ts`): every one on a first build,
+later only those pending notes name. The kickoff lists their paths, and once the vendor takes the
+archives they count as seen, so `reference_unseen` stays quiet. A successful managed
+`submit_sources` adds `notes_unsaved` and suggests `creator_notes` instead of `end` until this
+round has written the creator notes. Public clients see neither.
+
 ### Accepted-proposal rounds (`get_proposal_summary` / `get_proposal_diff`)
 
 Accepting a proposal on a creator-owned game never adopts the proposer's code: it opens

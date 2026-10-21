@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryStore } from '../platform/store.js';
-import { guardManagedEnd, guardManagedSubmit, type ManagedCall } from './managed-session-guard.js';
+import {
+  guardManagedEnd,
+  guardManagedSubmit,
+  NOTES_UNSAVED_WARNING,
+  type ManagedCall,
+} from './managed-session-guard.js';
 import { toolOk } from './mcp-tool-support.js';
 import { nextManagedSession } from '../store/slices/managed-session-step.js';
 
@@ -175,5 +180,25 @@ describe('managed session guard', () => {
     expect(await step('submit')).toBe('ended');
     await step('reopen');
     expect(await step('submit')).toBe('ok');
+  });
+
+  it('after a delivery, steers to creator_notes until this round wrote them', async () => {
+    const { store, deps, call } = await setup();
+    const delivered = async () =>
+      toolOk({ ok: true, warnings: [{ code: 'call_end', message: 'm' }], nextSuggestedTool: 'end' });
+    const first = await guardManagedSubmit(deps, { ...call(delivered), ownerUid: 'g:owner' });
+    expect(first.structuredContent).toMatchObject({
+      warnings: [{ code: 'call_end' }, NOTES_UNSAVED_WARNING],
+      nextSuggestedTool: 'creator_notes',
+    });
+    const at = new Date(deps.now()).toISOString();
+    await store.setCreatorNotes(
+      { uid: 'g:owner', text: 'likes drift', updatedAt: at, jobId: 5, roundGeneration: 1 },
+      0,
+    );
+    const second = await guardManagedSubmit(deps, { ...call(delivered), ownerUid: 'g:owner' });
+    expect(second.structuredContent).toMatchObject({ nextSuggestedTool: 'end' });
+    const refused = await guardManagedSubmit(deps, { ...call(async () => toolOk({ ok: false })), ownerUid: 'g:x' });
+    expect(refused.structuredContent).toEqual({ ok: false });
   });
 });

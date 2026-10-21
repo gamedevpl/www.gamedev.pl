@@ -67,7 +67,13 @@ export function buildPrompt(brief: BuildBrief, lane: PromptLane = { shell: false
 }
 
 // workspace: mounted-kit kickoff lines; mountedSources: the game is in them too.
-type PromptLane = { shell: boolean; workspace?: string[]; mountedSources?: boolean; maxSeconds?: number } & Inlined;
+type PromptLane = {
+  shell: boolean;
+  workspace?: string[];
+  mountedSources?: boolean;
+  mountedReferences?: boolean;
+  maxSeconds?: number;
+} & Inlined;
 
 const GET_SOURCES = [
   "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
@@ -111,7 +117,9 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
       ? [
           ...(workspace ?? SHELL_DOWNLOAD),
           'Upload changed files from disk: one `stage_upload_url` call with all their paths, then one bash loop that PUTs each `games/<slug>/<path>` to `batch.url?path=<path>` with `batch.headers` (`curl -sS -X PUT`, `--data-binary @…`). Use `patch_source_file` for a small edit; never paste whole files into tool arguments.',
-          'Creator images are part of the request: `get_reference_images` returns their URLs; curl each and `read` the file before your first edit.',
+          lane.mountedReferences
+            ? 'Creator images are part of the request: `read` the mounted ones above before your first edit.'
+            : 'Creator images are part of the request: `get_reference_images` returns their URLs; curl each and `read` the file before your first edit.',
         ]
       : [
           'A larger game comes back truncated: `read_source_files` only the files you change or need to read.',
