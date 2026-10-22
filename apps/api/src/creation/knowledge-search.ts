@@ -60,18 +60,23 @@ export const DEFAULT_RESULT_HARD_CAP_BYTES = 32 * 1024;
 
 const DEFAULT_CACHE_MAX_ENTRIES = 200;
 
+const NOT_COVERED_REPLY = 'The sources do not cover this.';
+
 const API_VERIFICATION_GUIDANCE =
   'Prose here can drift from the pinned Creator Kit. Verify exact current API signatures ' +
   'via get_kit_api / read_kit_file on the pinned engineRef before trusting a signature ' +
   'from this response alone.';
 
-// Discourages restating a wrong premise before correcting it — a measured failure mode.
+// Corrects a premise only on source evidence, not on a retrieval miss.
 const ANSWER_PREAMBLE =
-  'If the question rests on an incorrect assumption about this platform, correct it ' +
-  'directly rather than restating the assumption first. Cite sources for every claim.';
+  'Answer only from the provided sources. If a source contradicts an assumption in the ' +
+  'question, correct it directly rather than restating the assumption first. If the sources ' +
+  `do not describe what was asked, reply only "${NOT_COVERED_REPLY}"; never conclude that ` +
+  'the platform lacks a feature because the sources omit it. Cite sources for every claim.';
 
 // :answer sometimes emits this instead of an error (~10% in one register).
 const EMPTY_ANSWER_PATTERNS: readonly RegExp[] = [
+  /^the sources do not cover this\.?$/i,
   /cannot be answered (from|using) the (given|provided)?\s*(sources|context|search results)/i,
   /no answer could be generated/i,
   /not enough information (was found|is available)/i,
