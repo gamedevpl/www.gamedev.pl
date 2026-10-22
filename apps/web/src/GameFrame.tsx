@@ -3,7 +3,7 @@ import i18n from './i18n/index.js';
 import { prepareGameFrameDocument, useHostLoadTracking } from './frameMessage.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 import { usePreparedFrameDocument } from './frameAdapter.js';
-import { ImageExportPrompt } from './ImageExportPrompt.js';
+import { ExportPrompts } from './ImageExportPrompt.js';
 import { useGamepadBridge } from './gamepad.js';
 
 type GameFrameSource = { title: string; html: string; src?: never } | { title: string; src: string; html?: never };
@@ -55,7 +55,7 @@ export function GameFrame(props: GameFrameProps) {
   if (props.src === undefined && prepared.html === undefined) return null;
   return (
     <>
-      <ImageExportPrompt frameRef={iframeRef} />
+      <ExportPrompts frameRef={iframeRef} />
       <iframe
         key={frameKey}
         ref={iframeRef}

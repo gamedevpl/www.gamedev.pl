@@ -17,6 +17,7 @@ import {
   type FramedPlayStep,
   type HowToPlayVia,
   type ImageExportStep,
+  type VideoExportStep,
   type InviteStep,
   type PartyStep,
   type TransferStep,
@@ -117,6 +118,7 @@ export type VisitEvent =
   // Framed /play/ interstitial: shown, then which exit they took.
   | { type: 'framed_play_step'; step: FramedPlayStep }
   | { type: 'image_export_step'; step: ImageExportStep }
+  | { type: 'video_export_step'; step: VideoExportStep }
   | { type: 'invite_step'; step: InviteStep }
   // Party lifecycle; no slug or room code. `seat` is phone or keyboard.
   | { type: 'party_step'; step: PartyStep; via?: PartyVia }
@@ -431,6 +433,15 @@ export function recordImageExportStep(step: ImageExportStep): void {
   currentSession.record({ type: 'image_export_step', step });
 }
 
+let recordedVideoExportSteps = new Set<VideoExportStep>();
+
+// Game video prompt outcomes; never the filename or video.
+export function recordVideoExportStep(step: VideoExportStep): void {
+  if (!currentSession || recordedVideoExportSteps.has(step)) return;
+  recordedVideoExportSteps.add(step);
+  currentSession.record({ type: 'video_export_step', step });
+}
+
 let recordedTransferSteps = new Set<TransferStep>();
 
 // Handing a game over; slug and counterparty never travel.
@@ -624,6 +635,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();
   recordedImageExportSteps = new Set();
+  recordedVideoExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedAppleLinkSteps = new Set();
@@ -670,6 +682,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   recordedPartySteps = new Set();
   recordedTransferSteps = new Set();
   recordedImageExportSteps = new Set();
+  recordedVideoExportSteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedAppleLinkSteps = new Set();

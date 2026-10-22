@@ -53,4 +53,9 @@ export {
   type ShareStep,
   type FramedPlayStep,
 } from './visit-vocab.js';
-export { IMAGE_EXPORT_STEPS, type ImageExportStep } from './image-export-vocab.js';
+export {
+  IMAGE_EXPORT_STEPS,
+  VIDEO_EXPORT_STEPS,
+  type ImageExportStep,
+  type VideoExportStep,
+} from './image-export-vocab.js';

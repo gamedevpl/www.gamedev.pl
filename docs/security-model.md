@@ -75,6 +75,21 @@ image is never rendered, evaluated or uploaded by the shell. Outcomes are counte
 `image_export_step` on the visit stream (`requested` / `saved` / `dismissed` / `failed` / `rejected`),
 with no slug, filename or image data.
 
+#### Video export
+
+A game may also ask to save a short clip it recorded from its own canvas in the browser
+(`apps/web/src/videoExport.ts`, sharing the bridge in `apps/web/src/fileExport.ts`). Nothing
+is encoded or uploaded server-side. The game posts `{ t: 'video:export', id, name, data }`
+where `data` is an `ArrayBuffer` of at most 64 MiB; the shell accepts it only when the bytes
+open with an ISO BMFF `ftyp` box (saved as `video/mp4`, `.mp4`) or an EBML header (saved as
+`video/webm`, `.webm`), so the container, not the game, decides the type and extension. The
+filename is sanitized like a photo's with a `clip` fallback. Id echo, current-document check,
+1.5 s throttle, one pending request, the text-only prompt (`VideoExportPrompt`, also mounted
+in `GameFrame`), the 500 ms arming, the Save-click-only download and the 60 s timeout are the
+same as for images, with `video:export-pending` and `video:exported` replies. The shell never
+plays the clip. Outcomes are counted as `video_export_step` with the same steps and no slug,
+filename or video data.
+
 Older assembled GameKit versions are adapted in the browser before their document executes.
 A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`
 and `globalThis.parent.postMessage` calls to the bootstrap send function. Comments, strings,
