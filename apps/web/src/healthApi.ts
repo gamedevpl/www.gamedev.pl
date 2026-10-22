@@ -109,6 +109,7 @@ export interface VisitFunnel {
     declined: number;
   };
   imageExport?: { requested: number; saved: number; dismissed: number; failed?: number; rejected: number };
+  videoExport?: { requested: number; saved: number; dismissed: number; failed: number; rejected: number };
   localCode?: LocalCodeMetrics;
   completion?: {
     requests: number;
