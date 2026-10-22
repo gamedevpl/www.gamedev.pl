@@ -2325,6 +2325,7 @@
   },
   "imageExport": {
     "prompt": "Ta gra chce zapisać zdjęcie: {{filename}}",
+    "videoPrompt": "Ta gra chce zapisać klip wideo: {{filename}}",
     "save": "Zapisz",
     "notNow": "Nie teraz"
   },

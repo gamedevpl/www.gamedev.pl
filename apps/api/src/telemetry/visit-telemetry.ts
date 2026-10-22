@@ -10,6 +10,7 @@ import {
   EDITOR_STEPS,
   FRAMED_PLAY_STEPS,
   IMAGE_EXPORT_STEPS,
+  VIDEO_EXPORT_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
   PARTY_STEPS,
@@ -109,6 +110,7 @@ const EventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('share_step'), step: ShareStepSchema, ...offsetField }),
   z.object({ type: z.literal('framed_play_step'), step: FramedPlayStepSchema, ...offsetField }),
   z.object({ type: z.literal('image_export_step'), step: z.enum(IMAGE_EXPORT_STEPS), ...offsetField }),
+  z.object({ type: z.literal('video_export_step'), step: z.enum(VIDEO_EXPORT_STEPS), ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
   z.object({
     type: z.literal('party_step'),
@@ -257,6 +259,7 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'framed_play_step':
         case 'image_export_step':
+        case 'video_export_step':
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
           return { ...base, type: event.type, step: event.step };

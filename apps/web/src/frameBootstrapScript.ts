@@ -5,10 +5,12 @@ export function frameBootstrapScript(nonce: string): string {
   return `<script>(function(){
     var nonce=${JSON.stringify(nonce).replaceAll('<', '\\u003c')},host=parent,send=host.postMessage.bind(host),channel=new MessageChannel();
     var Event=MessageEvent,dispatch=window.dispatchEvent.bind(window),post=channel.port1.postMessage.bind(channel.port1);
-    var close=channel.port1.close.bind(channel.port1),define=Object.defineProperty;
+    var close=channel.port1.close.bind(channel.port1),define=Object.defineProperty,isArray=Array.isArray;
     var getData=Function.prototype.call.bind(Object.getOwnPropertyDescriptor(MessageEvent.prototype,'data').get);
-    Object.defineProperty(window,'__GDPL_DOCUMENT_SEND__',{value:function(payload){
-      post({payload:payload,documentNonce:nonce});
+    // Transfers move large buffers (video export) instead of cloning them.
+    Object.defineProperty(window,'__GDPL_DOCUMENT_SEND__',{value:function(payload,origin,transfer){
+      if(isArray(transfer))post({payload:payload,documentNonce:nonce},transfer);
+      else post({payload:payload,documentNonce:nonce});
     },writable:false,configurable:false});
     // Firefox can refuse the parent WindowProxy as a MessageEventInit source; the throw
     // used to drop the host message (pause/resume included) and surface as a game error.

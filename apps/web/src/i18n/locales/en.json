@@ -2311,6 +2311,7 @@
   },
   "imageExport": {
     "prompt": "This game wants to save a photo: {{filename}}",
+    "videoPrompt": "This game wants to save a video clip: {{filename}}",
     "save": "Save",
     "notNow": "Not now"
   },
