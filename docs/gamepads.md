@@ -9,19 +9,26 @@ An authenticated current-frame `gdp` v1 `gamepad:hello` starts animation-frame p
 Changed state is sent over the current document's reply channel as `gamepad:state`:
 
 ```ts
-{ ns: 'gdp', v: 1, t: 'gamepad:state', pads: [
+{ ns: 'gdp', v: 1, t: 'gamepad:state', active: true, pads: [
   { index: 0, mapping: 'standard', axes: [0, 0, 0, 0], buttons: [0, 0, 0] }
 ] }
 ```
 
-The host sends at most 16 connected standard-mapped devices, four clamped axes and
-17 clamped button values per device. Omitted controls are zero in GameKit. There is
+The host sends at most 16 connected devices as `mapping: 'standard'`, four clamped axes and
+17 clamped button values per device. Standard-mapped pads pass through. The 8BitDo Micro
+(Chrome D-input HID and macOS MFi profiles) is projected onto the standard slots by
+physical face position, with its digital cross on buttons 12–15; other raw layouts are
+dropped rather than guessed. Omitted controls are zero in GameKit. There is
 no fixed four-player browser contract. The game chooses its player limit and maps
 physical indices to seats. Hardware names, timestamps and device identifiers are
 never passed to the game or recorded. No room or network round trip is needed for
 local pad play. Unavailable or denied APIs return an empty list.
 
-Blur, hidden documents and teardown send neutral state. Polling ends on document
+Blur, hidden documents and teardown send neutral state with `active: false`; live
+frames carry `active: true`. A missing field means active (older hosts). Consumers
+must not read the drop to zero in an inactive frame as a release: a button still held
+when `active` returns to `true` stays off until it is released, so focus changes
+never produce a fresh press. GameKit keeps inactive pads listed, so seats survive. Polling ends on document
 replacement, navigation, passive preview transitions and unmount. Frame validation
 and bound replies prevent another window or an old game document receiving input.
 
