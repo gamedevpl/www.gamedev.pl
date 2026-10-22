@@ -13,9 +13,8 @@ function boot() {
     port2 = {};
   }
   const win: Record<string, unknown> = { addEventListener() {}, dispatchEvent() {} };
-  const code = frameBootstrapScript('n1')
-    .replace(/^<script>/, '')
-    .replace(/<\/script>$/, '');
+  const tag = frameBootstrapScript('n1');
+  const code = tag.slice('<script>'.length, -'</script>'.length);
   const run = new Function('window', 'parent', 'MessageChannel', 'MessageEvent', 'document', code);
   const event = function () {};
   Object.defineProperty(event.prototype, 'data', { get: () => null });
