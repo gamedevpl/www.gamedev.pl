@@ -68,6 +68,7 @@ describe('looksLikeEmptyAnswer', () => {
   it('flags the known "no answer" boilerplate', () => {
     expect(looksLikeEmptyAnswer('This cannot be answered from the given sources.')).toBe(true);
     expect(looksLikeEmptyAnswer('No answer could be generated for this query.')).toBe(true);
+    expect(looksLikeEmptyAnswer('The sources do not cover this.')).toBe(true);
     expect(looksLikeEmptyAnswer('')).toBe(true);
     expect(looksLikeEmptyAnswer('   ')).toBe(true);
   });
@@ -200,6 +201,24 @@ describe('queryKnowledge — mode=chunks', () => {
 
     expect(capturedBody?.filter).toBe('corpus: ANY("editor")');
     expect((capturedBody?.contentSearchSpec as Record<string, unknown>)?.searchResultMode).toBe('CHUNKS');
+  });
+});
+
+describe('answer preamble', () => {
+  it('corrects a premise only on source evidence and reports a miss as not covered', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(init!.body as string);
+      return jsonResponse(answerBody('The party module handles same-screen multiplayer.'));
+    });
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    await queryKnowledge({ query: 'best lap ghost replay', mode: 'answer' });
+
+    const spec = capturedBody?.answerGenerationSpec as { promptSpec: { preamble: string } };
+    expect(spec.promptSpec.preamble).toContain('If a source contradicts an assumption');
+    expect(spec.promptSpec.preamble).toContain('never conclude that the platform lacks a feature');
+    expect(spec.promptSpec.preamble).toContain('"The sources do not cover this."');
   });
 });
 
