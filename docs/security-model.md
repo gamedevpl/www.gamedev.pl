@@ -88,7 +88,8 @@ filename is sanitized like a photo's with a `clip` fallback. Id echo, current-do
 in `GameFrame`), the 500 ms arming, the Save-click-only download and the 60 s timeout are the
 same as for images, with `video:export-pending` and `video:exported` replies. The shell never
 plays the clip. Outcomes are counted as `video_export_step` with the same steps and no slug,
-filename or video data.
+filename or video data. The bootstrap's send function forwards a transfer list, so the
+kit moves the buffer across the bridge instead of cloning it.
 
 Older assembled GameKit versions are adapted in the browser before their document executes.
 A JavaScript parser rewrites direct global `parent.postMessage`, `window.parent.postMessage`
