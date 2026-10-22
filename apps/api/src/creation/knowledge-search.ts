@@ -67,7 +67,7 @@ const API_VERIFICATION_GUIDANCE =
   'via get_kit_api / read_kit_file on the pinned engineRef before trusting a signature ' +
   'from this response alone.';
 
-// Corrects a premise only on source evidence; a retrieval miss reads as one.
+// Corrects a premise only on source evidence, not on a retrieval miss.
 const ANSWER_PREAMBLE =
   'Answer only from the provided sources. If a source contradicts an assumption in the ' +
   'question, correct it directly rather than restating the assumption first. If the sources ' +
