@@ -190,6 +190,25 @@ describe('video export prompt', () => {
     expect(downloads).toEqual([]);
   });
 
+  it('refuses a video while a photo prompt is up, and the reverse', () => {
+    const fromGame = mount();
+    const gameWindow = container.querySelector('iframe')!.contentWindow as Window;
+    const photo = { ...envelope, t: 'image:export', id: 9, data: 'data:image/png;base64,iVBORw0KGgoAAAAN' };
+    act(() => {
+      window.dispatchEvent(documentMessage('message', { data: photo, source: gameWindow, origin: 'null' }));
+    });
+    fromGame({ data: buffer(MP4_BYTES) });
+
+    expect(promptText()).toContain('photo');
+    expect(document.querySelectorAll('.image-export-prompt')).toHaveLength(1);
+    expect(toGame).toContainEqual(REFUSED);
+
+    act(() => dismissButton()!.click());
+    vi.mocked(Date.now).mockImplementation(() => 20_000);
+    fromGame({ data: buffer(MP4_BYTES) });
+    expect(promptText()).toContain('video clip');
+  });
+
   it('is wired into GameFrame, which every play surface renders', async () => {
     root = createRoot(container);
     act(() => root!.render(<GameFrame title="game" html="<!doctype html><p>game</p>" autoFocus={false} />));

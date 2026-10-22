@@ -79,6 +79,9 @@ export interface FileExportPrompt {
   dismiss: () => void;
 }
 
+// One prompt per frame across kinds, so cards never stack.
+const busyFrames = new WeakSet<object>();
+
 interface Pending {
   request: FileExportRequest;
   finish: (ok: boolean) => void;
@@ -104,6 +107,7 @@ export function useFileExportBridge(
       const current = pending;
       if (!current) return;
       pending = null;
+      busyFrames.delete(frameRef);
       clearTimeout(current.timer);
       setFilename(null);
       let ok = false;
@@ -133,13 +137,14 @@ export function useFileExportBridge(
         kind.record('rejected');
         send({ t: kind.done, ok: false });
       };
-      if (pending) return reject();
+      if (pending || busyFrames.has(frameRef)) return reject();
       // Throttle before decoding so spam cannot burn shell CPU.
       const now = Date.now();
       if (now - lastRequestAt < FILE_EXPORT_INTERVAL_MS) return reject();
       lastRequestAt = now;
       const request = kind.parse(event.data);
       if (!request) return reject();
+      busyFrames.add(frameRef);
       pending = {
         request,
         finish: (ok) => send({ t: kind.done, ok }),
@@ -154,7 +159,10 @@ export function useFileExportBridge(
     return () => {
       cancelled = true;
       window.removeEventListener('message', onMessage);
-      if (pending) clearTimeout(pending.timer);
+      if (pending) {
+        clearTimeout(pending.timer);
+        busyFrames.delete(frameRef);
+      }
       pending = null;
       settleRef.current = null;
       setFilename(null);
