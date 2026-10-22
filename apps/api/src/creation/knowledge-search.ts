@@ -76,7 +76,7 @@ const ANSWER_PREAMBLE =
 
 // :answer sometimes emits this instead of an error (~10% in one register).
 const EMPTY_ANSWER_PATTERNS: readonly RegExp[] = [
-  /the sources do not cover this/i,
+  /^the sources do not cover this\.?$/i,
   /cannot be answered (from|using) the (given|provided)?\s*(sources|context|search results)/i,
   /no answer could be generated/i,
   /not enough information (was found|is available)/i,

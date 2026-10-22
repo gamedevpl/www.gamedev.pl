@@ -69,6 +69,9 @@ describe('looksLikeEmptyAnswer', () => {
     expect(looksLikeEmptyAnswer('This cannot be answered from the given sources.')).toBe(true);
     expect(looksLikeEmptyAnswer('No answer could be generated for this query.')).toBe(true);
     expect(looksLikeEmptyAnswer('The sources do not cover this.')).toBe(true);
+    expect(looksLikeEmptyAnswer('The sources do not cover this API detail, but createTimeTrial records a ghost.')).toBe(
+      false,
+    );
     expect(looksLikeEmptyAnswer('')).toBe(true);
     expect(looksLikeEmptyAnswer('   ')).toBe(true);
   });
