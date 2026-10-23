@@ -382,8 +382,8 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
         query,
         pageSize: CHUNKS_PAGE_SIZE,
         contentSearchSpec: { searchResultMode: 'CHUNKS' },
-        // AUTO spell correction emptied "best lap" queries; search the words as typed.
-        spellCorrectionSpec: { mode: 'SUGGESTION_ONLY' },
+        // The default threshold (like LOW) dropped every "best lap" chunk.
+        relevanceThreshold: 'LOWEST',
         ...(filter ? { filter } : {}),
       },
       chunksTimeoutMs,
@@ -405,7 +405,6 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
       {
         query: { text: query },
         relatedQuestionsSpec: { enable: false },
-        queryUnderstandingSpec: { disableSpellCorrection: true },
         answerGenerationSpec: {
           ignoreAdversarialQuery: true,
           includeCitations: true,
