@@ -26,6 +26,9 @@ describe('answer preamble', () => {
   it('treats only the exact not-covered reply as an empty answer', () => {
     expect(looksLikeEmptyAnswer('The sources do not cover this.')).toBe(true);
     expect(looksLikeEmptyAnswer('  the sources do not cover this  ')).toBe(true);
+    expect(
+      looksLikeEmptyAnswer('A summary could not be generated for your search query. Here are some search results.'),
+    ).toBe(true);
     expect(looksLikeEmptyAnswer('The sources do not cover this API detail, but createTimeTrial records a ghost.')).toBe(
       false,
     );

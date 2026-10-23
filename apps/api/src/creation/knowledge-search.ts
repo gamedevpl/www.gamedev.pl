@@ -79,6 +79,7 @@ const EMPTY_ANSWER_PATTERNS: readonly RegExp[] = [
   /^the sources do not cover this\.?$/i,
   /cannot be answered (from|using) the (given|provided)?\s*(sources|context|search results)/i,
   /no answer could be generated/i,
+  /^a summary could not be generated for your search query/i,
   /not enough information (was found|is available)/i,
   /I\s*(could not|couldn't|cannot|can't)\s*find (an answer|any relevant information)/i,
 ];
