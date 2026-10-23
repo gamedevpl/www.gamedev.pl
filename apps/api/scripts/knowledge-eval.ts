@@ -71,6 +71,8 @@ async function runVariant(name: string): Promise<CaseResult[]> {
     engineId: process.env.KNOWLEDGE_SEARCH_ENGINE_ID?.trim() || 'gamedevpl-knowledge',
     projectId: process.env.KNOWLEDGE_SEARCH_PROJECT_ID?.trim() || undefined,
     location: process.env.KNOWLEDGE_SEARCH_LOCATION?.trim() || undefined,
+    collection: process.env.KNOWLEDGE_SEARCH_COLLECTION?.trim() || undefined,
+    servingConfig: process.env.KNOWLEDGE_SEARCH_SERVING_CONFIG?.trim() || undefined,
     quotaProject: process.env.KNOWLEDGE_SEARCH_QUOTA_PROJECT?.trim() || undefined,
     fetchImpl: editingFetch(edit),
   });
