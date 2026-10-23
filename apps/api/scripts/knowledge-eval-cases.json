@@ -1,0 +1,304 @@
+[
+  {
+    "id": "ghost-best-lap",
+    "kind": "kit",
+    "query": "best lap ghost car replay for a racing game",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/game-kit.d.ts",
+      "shared/modules/gameplay.ts"
+    ],
+    "terms": ["createTimeTrial"]
+  },
+  {
+    "id": "best-lap-time",
+    "kind": "kit",
+    "query": "best lap time",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/game-kit.d.ts",
+      "shared/modules/gameplay.ts"
+    ],
+    "terms": ["createTimeTrial", "createRunRecords"]
+  },
+  {
+    "id": "time-trial-checkpoints",
+    "kind": "kit",
+    "query": "time trial with ordered checkpoints",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/game-kit.d.ts",
+      "shared/modules/gameplay.ts"
+    ],
+    "terms": ["createTimeTrial"]
+  },
+  {
+    "id": "touch-controls",
+    "kind": "kit",
+    "query": "touch controls on a phone with a d-pad and action buttons",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/input.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["dpad"]
+  },
+  {
+    "id": "steer-side-scroller",
+    "kind": "kit",
+    "query": "which steer option should createInput use for a side-scroller",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/input.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["steer"]
+  },
+  {
+    "id": "analog-stick",
+    "kind": "kit",
+    "query": "read continuous analog axes from the on-screen joystick",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/input.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["padAxes"]
+  },
+  {
+    "id": "grid-pathfinding",
+    "kind": "kit",
+    "query": "grid pathfinding with A* for enemies",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/path.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["astar"]
+  },
+  {
+    "id": "undo-move",
+    "kind": "kit",
+    "query": "undo the last move in a puzzle game",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/gameplay.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createUndoStack"]
+  },
+  {
+    "id": "save-progress",
+    "kind": "kit",
+    "query": "save player progress between sessions",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/save.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createSave"]
+  },
+  {
+    "id": "screen-shake",
+    "kind": "kit",
+    "query": "shake the screen when the player gets hit",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/effects.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createShake"]
+  },
+  {
+    "id": "particles",
+    "kind": "kit",
+    "query": "particle burst for an explosion",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/effects.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createParticles"]
+  },
+  {
+    "id": "top-down-car",
+    "kind": "kit",
+    "query": "top-down arcade car handling with handbrake drift",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/gameplay.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["driveArcadeVehicle"]
+  },
+  {
+    "id": "tile-collision",
+    "kind": "kit",
+    "query": "push the player out of solid grid tiles",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/collision.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["resolveTileHit"]
+  },
+  {
+    "id": "party-phones",
+    "kind": "kit",
+    "query": "local multiplayer with phones as controllers",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/party.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createParty"]
+  },
+  {
+    "id": "tilt-steering",
+    "kind": "kit",
+    "query": "steer with device tilt",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/sensing.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createSensing"]
+  },
+  {
+    "id": "sound-effects",
+    "kind": "kit",
+    "query": "play sound effects from the shared audio catalog",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/audio.ts",
+      ".github/skills/develop-game-audio/"
+    ],
+    "terms": ["createAudio", "catalog"]
+  },
+  {
+    "id": "inventory",
+    "kind": "kit",
+    "query": "inventory of items the player can combine",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/gameplay.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createInventory"]
+  },
+  {
+    "id": "combo-decay",
+    "kind": "kit",
+    "query": "combo multiplier that decays over time",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/gameplay.ts",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["createComboChain"]
+  },
+  {
+    "id": "football-ball",
+    "kind": "kit",
+    "query": "arcade football ball physics, kicks and goals",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/verticals/football/",
+      "shared/game-kit.d.ts"
+    ],
+    "terms": ["arcadeFootball", "createMatch"]
+  },
+  {
+    "id": "scene3d-chase",
+    "kind": "kit",
+    "query": "make a 3D game with a chase camera",
+    "expect": [
+      ".github/skills/develop-scene3d-game/",
+      ".github/skills/develop-canvas-game/references/scene3d-recipes.md",
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/modules/gfx3d/"
+    ],
+    "terms": ["chase"]
+  },
+  {
+    "id": "video-clip",
+    "kind": "kit",
+    "query": "record a short video clip of gameplay for the player to save",
+    "expect": [".github/skills/develop-canvas-game/references/game-kit.md", "shared/game-kit.d.ts"],
+    "terms": ["createVideoRecorder"]
+  },
+  {
+    "id": "settings-menu",
+    "kind": "docs",
+    "query": "player settings menu options",
+    "expect": [
+      "docs/settings.md",
+      "shared/modules/settings/",
+      ".github/skills/develop-canvas-game/references/game-kit.md"
+    ]
+  },
+  {
+    "id": "playability-rubric",
+    "kind": "docs",
+    "query": "what does the playability rubric check",
+    "expect": ["docs/playability-rubric.md"]
+  },
+  {
+    "id": "terminal-card",
+    "kind": "docs",
+    "query": "result card shown when the round ends",
+    "expect": ["docs/terminal-card.md"]
+  },
+  {
+    "id": "editor-knobs",
+    "kind": "kit",
+    "query": "expose editor parameters so the creator can tune the game",
+    "expect": [
+      "shared/editor-def",
+      "shared/modules/editor",
+      "tools/edit",
+      "tools/editor-gen",
+      ".github/skills/develop-canvas-game/references/game-kit.md"
+    ],
+    "terms": ["createEditor", "editor:gen"]
+  },
+  {
+    "id": "party-bots-examples",
+    "kind": "example",
+    "query": "fill empty party slots with bots",
+    "scope": "examples",
+    "expect": ["games/party-realm/", "games/arena-tag/"],
+    "terms": ["refreshHumanFlags"]
+  },
+  {
+    "id": "party-bots-default",
+    "kind": "example",
+    "query": "fill empty party slots with bots",
+    "expect": ["games/party-realm/", "games/arena-tag/", ".github/skills/develop-canvas-game/references/game-kit.md"],
+    "terms": ["refreshHumanFlags", "createParty"]
+  },
+  {
+    "id": "crate-undo",
+    "kind": "example",
+    "query": "how does crate-keeper undo a crate placement",
+    "scope": "examples",
+    "expect": ["games/crate-keeper/game/build.ts"],
+    "terms": ["undo"]
+  },
+  {
+    "id": "sokoban-solver",
+    "kind": "example",
+    "query": "sokoban puzzle solver",
+    "scope": "examples",
+    "expect": ["games/crate-keeper/game/solver.ts", "games/crate-keeper/game/sokoban.ts"],
+    "terms": ["solve"]
+  },
+  {
+    "id": "falling-block-ghost",
+    "kind": "example",
+    "query": "falling block game ghost piece preview",
+    "scope": "examples",
+    "expect": ["games/block-cascade/"],
+    "terms": ["ghost"]
+  }
+]
