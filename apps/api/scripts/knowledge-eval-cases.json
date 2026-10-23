@@ -7,7 +7,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/game-kit.d.ts",
       "shared/modules/gameplay.ts"
-    ]
+    ],
+    "terms": ["createTimeTrial"]
   },
   {
     "id": "best-lap-time",
@@ -17,7 +18,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/game-kit.d.ts",
       "shared/modules/gameplay.ts"
-    ]
+    ],
+    "terms": ["createTimeTrial", "createRunRecords"]
   },
   {
     "id": "time-trial-checkpoints",
@@ -27,7 +29,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/game-kit.d.ts",
       "shared/modules/gameplay.ts"
-    ]
+    ],
+    "terms": ["createTimeTrial"]
   },
   {
     "id": "touch-controls",
@@ -37,7 +40,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/input.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["dpad"]
   },
   {
     "id": "steer-side-scroller",
@@ -47,7 +51,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/input.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["steer"]
   },
   {
     "id": "analog-stick",
@@ -57,7 +62,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/input.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["padAxes"]
   },
   {
     "id": "grid-pathfinding",
@@ -67,7 +73,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/path.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["astar"]
   },
   {
     "id": "undo-move",
@@ -77,7 +84,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/gameplay.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createUndoStack"]
   },
   {
     "id": "save-progress",
@@ -87,7 +95,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/save.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createSave"]
   },
   {
     "id": "screen-shake",
@@ -97,7 +106,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/effects.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createShake"]
   },
   {
     "id": "particles",
@@ -107,7 +117,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/effects.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createParticles"]
   },
   {
     "id": "top-down-car",
@@ -117,7 +128,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/gameplay.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["driveArcadeVehicle"]
   },
   {
     "id": "tile-collision",
@@ -127,7 +139,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/collision.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["resolveTileHit"]
   },
   {
     "id": "party-phones",
@@ -137,7 +150,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/party.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createParty"]
   },
   {
     "id": "tilt-steering",
@@ -147,7 +161,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/sensing.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createSensing"]
   },
   {
     "id": "sound-effects",
@@ -157,7 +172,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/audio.ts",
       ".github/skills/develop-game-audio/"
-    ]
+    ],
+    "terms": ["createAudio", "catalog"]
   },
   {
     "id": "inventory",
@@ -167,7 +183,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/gameplay.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createInventory"]
   },
   {
     "id": "combo-decay",
@@ -177,7 +194,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/gameplay.ts",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["createComboChain"]
   },
   {
     "id": "football-ball",
@@ -187,7 +205,8 @@
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/verticals/football/",
       "shared/game-kit.d.ts"
-    ]
+    ],
+    "terms": ["arcadeFootball", "createMatch"]
   },
   {
     "id": "scene3d-chase",
@@ -198,13 +217,15 @@
       ".github/skills/develop-canvas-game/references/scene3d-recipes.md",
       ".github/skills/develop-canvas-game/references/game-kit.md",
       "shared/modules/gfx3d/"
-    ]
+    ],
+    "terms": ["chase"]
   },
   {
     "id": "video-clip",
     "kind": "kit",
     "query": "record a short video clip of gameplay for the player to save",
-    "expect": [".github/skills/develop-canvas-game/references/game-kit.md", "shared/game-kit.d.ts"]
+    "expect": [".github/skills/develop-canvas-game/references/game-kit.md", "shared/game-kit.d.ts"],
+    "terms": ["createVideoRecorder"]
   },
   {
     "id": "settings-menu",
@@ -238,40 +259,46 @@
       "tools/edit",
       "tools/editor-gen",
       ".github/skills/develop-canvas-game/references/game-kit.md"
-    ]
+    ],
+    "terms": ["createEditor", "editor:gen"]
   },
   {
     "id": "party-bots-examples",
     "kind": "example",
-    "scope": "examples",
     "query": "fill empty party slots with bots",
-    "expect": ["games/party-realm/", "games/arena-tag/"]
+    "scope": "examples",
+    "expect": ["games/party-realm/", "games/arena-tag/"],
+    "terms": ["refreshHumanFlags"]
   },
   {
     "id": "party-bots-default",
     "kind": "example",
     "query": "fill empty party slots with bots",
-    "expect": ["games/party-realm/", "games/arena-tag/", ".github/skills/develop-canvas-game/references/game-kit.md"]
+    "expect": ["games/party-realm/", "games/arena-tag/", ".github/skills/develop-canvas-game/references/game-kit.md"],
+    "terms": ["refreshHumanFlags", "createParty"]
   },
   {
     "id": "crate-undo",
     "kind": "example",
-    "scope": "examples",
     "query": "how does crate-keeper undo a crate placement",
-    "expect": ["games/crate-keeper/game/build.ts"]
+    "scope": "examples",
+    "expect": ["games/crate-keeper/game/build.ts"],
+    "terms": ["undo"]
   },
   {
     "id": "sokoban-solver",
     "kind": "example",
-    "scope": "examples",
     "query": "sokoban puzzle solver",
-    "expect": ["games/crate-keeper/game/solver.ts", "games/crate-keeper/game/sokoban.ts"]
+    "scope": "examples",
+    "expect": ["games/crate-keeper/game/solver.ts", "games/crate-keeper/game/sokoban.ts"],
+    "terms": ["solve"]
   },
   {
     "id": "falling-block-ghost",
     "kind": "example",
-    "scope": "examples",
     "query": "falling block game ghost piece preview",
-    "expect": ["games/block-cascade/"]
+    "scope": "examples",
+    "expect": ["games/block-cascade/"],
+    "terms": ["ghost"]
   }
 ]

@@ -9,6 +9,8 @@ interface EvalCase {
   query: string;
   scope?: KnowledgeScope;
   expect: string[];
+  // One must appear in the chunk; a path match alone is loose.
+  terms?: string[];
 }
 
 type BodyEdit = (body: Record<string, unknown>) => void;
@@ -48,7 +50,11 @@ function editingFetch(edit: BodyEdit): typeof fetch {
 }
 
 const isGameCode = (path: string) => path.startsWith('games/');
-const hits = (path: string, expect: string[]) => expect.some((prefix) => path.startsWith(prefix));
+function hits(chunk: { repoPath: string; snippet: string }, c: EvalCase): boolean {
+  if (!c.expect.some((prefix) => chunk.repoPath.startsWith(prefix))) return false;
+  const text = chunk.snippet.toLowerCase();
+  return !c.terms || c.terms.some((term) => text.includes(term.toLowerCase()));
+}
 
 interface CaseResult {
   id: string;
@@ -72,7 +78,7 @@ async function runVariant(name: string): Promise<CaseResult[]> {
   for (const c of cases) {
     const result = await query({ query: c.query, mode: 'chunks', scope: c.scope });
     const paths = result.chunks.map((chunk) => chunk.repoPath);
-    const rank = paths.findIndex((path) => hits(path, c.expect)) + 1;
+    const rank = result.chunks.findIndex((chunk) => hits(chunk, c)) + 1;
     const failed = result.warnings.find((w) => w.code !== 'result_truncated');
     results.push({ id: c.id, kind: c.kind, rank, paths, ...(failed ? { error: failed.code } : {}) });
   }
