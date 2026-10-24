@@ -50,4 +50,15 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('(up to 50 per call), then PUT them all from one bash loop');
     expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
+
+  // 2026-10-24: the kit-browse rule was read as covering knowledge_query.
+  it('keeps knowledge_query and the first report_progress in the shell round order', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toMatch(
+      /`get_brief`.*one `knowledge_query`.*one `report_progress` saying what you will change → build/s,
+    );
+    expect(shell).toContain('`knowledge_query` is not a kit-browse tool and this rule does not cover it');
+    expect(shell).toContain('are required, every one of them, even when the round is on a clock');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('one `knowledge_query`');
+  });
 });
