@@ -168,6 +168,12 @@ automatically. Full steps:
 
 ## Inspection & Debugging
 
+- **Apple Hide My Email**: verified `@privaterelay.appleid.com` aliases are valid
+  waitlist contacts. Keep them for welcome mail; account matching uses a separate
+  non-relay address. Register the sending domain/address in Apple Developer's
+  **Services → Sign in with Apple for Email Communication** and configure SPF/DKIM
+  ([Apple instructions](https://developer.apple.com/help/account/capabilities/configure-private-email-relay-service/)).
+  Old addressless Apple rows need the applicant to join again after the fix.
 - **Check if a user can sign in**:
   Run a query on Firestore `waitlist` collection for `email == user@example.com` or `uid == g:<sub>`.
 - **Public endpoints**:
