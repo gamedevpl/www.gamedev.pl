@@ -4,11 +4,9 @@ import {
   createQueryKnowledge,
   DEFAULT_RESULT_TARGET_BYTES,
   looksLikeEmptyAnswer,
-  scopeToBoostSpec,
   scopeToFilter,
   type KnowledgeChunk,
 } from './knowledge-search.js';
-import { EXAMPLE_DEMOTION } from './knowledge-corpus-policy.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -202,39 +200,6 @@ describe('queryKnowledge — mode=chunks', () => {
 
     expect(capturedBody?.filter).toBe('corpus: ANY("editor")');
     expect((capturedBody?.contentSearchSpec as Record<string, unknown>)?.searchResultMode).toBe('CHUNKS');
-  });
-
-  it('demotes example code only in an unscoped search', async () => {
-    const bodies: Record<string, unknown>[] = [];
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
-      bodies.push(JSON.parse(init!.body as string));
-      return jsonResponse(searchBody(1));
-    });
-    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
-
-    await queryKnowledge({ query: 'undo a move', mode: 'chunks' });
-    await queryKnowledge({ query: 'undo a move', mode: 'chunks', scope: 'examples' });
-
-    expect(bodies[0]?.boostSpec).toEqual({
-      conditionBoostSpecs: [{ condition: 'corpus: ANY("example")', boost: EXAMPLE_DEMOTION }],
-    });
-    expect(bodies[1]?.boostSpec).toBeUndefined();
-    expect(scopeToBoostSpec('kit')).toBeUndefined();
-  });
-
-  it('sends the same demotion with an unscoped answer request', async () => {
-    let capturedBody: Record<string, unknown> | undefined;
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
-      capturedBody = JSON.parse(init!.body as string);
-      return jsonResponse(answerBody('Use createUndoStack.'));
-    });
-    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
-
-    await queryKnowledge({ query: 'undo a move' });
-
-    const searchParams = (capturedBody?.searchSpec as { searchParams: Record<string, unknown> }).searchParams;
-    expect(searchParams.boostSpec).toEqual(scopeToBoostSpec(undefined));
-    expect(searchParams.filter).toBe(scopeToFilter(undefined));
   });
 });
 

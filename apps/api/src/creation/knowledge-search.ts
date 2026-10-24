@@ -377,7 +377,6 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
 
   async function runChunks(query: string, scope: KnowledgeScope | undefined): Promise<KnowledgeQueryResult> {
     const filter = scopeToFilter(scope);
-    const boostSpec = scopeToBoostSpec(scope);
     const json = await post(
       'search',
       {
@@ -387,7 +386,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
         // The default threshold (like LOW) dropped every "best lap" chunk.
         relevanceThreshold: 'LOWEST',
         ...(filter ? { filter } : {}),
-        ...(boostSpec ? { boostSpec } : {}),
+        boostSpec: scopeToBoostSpec(scope), // undefined drops out of the JSON body
       },
       chunksTimeoutMs,
     );
@@ -414,13 +413,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
           includeCitations: true,
           promptSpec: { preamble: ANSWER_PREAMBLE },
         },
-        searchSpec: {
-          searchParams: {
-            ...(filter ? { filter } : {}),
-            ...(boostSpec ? { boostSpec } : {}),
-            maxReturnResults: CHUNKS_PAGE_SIZE,
-          },
-        },
+        searchSpec: { searchParams: { filter: filter || undefined, boostSpec, maxReturnResults: CHUNKS_PAGE_SIZE } },
       },
       answerTimeoutMs,
     );
