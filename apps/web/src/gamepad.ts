@@ -3,6 +3,9 @@ import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
 import { useFrameDocument } from './frameLifecycle.js';
 
 type StandardPad = { index: number; mapping: 'standard'; axes: number[]; buttons: number[] };
+// Non-standard devices, only for games that ask for them.
+type RawFramePad = { index: number; mapping: ''; axes: number[]; buttons: number[] };
+type FramePad = StandardPad | RawFramePad;
 type RawPad = Pick<Gamepad, 'id' | 'mapping' | 'axes' | 'buttons'>;
 
 function isMicroPad(pad: Pick<Gamepad, 'id'>): boolean {
@@ -34,15 +37,26 @@ const MICRO_ORDER = {
   'micro-d-mfi': [0, 1, 5, 6, 11, 13, 12, 14, 4, 3, -1, -1, 10, 7, 8, 9, 2],
 } as const;
 
-function project(pad: Gamepad): StandardPad | null {
+function project(pad: Gamepad, raw = false): FramePad | null {
   const layout = padLayout(pad);
-  if (layout === 'unsupported') return null;
   const button = (n: number) => {
     const raw = pad.buttons[n];
     if (!raw) return 0;
     const value = Number.isFinite(raw.value) ? Math.max(0, Math.min(1, raw.value)) : 0;
     return raw.pressed ? Math.max(0.5, value) : value;
   };
+  if (layout === 'unsupported') {
+    if (!raw) return null;
+    // Own axis and button order; the game lets the player bind them.
+    return {
+      index: pad.index,
+      mapping: '',
+      axes: Array.from({ length: Math.min(8, pad.axes.length) }, (_, n) =>
+        Number.isFinite(pad.axes[n]) ? Math.max(-1, Math.min(1, pad.axes[n])) : 0,
+      ),
+      buttons: Array.from({ length: Math.min(32, pad.buttons.length) }, (_, n) => button(n)),
+    };
+  }
   if (layout === 'standard') {
     return {
       index: pad.index,
@@ -66,12 +80,12 @@ function project(pad: Gamepad): StandardPad | null {
   return { index: pad.index, mapping: 'standard', axes: [0, 0, 0, 0], buttons };
 }
 
-export function readGamepads(): StandardPad[] {
+export function readGamepads(raw = false): FramePad[] {
   try {
     return Array.from(navigator.getGamepads?.() ?? [])
       .filter((pad): pad is Gamepad => pad !== null && pad.connected)
       .flatMap((pad) => {
-        const projected = project(pad);
+        const projected = project(pad, raw);
         return projected ? [projected] : [];
       })
       .slice(0, 16);
@@ -82,21 +96,22 @@ export function readGamepads(): StandardPad[] {
 
 export function useGamepadBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>, active: boolean): void {
   const epoch = useFrameDocument(frameRef);
-  const subscription = useRef({ epoch, requested: false });
+  const subscription = useRef({ epoch, requested: false, raw: false });
   useEffect(() => {
-    if (subscription.current.epoch !== epoch) subscription.current = { epoch, requested: false };
+    if (subscription.current.epoch !== epoch) subscription.current = { epoch, requested: false, raw: false };
     let requested = subscription.current.requested;
+    let raw = subscription.current.raw;
     let running = false;
     let animation = 0;
     let last = '';
     let devices: ReturnType<typeof readGamepads> = [];
     let reply = bindGameFrameReply(frameRef.current);
     function neutral() {
-      return devices.map((pad) => ({ ...pad, axes: [0, 0, 0, 0], buttons: Array<number>(17).fill(0) }));
+      return devices.map((pad) => ({ ...pad, axes: pad.axes.map(() => 0), buttons: pad.buttons.map(() => 0) }));
     }
     function poll() {
       const inactive = document.visibilityState === 'hidden' || !document.hasFocus();
-      if (!inactive) devices = readGamepads();
+      if (!inactive) devices = readGamepads(raw);
       const pads = inactive ? neutral() : devices;
       // Marks neutral frames so games latch buttons held across focus changes.
       const serialized = JSON.stringify({ pads, inactive });
@@ -114,6 +129,8 @@ export function useGamepadBridge(frameRef: MutableRefObject<HTMLIFrameElement | 
       last = '';
       subscription.current.requested = true;
       requested = true;
+      // Any instance asking for raw devices turns them on for the document.
+      if (data.raw === true) subscription.current.raw = raw = true;
       if (!active || running) return;
       running = true;
       poll();

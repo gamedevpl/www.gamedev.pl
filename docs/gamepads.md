@@ -18,7 +18,11 @@ The host sends at most 16 connected devices as `mapping: 'standard'`, four clamp
 17 clamped button values per device. Standard-mapped pads pass through. The 8BitDo Micro
 (Chrome D-input HID and macOS MFi profiles) is projected onto the standard slots by
 physical face position, with its digital cross on buttons 12–15; other raw layouts are
-dropped rather than guessed. Omitted controls are zero in GameKit. There is
+dropped rather than guessed, unless the game asked for them. A `gamepad:hello` with
+`raw: true` (GameKit `createGamepads({ nonStandard: true })`) turns on raw devices for
+that frame document: wheels, pedals, throttles and flight sticks arrive as
+`{ index, mapping: '', axes, buttons }` with at most 8 clamped axes and 32 button values
+in the device's own order, for the game to let the player bind. Omitted controls are zero in GameKit. There is
 no fixed four-player browser contract. The game chooses its player limit and maps
 physical indices to seats. Hardware names, timestamps and device identifiers are
 never passed to the game or recorded. No room or network round trip is needed for
