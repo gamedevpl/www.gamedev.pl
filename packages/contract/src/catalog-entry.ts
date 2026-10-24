@@ -75,7 +75,7 @@ export interface CatalogEntry {
   contributorHandles?: string[];
   // 0..1 bake-time development effort; absent when unknown.
   effort?: number;
-  // AI-generated punchy summary/taglines (e.g. from Flash-Lite).
+  // Authored catalog hook; generated enrichment fills missing languages.
   tagline?: { en?: string; pl?: string } | null;
   // AI-generated concise keybindings summary.
   shortControls?: { en?: string; pl?: string } | null;

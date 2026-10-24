@@ -17,6 +17,7 @@ import {
 } from '@gamedevpl/contract';
 import { rememberBounded } from '../platform/bounded-map.js';
 import { parseOptionalEffort } from './catalog-effort.js';
+import { parseCatalogTagline } from './catalog-tagline.js';
 import { buildCatalogFromArchive } from './catalog-from-archive.js';
 import { type CatalogGameTouch } from './catalog-touch.js';
 import {
@@ -1680,14 +1681,15 @@ export function catalogEntryFromSpec(
   const frontmatter = parseSpecFrontmatter(specMd);
   const title = frontmatter.title;
   if (!title) return null;
-  // A spec with no status is published — merging it is what publishes it. Only an
-  // explicit archived/disabled withdraws a game from the site.
+  // Missing status means published; archived and disabled withdraw the game.
   const rawStatus = frontmatter.status ?? '';
   const status = rawStatus === 'archived' || rawStatus === 'disabled' ? rawStatus : 'published';
   const mediaMetadata = status === 'published' ? readSibling('media/metadata.json') : null;
+  const tagline = parseCatalogTagline(frontmatter);
   return {
     slug,
     title,
+    ...(tagline ? { tagline } : {}),
     genre: frontmatter.genre ?? '',
     controls: frontmatter.controls ?? '',
     status,

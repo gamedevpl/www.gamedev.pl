@@ -5,6 +5,7 @@ import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichmen
 import { extractSpecDescription } from './game-page-routes.js';
 import type { GenAIClient } from 'genaicode';
 import { createVertexClient } from '../platform/genai.js';
+import { mergeCatalogTaglines } from './catalog-tagline.js';
 
 export const GEMINI_ENRICHMENT_MODEL = 'gemini-3.5-flash-lite';
 
@@ -180,7 +181,6 @@ Respond with STRICT JSON only, matching this schema:
   return record;
 }
 
-// Enriches an array of catalog game entries.
 export async function enrichCatalogEntries(
   entries: CatalogGameEntry[],
   getSpec: (slug: string) => Promise<string | null>,
@@ -194,7 +194,7 @@ export async function enrichCatalogEntries(
         const enrichment = await getOrEnrichCatalogGame(entry, spec, options);
         return {
           ...entry,
-          tagline: enrichment.tagline,
+          tagline: mergeCatalogTaglines(entry.tagline, enrichment.tagline),
           shortControls: enrichment.shortControls,
           searchKeywords: enrichment.searchKeywords,
         };
@@ -218,7 +218,7 @@ export async function attachCatalogEnrichments(
     if (!enrichment) return entry;
     return {
       ...entry,
-      tagline: enrichment.tagline,
+      tagline: mergeCatalogTaglines(entry.tagline, enrichment.tagline),
       shortControls: enrichment.shortControls,
       searchKeywords: enrichment.searchKeywords,
     };
@@ -240,7 +240,7 @@ export async function attachCatalogEnrichment(
   if (!enrichment) return entry;
   return {
     ...entry,
-    tagline: enrichment.tagline,
+    tagline: mergeCatalogTaglines(entry.tagline, enrichment.tagline),
     shortControls: enrichment.shortControls,
     searchKeywords: enrichment.searchKeywords,
   };

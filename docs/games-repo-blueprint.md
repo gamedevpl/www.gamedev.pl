@@ -60,6 +60,8 @@ title: Dodge the Falling Rocks
 slug: dodge-the-falling-rocks
 status: published # draft | in-progress | published
 genre: arcade
+tagline_en: Keep moving. The next rock is already falling.
+tagline_pl: Nie zatrzymuj się. Następny głaz już spada.
 controls: Left and right arrow keys
 submitted_by: null # GitHub handle when creator-submitted, else null
 # listed: false # optional: stays published and playable by link, but on no site list
@@ -89,6 +91,11 @@ One paragraph: what the player does and why it's fun.
 ```
 
 `slug` **must** equal the directory name — validation enforces it.
+
+Optional `tagline_en` and `tagline_pl` are short, authored hooks for the home-page
+Featured card. Each supplied language takes precedence over generated catalog
+enrichment. They are separate from `GAME.json.description`, which describes the
+game inside the player, and from the design prose below the frontmatter.
 
 The **"Out of scope"** section matters more than it looks: it's the main lever for stopping an
 agent from inventing scope, and it's where "no network", "no dependencies" get restated per game.
