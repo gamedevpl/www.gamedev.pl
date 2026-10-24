@@ -4121,7 +4121,9 @@ a.user-name--profile:focus-visible {
   .beta-splash__card:has(.splash-game--playing) .beta-splash__badge,
   .beta-splash__card:has(.splash-game--over) .beta-splash__badge,
   .beta-splash__card:has(.splash-game--playing) .beta-splash__footer,
-  .beta-splash__card:has(.splash-game--over) .beta-splash__footer {
+  .beta-splash__card:has(.splash-game--over) .beta-splash__footer,
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__social,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__social {
     display: none;
   }
 
@@ -5985,6 +5987,16 @@ button.builder-mode-selector:disabled {
 }
 
 .ai-notice a {
+  color: var(--turquoise);
+}
+
+.beta-splash__social {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.beta-splash__social a {
   color: var(--turquoise);
 }
 
@@ -8203,6 +8215,20 @@ button.builder-mode-selector:disabled {
   margin: 0.4rem 0 1rem;
   font-size: clamp(2rem, 5vw, 3.2rem);
   line-height: 1;
+}
+
+.game-page-videos {
+  margin: -0.25rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.game-page-videos > svg {
+  vertical-align: -1px;
+}
+
+.game-page-videos a {
+  color: var(--turquoise);
 }
 
 .game-page-actions {

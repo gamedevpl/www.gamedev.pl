@@ -2,8 +2,9 @@ import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
 import { REPO_URL } from './github.js';
 
-export const YOUTUBE_URL = 'https://www.youtube.com/@gamedev_pl';
-export const X_URL = 'https://x.com/plgamedev';
+import { X_URL, YOUTUBE_URL } from './gameVideos.js';
+
+export { X_URL, YOUTUBE_URL };
 
 // Where the project lives and where it posts; brand names stay untranslated.
 export function FooterProjectLinks() {

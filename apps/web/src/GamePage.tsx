@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
+import { gameVideosUrl, gameXUrl } from './gameVideos.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { creatorPath, gamePath, playPath, studioPath } from './core/router.js';
@@ -120,6 +121,7 @@ export function GamePage({
   const ownerHandle = creator?.handle ?? entry.creatorHandle ?? null;
   const isOwner = Boolean(user?.handle && ownerHandle && user.handle.toLowerCase() === ownerHandle.toLowerCase());
   const studioHref = studioPath(slug);
+  const videosUrl = gameVideosUrl(slug, 'game_page');
 
   const play = () => {
     if (playGated) {
@@ -151,6 +153,18 @@ export function GamePage({
         </nav>
         <h1>{entry.title}</h1>
         {page.description ? <p className="game-page-description">{page.description}</p> : null}
+        {videosUrl ? (
+          <p className="game-page-videos">
+            <PixelIcon name="play" size={12} /> {t('gamePage.videos')}{' '}
+            <a href={videosUrl} target="_blank" rel="noreferrer noopener">
+              YouTube
+            </a>
+            {' · '}
+            <a href={gameXUrl(slug, 'game_page')} target="_blank" rel="noreferrer noopener">
+              X
+            </a>
+          </p>
+        ) : null}
         <div className="game-page-actions" role="group" aria-label={t('gamePage.actions')}>
           <button type="button" className="primary-btn" onClick={play}>
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}
