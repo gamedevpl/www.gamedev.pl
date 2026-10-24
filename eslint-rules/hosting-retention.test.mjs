@@ -23,7 +23,15 @@ function firebase(seed = { 'App-old.js': 'old app', 'en-old.js': 'old locale', '
     }),
   );
   const versions = new Map([['sites/gamedevpl/versions/initial', initial]]);
-  const state = { live: 'sites/gamedevpl/versions/initial', releases: 0, calls: [], blobs, versions, created: 0 };
+  const state = {
+    live: 'sites/gamedevpl/versions/initial',
+    releaseType: 'DEPLOY',
+    releases: 0,
+    calls: [],
+    blobs,
+    versions,
+    created: 0,
+  };
   const json = (value) => new Response(JSON.stringify(value));
   const fetchImpl = async (url, options) => {
     state.calls.push({ url, ...options });
@@ -48,10 +56,11 @@ function firebase(seed = { 'App-old.js': 'old app', 'en-old.js': 'old locale', '
     if (resource === 'sites/gamedevpl/releases') {
       if (options.method === 'POST') {
         state.live = address.searchParams.get('versionName');
+        state.releaseType = undefined;
         state.releases++;
         return json({});
       }
-      return json({ releases: [{ type: 'DEPLOY', version: { name: state.live, status: 'FINALIZED' } }] });
+      return json({ releases: [{ type: state.releaseType, version: { name: state.live, status: 'FINALIZED' } }] });
     }
     if (resource === 'sites/gamedevpl/versions') {
       const name = `sites/gamedevpl/versions/new${++state.created}`;
@@ -122,6 +131,16 @@ const start = Date.parse('2026-10-24T12:00:00Z');
 const day = RETENTION_MS / 7;
 
 describe('Firebase asset retention deployment', () => {
+  it('accepts finalized rollback and unspecified releases but refuses disabled sites', async () => {
+    const service = firebase();
+    service.releaseType = 'ROLLBACK';
+    await service.deploy({ 'App-next.js': 'next' }, start);
+    service.releaseType = 'TYPE_UNSPECIFIED';
+    await service.deploy({ 'App-next.js': 'next' }, start + day);
+    service.releaseType = 'SITE_DISABLE';
+    await expect(service.deploy({ 'App-next.js': 'next' }, start + 2 * day)).rejects.toThrow('not finalized');
+  });
+
   it('protects the serving build when promotion fails and a retry arrives weeks later', async () => {
     const service = firebase();
     await service.deploy({ 'App-candidate.js': 'candidate' }, start, { prepareOnly: true });

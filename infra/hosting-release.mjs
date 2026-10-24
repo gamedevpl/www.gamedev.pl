@@ -63,7 +63,7 @@ export async function releaseAssets({
     const result = await api(`sites/${site}/releases?pageSize=1`);
     const release = result.releases?.[0];
     if (!release) throw new Error('No live release: bootstrap Hosting before enabling retention');
-    if (release.type !== 'DEPLOY' || release.version?.status !== 'FINALIZED')
+    if (release.type === 'SITE_DISABLE' || release.version?.status !== 'FINALIZED')
       throw new Error('Live Hosting release is not finalized');
     return validateVersion(release.version.name);
   }
