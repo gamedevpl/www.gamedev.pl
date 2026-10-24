@@ -68,6 +68,7 @@ export function StageOverlay({
           reportSlug={stageContent.game.slug}
           submittedBy={stageContent.game.submittedBy}
           creatorHandle={stageContent.game.creatorHandle}
+          links={stageContent.game.links ?? null}
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
           via={stageContent.via}

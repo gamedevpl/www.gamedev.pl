@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { CatalogLinks } from '@gamedevpl/contract';
 import { gamePageHandle, isPlatformAuthor, type CatalogTouch, type PublishedGame } from './catalog.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
@@ -16,7 +17,8 @@ import { ProposeChangeWidget } from './ProposeChangeWidget.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
-import { gameVideosUrl, gameXUrl } from './gameVideos.js';
+import { gameSocialLinks } from './gameVideos.js';
+import { useGameLinks } from './useGameLinks.js';
 import { useGamepadSpike } from './gamepadSpike.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
@@ -90,6 +92,8 @@ type GameTheaterProps = {
   submittedBy?: string | null;
   /** When set, the byline links to `/:handle`. */
   creatorHandle?: string | null;
+  // Catalog links when known; otherwise read from the public game page.
+  links?: CatalogLinks | null;
   /**
    * The game's `controls` line from the catalog. A fallback now rather than the only
    * source: the player bridge reports the game's own control list, which is localized,
@@ -124,6 +128,7 @@ export function GameTheater({
   reportSlug,
   submittedBy = null,
   creatorHandle = null,
+  links,
   controls,
   touch = null,
   via,
@@ -429,7 +434,8 @@ export function GameTheater({
   // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
   // control would have vanished entirely.
   const shellMenu = player.shellMenu;
-  const videosUrl = reportSlug ? gameVideosUrl(reportSlug, 'player_menu') : null;
+  const gameLinks = useGameLinks(reportSlug, links);
+  const social = reportSlug ? gameSocialLinks(reportSlug, gameLinks, 'player_menu') : null;
   const showMoreMenu =
     Boolean(reportSlug) ||
     agentAvailable ||
@@ -689,19 +695,29 @@ export function GameTheater({
                         <PixelIcon name="folder" size={13} /> {t('player.aboutGame')}
                       </a>
                       {/* New tab: the link is for after the game, not instead of it. */}
-                      {videosUrl ? (
-                        <a className="theater-menu-item" href={videosUrl} target="_blank" rel="noreferrer noopener">
-                          <PixelIcon name="play" size={13} /> {t('player.videos')}
-                        </a>
-                      ) : null}
-                      {videosUrl ? (
+                      {social?.youtube ? (
                         <a
                           className="theater-menu-item"
-                          href={gameXUrl(reportSlug, 'player_menu')}
+                          href={social.youtube}
                           target="_blank"
                           rel="noreferrer noopener"
                         >
+                          <PixelIcon name="play" size={13} /> {t('player.videos')}
+                        </a>
+                      ) : null}
+                      {social ? (
+                        <a className="theater-menu-item" href={social.x} target="_blank" rel="noreferrer noopener">
                           <PixelIcon name="share" size={13} /> {t('player.followX')}
+                        </a>
+                      ) : null}
+                      {gameLinks?.source ? (
+                        <a
+                          className="theater-menu-item"
+                          href={gameLinks.source}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <PixelIcon name="code" size={13} /> {t('player.source')}
                         </a>
                       ) : null}
                       {/* Shares the play permalink: someone handed a game link expects

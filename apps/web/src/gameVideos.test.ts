@@ -1,19 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { gameVideosUrl, splashYouTubeUrl, withUtm } from './gameVideos.js';
+import { gameSocialLinks, splashYouTubeUrl, withUtm } from './gameVideos.js';
 
 describe('gameVideos', () => {
-  it('links a game with a playlist, tagged by placement and slug', () => {
-    const url = new URL(gameVideosUrl('trenchline-command', 'player_menu') ?? '');
-    expect(url.origin + url.pathname).toBe('https://www.youtube.com/playlist');
-    expect(url.searchParams.get('list')).toBe('PLOjEHsPPD9oQ');
-    expect(url.searchParams.get('utm_source')).toBe('gamedev.pl');
-    expect(url.searchParams.get('utm_medium')).toBe('player_menu');
-    expect(url.searchParams.get('utm_campaign')).toBe('trenchline-command');
+  it('tags a game playlist and falls back to the brand X account', () => {
+    const social = gameSocialLinks(
+      'trenchline-command',
+      { youtube: 'https://www.youtube.com/playlist?list=PLOjEHsPPD9oQ' },
+      'player_menu',
+    );
+    const youtube = new URL(social?.youtube ?? '');
+    expect(youtube.searchParams.get('list')).toBe('PLOjEHsPPD9oQ');
+    expect(youtube.searchParams.get('utm_source')).toBe('gamedev.pl');
+    expect(youtube.searchParams.get('utm_medium')).toBe('player_menu');
+    expect(youtube.searchParams.get('utm_campaign')).toBe('trenchline-command');
+    expect(social?.x).toBe(
+      'https://x.com/plgamedev?utm_source=gamedev.pl&utm_medium=player_menu&utm_campaign=trenchline-command',
+    );
   });
 
-  it('has nothing for a game without a playlist', () => {
-    expect(gameVideosUrl('mexico-86', 'game_page')).toBeNull();
-    expect(gameVideosUrl('toString', 'game_page')).toBeNull();
+  it("uses the game's own X link when the SPEC names one", () => {
+    const social = gameSocialLinks('neon', { x: 'https://x.com/gtanczyk/status/1' }, 'game_page');
+    expect(social?.youtube).toBeNull();
+    expect(social?.x.startsWith('https://x.com/gtanczyk/status/1?')).toBe(true);
+  });
+
+  it('has nothing for a game without links', () => {
+    expect(gameSocialLinks('mexico-86', null, 'game_page')).toBeNull();
+    expect(gameSocialLinks('mexico-86', undefined, 'game_page')).toBeNull();
+    expect(gameSocialLinks('mexico-86', {}, 'game_page')).toBeNull();
   });
 
   it('tags the splash links without a campaign', () => {
