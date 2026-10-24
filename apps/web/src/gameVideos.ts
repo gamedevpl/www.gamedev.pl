@@ -1,4 +1,4 @@
-// Kept here, not in the footer, so the svg-free play bundle can import it.
+// Here, not in the footer: the play bundle cannot load svg.
 export const YOUTUBE_URL = 'https://www.youtube.com/@gamedev_pl';
 export const X_URL = 'https://x.com/plgamedev';
 
