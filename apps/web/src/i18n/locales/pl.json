@@ -258,6 +258,7 @@
     "aboutGame": "O tej grze",
     "videos": "Filmy na YouTube",
     "followX": "Obserwuj na X",
+    "source": "Kod źródłowy",
     "agent": {
       "title": "Tryb agenta",
       "menu": "Tryb agenta",
@@ -2094,6 +2095,7 @@
     "playPreview": "Zagraj w {{title}} w trybie kinowym",
     "openTheater": "Graj w trybie kinowym",
     "videos": "Klipy i devlog:",
+    "source": "Kod źródłowy",
     "screenshots": "Zrzuty ekranu",
     "viewScreenshot": "Pokaż zrzut ekranu {{number}}",
     "breadcrumbAria": "Położenie gry"

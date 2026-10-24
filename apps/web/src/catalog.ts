@@ -16,7 +16,7 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
-import { isListedEntry, isPublishedEntry } from '@gamedevpl/contract';
+import { isListedEntry, isPublishedEntry, parseCatalogLinks } from '@gamedevpl/contract';
 import type {
   CatalogEditor,
   CatalogEntry,
@@ -199,6 +199,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
   }
   const effort = parseCatalogEffort(entry.effort);
   const tagline = parseCatalogTagline(entry.tagline);
+  const links = parseCatalogLinks(entry.links);
   return {
     slug: entry.slug,
     title: entry.title,
@@ -225,6 +226,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
       : undefined,
     ...(effort !== undefined ? { effort } : {}),
     ...(tagline ? { tagline } : {}),
+    ...(links ? { links } : {}),
   };
 }
 
