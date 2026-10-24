@@ -5,30 +5,19 @@ import { AuthProvider } from './AuthContext.js';
 import { platform } from './platform/index.js';
 import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
+import { watchChunkRecovery } from './chunkRecovery.js';
 import { startVisitTracking } from './visitTelemetry.js';
 import { i18nReady } from './i18n/index.js';
 import './core/styles/tokens.css';
 import './styles.css';
 
-// Started before the first render: the visit has to be recorded as it lands, and a tree
-// that has already chosen a route has passed the moment being measured.
+// Locale imports can fail before React mounts the route boundary.
+watchChunkRecovery();
+
+// Record arrivals before rendering chooses a route.
 startVisitTracking();
 
-/*
- * Both of these have to happen at boot rather than from the component that uses them.
- *
- * `watchInstallPrompt` because Chrome fires `beforeinstallprompt` during load and only
- * honours a synchronous `preventDefault()`; a listener attached on mount never sees it.
- *
- * `recordVisit` because "has this person been here before" must count every session,
- * including the ones spent on the beta splash or a controller page — routes where the
- * install banner deliberately never renders and so could never do the counting itself.
- *
- * `watchShellUpdates` for the same timing reason as the install prompt: the worker can
- * activate and post `shell-updated` while the auth splash is still up, long before
- * `AppUpdateBanner` mounts. Without an early listener the message is gone and an
- * iPhone Home Screen reopen stays on a stale shell with no Reload offer.
- */
+// Capture browser lifecycle events before React mounts their UI.
 platform.install.watch();
 platform.install.recordVisit();
 watchShellUpdates();
