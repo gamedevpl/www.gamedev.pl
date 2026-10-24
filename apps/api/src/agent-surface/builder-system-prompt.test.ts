@@ -55,8 +55,9 @@ describe('builderSystemPrompt', () => {
   it('keeps knowledge_query and the first report_progress in the shell round order', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toMatch(
-      /`get_brief`.*one `knowledge_query`.*one `report_progress` saying what you will change → build/s,
+      /`get_brief`.*one `knowledge_query`.*one `report_progress` saying what you will change, before you open any kit or game file → the unpacked kit/s,
     );
+    expect(shell).toContain('That never covers `get_brief`');
     expect(shell).toContain('`knowledge_query` is not a kit-browse tool and this rule does not cover it');
     expect(shell).toContain('are required, every one of them, even when the round is on a clock');
     expect(builderSystemPrompt({ shell: false })).not.toContain('one `knowledge_query`');

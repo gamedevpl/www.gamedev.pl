@@ -55,7 +55,7 @@ export function openingSteps(
 ): string[] {
   // get_brief stays: start names it as the next call.
   const reads = [
-    '`get_brief`',
+    '`get_brief` (always, even with the spec inlined)',
     ...(lane.inlined?.inbox ? [] : ['`read_inbox`']),
     ...(lane.inlined?.notes ? [] : ['`creator_notes` (sessionKey only)']),
     ...(lane.mountedSources || lane.inlined?.noFiles ? [] : ['`get_sources`']),
@@ -66,7 +66,7 @@ export function openingSteps(
     `\`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
     ...(list ? [`${list}.`] : []),
     ...(lane.workspace ? [KNOWLEDGE_STEP] : []),
-    'One short `report_progress`, in the creator’s language, of what you will change.',
+    'One short `report_progress`, in the creator’s language, of what you will change, before you open any kit or game file.',
   ];
   return [
     'Before your first edit, in this order (each step is required and takes seconds; the clock is no reason to skip one):',

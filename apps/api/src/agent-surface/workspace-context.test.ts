@@ -36,7 +36,7 @@ describe('kickoff context', () => {
       inlined: { inbox: true, messages: false, notes: true, noFiles: true },
     });
     expect(fresh).toContain('1. `start`');
-    expect(fresh).toContain('2. `get_brief`.');
+    expect(fresh).toContain('2. `get_brief` (always, even with the spec inlined).');
     expect(fresh).toContain('3. One `knowledge_query`');
     expect(buildPrompt(BRIEF, { shell: true })).not.toContain('One `knowledge_query`');
     expect(fresh).toContain('4. One short `report_progress`');
@@ -52,7 +52,7 @@ describe('kickoff context', () => {
         inlined: { inbox: false, messages: true, notes: true, noFiles: false },
       },
     );
-    expect(revision).toContain('2. `get_brief` and `read_inbox`.');
+    expect(revision).toContain('2. `get_brief` (always, even with the spec inlined) and `read_inbox`.');
     expect(revision).toContain('Call `read_inbox` once as well');
     expect(revision).toContain('under “Creator messages not yet acknowledged”');
     expect(revision).not.toContain('asserts on the core loop');
