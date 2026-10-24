@@ -45,6 +45,8 @@ describe('openingSteps', () => {
     expect(steps).toContain(
       'in this order (each step is required and takes seconds; the clock is no reason to skip one)',
     );
-    expect(steps).toMatch(/`get_brief`.*\n3\. One `knowledge_query`.*\n4\. One short `report_progress`/s);
+    expect(steps).toMatch(
+      /`get_brief`.*\n3\. One `knowledge_query`.*\n4\. One short `report_progress`.*before you open any kit or game file/s,
+    );
   });
 });

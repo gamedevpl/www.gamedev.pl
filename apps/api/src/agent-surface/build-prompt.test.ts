@@ -143,7 +143,7 @@ describe('buildPrompt', () => {
 
   it('truncates an oversized spec rather than sending it whole', () => {
     const prompt = buildPrompt({ ...BRIEF, spec: 'x'.repeat(20_000) });
-    expect(prompt.length).toBeLessThan(12_000);
+    expect(prompt.length).toBeLessThan(12_500);
   });
 
   // Without this, a queue-write failure would silently drop creator words.
