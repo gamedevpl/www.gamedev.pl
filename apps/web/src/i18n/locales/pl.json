@@ -256,6 +256,8 @@
     "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
     "howToPlayOther": "Sterowanie",
     "aboutGame": "O tej grze",
+    "videos": "Filmy na YouTube",
+    "followX": "Obserwuj na X",
     "agent": {
       "title": "Tryb agenta",
       "menu": "Tryb agenta",
@@ -1389,6 +1391,7 @@
     "waitlistRejected": "Twoja aplikacja nie została zaakceptowana tym razem. Dziękujemy za zainteresowanie.",
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie.",
+    "follow": "Nowe gry i klipy:",
     "game": {
       "hint": "Przesuwaj, żeby łapać przekąski",
       "region": "Łapanie przekąsek z maskotką",
@@ -2090,6 +2093,7 @@
     "openStudio": "Otwórz w Studio",
     "playPreview": "Zagraj w {{title}} w trybie kinowym",
     "openTheater": "Graj w trybie kinowym",
+    "videos": "Klipy i devlog:",
     "screenshots": "Zrzuty ekranu",
     "viewScreenshot": "Pokaż zrzut ekranu {{number}}",
     "breadcrumbAria": "Położenie gry"

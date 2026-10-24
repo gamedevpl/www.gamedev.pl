@@ -16,6 +16,7 @@ import { ProposeChangeWidget } from './ProposeChangeWidget.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { postGameHostMessage, useGamePlayer } from './gamePlayer.js';
+import { gameVideosUrl, gameXUrl } from './gameVideos.js';
 import { useGamepadSpike } from './gamepadSpike.js';
 import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
@@ -428,6 +429,7 @@ export function GameTheater({
   // — would have had the bar copy hidden by CSS and no menu to fall back to, and the
   // control would have vanished entirely.
   const shellMenu = player.shellMenu;
+  const videosUrl = reportSlug ? gameVideosUrl(reportSlug, 'player_menu') : null;
   const showMoreMenu =
     Boolean(reportSlug) ||
     agentAvailable ||
@@ -686,6 +688,22 @@ export function GameTheater({
                       <a className="theater-menu-item" href={gamePath(gamePageHandle({ creatorHandle }), reportSlug)}>
                         <PixelIcon name="folder" size={13} /> {t('player.aboutGame')}
                       </a>
+                      {/* New tab: the link is for after the game, not instead of it. */}
+                      {videosUrl ? (
+                        <a className="theater-menu-item" href={videosUrl} target="_blank" rel="noreferrer noopener">
+                          <PixelIcon name="play" size={13} /> {t('player.videos')}
+                        </a>
+                      ) : null}
+                      {videosUrl ? (
+                        <a
+                          className="theater-menu-item"
+                          href={gameXUrl(reportSlug, 'player_menu')}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          <PixelIcon name="share" size={13} /> {t('player.followX')}
+                        </a>
+                      ) : null}
                       {/* Shares the play permalink: someone handed a game link expects
                           to land in the game. The game page shares itself instead. */}
                       <ShareGameButton slug={reportSlug} title={displayTitle} />
