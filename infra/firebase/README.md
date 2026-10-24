@@ -40,9 +40,16 @@ Only `/assets/` is included; headers and the Cloud Run rewrite come from `fireba
 Unsupported config additions fail explicitly rather than being silently ignored.
 
 Each version carries one content-addressed `retention-<sha256>.json` ledger. Current
-files have no expiry. On replacement they receive a seven-day deadline; later deploys
-preserve that deadline. Expired files are omitted on the next deploy. A file reused by
-the current build becomes current again. The first deployment without a ledger seeds
+files have no expiry. Publication before promotion keeps both the old current files and
+the candidate files unexpired. **Only after Cloud Run promotion succeeds**, a second
+Hosting publication assigns seven-day deadlines to the replaced files. Confirmation
+checks the exact version receipt from the first publication. If verification or promotion
+fails, the serving build remains unexpired, even when the next retry is weeks later.
+If confirmation fails, unconfirmed files stay protected until a later successful deploy;
+the workflow warns rather than marking the already-live application as failed.
+
+Later deploys preserve existing deadlines. Expired files are omitted on the next deploy.
+A file reused by the current build becomes current again. The first deployment without a ledger seeds
 retention from all files in the existing live version, regardless of its age; files
 already removed before rollout cannot be recovered this way.
 
@@ -56,7 +63,8 @@ Before Cloud Run traffic promotion, public GETs verify the new ledger and repres
 current and retired entry, App, locale and CSS files on the site's `web.app` origin.
 They compare raw bytes, so changing gzip implementations does not create false failures.
 CDN propagation gets bounded retries. A failed check stops promotion; the asset release
-may already be live, but includes the previous build. Retry the deployment after diagnosis.
+may already be live, but includes the previous build without starting its retention clock.
+Retry the deployment after diagnosis.
 The gate samples public responses and checks the complete API manifest; it is not a
 probe of every asset from every CDN location or custom domain.
 
@@ -88,6 +96,13 @@ node infra/deploy-hosting.mjs --dry-run
 node infra/deploy-hosting.mjs
 ```
 
+Save the printed `version` as `HOSTING_VERSION`. After successfully promoting the matching
+Cloud Run image, confirm that publication:
+
+```bash
+node infra/deploy-hosting.mjs --confirm-promotion "$HOSTING_VERSION"
+```
+
 Use authenticated `gcloud` with `roles/firebasehosting.admin` and quota-project access
 (`roles/serviceusage.serviceUsageConsumer`). The workflow uses its existing WIF deploy
 identity; no new credential or bucket is needed. Dry-run reads live files and computes
@@ -96,7 +111,8 @@ production assets: it replaces the live manifest without carrying retained files
 
 Build with the same `VITE_*` values as the image, including a defined-empty
 `VITE_API_BASE_URL`; otherwise the entry hashes differ. Publish and verify assets before
-promoting the matching Cloud Run image. A missing current asset can fall through to that
+promoting the matching Cloud Run image, then confirm promotion to start retirement deadlines.
+A missing current asset can fall through to that
 image, but that fallback does not protect chunks from older images.
 
 Each command stands alone: interactive zsh does not treat `#` as a comment unless

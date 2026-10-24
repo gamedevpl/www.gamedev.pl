@@ -97,7 +97,7 @@ function firebase(seed = { 'App-old.js': 'old app', 'en-old.js': 'old locale', '
     const directory = await mkdtemp(path.join(tmpdir(), 'hosting-retention-'));
     temporary.push(directory);
     await Promise.all(Object.entries(files).map(([name, content]) => writeFile(path.join(directory, name), content)));
-    return releaseAssets({
+    const options = {
       site: 'gamedevpl',
       project: 'gamedevpl',
       token: 'test-token',
@@ -107,7 +107,10 @@ function firebase(seed = { 'App-old.js': 'old app', 'en-old.js': 'old locale', '
       fetchImpl,
       wait: async () => {},
       ...extra,
-    });
+    };
+    const prepared = await releaseAssets(options);
+    if (extra.prepareOnly || extra.dryRun || extra.confirmVersion) return prepared;
+    return releaseAssets({ ...options, confirmVersion: prepared.version });
   };
   state.liveFiles = () => versions.get(state.live);
   state.ledger = () =>
@@ -119,6 +122,26 @@ const start = Date.parse('2026-10-24T12:00:00Z');
 const day = RETENTION_MS / 7;
 
 describe('Firebase asset retention deployment', () => {
+  it('protects the serving build when promotion fails and a retry arrives weeks later', async () => {
+    const service = firebase();
+    await service.deploy({ 'App-candidate.js': 'candidate' }, start, { prepareOnly: true });
+    expect(service.ledger().files['/assets/App-old.js'].expiresAt).toBeNull();
+    await service.deploy({ 'App-next.js': 'next' }, start + 30 * day);
+    expect(service.ledger().files['/assets/App-old.js'].expiresAt).toBe(start + 37 * day);
+    expect(service.ledger().files['/assets/App-candidate.js'].expiresAt).toBe(start + 37 * day);
+    expect(service.liveFiles().has('/assets/App-old.js')).toBe(true);
+  });
+
+  it('does not confirm an intervening deployment using an old receipt', async () => {
+    const service = firebase();
+    const prepared = await service.deploy({ 'App-candidate.js': 'candidate' }, start, { prepareOnly: true });
+    await service.deploy({ 'App-next.js': 'next' }, start + day, { prepareOnly: true });
+    await expect(
+      service.deploy({ 'App-candidate.js': 'candidate' }, start + day, { confirmVersion: prepared.version }),
+    ).rejects.toThrow('different Hosting version');
+    expect(service.ledger().files['/assets/App-old.js'].expiresAt).toBeNull();
+  });
+
   it('keeps retired imports at their original URLs through multiple deploys and expires them after seven days', async () => {
     const service = firebase();
     await service.deploy({ 'App-new.js': 'new app' }, start);
@@ -157,7 +180,7 @@ describe('Firebase asset retention deployment', () => {
       rewrites: [{ glob: '**', run: { serviceId: 'gamedev-app', region: 'europe-west1' } }],
     });
     expect([...service.liveFiles().keys()].every((key) => key.startsWith('/assets/'))).toBe(true);
-    expect(service.calls.filter((call) => call.url.startsWith('https://upload-'))).toHaveLength(4);
+    expect(service.calls.filter((call) => call.url.startsWith('https://upload-'))).toHaveLength(5);
     const probes = service.calls.filter((call) => call.url.includes('?release='));
     expect(probes.some((call) => call.url.includes('App-old.js'))).toBe(true);
     expect(probes.some((call) => call.url.includes('en-old.js'))).toBe(true);
@@ -202,7 +225,7 @@ describe('Firebase asset retention deployment', () => {
     const ledgerHash = [...service.liveFiles()].find(([key]) => METADATA_PATH.test(key))[1];
     service.blobs.set(ledgerHash, packFile('{}').compressed);
     await expect(service.deploy({ 'App-next.js': 'next' }, start + day)).rejects.toThrow('digest mismatch');
-    expect(service.created).toBe(1);
+    expect(service.created).toBe(2);
   });
 
   it('rejects a ledger which silently drops a live file', async () => {
@@ -215,7 +238,7 @@ describe('Firebase asset retention deployment', () => {
     service.liveFiles().delete([...service.liveFiles().keys()].find((key) => METADATA_PATH.test(key)));
     service.liveFiles().set(`/assets/retention-${sha256(packed.raw)}.json`, packed.hash);
     await expect(service.deploy({ 'App-next.js': 'next' }, start + day)).rejects.toThrow('does not cover');
-    expect(service.releases).toBe(1);
+    expect(service.releases).toBe(2);
   });
 
   it('stops when a concurrent publisher changes the live release', async () => {
@@ -230,6 +253,7 @@ describe('Firebase asset retention deployment', () => {
     service.breakProbe = '/assets/App-old.js';
     await expect(service.deploy({ 'App-new.js': 'new' }, start)).rejects.toThrow('Released asset verification failed');
     expect(service.releases).toBe(1);
+    expect(service.ledger().files['/assets/App-old.js'].expiresAt).toBeNull();
     expect(service.calls.filter((call) => call.url.includes('App-old.js?release='))).toHaveLength(5);
   });
 
@@ -248,7 +272,7 @@ describe('Firebase asset retention deployment', () => {
     const service = firebase(seed);
     await service.deploy({ 'App-new.js': 'new' }, start);
     const batches = service.calls.filter((call) => call.url.endsWith(':populateFiles'));
-    expect(batches.map((call) => Object.keys(JSON.parse(call.body).files).length)).toEqual([1000, 7]);
+    expect(batches.map((call) => Object.keys(JSON.parse(call.body).files).length)).toEqual([1000, 7, 1000, 7]);
     expect(service.liveFiles().size).toBe(1007);
   });
 
@@ -268,10 +292,12 @@ describe('Firebase asset retention deployment', () => {
     const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
     const release = workflow.indexOf('node infra/deploy-hosting.mjs');
     const promotion = workflow.indexOf('- name: Promote candidate revision to 100% traffic');
+    const confirmation = workflow.indexOf('node infra/deploy-hosting.mjs --confirm-promotion');
     const prune = workflow.indexOf('- name: Prune old Firebase Hosting versions');
     expect(release).toBeGreaterThan(0);
     expect(release).toBeLessThan(promotion);
-    expect(promotion).toBeLessThan(prune);
+    expect(promotion).toBeLessThan(confirmation);
+    expect(confirmation).toBeLessThan(prune);
     expect(workflow).not.toMatch(/firebase-tools[^\n]* deploy/);
   });
 });

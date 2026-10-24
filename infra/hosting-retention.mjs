@@ -68,12 +68,12 @@ export function parseLedger(raw, name, liveFiles) {
   return files;
 }
 
-export function planAssets(current, previous, now) {
+export function planAssets(current, previous, now, retireCurrent) {
   if (!current.size || !Number.isSafeInteger(now) || now <= 0) throw new Error('Empty build or invalid clock');
   const files = new Map();
   for (const [name, entry] of previous) {
-    const expiresAt = entry.expiresAt ?? now + RETENTION_MS;
-    if (expiresAt > now) files.set(name, { hash: entry.hash, expiresAt });
+    const expiresAt = entry.expiresAt ?? (retireCurrent ? now + RETENTION_MS : null);
+    if (expiresAt === null || expiresAt > now) files.set(name, { hash: entry.hash, expiresAt });
   }
   for (const [name, file] of current) {
     validateAssetPath(name);
@@ -87,7 +87,7 @@ export function planAssets(current, previous, now) {
   const manifest = new Map([...files].map(([name, entry]) => [name, entry.hash]));
   manifest.set(metadataPath, metadata.hash);
   const uploads = new Map([...current.values(), metadata].map((file) => [file.hash, file.compressed]));
-  const retained = [...files].filter(([, entry]) => entry.expiresAt !== null).map(([name]) => name);
+  const retained = [...files.keys()].filter((name) => !current.has(name));
   return { manifest, uploads, metadataPath, retained };
 }
 

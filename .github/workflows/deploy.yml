@@ -1278,6 +1278,7 @@ jobs:
         run: npm ci
 
       - name: Upload web assets to Firebase Hosting
+        id: hosting-assets
         # Preserve retired assets before promoting Cloud Run; see infra/firebase/README.md.
         # Keep VITE inputs identical to the image build, including defined-empty values.
         env:
@@ -1297,6 +1298,17 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Start asset retention deadlines after promotion
+        continue-on-error: true
+        env:
+          HOSTING_VERSION: ${{ steps.hosting-assets.outputs.version }}
+        run: |
+          if ! node infra/deploy-hosting.mjs --confirm-promotion "$HOSTING_VERSION"; then
+            echo "::warning title=Hosting retention confirmation failed::The application is live. \
+          Unconfirmed assets remain protected until the next successful deployment confirms promotion."
+            exit 1
+          fi
 
       - name: Prune old Firebase Hosting versions
         # Last, and after promotion: Hosting keeps every version ever deployed and bills

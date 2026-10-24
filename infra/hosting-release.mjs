@@ -18,6 +18,7 @@ export async function releaseAssets({
   assetDir,
   hosting,
   dryRun = false,
+  confirmVersion,
   now = Date.now(),
   fetchImpl = fetch,
   wait = delay,
@@ -88,6 +89,8 @@ export async function releaseAssets({
   }
 
   const previousVersion = await liveVersion();
+  if (confirmVersion && confirmVersion !== previousVersion)
+    throw new Error('Promotion confirmation targets a different Hosting version');
   const liveFiles = await versionFiles(previousVersion);
   const metadataNames = [...liveFiles.keys()].filter((name) => METADATA_PATH.test(name));
   if (metadataNames.length > 1) throw new Error('Multiple retention ledgers in the live version');
@@ -110,7 +113,7 @@ export async function releaseAssets({
       file.compressed = undefined;
     }
   }
-  const plan = planAssets(current, previous, now);
+  const plan = planAssets(current, previous, now, Boolean(confirmVersion));
   const receipt = { previousVersion, retained: plan.retained.length, files: plan.manifest.size, dryRun };
   if (dryRun) return receipt;
 
