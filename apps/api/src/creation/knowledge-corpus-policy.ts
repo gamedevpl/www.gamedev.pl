@@ -15,7 +15,7 @@ export function scopeToFilter(scope: KnowledgeScope | undefined): string {
   }
 }
 
-// Example code is ~70% of the corpus and crowded kit answers out of an unscoped search.
+// Example code (~70% of docs) crowded kit answers out unscoped.
 export const EXAMPLE_DEMOTION = -0.5;
 
 export function scopeToBoostSpec(scope: KnowledgeScope | undefined) {
