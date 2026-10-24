@@ -18,7 +18,8 @@ function needsSession(view: string): boolean {
 
 // Decides splash-or-app before the import, not after.
 export function BootGate() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const polish = i18n.language?.startsWith('pl');
   const { user, loading, privateBeta } = useAuth();
   // Canonicalises first, as App does: /gamedevpl is home.
   const [route, setRoute] = useState(readLocationRoute);
@@ -45,9 +46,15 @@ export function BootGate() {
     <RouteChunkBoundary
       fallback={
         <div className="content-load-error">
-          <p>{t('app.surfaceLoadFailed')}</p>
+          <p>
+            {t('app.surfaceLoadFailed', {
+              defaultValue: polish
+                ? 'Nie udało się wczytać strony. Spróbuj ją odświeżyć.'
+                : 'This page could not load. Try reloading it.',
+            })}
+          </p>
           <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>
-            {t('app.reload')}
+            {t('app.reload', { defaultValue: polish ? 'Odśwież' : 'Reload' })}
           </button>
         </div>
       }
