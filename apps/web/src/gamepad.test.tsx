@@ -51,13 +51,13 @@ function setup(active = true) {
   act(() => root.render(<Harness active={active} />));
   const frame = container.querySelector('iframe')!;
   const post = vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
-  const send = (source: Window = frame.contentWindow!) =>
+  const send = (source: Window = frame.contentWindow!, raw?: boolean) =>
     act(() =>
       window.dispatchEvent(
         documentMessage('message', {
           source,
           origin: 'null',
-          data: { ns: 'gdp', v: 1, t: 'gamepad:hello' },
+          data: { ns: 'gdp', v: 1, t: 'gamepad:hello', ...(raw === undefined ? {} : { raw }) },
         }),
       ),
     );
@@ -98,6 +98,42 @@ describe('gamepad bridge', () => {
       host.get.mockReturnValue([]);
       host.tick();
       expect(host.post).toHaveBeenLastCalledWith(expect.objectContaining({ pads: [] }), '*');
+    } finally {
+      host.cleanup();
+    }
+  });
+
+  it('forwards devices without a standard layout only after a raw hello', () => {
+    const host = setup();
+    const wheel = {
+      ...pad(6),
+      mapping: '',
+      axes: [0.25, 3, NaN, 0, 0, 0, 0, 0, 0, 0],
+      buttons: Array.from({ length: 40 }, (_, n) => ({ pressed: n === 20, value: n === 20 ? 1 : 0 })),
+    } as unknown as Gamepad;
+    host.get.mockReturnValue([pad(2), wheel]);
+    try {
+      host.send();
+      expect(host.post.mock.calls.at(-1)![0].pads.map((p: { index: number }) => p.index)).toEqual([2]);
+      host.send(undefined, true);
+      host.tick();
+      const raw = host.post.mock.calls.at(-1)![0].pads[1];
+      expect(raw).toEqual({
+        index: 6,
+        mapping: '',
+        axes: [0.25, 1, 0, 0, 0, 0, 0, 0],
+        buttons: Array.from({ length: 32 }, (_, n) => (n === 20 ? 1 : 0)),
+      });
+      expect(JSON.stringify(host.post.mock.calls.at(-1)![0])).not.toContain('private device name');
+      // A later plain hello from another instance keeps raw devices on.
+      host.send(undefined, false);
+      host.tick();
+      expect(host.post.mock.calls.at(-1)![0].pads).toHaveLength(2);
+      act(() => window.dispatchEvent(new Event('blur')));
+      const neutral = host.post.mock.calls.at(-1)![0];
+      expect(neutral.active).toBe(false);
+      expect(neutral.pads[1].axes).toEqual(Array(8).fill(0));
+      expect(neutral.pads[1].buttons).toEqual(Array(32).fill(0));
     } finally {
       host.cleanup();
     }
