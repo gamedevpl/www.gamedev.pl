@@ -2,8 +2,8 @@
 
 import { GoogleAuth } from 'google-auth-library';
 import { rememberBounded } from '../platform/bounded-map.js';
-import { isCreatorSpec, scopeToFilter } from './knowledge-corpus-policy.js';
-export { scopeToFilter } from './knowledge-corpus-policy.js';
+import { isCreatorSpec, scopeToBoostSpec, scopeToFilter } from './knowledge-corpus-policy.js';
+export { scopeToBoostSpec, scopeToFilter } from './knowledge-corpus-policy.js';
 
 export type KnowledgeMode = 'answer' | 'chunks';
 export type KnowledgeScope = 'kit' | 'editor' | 'examples' | 'docs';
@@ -386,6 +386,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
         // The default threshold (like LOW) dropped every "best lap" chunk.
         relevanceThreshold: 'LOWEST',
         ...(filter ? { filter } : {}),
+        boostSpec: scopeToBoostSpec(scope), // undefined drops out of the JSON body
       },
       chunksTimeoutMs,
     );
@@ -401,6 +402,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
 
   async function runAnswer(query: string, scope: KnowledgeScope | undefined): Promise<KnowledgeQueryResult> {
     const filter = scopeToFilter(scope);
+    const boostSpec = scopeToBoostSpec(scope);
     const json = await post(
       'answer',
       {
@@ -411,9 +413,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
           includeCitations: true,
           promptSpec: { preamble: ANSWER_PREAMBLE },
         },
-        ...(filter
-          ? { searchSpec: { searchParams: { filter, maxReturnResults: CHUNKS_PAGE_SIZE } } }
-          : { searchSpec: { searchParams: { maxReturnResults: CHUNKS_PAGE_SIZE } } }),
+        searchSpec: { searchParams: { filter: filter || undefined, boostSpec, maxReturnResults: CHUNKS_PAGE_SIZE } },
       },
       answerTimeoutMs,
     );

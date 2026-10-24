@@ -28,6 +28,17 @@ const VARIANTS: Record<string, BodyEdit> = {
   'default-threshold': (body) => {
     delete body.relevanceThreshold;
   },
+  'no-demotion': (body) => {
+    delete body.boostSpec;
+  },
+  ...Object.fromEntries(
+    [-0.3, -0.8].map((boost) => [
+      `demote${boost}`,
+      (body: Record<string, unknown>) => {
+        if (body.boostSpec) body.boostSpec = { conditionBoostSpecs: [{ condition: 'corpus: ANY("example")', boost }] };
+      },
+    ]),
+  ),
 };
 
 const args = process.argv.slice(2);
