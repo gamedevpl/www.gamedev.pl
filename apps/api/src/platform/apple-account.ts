@@ -21,33 +21,21 @@ export interface AppleAccountResolution {
   linkedTo?: User;
   // Another account holds this address; refuse sign-in and ask for a link.
   linkRequired?: true;
-  /**
-   * The address safe to persist and to test against the private-beta allowlist, or
-   * undefined when Apple gave us nothing usable. Never a relay address.
-   */
+  // Non-relay address for account matching and the private-beta allowlist.
   email?: string;
 }
 
-/**
- * The address an Apple payload may be matched or allowlisted on, if any.
- *
- * Two independent disqualifiers:
- *
- * - **Unverified.** Same rule the Google path applies: an unverified claim must never
- *   satisfy an access-control decision.
- * - **Private relay.** "Hide My Email" yields a verified, deliverable, genuinely-theirs
- *   `@privaterelay.appleid.com` address — but it is freshly minted per app and nobody
- *   else has ever seen it, so it cannot match an existing account or an allowlist a human
- *   typed. Matching on it would always miss; the danger is not a false link but a silent
- *   failure to link, which is why it is named here rather than left to chance.
- */
+// Relay aliases receive mail even though they cannot match other identities.
+export function verifiedAppleContactEmail(payload: AppleAuthPayload): string | undefined {
+  return payload.emailVerified ? payload.email?.trim() || undefined : undefined;
+}
+
+// Matching other identities and bootstrap allowlists excludes relay aliases.
 export function linkableAppleEmail(payload: AppleAuthPayload): string | undefined {
-  if (!payload.emailVerified) return undefined;
   if (payload.isPrivateEmail) return undefined;
-  const email = payload.email?.trim();
+  const email = verifiedAppleContactEmail(payload);
   if (!email) return undefined;
-  // Belt and braces: Apple should always set `is_private_email` for these, but the claim
-  // is one of the string-or-boolean ones and the domain is unambiguous on its own.
+  // The domain also detects relay aliases when Apple's flag is missing.
   if (email.toLowerCase().endsWith('@privaterelay.appleid.com')) return undefined;
   return email;
 }

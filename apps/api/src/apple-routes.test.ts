@@ -119,14 +119,12 @@ describe('POST /api/auth/apple', () => {
     expect((await store.getUser(`a:${APPLE_SUB}`))?.name).toBe('Ada Lovelace');
   });
 
-  it('never stores a Hide-My-Email relay address', async () => {
-    // Storing it would overwrite a real address with a per-app forwarding alias and break
-    // the notification emails the account already receives.
+  it('stores a verified Hide-My-Email address for notifications', async () => {
     const { app, store } = await setup({ 'apple-token': RELAY });
 
     await signIn(app);
 
-    expect((await store.getUser(`a:${APPLE_SUB}`))?.email).toBeUndefined();
+    expect((await store.getUser(`a:${APPLE_SUB}`))?.email).toBe(RELAY.email);
   });
 
   it('rejects an unverifiable token', async () => {

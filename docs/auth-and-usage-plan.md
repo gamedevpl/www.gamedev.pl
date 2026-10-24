@@ -239,8 +239,8 @@ than a fresh one — account linking working against real Apple tokens, not just
 
 **Domain verification turned out not to be part of this flow.** The console never offered
 an association file, and none was needed: Apple validates the web flow against the
-registered **Return URLs**. `apple-developer-domain-association.txt` belongs to the
-private-email relay service, which this product deliberately does not use.
+registered **Return URLs**. Outbound mail through Apple's private relay requires a
+separate sender registration and email authentication; it needs no association file.
 
 ### What the owner has to do (none of it can be done from the repo)
 
@@ -250,7 +250,7 @@ private-email relay service, which this product deliberately does not use.
 3. Create a **Services ID** (e.g. `pl.gamedev.web`) — this is the _web_ client, distinct
    from the app's bundle ID — and enable _Sign in with Apple_ on it.
 4. Under that Services ID, configure:
-   - **Domain**: `www.gamedev.pl`, then complete Apple's domain-verification file check.
+   - **Domain**: `www.gamedev.pl`.
    - **Return URL**: `https://www.gamedev.pl/` — must be https and must match exactly.
      Apple rejects every `http://` origin, which is why this flow **cannot be exercised
      from localhost or from a preview build**; a deployed https origin is the only place
@@ -278,12 +278,19 @@ private-email relay service, which this product deliberately does not use.
   `users.appleSub` (uniqueness lock in `appleLinks/{sub}`). Later Apple sign-ins resolve
   on that binding. An ambiguous email match creates a new `a:<sub>` account instead of
   guessing. The funnel is measured as `apple_link_step` (`required` / `linked` / `failed`).
-- **Hide My Email is a known, accepted limitation.** A creator who picks it gets a
-  per-app `@privaterelay.appleid.com` address that no allowlist and no existing account
-  can match, so they land in a new account and, under private beta, are refused and sent
-  to the waitlist. Correct, but it will read as a bug when it first happens — the fix is
-  an explicit "link an Apple ID" action on an already-signed-in account (built on
-  `/api/auth/apple/link`), not looser matching.
+- **Hide My Email keeps a separate Apple identity.** An unbound Apple ID with a relay
+  alias resolves to `a:<sub>`; it cannot match another account's real address. Private
+  beta requires approval of that UID or an invite. Existing explicit Apple bindings
+  still resolve to the linked account, which keeps its original contact address.
+- **Relay aliases are contact addresses.** A verified Apple alias is stored on the
+  waitlist, invite admission and an unlinked Apple profile for welcome and notification
+  emails. Account matching and the bootstrap email allowlist still exclude aliases;
+  waitlist approval admits the Apple UID. Linked accounts keep their existing contact.
+  Register the outbound sender domain in Apple Developer's **Services → Sign in with
+  Apple for Email Communication** and authenticate it with SPF and/or DKIM before
+  sending through the relay. See [Apple's setup instructions](https://developer.apple.com/help/account/capabilities/configure-private-email-relay-service/).
+  Older waitlist entries without an address need another join after this fix; their
+  contact cannot be reconstructed from the Apple UID.
 - **`email_verified` arrives as a boolean _or_ the string `"true"`**, depending on the
   flow. `Boolean("false")` is `true`, so a direct read of that claim fails **open** on the
   one flag gating the allowlist. `appleClaimFlag` exists solely for this and is pinned by

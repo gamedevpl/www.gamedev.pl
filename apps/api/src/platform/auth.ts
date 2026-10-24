@@ -8,7 +8,7 @@ import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token
 import { resolveBearerIdentity } from './oauth-request-auth.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { isReviewer, isReviewerSession } from '../community/review.js';
-import { appleLinkRefusal, resolveAppleAccount } from './apple-account.js';
+import { appleLinkRefusal, resolveAppleAccount, verifiedAppleContactEmail } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
 import { sessionWriteAllowed } from './session-csrf.js';
@@ -607,6 +607,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           return reply.status(409).send({ error: 'apple_link_required' });
         }
         const uid = resolution.uid;
+        const contactEmail = resolution.linkedTo?.email ?? verifiedAppleContactEmail(applePayload);
         const existingUser = await store.getUser(uid);
 
         // Identical rule to the Google path, run against the *resolved* uid: a creator
@@ -640,8 +641,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
             const claimLocale = localeFromRequest(request);
             await recordInviteAdmission(store, request, {
               uid,
-              // Already the verified, linkable address — never a relay alias.
-              ...(emailLower !== '' ? { email: emailLower } : {}),
+              ...(contactEmail ? { email: contactEmail.toLowerCase() } : {}),
               ...(parseResult.data.name ? { name: parseResult.data.name } : {}),
               ...(claimLocale ? { locale: claimLocale } : {}),
             });
@@ -652,9 +652,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         const signInLocale = localeFromRequest(request);
         const user = await store.upsertUser({
           uid,
-          // Only ever the linkable address, and never onto a linked account: that account's
-          // own address is the one its notifications go to.
-          email: resolution.linkedTo ? undefined : resolution.email,
+          // Linked accounts keep their own notification address.
+          email: resolution.linkedTo ? undefined : contactEmail,
           // Apple sends the name once and never again, so an absent one must leave any
           // stored name alone — which `upsertUser` already does for undefined.
           name: parseResult.data.name || undefined,
@@ -776,9 +775,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           const applePayload = await appleVerifier.verifyIdToken(parseResult.data.idToken);
           const resolution = await resolveAppleAccount(store, applePayload);
           uid = resolution.uid;
-          // Already excludes unverified and relay addresses. A relay address on the
-          // waitlist would be a row the owner cannot recognise when approving.
-          email = resolution.email;
+          email = resolution.linkedTo?.email ?? verifiedAppleContactEmail(applePayload);
         } else {
           const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
           uid = `g:${googleUser.sub}`;
