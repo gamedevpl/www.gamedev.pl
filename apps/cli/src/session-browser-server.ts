@@ -11,7 +11,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import { stripVTControlCharacters } from 'node:util';
 import { stripTerminalControls } from './ansi.js';
-import { z } from 'zod';
+import * as z from 'zod';
 import { createSessionCommands } from './session-commands.js';
 import type { SessionController } from './session-controller.js';
 import { previewSource, type PreviewSource } from './local-preview-source.js';

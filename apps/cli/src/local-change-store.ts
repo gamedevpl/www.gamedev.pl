@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { z } from 'zod';
+import * as z from 'zod';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { kitPath } from './kit-install.js';
 import { localTree } from './history-edit-tree.js';

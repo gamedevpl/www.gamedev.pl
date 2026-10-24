@@ -141,6 +141,9 @@ repo in the same session.
   the built CLI and enforces the 4.5 MB bundle budget. Release bundling removes
   whitespace while retaining identifiers and legal notices; keep the size guard
   rather than raising it to accommodate an unoptimized dependency.
+  In Zod 4, import `import * as z from 'zod'` rather than `import { z } from 'zod'`
+  in `apps/cli/src/`: the named `{ z }` re-export is a namespace object that blocks
+  esbuild from tree-shaking unused locales and JSON Schema compilers (~486 KB).
   Run CLI prebuild, type-check, test and bundle commands sequentially: their
   shared UI generator writes and deletes the same `play-shell.mjs` file.
 

@@ -1,6 +1,6 @@
 import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { z } from 'zod';
+import * as z from 'zod';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT } from './exit-codes.js';
 import type { LoopbackLoginInput } from './login.js';

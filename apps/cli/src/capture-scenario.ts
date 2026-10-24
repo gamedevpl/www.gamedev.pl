@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { createHash } from 'node:crypto';
 import { openSync, readSync, fstatSync, closeSync, constants } from 'node:fs';
 import { gameSourcePath } from './source-project.js';

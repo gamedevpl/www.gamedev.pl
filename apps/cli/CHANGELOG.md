@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Upgrade `zod` to 4.6.7 and use namespace imports so esbuild tree-shakes unused schemas and locales from the CLI bundle.
+
 ## 0.56.0 — 2026-10-21
 
 ### Added

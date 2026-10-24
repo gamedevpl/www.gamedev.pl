@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { z } from 'zod';
+import * as z from 'zod';
 import { CODE_STEPS, CODE_COMPLETION_KINDS, CODE_COMPLETION_OUTCOMES } from '@gamedevpl/contract';
 
 export const codeMetricSchema = z.discriminatedUnion('type', [
