@@ -25,26 +25,79 @@ CDN that caches nothing for the only audience there is, which is the opposite of
 so shipping it here would bypass the origin's SPA shell handling — the part that answers a
 real 404 for unknown deep links and 200 only for known ones.
 
-## Why a hash mismatch is not an outage
+## Keeping old imports available
 
-The `**` rewrite catches anything Hosting does not hold, and the Cloud Run image always
-carries a complete copy of the same build. So if an upload and an image ever disagree — a
-half-finished deploy, a rolled-back revision — the affected assets are served from the
-origin uncached rather than 404ing. Degraded, not broken.
+An open tab or service-worker shell can reference chunks from a previous deployment.
+The Cloud Run fallback carries only its own build, so once Hosting and Cloud Run both
+advance, that fallback cannot serve old imports. Keeping archived Hosting versions for
+rollback does not make their files available at the live URL.
+
+`infra/deploy-hosting.mjs` publishes the current build plus retired assets for **seven
+days after replacement**. It uses the documented [Hosting REST deployment API](https://firebase.google.com/docs/hosting/api-deploy):
+create a version, populate its complete path-to-gzip-SHA256 manifest, upload missing
+blobs, finalize, then release. Hosting reuses previously uploaded content by hash.
+Only `/assets/` is included; headers and the Cloud Run rewrite come from `firebase.json`.
+Unsupported config additions fail explicitly rather than being silently ignored.
+
+Each version carries one content-addressed `retention-<sha256>.json` ledger. Current
+files have no expiry. On replacement they receive a seven-day deadline; later deploys
+preserve that deadline. Expired files are omitted on the next deploy. A file reused by
+the current build becomes current again. The first deployment without a ledger seeds
+retention from all files in the existing live version, regardless of its age; files
+already removed before rollout cannot be recovered this way.
+
+The publisher lists **ACTIVE** files across all API pages, verifies ledger coverage,
+rejects changed content at an existing immutable URL, and refuses to release if a
+retained blob is unavailable. It checks the finalized manifest and detects an intervening
+live release before publishing. Production deploys remain serialized by the workflow;
+the API has no compare-and-swap release operation, so do not publish manually alongside it.
+
+Before Cloud Run traffic promotion, public GETs verify the new ledger and representative
+current and retired entry, App, locale and CSS files on the site's `web.app` origin.
+They compare raw bytes, so changing gzip implementations does not create false failures.
+CDN propagation gets bounded retries. A failed check stops promotion; the asset release
+may already be live, but includes the previous build. Retry the deployment after diagnosis.
+The gate samples public responses and checks the complete API manifest; it is not a
+probe of every asset from every CDN location or custom domain.
+
+`prune-hosting-versions.sh` still keeps ten archived versions for rollback. Files retained
+in the new live manifest remain referenced even when their original version is pruned.
+Storage now includes the current build and seven days of retired content, plus retained
+archives; adjust the retention window only with that cost and old-tab support in mind.
+
+Roll back application code by redeploying it through this publisher, which retains the
+newer assets too. Directly releasing an old Hosting version also restores its old
+manifest and ledger, bypassing the retention guarantee for subsequent builds. Tabs older
+than the retention window still need [bounded chunk recovery](../../docs/frontend-chunk-recovery.md).
 
 ## Deploying by hand
+
+```bash
+npm run build:packages
+```
 
 ```bash
 npm run build --workspace apps/web
 ```
 
 ```bash
-rm -rf infra/firebase/public/assets && cp -r apps/web/dist/assets infra/firebase/public/assets
+node infra/deploy-hosting.mjs --dry-run
 ```
 
 ```bash
-npx firebase-tools deploy --only hosting --project gamedevpl --config infra/firebase/firebase.json
+node infra/deploy-hosting.mjs
 ```
+
+Use authenticated `gcloud` with `roles/firebasehosting.admin` and quota-project access
+(`roles/serviceusage.serviceUsageConsumer`). The workflow uses its existing WIF deploy
+identity; no new credential or bucket is needed. Dry-run reads live files and computes
+the manifest without creating a version. Do not use a plain Firebase CLI deploy for
+production assets: it replaces the live manifest without carrying retained files.
+
+Build with the same `VITE_*` values as the image, including a defined-empty
+`VITE_API_BASE_URL`; otherwise the entry hashes differ. Publish and verify assets before
+promoting the matching Cloud Run image. A missing current asset can fall through to that
+image, but that fallback does not protect chunks from older images.
 
 Each command stands alone: interactive zsh does not treat `#` as a comment unless
 `INTERACTIVE_COMMENTS` is set, so an annotated command line pasted into it arrives as extra

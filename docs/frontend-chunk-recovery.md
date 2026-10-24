@@ -5,6 +5,11 @@ Later imports of App or the active locale then return 404. A failed locale also
 leaves i18next without its resource bundle, so the boot error must have inline
 English and Polish defaults.
 
+The [Hosting publisher](../infra/firebase/README.md#keeping-old-imports-available)
+retains retired assets at their original URLs for seven days after replacement.
+That prevents missing imports during the supported window. Recovery remains necessary
+for older tabs, transient network failures, and assets lost before retention was enabled.
+
 `main.tsx` registers `watchChunkRecovery` before awaiting locale initialization or
 rendering React. Vite dispatches `vite:preloadError` for rejected dynamic imports;
 the listener recognizes browser module-fetch and stylesheet-preload failures.

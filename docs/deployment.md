@@ -94,6 +94,12 @@ move stays in `deploy` because the gate opens a lobby and the relay must already
 candidate's identity. The gate job does not use the npm cache: the cache is saved after the
 games have run, and `promote` restores it on a runner that holds GCP credentials.
 
+The [Hosting publisher](../infra/firebase/README.md#keeping-old-imports-available)
+retains retired frontend assets for seven days after replacement. It verifies the complete
+published manifest and samples public asset responses before Cloud Run traffic promotion.
+Keeping ten archived Hosting versions is a separate rollback policy; archived files alone
+are not available to old tabs at the active site URL.
+
 **Chromium sandbox.** `apps/e2e/src/browser.ts` launches with Chromium's sandbox on
 (Playwright otherwise passes `--no-sandbox` by default). The gate job installs a one-binary
 AppArmor profile granting user namespaces when the runner restricts them (Ubuntu 23.10+).
