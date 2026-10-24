@@ -47,6 +47,13 @@ dependency-free JavaScript before browser delivery.
 problems, and bringing each game into line with its current spec. Claude Code / Codex / agy
 can be brought in as extra hands on the same repo when needed.
 
+For store-published games, the catalog uses the published `GAME.json.description`
+as its localized `tagline` fallback when generated catalog enrichment is absent.
+Both English and Polish descriptions are retained; a legacy string or single locale
+fills both slots. The manifest read shares the store-catalog cache window, so repeated
+home-page requests do not reload each game's sources. Existing generated enrichment
+still takes precedence. This fallback requires no generation call or game rebuild.
+
 The gamedev.pl app is a **catalog and player** over that repo, plus a way for creators to
 submit specs.
 

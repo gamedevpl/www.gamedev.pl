@@ -12,6 +12,7 @@ import {
   type MintBudgetLimits,
 } from '../platform/media-mint-budget.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
+import { manifestTagline } from './catalog-tagline.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -323,12 +324,10 @@ export async function registerCatalogRoutes(
       for (const record of publications) {
         const spec = await gamesStore.getSourceFile(record.slug, record.currentVersion, 'SPEC.md');
         if (spec === null) continue;
-        // Media lives as derived artifacts, produced by the gate — not as source.
-        const mediaMetadata = await gamesStore.getDerivedArtifact(
-          record.slug,
-          record.currentVersion,
-          'media/metadata.json',
-        );
+        const [mediaMetadata, gameManifest] = await Promise.all([
+          gamesStore.getDerivedArtifact(record.slug, record.currentVersion, 'media/metadata.json'),
+          gamesStore.getSourceFile(record.slug, record.currentVersion, 'GAME.json').catch(() => null),
+        ]);
         const entry = catalogEntryFromSpec(record.slug, spec, (name) =>
           name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
         );
@@ -352,6 +351,7 @@ export async function registerCatalogRoutes(
         }
         entries.push({
           ...entry,
+          tagline: manifestTagline(gameManifest) ?? entry.tagline,
           status: 'published',
           submittedBy: noAttribution ? 'gamedev-platform' : profile ? profileBylineName(profile) : entry.submittedBy,
           creatorHandle: noAttribution ? null : (profile?.handle ?? null),
