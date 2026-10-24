@@ -11,7 +11,7 @@ const BodySchema = z.object({
   slug: z.string().min(1),
   version: z.string().min(1),
   kind: z.enum(['gate', 'preview', 'health', 'progress']),
-  result: z.record(z.unknown()),
+  result: z.record(z.string(), z.unknown()),
 });
 
 export interface GateVerdictRoutesOptions {

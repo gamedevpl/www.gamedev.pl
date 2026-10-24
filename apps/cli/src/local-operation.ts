@@ -1,7 +1,7 @@
 import { isRasterSourcePath } from '@gamedevpl/contract';
 import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, rmSync } from 'node:fs';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { ApiClient } from './api.js';
 import { hashContent, hashesOf, type TreeFile } from './checkout-sync.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';

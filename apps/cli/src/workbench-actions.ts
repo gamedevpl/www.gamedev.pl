@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 
 // Actions enter the shared session queue through fixed, typed domain verbs.
 export const WORKBENCH_ACTIONS = {

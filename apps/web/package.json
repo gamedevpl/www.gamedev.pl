@@ -44,7 +44,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "jsdom": "^29.1.1",
     "vite": "^6.4.4",
-    "vitest": "^4.1.11",
+    "vitest": "^4.1.12",
     "webmcp-types": "^0.1.10"
   }
 }

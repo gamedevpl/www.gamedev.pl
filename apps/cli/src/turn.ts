@@ -2,7 +2,7 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 import type { CreatorProposal } from '@gamedevpl/contract';
 import { SUBMISSION_STATES } from '@gamedevpl/contract';
-import { z } from 'zod';
+import * as z from 'zod';
 
 export type TurnResult = { kind: 'reply'; text: string } | { kind: 'build'; ack?: string; roundId: number };
 export type PreparedTurnResult = TurnResult | { kind: 'proposal'; ack?: string };

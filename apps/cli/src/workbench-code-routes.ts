@@ -1,6 +1,6 @@
 import { gameSourcePath } from './source-project.js';
 import type { IncomingMessage } from 'node:http';
-import { z } from 'zod';
+import * as z from 'zod';
 import { isJsonContentType } from './workbench-http.js';
 import { codeProjectId, readCodeFile, saveCodeFile, type CodeCheckout } from './workbench-code-files.js';
 import {

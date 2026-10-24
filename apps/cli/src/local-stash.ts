@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, lstatSync, readdirSync, rmSync } from 'node:fs';
-import { z } from 'zod';
+import * as z from 'zod';
 import type { ApiClient } from './api.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { hashesOf } from './checkout-sync.js';

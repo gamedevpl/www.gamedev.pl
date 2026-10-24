@@ -5,7 +5,7 @@ import type WebSocket from 'ws';
 import { attachPlayPresence, presenceToken } from './play-presence.js';
 import { networkInterfaces } from 'node:os';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { z } from 'zod';
+import * as z from 'zod';
 import { PHONE_PAGE } from './workbench-phone-page.js';
 
 export function lanAddresses(): string[] {
