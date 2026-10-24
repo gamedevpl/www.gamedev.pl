@@ -34,7 +34,7 @@ describe('buildPromptOpening for an undelivered round', () => {
   });
 });
 
-// 2026-10-24: a mounted round on a 20-minute clock skipped all three.
+// 2026-10-24: a mounted round on a clock skipped all three.
 describe('openingSteps', () => {
   it('marks every opening step required, the clock included', () => {
     const steps = openingSteps(BRIEF, {
