@@ -1278,47 +1278,18 @@ jobs:
         run: npm ci
 
       - name: Upload web assets to Firebase Hosting
-        # Before promotion, so the assets are in place when the new index.html goes live.
-        #
-        # Only apps/web/dist/assets is uploaded. Hosting appends `cookie` to Vary on anything
-        # it takes from a Cloud Run rewrite, and each signed-in caller carries a distinct
-        # __session, so an asset fetched through the rewrite is cached per user and never
-        # shared — measured 2026-09-04. Files Hosting serves itself carry no cookie in Vary.
-        #
-        # index.html is deliberately NOT uploaded: Hosting matches static files before
-        # rewrites, so it would bypass the origin's SPA shell handling.
-        #
-        # A hash mismatch between this upload and the image degrades to serving from the
-        # origin rather than 404ing, because the ** rewrite catches whatever Hosting lacks
-        # and the image always carries a complete copy. That is what makes this safe to run
-        # on every deploy.
-        #
-        # Needs roles/firebasehosting.admin on the deploy service account.
-        # The hashes must match the image's. Vite content-hashes each chunk, and the main
-        # bundle inlines these three values, so a build without them produces a different
-        # index-*.js name than the one the image's index.html references — measured on the
-        # first deploy: the CSS (which embeds nothing) was served by Hosting, the JS fell
-        # through to the rewrite. The set must equal the Dockerfile's VITE_* ARGs, not just
-        # the ones the image build passes: the Dockerfile defines VITE_API_BASE_URL as an
-        # empty string, and Vite compiles a defined-empty variable differently from an
-        # absent one — measured, the JS hash differs on that alone while the CSS matches.
+        id: hosting-assets
+        # Preserve retired assets before promoting Cloud Run; see infra/firebase/README.md.
+        # Keep VITE inputs identical to the image build, including defined-empty values.
         env:
           VITE_API_BASE_URL: ''
           VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
           VITE_APPLE_SERVICES_ID: ${{ vars.APPLE_SERVICES_ID }}
           VITE_MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
         run: |
-          # npm ci alone leaves the workspace packages unbuilt, and apps/web will not
-          # typecheck against their stale dists.
           npm run build:packages
           npm run build --workspace apps/web
-          rm -rf infra/firebase/public/assets
-          cp -r apps/web/dist/assets infra/firebase/public/assets
-          npx firebase-tools@15.29.0 deploy \
-            --only hosting \
-            --project "$PROJECT_ID" \
-            --config infra/firebase/firebase.json \
-            --non-interactive
+          node infra/deploy-hosting.mjs
 
       - name: Promote candidate revision to 100% traffic
         run: |
@@ -1327,6 +1298,17 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Start asset retention deadlines after promotion
+        continue-on-error: true
+        env:
+          HOSTING_VERSION: ${{ steps.hosting-assets.outputs.version }}
+        run: |
+          if ! node infra/deploy-hosting.mjs --confirm-promotion "$HOSTING_VERSION"; then
+            echo "::warning title=Hosting retention confirmation failed::The application is live. \
+          Unconfirmed assets remain protected until the next successful deployment confirms promotion."
+            exit 1
+          fi
 
       - name: Prune old Firebase Hosting versions
         # Last, and after promotion: Hosting keeps every version ever deployed and bills
