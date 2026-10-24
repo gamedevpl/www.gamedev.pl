@@ -1,4 +1,6 @@
-import { X_URL, YOUTUBE_URL } from './FooterProjectLinks.js';
+// Kept here, not in the footer, so the svg-free play bundle can import it.
+export const YOUTUBE_URL = 'https://www.youtube.com/@gamedev_pl';
+export const X_URL = 'https://x.com/plgamedev';
 
 // Where the link was clicked; becomes `utm_medium`.
 export type SocialLinkPlacement = 'beta_splash' | 'game_page' | 'player_menu';
