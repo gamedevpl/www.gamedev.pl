@@ -594,6 +594,7 @@ const FILE_BUCKET = {
   'assembled-game-cache': 'catalog',
   'slug-resolver': 'catalog',
   'catalog-enricher': 'catalog',
+  'catalog-tagline': 'catalog',
   'catalog-indexer': 'catalog',
   'catalog-vector-index': 'catalog',
   'catalog-routes': 'catalog',
