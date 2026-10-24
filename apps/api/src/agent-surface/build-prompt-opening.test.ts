@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BuildBrief } from './agent-backend.js';
-import { buildPromptOpening } from './build-prompt-opening.js';
+import { buildPromptOpening, openingSteps } from './build-prompt-opening.js';
 
 const BRIEF = { jobId: 1, slug: 'rocks', spec: 's', channelToken: 't', apiBaseUrl: 'https://x' } as BuildBrief;
 
@@ -31,5 +31,20 @@ describe('buildPromptOpening for an undelivered round', () => {
   it('keeps the plain opening for an operator retry, which carries no creator note', () => {
     const brief = { ...BRIEF, undelivered: true, feedback: '', previewVersion: 'v1' };
     expect(buildPromptOpening(brief, 'rocks', false)).toContain('ended without delivering');
+  });
+});
+
+// 2026-10-24: a mounted round on a clock skipped all three.
+describe('openingSteps', () => {
+  it('marks every opening step required, the clock included', () => {
+    const steps = openingSteps(BRIEF, {
+      workspace: true,
+      mountedSources: true,
+      inlined: { inbox: true, messages: true, notes: true, noFiles: true },
+    }).join('\n');
+    expect(steps).toContain(
+      'in this order (each step is required and takes seconds; the clock is no reason to skip one)',
+    );
+    expect(steps).toMatch(/`get_brief`.*\n3\. One `knowledge_query`.*\n4\. One short `report_progress`/s);
   });
 });

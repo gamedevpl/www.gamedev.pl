@@ -96,7 +96,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     `The session is cancelled after ${!lane.maxSeconds ? 'a hard time limit' : lane.maxSeconds < 120 ? `${Math.floor(lane.maxSeconds)} seconds` : `${Math.floor(lane.maxSeconds / 60)} minutes`}; without \`submit_sources\` by then it delivers nothing.`,
     'A typical revision takes minutes; the reads below, the creator’s images and a 2D capture take seconds each.',
     '',
-    'Do not reply with a plan; act through tool calls. Reads come first: the round, the creator request with its images, and the sources. Only then edit.',
+    'Do not reply with a plan; act through tool calls. Reads come first, edits after.',
     ...(creating
       ? [
           `Call \`create_game\` first with ${JSON.stringify({

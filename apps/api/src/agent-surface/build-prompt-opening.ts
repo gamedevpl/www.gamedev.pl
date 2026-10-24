@@ -68,5 +68,8 @@ export function openingSteps(
     ...(lane.workspace ? [KNOWLEDGE_STEP] : []),
     'One short `report_progress`, in the creator’s language, of what you will change.',
   ];
-  return ['Before your first edit, in this order:', ...steps.map((step, index) => `${index + 1}. ${step}`)];
+  return [
+    'Before your first edit, in this order (each step is required and takes seconds; the clock is no reason to skip one):',
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
+  ];
 }
