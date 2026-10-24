@@ -12,6 +12,7 @@ import {
   type MintBudgetLimits,
 } from '../platform/media-mint-budget.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
+import { extractSpecDescription } from './game-page-routes.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -333,11 +334,10 @@ export async function registerCatalogRoutes(
           name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
         );
         if (!entry) continue;
-        // Attribution joins from canonical access, not the publishing submission.
+        const description = extractSpecDescription(spec);
         const access = await resolveGameAccess(store, record.slug);
         const owner = access.owner.kind === 'creator' ? await store.getUser(access.owner.uid) : null;
         const profile = owner ? toPublicCreatorProfile(owner) : null;
-        // No canonical handle, or platform owned: never use the SPEC byline.
         const noAttribution = access.source === 'canonical' && (access.owner.kind === 'platform' || !profile);
         const contributors: string[] = [];
         try {
@@ -352,6 +352,7 @@ export async function registerCatalogRoutes(
         }
         entries.push({
           ...entry,
+          ...(description ? { tagline: { en: description, pl: description } } : {}),
           status: 'published',
           submittedBy: noAttribution ? 'gamedev-platform' : profile ? profileBylineName(profile) : entry.submittedBy,
           creatorHandle: noAttribution ? null : (profile?.handle ?? null),
