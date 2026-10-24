@@ -307,6 +307,14 @@ describe('Firebase asset retention deployment', () => {
     expect(service.created).toBe(0);
   });
 
+  it('ignores non-asset files in Hosting versions such as /__/firebase/init.js', async () => {
+    const service = firebase();
+    service.versions.get('sites/gamedevpl/versions/initial').set('/__/firebase/init.js', 'a'.repeat(64));
+    service.versions.get('sites/gamedevpl/versions/initial').set('/index.html', 'b'.repeat(64));
+    const result = await service.deploy({ 'App-new.js': 'new' }, start);
+    expect(result.files).toBe(5);
+  });
+
   it('runs the retention gate before traffic promotion and pruning in production', () => {
     const workflow = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
     const release = workflow.indexOf('node infra/deploy-hosting.mjs');

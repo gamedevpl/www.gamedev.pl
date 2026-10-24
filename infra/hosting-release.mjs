@@ -77,6 +77,7 @@ export async function releaseAssets({
       seen.add(next);
       const result = await api(`${version}/files?status=ACTIVE&pageSize=1000&pageToken=${encodeURIComponent(next)}`);
       for (const file of result.files ?? []) {
+        if (!file.path?.startsWith('/assets/')) continue;
         validateAssetPath(file.path);
         if (file.status !== 'ACTIVE' || !/^[a-f0-9]{64}$/.test(file.hash) || files.has(file.path))
           throw new Error('Invalid Hosting file listing');
