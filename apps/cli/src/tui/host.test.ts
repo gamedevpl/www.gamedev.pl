@@ -131,13 +131,16 @@ it('paints the workspace and overlaps account and Studio reads before accepting 
   }
 });
 
-it('sends a request for a published game to the improvement round instead of the Play agent', async () => {
+it.each([
+  ['a published game', { status: 'published', slug: 'snake' }],
+  ['a game switched to the platform builder', { status: 'building', slug: 'snake', builder: 'platform' }],
+])('sends a request for %s to the workshop instead of the Play agent', async (_label, round) => {
   const workshop = { slug: 'snake', root: '/tmp/snake', token: 'live', builder: 'self' } as Workshop;
   vi.mocked(handleReplLine)
     .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'snake', workshop })
     .mockResolvedValueOnce({ next: 'quit' });
   const request = vi.fn(async (_method: string, path: string) =>
-    path === '/api/submissions/live' ? { status: 'published', slug: 'snake' } : { user: { uid: 'owner' } },
+    path === '/api/submissions/live' ? round : { user: { uid: 'owner' } },
   );
   await runInkRepl({
     api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
