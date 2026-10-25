@@ -6,6 +6,7 @@ import { formatError } from './errors.js';
 import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { postTurn } from './turn.js';
+import type { CliTelemetry } from './telemetry.js';
 import { runLadderAsync } from './verify.js';
 
 type VerifyRun = NonNullable<Parameters<typeof runLadderAsync>[0]['run']>;
@@ -28,6 +29,7 @@ export type PlayToolsInput = {
   pollMs?: number;
   // Runs delivery in the turn's writer lock; tool calls arrive outside.
   writer?: <T>(run: () => Promise<T>) => Promise<T>;
+  telemetry?: CliTelemetry;
 };
 
 const CAPTURE_SCHEMA = {
@@ -66,6 +68,7 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
         onProgress: input.write,
       });
     const result = await (input.writer ? input.writer(submit) : submit());
+    if (result.kind === 'delivered') input.telemetry?.record('delivered');
     return formatSubmitLines(result, input.slug).join('\n');
   };
   return [
