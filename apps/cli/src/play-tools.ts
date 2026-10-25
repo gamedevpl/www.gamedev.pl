@@ -10,7 +10,7 @@ import { runLadderAsync } from './verify.js';
 
 type VerifyRun = NonNullable<Parameters<typeof runLadderAsync>[0]['run']>;
 
-// The local capture MCP server (startLocalPreviewMcp) the Play host runs for this game.
+// The Play host's local capture MCP server (startLocalPreviewMcp).
 export type CaptureServer = { url: string; authorization: string };
 
 export type PlayToolsInput = {
@@ -43,7 +43,7 @@ const CAPTURE_SCHEMA = {
   additionalProperties: false,
 };
 
-// Gamedev's own steps as app-agent tools: the agent decides when to check, look and deliver.
+// Gamedev steps as app-agent tools: the agent checks, looks and delivers.
 export function playAppTools(input: PlayToolsInput): AppTool[] {
   const delivery = (publish: boolean) => async (): Promise<string> => {
     const session = await deliverySession(input.api, input.slug);
