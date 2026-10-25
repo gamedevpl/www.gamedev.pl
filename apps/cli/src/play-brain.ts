@@ -17,6 +17,7 @@ import { changedPaths, localGameFiles } from './checkout.js';
 import { claudeAbsolutePath } from './permission-task.js';
 import { childEnv } from './delegate.js';
 import { formatError } from './errors.js';
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { localActivity } from './local-activity.js';
 import { startLocalPreviewMcp } from './local-preview-mcp.js';
 import { startWorkshopPreview } from './local-preview-tools.js';
@@ -121,15 +122,23 @@ export async function startPlayBrain(input: {
   const local = !ws.runAdapter;
   const env = subscriptionEnv(childEnv(ws.env, ''));
   if (local) {
-    write('Preparing Creator Kit and dependencies…');
-    await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: lifetime.signal, write });
-    if (name === 'claude')
-      await requireClaudeSubscription({
-        command: spec.command,
-        cwd: gameSourceRoot(ws.root, ws.slug),
-        env,
-        abort: lifetime.signal,
-      });
+    // Ctrl+C (or a browser-worker shutdown) cancels setup, as it cancels the workshop's.
+    const setup = new AbortController();
+    ws.abort.current = setup;
+    try {
+      write('Preparing Creator Kit and dependencies…');
+      await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: setup.signal, write });
+      if (name === 'claude')
+        await requireClaudeSubscription({
+          command: spec.command,
+          cwd: gameSourceRoot(ws.root, ws.slug),
+          env,
+          abort: setup.signal,
+        });
+      if (setup.signal.aborted) throw new CliError('setup cancelled', EXIT_REFUSED);
+    } finally {
+      if (ws.abort.current === setup) ws.abort.current = null;
+    }
   }
   let previewUrl: Promise<string | undefined> | undefined;
   const preview = () =>

@@ -2,7 +2,7 @@ import { AsyncResource } from 'node:async_hooks';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentResult, AgentTask, CodingAgent } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 import type { ApiClient } from './api.js';
@@ -10,6 +10,14 @@ import { saveAgentSelection } from './agent-settings.js';
 import { writeGameFiles } from './checkout.js';
 import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
 import type { Workshop } from './workshop.js';
+
+// Setup waits until it is cancelled; only a local (non-runAdapter) workshop reaches it.
+vi.mock('./prepare-workspace.js', () => ({
+  prepareWorkspace: (input: { abort: AbortSignal }) =>
+    new Promise((_, reject) =>
+      input.abort.addEventListener('abort', () => reject(new Error('setup cancelled')), { once: true }),
+    ),
+}));
 
 type Step = (task: AgentTask) => Promise<string>;
 
@@ -315,5 +323,16 @@ describe('play brain', () => {
     expect(t.prompts).toHaveLength(1);
     expect(t.lines).toContain('claude: permission request is too large to display completely; denied.');
     expect(t.lines).toContain('deny');
+  });
+
+  it('lets Ctrl+C cancel the first setup, then frees the abort slot', async () => {
+    const t = setup([]);
+    t.ws.runAdapter = undefined;
+    const starting = t.start();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(t.ws.abort.current).toBeTruthy();
+    t.ws.abort.current!.abort();
+    await expect(starting).rejects.toThrow('setup cancelled');
+    expect(t.ws.abort.current).toBeNull();
   });
 });
