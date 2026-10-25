@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- In a self-built game your installed Claude Code, Codex or Copilot now drives Play by default, so a message goes straight to your agent; `--brain repl` keeps the workshop (#PR).
+- In a self-built game your installed Claude Code, Codex or Copilot now drives Play by default, so a message goes straight to your agent; `--brain repl` keeps the workshop (#1978).
 
 ## 0.57.0 — 2026-10-25
 
