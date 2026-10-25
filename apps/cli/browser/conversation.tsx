@@ -239,9 +239,13 @@ function AgentConversation({
         }
       />
       {log.length > 0 && (
-        <div className="play-agent-log" aria-label="Session output">
+        // Folded, so only the agent chat scrolls.
+        <details className="play-agent-log" aria-label="Session output">
+          <summary>
+            Session output <span className="play-agent-log-count">{log.length}</span>
+          </summary>
           <SessionMessages messages={log} diffs={diffs} openDiff={openDiff} />
-        </div>
+        </details>
       )}
     </div>
   );

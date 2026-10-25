@@ -158,8 +158,20 @@
   display: none;
 }
 #conversation.play-agent .play-agent-log {
+  flex: none;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
+#conversation.play-agent .play-agent-log[open] {
   max-height: 35%;
   overflow: auto;
-  padding: 8px 12px;
-  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
+#conversation.play-agent .play-agent-log > summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+}
+#conversation.play-agent .play-agent-log-count {
+  margin-left: 4px;
+  opacity: 0.8;
 }

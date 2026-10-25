@@ -24,7 +24,7 @@ import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 import { bufferTerminalInput } from './input-frame.js';
 import { startPlayOutput } from '../play-output.js';
-import { startPlayBrain, type PlayBrain } from '../play-brain.js';
+import { brainAgent, startPlayBrain, type PlayBrain } from '../play-brain.js';
 import { brainChoice, brainRequested } from '../play-brain-choice.js';
 
 export async function runInkRepl(input: {
@@ -135,7 +135,7 @@ export async function runInkRepl(input: {
     () => brain?.started?.agent,
   );
   // GAMEDEVPL_BRAIN=app-agent: a genaicode app-agent takes self-builder messages.
-  let brain: { workshop: Workshop; started?: PlayBrain } | undefined;
+  let brain: { workshop: Workshop; name?: string; started?: PlayBrain } | undefined;
   const closeBrain = async (): Promise<void> => {
     const closing = brain?.started;
     brain = undefined;
@@ -336,7 +336,7 @@ export async function runInkRepl(input: {
         !/^[!/]/.test(line.trimStart()) &&
         !session.get().question
       ) {
-        if (brain && brain.workshop !== workshop) await closeBrain();
+        if (brain && (brain.workshop !== workshop || brain.name !== brainAgent(workshop))) await closeBrain();
         try {
           // Published games or a Studio builder switch go to the workshop below.
           const status = token ? await getStatus(input.api, token) : undefined;
@@ -345,6 +345,7 @@ export async function runInkRepl(input: {
             session.setActivity('Starting the Play agent');
             brain = {
               workshop,
+              name: brainAgent(workshop),
               started: await startPlayBrain({
                 api: input.api,
                 ws: workshop,
