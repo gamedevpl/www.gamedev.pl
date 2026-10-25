@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { verifyToken } from '../platform/submission-token.js';
-import { MCP_PRESENCE_MIN_GAP_MS } from '../agent-surface/mcp-presence.js';
 
+// Same gap as MCP presence pulses: one Firestore write a minute.
+const SIGNAL_MIN_GAP_MS = 60_000;
 const WORKING_PHASES = new Set(['preparing', 'editing', 'permission', 'interactive', 'verifying']);
 
 const activitySchema = z
@@ -47,7 +48,7 @@ export async function registerLocalActivityRoutes(app: FastifyInstance, store: S
       if (!saved) return reply.code(409).send({ error: 'local task superseded' });
       // A working local agent counts as agent signal, so Studio leaves no_agent_yet.
       const now = Date.now();
-      if (WORKING_PHASES.has(input.phase) && now - (lastSignal.get(jobId) ?? -Infinity) >= MCP_PRESENCE_MIN_GAP_MS) {
+      if (WORKING_PHASES.has(input.phase) && now - (lastSignal.get(jobId) ?? -Infinity) >= SIGNAL_MIN_GAP_MS) {
         lastSignal.set(jobId, now);
         // preserveEnded: a heartbeat after submit must not reopen the handoff.
         await store
