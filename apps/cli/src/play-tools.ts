@@ -26,7 +26,7 @@ export type PlayToolsInput = {
   write: (line: string) => void;
   fetch?: typeof fetch;
   pollMs?: number;
-  // Runs delivery inside the turn's writer lock (tool calls arrive outside it).
+  // Runs delivery in the turn's writer lock; tool calls arrive outside.
   writer?: <T>(run: () => Promise<T>) => Promise<T>;
 };
 
