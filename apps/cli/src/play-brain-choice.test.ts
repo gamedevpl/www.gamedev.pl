@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { brainChoice, brainRequested, parseBrainChoice } from './play-brain-choice.js';
 
 describe('brain choice', () => {
-  it('keeps the workshop unless the creator asks for the Play agent', () => {
-    expect(brainChoice({})).toBe('repl');
-    expect(brainChoice({ GAMEDEVPL_BRAIN: 'nonsense' })).toBe('repl');
+  it('uses the Play agent when one is installed unless the creator asks for the workshop', () => {
+    expect(brainChoice({})).toBe('auto');
+    expect(brainChoice({ GAMEDEVPL_BRAIN: 'nonsense' })).toBe('auto');
+    expect(brainRequested({})).toBe(true);
     expect(brainRequested({ GAMEDEVPL_BRAIN: 'app-agent' })).toBe(true);
     expect(brainRequested({ GAMEDEVPL_BRAIN: 'auto' })).toBe(true);
     expect(brainRequested({ GAMEDEVPL_BRAIN: 'repl' })).toBe(false);
