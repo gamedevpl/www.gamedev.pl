@@ -1,0 +1,206 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { AgentEvent, AgentResult, AgentTask, CodingAgent } from 'genaicode/agents';
+import type { AdapterSpec } from './adapters.js';
+import type { ApiClient } from './api.js';
+import { writeGameFiles } from './checkout.js';
+import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
+import type { Workshop } from './workshop.js';
+
+type Step = (task: AgentTask) => Promise<string>;
+
+function fakeAgent(steps: Step[]): { agent: CodingAgent; tasks: AgentTask[] } {
+  const tasks: AgentTask[] = [];
+  const agent: CodingAgent = {
+    name: 'claude',
+    command: process.execPath,
+    capabilities: { resume: true, mcp: true },
+    run(task) {
+      tasks.push(task);
+      const step = steps.shift() ?? (async () => 'nothing to do');
+      const done = step(task).then((text) => {
+        const result: AgentResult = { status: 'completed', ok: true, exitCode: 0, signal: null, sessionId: 's1' };
+        return { text, result };
+      });
+      return {
+        result: done.then(({ result }) => result),
+        abort() {},
+        async *[Symbol.asyncIterator]() {
+          const { text, result } = await done;
+          const events: AgentEvent[] = [
+            { type: 'session', sessionId: 's1' },
+            { type: 'message', text },
+            { type: 'done', result },
+          ];
+          yield* events;
+        },
+      };
+    },
+  };
+  return { agent, tasks };
+}
+
+async function callTool(task: AgentTask, name: string, args: Record<string, unknown> = {}) {
+  const server = task.mcpServers![0] as { url: string; headers?: Record<string, string> };
+  const response = await fetch(server.url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...server.headers },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+  });
+  const reply = (await response.json()) as { result: { content: Array<{ text: string }> } };
+  return reply.result.content[0]!.text;
+}
+
+const roots: string[] = [];
+const brains: PlayBrain[] = [];
+afterEach(async () => {
+  for (const brain of brains.splice(0)) await brain.close();
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
+function setup(steps: Step[], answers: string[] = []) {
+  const root = mkdtempSync(join(tmpdir(), 'play-brain-'));
+  roots.push(root);
+  writeGameFiles(root, 'snake', [{ path: 'game.ts', content: 'export const speed = 1;\n' }]);
+  writeFileSync(join(root, '.gamedev-slug'), 'snake');
+  const lines: string[] = [];
+  const prompts: Array<{ choices: string[]; question: string }> = [];
+  const picks: string[] = [];
+  let red = 0;
+  const api: ApiClient = {
+    origin: 'https://gamedev.test',
+    request: async <T>(_method: string, path: string) => {
+      if (path.endsWith('/sources/session')) return { locked: false, canTakeOver: false, jobId: 1, generation: 1 } as T;
+      throw new Error(`unexpected ${path}`);
+    },
+    requestBytes: async () => Buffer.alloc(0),
+  };
+  const fake = fakeAgent(steps);
+  const ws: Workshop = {
+    slug: 'snake',
+    root,
+    token: 'tok',
+    env: {},
+    adapters: [{ name: 'claude', command: 'claude' } as AdapterSpec],
+    builder: 'self',
+    pick: async (choices, question) => {
+      picks.push(question);
+      return choices.at(-1)!;
+    },
+    abort: { current: null },
+    runAdapter: async () => ({ code: 0 }),
+    run: () => (red-- > 0 ? { status: 1, stderr: 'game.ts(1,1): error TS1005' } : { status: 0, stderr: '' }),
+  };
+  const start = async (failing = 0) => {
+    red = failing;
+    const brain = await startPlayBrain({
+      api,
+      ws,
+      prompt: async (choices, question) => {
+        prompts.push({ choices, question });
+        return answers.shift() ?? choices.at(-1)!;
+      },
+      write: (line) => lines.push(line),
+      activity: () => {},
+      agents: () => [fake.agent],
+    });
+    brains.push(brain!);
+    return brain!;
+  };
+  const edit = (content: string) => writeGameFiles(root, 'snake', [{ path: 'game.ts', content }]);
+  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws };
+}
+
+describe('play brain', () => {
+  it('runs only agents that take per-run MCP tools, preferring the selected one', () => {
+    const spec = (name: string) => ({ name, command: name }) as AdapterSpec;
+    expect(brainAgent({ adapters: [spec('muse'), spec('codex'), spec('claude')], selectedAgent: 'claude' })).toBe(
+      'claude',
+    );
+    expect(brainAgent({ adapters: [spec('muse'), spec('codex')], selectedAgent: 'muse' })).toBe('codex');
+    expect(brainAgent({ adapters: [spec('muse'), spec('gemini')] })).toBeUndefined();
+  });
+
+  it('maps Ask, Auto-approve and YOLO onto the agent CLI prompts', () => {
+    expect(decideApproval('ask', { id: '1', kind: 'file-change' })).toBeUndefined();
+    expect(decideApproval('auto', { id: '1', kind: 'file-change' })).toBe('approve');
+    expect(decideApproval('auto', { id: '1', kind: 'command', summary: 'rm -rf /' })).toBeUndefined();
+    expect(decideApproval('yolo', { id: '1', kind: 'command' })).toBe('approve');
+  });
+
+  it('answers a question without checks or a delivery offer', async () => {
+    const t = setup([async () => 'The snake moves one cell per tick.']);
+    const brain = await t.start();
+    await brain.turn('how fast is the snake?');
+    expect(t.tasks[0]!.prompt).toContain('You edit the gamedev.pl game "snake"');
+    expect(t.tasks[0]!.prompt).toContain('how fast is the snake?');
+    expect(t.lines).toContain('The snake moves one cell per tick.');
+    expect(t.picks).toEqual([]);
+  });
+
+  it('sends red checks back to the agent, then offers the green edit for delivery', async () => {
+    const t = setup([
+      async () => {
+        t.edit('export const speed = 2\n');
+        return 'Faster now.';
+      },
+      async (task) => {
+        expect(task.prompt).toContain('<validation stage="typecheck">');
+        t.edit('export const speed = 2;\n');
+        return 'Fixed the syntax.';
+      },
+    ]);
+    const brain = await t.start(1);
+    await brain.turn('make the snake faster');
+    expect(t.tasks).toHaveLength(2);
+    expect(t.lines).toContain('verify failed at typecheck');
+    expect(t.lines).toContain('✓ static ladder green');
+    expect(t.picks).toEqual(['Deliver snake?']);
+  });
+
+  it('stops after two repairs that stay red', async () => {
+    const t = setup([
+      async () => {
+        t.edit('broken 1');
+        return 'one';
+      },
+      async () => {
+        t.edit('broken 2');
+        return 'two';
+      },
+      async () => {
+        t.edit('broken 3');
+        return 'three';
+      },
+    ]);
+    const brain = await t.start(5);
+    await brain.turn('make the snake faster');
+    expect(t.tasks).toHaveLength(3);
+    expect(t.lines.at(-1)).toMatch(/Checks still fail after 2 automatic repairs/);
+    expect(t.picks).toEqual([]);
+  });
+
+  it('asks the creator before a delivery the agent proposes, and tells the agent the answer', async () => {
+    const t = setup(
+      [
+        async (task) => {
+          t.edit('export const speed = 3;\n');
+          return await callTool(task, 'game_publish', { approval_summary: 'Publish snake' });
+        },
+        async (task) => {
+          expect(task.prompt).toContain('The user rejected action #1 (Publish snake).');
+          return 'Not published.';
+        },
+      ],
+      ['Reject'],
+    );
+    const brain = await t.start();
+    await brain.turn('publish it');
+    expect(t.prompts).toEqual([{ choices: ['Approve', 'Reject'], question: 'Publish snake' }]);
+    expect(t.lines).toContain('Not published.');
+    // The agent proposed a delivery itself: no second offer from the workshop.
+    expect(t.picks).toEqual([]);
+  });
+});
