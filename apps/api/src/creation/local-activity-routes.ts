@@ -3,6 +3,9 @@ import { z } from 'zod';
 import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { verifyToken } from '../platform/submission-token.js';
+import { MCP_PRESENCE_MIN_GAP_MS } from '../agent-surface/mcp-presence.js';
+
+const WORKING_PHASES = new Set(['preparing', 'editing', 'permission', 'interactive', 'verifying']);
 
 const activitySchema = z
   .object({
@@ -13,6 +16,7 @@ const activitySchema = z
   })
   .strict();
 export async function registerLocalActivityRoutes(app: FastifyInstance, store: Store, secret: string) {
+  const lastSignal = new Map<number, number>();
   app.route<{ Params: { token: string } }>({
     method: ['GET', 'POST'],
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
@@ -41,6 +45,18 @@ export async function registerLocalActivityRoutes(app: FastifyInstance, store: S
       if (start && input.phase !== 'preparing') return reply.code(400).send({ error: 'invalid start' });
       const saved = await store.setLocalActivity(jobId, { ...input, at: new Date().toISOString() }, start);
       if (!saved) return reply.code(409).send({ error: 'local task superseded' });
+      // A working local agent counts as agent signal, so Studio leaves no_agent_yet.
+      const now = Date.now();
+      if (WORKING_PHASES.has(input.phase) && now - (lastSignal.get(jobId) ?? -Infinity) >= MCP_PRESENCE_MIN_GAP_MS) {
+        lastSignal.set(jobId, now);
+        // preserveEnded: a heartbeat after submit must not reopen the handoff.
+        await store
+          .touchLastAgentSignalAt(jobId, new Date(now).toISOString(), undefined, {
+            preserveEnded: true,
+            roundGeneration: record.roundGeneration ?? 1,
+          })
+          .catch((error: unknown) => request.log.warn({ err: error, jobId }, 'local activity signal failed'));
+      }
       return { ok: true };
     },
   });

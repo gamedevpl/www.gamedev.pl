@@ -23,6 +23,8 @@ it('keeps local activity owner-only, rejects stale runs and leaves delivery stat
   expect((await app.inject({ method: 'GET', url, headers: { 'x-user': 'owner' } })).json().activity.phase).toBe(
     'preparing',
   );
+  // A working local agent is agent signal, so Studio stops showing no_agent_yet.
+  expect((await store.getSubmission(1))?.lastAgentSignalAt).toBeTruthy();
   expect(
     (
       await app.inject({
