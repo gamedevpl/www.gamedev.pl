@@ -184,8 +184,14 @@ describe('play brain', () => {
     const brain = await t.start(5);
     await brain.turn('make the snake faster');
     expect(t.tasks).toHaveLength(3);
-    expect(t.lines.at(-1)).toMatch(/Checks still fail after 2 automatic repairs/);
+    expect(t.lines).toContainEqual(expect.stringMatching(/Checks still fail after 2 automatic repairs/));
     expect(t.picks).toEqual([]);
+    // /retry (the workshop's) resumes the failed request from the original baseline.
+    expect(t.ws.failedTask).toMatchObject({ request: 'make the snake faster', agent: 'claude' });
+    expect(t.ws.failedTask!.before).toEqual([{ path: 'game.ts', content: 'export const speed = 1;\n' }]);
+    expect(t.lines.at(-1)).toBe('Task saved locally — /retry resumes it with claude; /diff shows partial edits.');
+    await brain.turn('what is the speed?');
+    expect(t.ws.failedTask).toBeUndefined();
   });
 
   it('withdraws the terminal question when the browser chat answers the card', async () => {
