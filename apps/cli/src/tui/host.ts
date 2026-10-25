@@ -337,9 +337,10 @@ export async function runInkRepl(input: {
       ) {
         if (brain && brain.workshop !== workshop) await closeBrain();
         try {
-          // Published games change via an improvement round, opened by the workshop below.
-          const published = !!token && (await getStatus(input.api, token)).status === 'published';
-          if (!published && !brain) {
+          // Published games or a Studio builder switch go to the workshop below.
+          const status = token ? await getStatus(input.api, token) : undefined;
+          const toWorkshop = status?.status === 'published' || (!!status?.builder && status.builder !== 'self');
+          if (!toWorkshop && !brain) {
             session.setActivity('Starting the Play agent');
             brain = {
               workshop,
@@ -354,7 +355,7 @@ export async function runInkRepl(input: {
             session.setActivity('');
             if (!brain.started) session.writeLine('No installed agent can run Play tools; using the workshop.');
           }
-          if (!published && brain?.started) {
+          if (!toWorkshop && brain?.started) {
             await brain.started.turn(line);
             saveHistory();
             continue;
