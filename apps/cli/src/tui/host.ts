@@ -9,6 +9,7 @@ import { createElement } from 'react';
 import { EXIT_GREEN } from '../exit-codes.js';
 import { formatError } from '../errors.js';
 import { handleReplLine, replBanner } from '../repl.js';
+import { getStatus } from '../turn.js';
 import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
@@ -335,7 +336,9 @@ export async function runInkRepl(input: {
       ) {
         if (brain && brain.workshop !== workshop) await closeBrain();
         try {
-          if (!brain) {
+          // A published game takes changes through a new improvement round, which the workshop opens below.
+          const published = !!token && (await getStatus(input.api, token)).status === 'published';
+          if (!published && !brain) {
             session.setActivity('Starting the Play agent');
             brain = {
               workshop,
@@ -350,7 +353,7 @@ export async function runInkRepl(input: {
             session.setActivity('');
             if (!brain.started) session.writeLine('No installed agent can run Play tools; using the workshop.');
           }
-          if (brain.started) {
+          if (!published && brain?.started) {
             await brain.started.turn(line);
             saveHistory();
             continue;
