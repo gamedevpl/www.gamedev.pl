@@ -157,7 +157,9 @@
 #conversation.play-agent .gc-app-controls select {
   display: none;
 }
-#conversation.play-agent .play-agent-status {
-  padding: 6px 12px;
+#conversation.play-agent .play-agent-log {
+  max-height: 35%;
+  overflow: auto;
+  padding: 8px 12px;
   border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
 }
