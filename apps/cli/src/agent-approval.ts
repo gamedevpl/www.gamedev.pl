@@ -6,7 +6,7 @@ const REMEMBER = 'Always allow this exact command (this session)';
 export const AUTO_NEXT = 'Allow once and use Auto for next tasks';
 export const AUTO_RESUME = 'Resume this task in Auto (sandboxed)';
 
-function requestDetail(request: ApprovalRequest): string {
+export function requestDetail(request: ApprovalRequest): string {
   const detail = request.detail as { input?: { command?: unknown } } | undefined;
   if (typeof detail?.input?.command === 'string') {
     const rest = { ...detail, input: { ...detail.input, command: undefined } };
