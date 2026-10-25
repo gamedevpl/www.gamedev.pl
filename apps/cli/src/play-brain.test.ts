@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentEvent, AgentResult, AgentTask, CodingAgent } from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 import type { ApiClient } from './api.js';
+import { saveAgentSelection } from './agent-settings.js';
 import { writeGameFiles } from './checkout.js';
 import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
 import type { Workshop } from './workshop.js';
@@ -84,7 +85,7 @@ function setup(steps: Step[], answers: string[] = []) {
     slug: 'snake',
     root,
     token: 'tok',
-    env: {},
+    env: { XDG_CONFIG_HOME: root },
     adapters: [{ name: 'claude', command: 'claude' } as AdapterSpec],
     builder: 'self',
     pick: async (choices, question) => {
@@ -185,6 +186,16 @@ describe('play brain', () => {
     expect(t.tasks).toHaveLength(3);
     expect(t.lines.at(-1)).toMatch(/Checks still fail after 2 automatic repairs/);
     expect(t.picks).toEqual([]);
+  });
+
+  it('runs the agent with the model and effort saved by /model, read on every turn', async () => {
+    const t = setup([async () => 'one', async () => 'two']);
+    const brain = await t.start();
+    await brain.turn('first');
+    expect(t.tasks[0]!.model).toBeUndefined();
+    saveAgentSelection('claude', { model: 'claude-test', effort: 'high' }, t.ws.env);
+    await brain.turn('second');
+    expect([t.tasks[1]!.model, t.tasks[1]!.effort]).toEqual(['claude-test', 'high']);
   });
 
   it('keeps a stale or conflicting checkout away from the agent, as the workshop does', async () => {
