@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Preview: `--brain app-agent` lets Claude Code, Codex or Copilot drive Play with its steps as tools; the browser shows its chat, and deliveries still ask you first.
+- Preview: `--brain app-agent` lets Claude Code, Codex or Copilot drive Play with its steps as tools; the browser shows its chat, and deliveries still ask you first (#1974).
 
 ### Internal
 
