@@ -310,6 +310,12 @@ export async function startPlayBrain(input: {
           if (signal.aborted) return;
           continue;
         }
+        // Settled is not done: an agent that failed (auth, quota, crash) leaves the request for /retry.
+        const outcome = state.session?.turns.at(-1)?.result;
+        if (!outcome?.ok) {
+          write(`${name} did not finish: ${outcome?.error ?? outcome?.status ?? 'no result'}. Nothing was delivered.`);
+          return;
+        }
         const changed = changedPaths(before, localGameFiles(ws.root, ws.slug)).length > 0;
         if (!changed) {
           finished = true;
