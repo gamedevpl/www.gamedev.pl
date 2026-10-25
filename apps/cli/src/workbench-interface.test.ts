@@ -154,7 +154,8 @@ it('keeps tool output collapsed and labels the actual agent reply', async () => 
 it('embeds only the two WOFF2 font weights used by Play', () => {
   expect(PLAY_STYLE.match(/@font-face/g)).toHaveLength(2);
   expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);
-  expect(PLAY_STYLE.length).toBeLessThan(120_000);
+  // Includes genaicode/react's chat styles (~15 KB) for the Play agent.
+  expect(PLAY_STYLE.length).toBeLessThan(140_000);
 });
 
 it('declares mascot favicon link in head', () => {

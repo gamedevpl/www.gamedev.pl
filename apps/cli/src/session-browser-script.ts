@@ -51,8 +51,8 @@ function render(next) {
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
   el('identity').textContent = state.identity;
   el('game-name').textContent = state.identity || 'gamedev.pl';
-  el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
-  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace}}));
+  el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.agent ? 'To: ' + state.agent.agent + ' · edits, checks and asks before delivery' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
+  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent}}));
   el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';

@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { privatePlayDirectory } from './play-state.js';
 import { stopPlaySession } from './play.js';
+import type { AppAgent } from 'genaicode/app-agent';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -58,6 +59,51 @@ it('loads complete diffs on demand instead of sending patches in every state pol
   expect((await response.json()).lines.join('\n')).toBe(patch);
   expect((await fetch(`${url.origin}/diff/1`)).status).toBe(401);
   expect((await fetch(`${url.origin}/diff/99`, { headers })).status).toBe(404);
+});
+
+it('shows the Play agent and forwards only its card answers', async () => {
+  const session = createSessionController('hello', vi.fn());
+  const calls: unknown[][] = [];
+  const current: { agent?: AppAgent } = {};
+  const agent = {
+    get: () => ({ agent: 'claude', actions: [] }),
+    decide: (...args: unknown[]) => calls.push(['decide', ...args]),
+    approve: (...args: unknown[]) => {
+      throw new Error(`unknown approval ${String(args[0])}`);
+    },
+    reset: () => calls.push(['reset']),
+  } as unknown as AppAgent;
+  const server = await startSessionBrowser(session, { agent: () => current.agent });
+  cleanup.push(async () => {
+    session.close();
+    await server.close();
+  });
+  const url = new URL(server.url);
+  const headers = {
+    Authorization: `Bearer ${url.hash.slice(1)}`,
+    Origin: url.origin,
+    'Content-Type': 'application/json',
+  };
+  const post = (command: unknown, extra = headers) =>
+    fetch(`${url.origin}/agent`, { method: 'POST', headers: extra, body: JSON.stringify(command) });
+  expect((await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).agent).toBeUndefined();
+  expect((await post({ kind: 'reset' })).status).toBe(404);
+  current.agent = agent;
+  expect((await fetch(`${url.origin}/state`, { headers }).then((r) => r.json())).agent).toEqual({
+    agent: 'claude',
+    actions: [],
+  });
+  expect((await post({ kind: 'action', id: '1', decision: 'approve' }, { ...headers, Authorization: '' })).status).toBe(
+    401,
+  );
+  expect(
+    (await post({ kind: 'action', id: '1', decision: 'approve' }, { ...headers, Origin: 'https://evil.test' })).status,
+  ).toBe(403);
+  expect((await post({ kind: 'send', text: 'hi' })).status).toBe(400);
+  expect((await post({ kind: 'action', id: '1', decision: 'approve' })).status).toBe(200);
+  expect((await post({ kind: 'approval', id: '9', decision: 'deny' })).status).toBe(409);
+  expect((await post({ kind: 'reset' })).status).toBe(200);
+  expect(calls).toEqual([['decide', '1', 'approve'], ['reset']]);
 });
 
 it('authenticates build retries and refuses stale sources and unsupported previews', async () => {

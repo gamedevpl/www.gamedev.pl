@@ -214,6 +214,31 @@ describe('play brain', () => {
     expect(t.ws.failedTask).toBeUndefined();
   });
 
+  it('withdraws the terminal question when the browser chat answers the card', async () => {
+    const t = setup([
+      async (task) => await callTool(task, 'game_publish', { approval_summary: 'Publish snake' }),
+      async (task) => {
+        expect(task.prompt).toContain('The user rejected action #1 (Publish snake).');
+        return 'Not published.';
+      },
+    ]);
+    const started: { brain?: PlayBrain } = {};
+    const withdrawn: boolean[] = [];
+    const prompt = (_choices: string[], _question: string, signal?: AbortSignal) =>
+      new Promise<string>((resolve) => {
+        // The creator clicks Reject in the browser chat instead.
+        setTimeout(() => started.brain!.agent.decide('1', 'reject'), 5);
+        signal!.addEventListener('abort', () => {
+          withdrawn.push(true);
+          resolve('');
+        });
+      });
+    started.brain = await t.start(0, prompt);
+    await started.brain.turn('publish it');
+    expect(withdrawn).toEqual([true]);
+    expect(t.lines).toContain('Not published.');
+  });
+
   it('runs the agent with the model and effort saved by /model, read on every turn', async () => {
     const t = setup([async () => 'one', async () => 'two']);
     const brain = await t.start();
