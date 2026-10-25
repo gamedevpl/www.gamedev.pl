@@ -154,6 +154,8 @@ export function createLiveGame(currentSource: () => number) {
       if (name === 'game_journal_read') return { data: journal.read(liveArguments.game_journal_read.parse(raw)) };
       const args = liveArguments[name].parse(raw);
       signal.throwIfAborted();
+      if (name === 'game_release_control' && owner?.task !== task)
+        return { data: { released: true, alreadyReleased: true } };
       if (busy) throw Error('Another live game operation is running.');
       if (name === 'game_act') {
         const { actions } = liveArguments.game_act.parse(raw);

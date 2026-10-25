@@ -46,6 +46,7 @@ it.skipIf(!findChromium())(
       const png = PNG.sync.read(Buffer.from(observed.image!, 'base64'));
       expect(png.width).toBeGreaterThan(0);
       expect(new Set(png.data).size).toBeGreaterThan(2);
+      await page.keyboard.down('ArrowRight');
       await page.mouse.down();
       const initial = await agent.call('game_take_control');
       expect(initial.data.observation.stepped).toBe(true);
@@ -55,6 +56,32 @@ it.skipIf(!findChromium())(
           .evaluate(() => (window as unknown as { fixture: { pointing(): boolean } }).fixture.pointing()),
       ).toBe(false);
       await page.mouse.up();
+      await page.keyboard.up('ArrowRight');
+      await expect
+        .poll(async () => {
+          const catalog = (await agent.call('game_journal')).data as unknown as {
+            recordings: Array<{ recordingId: string }>;
+          };
+          if (!catalog.recordings.length) return false;
+          const read = (
+            await agent.call('game_journal_read', {
+              recordingId: catalog.recordings[0]!.recordingId,
+              kinds: ['input', 'lifecycle'],
+            })
+          ).data as unknown as {
+            entries: Array<{
+              seq: number;
+              kind: string;
+              data: { type?: string; event?: string; actor?: string; cleanup?: boolean; key?: string };
+            }>;
+          };
+          const up = read.entries.find(
+            (entry) => entry.data.type === 'keyup' && entry.data.cleanup && entry.data.key === 'ArrowRight',
+          );
+          const take = read.entries.find((entry) => entry.data.event === 'take-control');
+          return up?.data.actor === 'player' && !!take && up.seq < take.seq;
+        })
+        .toBe(true);
       await page.locator('#agent-reclaim').waitFor();
       await game.locator('canvas').click();
       await page.keyboard.press('ArrowLeft');
@@ -148,6 +175,41 @@ it.skipIf(!findChromium())(
           return composer!.y + composer!.height <= control!.y;
         })
         .toBe(true);
+      await two.click('#close');
+      await two.click('#devices-open');
+      const drawer = await two.locator('#workbench-tools').boundingBox();
+      const badge = await two.locator('#agent-control').boundingBox();
+      expect(drawer!.y + drawer!.height).toBeLessThanOrEqual(badge!.y);
+      await two.click('#drawer-close');
+      for (const viewport of [
+        { width: 1280, height: 800 },
+        { width: 390, height: 360 },
+      ]) {
+        await two.setViewportSize(viewport);
+        await two.evaluate(() => {
+          let code = document.getElementById('code-panel');
+          if (!code) {
+            code = document.createElement('section');
+            code.id = 'code-panel';
+            document.body.append(code);
+          }
+          code.hidden = false;
+          code.dataset.view = 'editor-chat-preview';
+          document.body.style.setProperty('--notice-space', '300px');
+          document.getElementById('panel')!.hidden = false;
+        });
+        await expect
+          .poll(async () => {
+            const panel = await two.locator('#panel').boundingBox();
+            if (viewport.width > 600) {
+              const game = await two.locator('#game').boundingBox();
+              return Math.abs(panel!.y + panel!.height - game!.y) < 1;
+            }
+            const control = await two.locator('#agent-control').boundingBox();
+            return panel!.y + panel!.height <= control!.y;
+          })
+          .toBe(true);
+      }
       await two.evaluate(() => {
         dispatchEvent(new Event('pagehide'));
       });

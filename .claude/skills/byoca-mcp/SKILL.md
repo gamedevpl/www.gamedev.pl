@@ -41,6 +41,12 @@ Journal instrumentation reports distinguish absent fields from unmatched predica
 and empty ranges. Improve observations through normal source edits when needed;
 verify and reproduce in a new build. Never treat new instrumentation as evidence
 about an old recording, or capture loss as proof that the game lacks a provider.
+Attribute control transitions from the executor's cleanup phases, not host-message
+arrival: takeover releases player input first, and release cleans agent input before
+changing ownership. Exercise manual release and watchdog expiry with the recorder
+and executor together; isolated message mocks miss their listener ordering.
+Candidate iframes can initially measure 0×0: never cache zero canvas-fit bounds.
+Observe body sizing so the canvas recovers without requiring a window resize.
 
 ## Session loop (what a round usually does)
 

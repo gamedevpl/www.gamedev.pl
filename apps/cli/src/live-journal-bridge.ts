@@ -3,7 +3,7 @@ export const LIVE_JOURNAL_BRIDGE = String.raw`
 (() => {
   const recordingId=crypto.randomUUID(),startedAt=Date.now(),started=performance.now();
   const stringify=JSON.stringify.bind(JSON),parse=JSON.parse.bind(JSON);
-  let seq=0,queue=[],bytes=0,dropped=0,stopped=false,lastFrame=-1,lastHarness,slowUntil=0,agent=false,command=null;
+  let seq=0,queue=[],bytes=0,dropped=0,stopped=false,lastFrame=-1,lastHarness,slowUntil=0,agent=false,cleanup=false,command=null;
   const held=new Set(),wrapped=new WeakSet(),unwrappable=new WeakSet(),seenLogs=new WeakMap(),tails={};
   const harness=()=>window.__GAME_HARNESS__;
   const frame=()=>{const value=Number(harness()?.frame);return Number.isFinite(value)?Math.max(0,Math.floor(value)):0;};
@@ -78,11 +78,11 @@ export const LIVE_JOURNAL_BRIDGE = String.raw`
   window.requestAnimationFrame=callback=>raf(now=>{try{callback(now);}finally{sample('frame');}});
   for(const type of ['keydown','keyup','pointerdown','pointerup','pointermove','pointercancel','wheel']){
     addEventListener(type,event=>{
-      const actor=event.isTrusted?'player':agent?'agent':'synthetic';
+      const actor=event.isTrusted?'player':agent?'agent':cleanup?'player':'synthetic';
       const blocked=event.isTrusted&&agent;
       if(!blocked&&type==='keydown')held.add(event.code||event.key);
       if(!blocked&&type==='keyup')held.delete(event.code||event.key);
-      const data={type,actor,blocked,command,heldKeys:[...held],alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey};
+      const data={type,actor,blocked,cleanup,command,heldKeys:[...held],alt:event.altKey,ctrl:event.ctrlKey,meta:event.metaKey,shift:event.shiftKey};
       if(type.startsWith('key'))Object.assign(data,{key:event.key,code:event.code,repeat:event.repeat});
       else Object.assign(data,{x:event.clientX/innerWidth,y:event.clientY/innerHeight,button:event.button,buttons:event.buttons,pointerType:event.pointerType,deltaX:event.deltaX,deltaY:event.deltaY});
       append('input',data);
@@ -102,8 +102,7 @@ export const LIVE_JOURNAL_BRIDGE = String.raw`
     if(event.source!==parent)return;
     const m=event.data;if(!m)return;
     if(m.source==='gdpl-host'){
-      if(m.type==='agent:enable'){agent=true;sample('take-control');append('lifecycle',{event:'take-control'});}
-      if(m.type==='agent:disable'){agent=false;command=null;append('lifecycle',{event:'release-control'});}
+      if(m.type==='agent:enable')sample('take-control');
       if(m.type==='agent:command'){command=m.id;append('lifecycle',{event:'action',command,action:m.command});}
     }
     if(m.source==='gdpl-journal-host'&&m.recordingId===recordingId){
@@ -114,6 +113,13 @@ export const LIVE_JOURNAL_BRIDGE = String.raw`
       if(advanced)flush();
     }
   },true);
+  addEventListener('gdpl-agent-control',event=>{
+    const phase=event.detail?.phase;
+    if(phase==='taking')cleanup=true;
+    if(phase==='acquired'){cleanup=false;agent=true;append('lifecycle',{event:'take-control'});}
+    if(phase==='releasing')cleanup=true;
+    if(phase==='released'){cleanup=false;agent=false;command=null;append('lifecycle',{event:'release-control'});}
+  });
   addEventListener('blur',()=>{append('lifecycle',{event:'blur',heldKeys:[...held]});});
   addEventListener('pagehide',()=>{append('lifecycle',{event:'pagehide'});flush();});
   document.addEventListener('visibilitychange',()=>append('lifecycle',{event:'visibility',value:document.visibilityState}));

@@ -1,6 +1,6 @@
 // Local Play leases expire even when their host disappears.
 export const AGENT_PLAY_LEASE = `
-  var agentLeaseTimer=0,agentLeased=false,agentPhysicalKeys={},agentPhysicalPointers={};
+  var agentLeaseTimer=0,agentLeased=false,agentPhysicalKeys={},agentPhysicalPointers={},agentLeaseFinishing=false;
   var agentRaf=window.requestAnimationFrame,agentCaf=window.cancelAnimationFrame,agentRafSeq=0,agentRafIds={};
   if(agentRaf&&agentCaf){
     window.requestAnimationFrame=function(cb){
@@ -19,7 +19,9 @@ export const AGENT_PLAY_LEASE = `
     clearTimeout(agentLeaseTimer);
     if(agentLeased)agentLeaseTimer=setTimeout(function(){agentDisable();agentState('lease expired');},5000);
   }
+  function agentLeaseEvent(phase){try{dispatchEvent(new CustomEvent('gdpl-agent-control',{detail:{phase:phase}}));}catch(err){}}
   function agentLeaseStart(){
+    agentLeaseEvent('taking');
     agentLeased=true;
     for(var key in agentPhysicalKeys)agentKey('keyup',key,agentPhysicalKeys[key]);
     agentPhysicalKeys={};
@@ -29,9 +31,10 @@ export const AGENT_PLAY_LEASE = `
       event.target.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:event.button,buttons:0}));
     }
     agentPhysicalPointers={};
-    agentHeartbeat();
+    agentHeartbeat();agentLeaseEvent('acquired');
   }
-  function agentLeaseEnd(){clearTimeout(agentLeaseTimer);agentLeased=false;}
+  function agentLeaseEnd(){agentLeaseFinishing=agentLeased;if(agentLeased)agentLeaseEvent('releasing');clearTimeout(agentLeaseTimer);agentLeased=false;}
+  function agentLeaseReleased(){if(agentLeaseFinishing){agentLeaseFinishing=false;agentLeaseEvent('released');}}
   ['keydown','keyup','pointerdown','pointerup','pointermove','pointercancel','mousedown','mouseup','touchstart','touchmove','touchend','click','wheel'].forEach(function(type){
     addEventListener(type,function(event){
       if(!event.isTrusted)return;

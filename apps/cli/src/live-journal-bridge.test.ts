@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LIVE_JOURNAL_BRIDGE } from './live-journal-bridge.js';
 import type { JournalEntry } from './live-journal-protocol.js';
+import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 
 const windows: JSDOM[] = [];
 afterEach(() => {
@@ -136,6 +137,42 @@ it('records signal entries without sequence numbers and coalesced audio updates'
   const second = await f.flush();
   expect(second.filter((entry) => entry.kind === 'audio')[0]?.data).toMatchObject({ count: 3 });
   expect(second.filter((entry) => entry.kind === 'signal')).toHaveLength(0);
+});
+
+it('attributes agent cleanup before release, including watchdog expiry', async () => {
+  const f = fixture();
+  Object.assign(f.win, {
+    __GDPL_BRIDGE__: {
+      post: () => {},
+      el: () => null,
+      text: () => '',
+      setPaused: () => {},
+      capturePng: () => '',
+      legendRows: () => [],
+      kitRows: () => [],
+      largestCanvas: () => null,
+      isPaused: () => true,
+    },
+  });
+  f.win.setTimeout = setTimeout as unknown as typeof f.win.setTimeout;
+  f.win.clearTimeout = clearTimeout as unknown as typeof f.win.clearTimeout;
+  f.win.eval(AGENT_PLAY_BRIDGE);
+  for (const expire of [false, true]) {
+    f.send({ source: 'gdpl-host', type: 'agent:enable', lease: true });
+    f.send({ source: 'gdpl-host', type: 'agent:command', command: { kind: 'keyDown', key: 'space' } });
+    if (expire) await vi.advanceTimersByTimeAsync(5001);
+    else f.send({ source: 'gdpl-host', type: 'agent:disable' });
+    const entries = await f.flush();
+    const release = entries.findIndex(
+      (entry) => entry.kind === 'lifecycle' && (entry.data as { event: string }).event === 'release-control',
+    );
+    const up = entries.findIndex(
+      (entry) => entry.kind === 'input' && (entry.data as { type: string }).type === 'keyup',
+    );
+    expect(up).toBeGreaterThanOrEqual(0);
+    expect(release).toBeGreaterThan(up);
+    expect(entries[up]?.data).toMatchObject({ actor: 'agent', cleanup: true, key: ' ', code: 'Space' });
+  }
 });
 
 it('records step failures without swallowing the exception or calling arbitrary helpers', async () => {

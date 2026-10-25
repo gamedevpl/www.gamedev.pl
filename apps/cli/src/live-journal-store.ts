@@ -121,6 +121,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
           recording.revision !== source.revision)
       )
         throw Error('Journal belongs to another game instance.');
+      if (stopped) return { through: recording?.last ?? 0, stopped };
       if (!recording) {
         if (recordings.size >= 256) throw Error('Journal instance limit reached.');
         for (const previous of recordings.values()) if (previous.tabId === source.tabId) previous.connected = false;
@@ -146,7 +147,6 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
         };
         recordings.set(batch.recordingId, recording);
       }
-      if (stopped) return { through: recording.last, stopped };
       const fresh = batch.entries.filter((entry) => entry.seq > recording.last);
       if (!fresh.length) return { through: recording.last };
       let last = recording.last,

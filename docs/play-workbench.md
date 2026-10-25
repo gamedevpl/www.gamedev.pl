@@ -352,6 +352,10 @@ JavaScript errors and rejection stacks; GameKit signals/audio events; lifecycle
 and agent action IDs. Coordinates are relative to the iframe viewport. These are
 DOM events, not an authoritative replay of what game code consumed. Gamepad and
 sensor polling are not recorded. Audio entries may update coalesced counts.
+Cleanup input carries `cleanup: true` and belongs to the owner whose held input
+is being released. The takeover marker follows player-input cleanup; the release
+marker follows agent-input cleanup, including watchdog expiry. Releasing control
+again after reclaim is a successful no-op and cannot affect another task's lease.
 
 State sampling runs after rendered frames and manual harness steps. It captures
 metadata, game observations and `snapshotState()` when available, with a

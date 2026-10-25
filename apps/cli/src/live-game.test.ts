@@ -80,10 +80,18 @@ it('pins control to one task and tab, and refuses reacquisition after the creato
   first.message({ type: 'live:reclaim' });
   await failure;
   await expect(game.call('task', 'game_take_control', {}, signal.signal)).rejects.toThrow('revoked');
+  await expect(game.call('task', 'game_release_control', {}, signal.signal)).resolves.toMatchObject({
+    data: { alreadyReleased: true },
+  });
   game.release('task');
   const next = game.call('next-task', 'game_take_control', {}, signal.signal);
   first.reply();
   await next;
+  const sent = first.socket.send.mock.calls.length;
+  await expect(game.call('task', 'game_release_control', {}, signal.signal)).resolves.toMatchObject({
+    data: { alreadyReleased: true },
+  });
+  expect(first.socket.send.mock.calls).toHaveLength(sent);
   game.release('next-task');
   expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0])).toEqual({ type: 'live:release' });
 });

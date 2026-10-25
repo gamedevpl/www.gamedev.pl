@@ -84,12 +84,51 @@ it('reports a step exception as failure instead of claiming a completed movement
   expect(f.paused()).toBe(false);
 });
 
+it('normalizes command keys and supplies browser codes while respecting explicit codes', () => {
+  const f = fixture();
+  const events: Array<[string, string, string]> = [];
+  for (const type of ['keydown', 'keyup'])
+    f.win.addEventListener(type, (event) => {
+      const key = event as KeyboardEvent;
+      events.push([type, key.key, key.code]);
+    });
+  f.send('agent:enable', { lease: true });
+  for (const [key, code] of [
+    ['space', undefined],
+    [' ', undefined],
+    ['left', undefined],
+    ['7', undefined],
+    ['A', 'KeyQ'],
+  ]) {
+    f.send('agent:command', { command: { kind: 'tap', key, code } });
+  }
+  expect(events.filter(([type]) => type === 'keydown').map(([, key, code]) => [key, code])).toEqual([
+    [' ', 'Space'],
+    [' ', 'Space'],
+    ['ArrowLeft', 'ArrowLeft'],
+    ['7', 'Digit7'],
+    ['A', 'KeyQ'],
+  ]);
+  expect(f.held.size).toBe(0);
+});
+
 it('does not expire the existing reviewer mode without an explicit local lease', async () => {
   const f = fixture();
   f.send('agent:enable');
   await vi.advanceTimersByTimeAsync(6000);
   expect(f.paused()).toBe(true);
   f.send('agent:disable');
+  expect(f.paused()).toBe(false);
+});
+
+it('returns control even when game code breaks lifecycle notifications', async () => {
+  const f = fixture();
+  f.win.CustomEvent = function () {
+    throw Error('broken event constructor');
+  } as unknown as typeof f.win.CustomEvent;
+  f.send('agent:enable', { lease: true });
+  expect(f.paused()).toBe(true);
+  await vi.advanceTimersByTimeAsync(5001);
   expect(f.paused()).toBe(false);
 });
 

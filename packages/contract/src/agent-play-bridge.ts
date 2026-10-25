@@ -113,15 +113,14 @@ export const AGENT_PLAY_BRIDGE =
   }
   var AGENT_KEY_ALIASES={left:{key:'ArrowLeft',code:'ArrowLeft'},right:{key:'ArrowRight',code:'ArrowRight'},
     up:{key:'ArrowUp',code:'ArrowUp'},down:{key:'ArrowDown',code:'ArrowDown'},space:{key:' ',code:'Space'},
-    enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'}};
+    enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'},' ':{key:' ',code:'Space'}};
   function agentResolveKey(token){
-    var raw=AGENT_STR(token==null?'':token);
-    var lower=raw.toLowerCase();
+    var raw=AGENT_STR(token==null?'':token),lower=raw.toLowerCase();
     if(Object.prototype.hasOwnProperty.call(AGENT_KEY_ALIASES,lower))return AGENT_KEY_ALIASES[lower];
-    if(raw.length===1)return {key:raw.toLowerCase(),code:'Key'+raw.toUpperCase()};
+    if(/^[a-z]$/i.test(raw))return {key:raw,code:'Key'+raw.toUpperCase()};if(/^[0-9]$/.test(raw))return {key:raw,code:'Digit'+raw};
     return {key:raw,code:raw};
   }
-  // Held input we synthesized, so closing the mode cannot hand a human a stuck key.
+  // Track synthetic input so release cannot leave keys stuck.
   var agentHeldKeys=[],agentPointerIsDown=false,agentPointerAt={x:0,y:0};
   function agentNoteHeld(type,key,code){
     var i;
@@ -130,7 +129,7 @@ export const AGENT_PLAY_BRIDGE =
       agentPut(agentHeldKeys,{key:key,code:code});
       return;
     }
-    // Rebuilt, not spliced: a key left held is an input the reviewer cannot clear.
+    // Rebuild held keys; game code may replace splice.
     var keep=[];
     for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key!==key)agentPut(keep,agentHeldKeys[i]);
     agentHeldKeys=keep;
@@ -146,6 +145,7 @@ export const AGENT_PLAY_BRIDGE =
     agentTilt=null;
   }
   function agentKey(type,key,code){
+    var resolved=agentResolveKey(key);key=resolved.key;code=code||resolved.code;
     agentNoteHeld(type,key,code);
     var target=agentCanvas()||window,ev;
     try{ev=new KeyboardEvent(type,{key:key,code:code,bubbles:true,cancelable:true});}
@@ -223,7 +223,7 @@ export const AGENT_PLAY_BRIDGE =
     agentLeaseEnd();
     if(!agentOn)return;
     agentOn=false;
-    agentReleaseInput();
+    agentReleaseInput();agentLeaseReleased();
     agentSetStepped(false);
   }
   function agentRun(command,id){

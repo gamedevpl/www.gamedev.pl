@@ -91,6 +91,21 @@ it('stops explicitly at capacity and leaves previous history readable', () => {
   expect(append([huge]).stopped).toContain('capacity');
   expect(store.read({ recordingId }).entries.map((e) => e.seq)).toEqual([1]);
   expect(store.status().stopped).toContain('capacity');
+  const count = store.status().recordings.length;
+  for (let i = 0; i < 260; i++) {
+    expect(
+      store.append(
+        { tabId: randomUUID(), sourceId: 2, revision: 'later' },
+        {
+          type: 'live:journal',
+          recordingId: randomUUID(),
+          startedAt: 1234,
+          entries: [entry(1)],
+        },
+      ).stopped,
+    ).toContain('capacity');
+  }
+  expect(store.status().recordings).toHaveLength(count);
 });
 
 it('seeks frame and time ranges without scanning unrelated batches', () => {
