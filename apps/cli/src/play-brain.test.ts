@@ -249,6 +249,17 @@ describe('play brain', () => {
     expect([t.tasks[1]!.model, t.tasks[1]!.effort]).toEqual(['claude-test', 'high']);
   });
 
+  it('runs each task under the current permission mode, as the workshop does', async () => {
+    const t = setup([async () => 'one', async () => 'two']);
+    t.ws.permissionMode = 'ask';
+    const brain = await t.start();
+    await brain.turn('first');
+    expect(t.tasks[0]!.permissions).toBeUndefined();
+    t.ws.permissionMode = 'auto';
+    await brain.turn('second');
+    expect(t.tasks[1]!.permissions).toEqual({ approval: 'auto-approve', sandbox: 'workspace-write' });
+  });
+
   it('keeps a stale or conflicting checkout away from the agent, as the workshop does', async () => {
     const t = setup([async () => 'never']);
     const brain = await t.start();

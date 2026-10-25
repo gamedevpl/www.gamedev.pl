@@ -6,6 +6,7 @@ import {
   claude,
   codex,
   copilot,
+  type AgentTask,
   type ApprovalDecision,
   type ApprovalRequest,
   type CodingAgent,
@@ -27,7 +28,7 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { gameSourcePath, gameSourceRoot } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
-import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
+import { modePermissions, taskPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { requestDetail } from './agent-approval.js';
 import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
@@ -75,17 +76,18 @@ export function decideApproval(mode: PermissionMode, request: ApprovalRequest): 
   return undefined;
 }
 
-function brainAgents(root: string): CodingAgent[] {
+// With a permission policy the drivers own the mode and sandbox flags.
+function brainAgents(root: string, permissions?: AgentTask['permissions']): CodingAgent[] {
   const readRoot = `Read(${claudeAbsolutePath(realpathSync(root))}/**)`;
   return [
     claude({
-      permissionMode: 'acceptEdits',
+      ...(permissions ? {} : { permissionMode: 'acceptEdits' as const }),
       strictMcpConfig: true,
       disallowedTools: ['Bash(git commit:*)', 'Bash(git push:*)', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
       settings: { disableAllHooks: true, permissions: { allow: [readRoot] } },
     }),
     codex({
-      sandbox: 'workspace-write',
+      ...(permissions ? {} : { sandbox: 'workspace-write' as const }),
       config: {
         'features.apps': false,
         'features.hooks': false,
@@ -96,7 +98,7 @@ function brainAgents(root: string): CodingAgent[] {
       onlyTaskMcpServers: true,
     }),
     copilot({
-      allowAllTools: false,
+      ...(permissions ? {} : { allowAllTools: false }),
       allowTools: ['write'],
       denyTools: ['shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
       onlyTaskMcpServers: true,
@@ -110,7 +112,7 @@ export async function startPlayBrain(input: {
   prompt: Prompt;
   write: (line: string) => void;
   activity: (text: string) => void;
-  agents?: (root: string) => CodingAgent[];
+  agents?: (root: string, permissions?: AgentTask['permissions']) => CodingAgent[];
   // The workshop's stale/conflict preflight; tests replace it.
   ready?: () => Promise<boolean>;
 }): Promise<PlayBrain | undefined> {
@@ -205,10 +207,12 @@ export async function startPlayBrain(input: {
       writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
     }),
     dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: false, only: true },
-    agents: () =>
-      (input.agents ?? brainAgents)(ws.root)
-        .filter((candidate) => candidate.name === name)
-        .map((candidate) => withSavedSelection(candidate, ws.env)),
+    agents: () => {
+      const make = (permissions?: AgentTask['permissions']) =>
+        (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
+      const configured = withRunSettings(make, ws.env, permission);
+      return configured ? [configured] : [];
+    },
     agent: name,
     serverName: 'gamedevpl',
     mcpUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/agent/mcp`,
@@ -239,6 +243,18 @@ export async function startPlayBrain(input: {
         if (settled(state) || waiting(state)) done();
       });
       signal.addEventListener('abort', done, { once: true });
+    });
+
+  const busy = (state: AppAgentState) =>
+    state.session?.status === 'running' || state.actions.some((action) => action.status === 'running');
+  const quiet = () =>
+    new Promise<void>((resolve) => {
+      if (!busy(agent.get())) return resolve();
+      const off = agent.subscribe((state) => {
+        if (busy(state)) return;
+        off();
+        resolve();
+      });
     });
 
   // Asks in the terminal; a browser card answer withdraws the question.
@@ -365,6 +381,8 @@ export async function startPlayBrain(input: {
     } finally {
       ws.onSteering?.(undefined);
       ws.onLocalTask?.('');
+      // Keep the writer lock until the stopped agent and actions exit.
+      if (signal.aborted) await quiet();
       if (ws.abort.current === turnAbort) ws.abort.current = null;
       await presence?.finish(signal.aborted ? 'stopped' : ok ? 'ready' : 'failed');
       if (signal.aborted) write(`${name} stopped — the tree keeps whatever it wrote; /diff to see`);
@@ -402,13 +420,21 @@ export async function startPlayBrain(input: {
   };
 }
 
-// Applies /model's saved model and effort on every run, like configureAdapter.
-export function withSavedSelection(agent: CodingAgent, env: NodeJS.ProcessEnv): CodingAgent {
+// Runs use /model's selection and the permission mode, like the workshop.
+export function withRunSettings(
+  make: (permissions?: AgentTask['permissions']) => CodingAgent | undefined,
+  env: NodeJS.ProcessEnv,
+  mode: () => PermissionMode,
+): CodingAgent | undefined {
+  const agent = make();
+  if (!agent) return undefined;
   const run: CodingAgent['run'] = (task) => {
     const selection = readAgentSelection(agent.name, env);
     validateSelection(agent.name, selection);
-    return agent.run({
+    const permissions = modePermissions(mode());
+    return (permissions ? make(permissions)! : agent).run({
       ...task,
+      ...(permissions ? { permissions } : {}),
       ...(selection.model && !task.model ? { model: selection.model } : {}),
       ...(selection.effort && !task.effort ? { effort: selection.effort } : {}),
     });
