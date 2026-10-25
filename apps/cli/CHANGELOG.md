@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Local Play keeps a queryable session journal: agents can search earlier inputs, errors and saved game states, sample any recorded frame range, and revisit history across tasks and build changes (#1976).
 - In local Play, agents can inspect your running game, take control for frame-counted moves, and return it without restarting. Take back control at any time; task cancellation and lost connections release it automatically (#1976).
 - Preview: `--brain app-agent` lets Claude Code, Codex or Copilot drive Play with its steps as tools; the browser shows its chat, and deliveries still ask you first (#1974).
 

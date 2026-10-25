@@ -288,10 +288,75 @@ tab and request, bounds message sizes and serializes operations. Game output is
 untrusted data. Neither MCP credentials nor source files enter the iframe, whose
 sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
 
+### Query the recorded session journal
+
+Local Play records a journal automatically, before a delegated task starts. The
+CLI keeps compressed, indexed batches in a private temporary directory until the
+Play process closes. Old recordings remain queryable across agent tasks, build
+replacements and tab closure. Each iframe instance has a separate `recordingId`,
+with its tab, source and build revision; frame numbers may reset within an instance,
+so the monotonic `seq` is the exact entry identifier. `timeMs` is elapsed time
+since recording began; `startedAt` is its wall-clock Unix timestamp in milliseconds.
+
+`game_journal` lists recordings, retained sequence ranges, collection times, reported
+gaps and storage status. `game_journal_read` reads any retained interval without
+pausing, taking control, or modifying the game. There is no per-task query quota.
+Queries support frame/time ranges, event kinds, field predicates, state sampling
+with `everyFrames`, and field projection using JSON pointers into `entry.data`.
+
+For example, after finding an input or error at frame 450:
+
+```json
+{
+  "recordingId": "<ID from game_journal>",
+  "fromFrame": 420,
+  "toFrame": 480,
+  "kinds": ["state"],
+  "everyFrames": 10,
+  "fields": ["/metadata", "/persistedState", "/heldKeys"]
+}
+```
+
+Then remove `everyFrames` to inspect every recorded state in a narrower range.
+To search health changes, use a predicate such as
+`where: {path: '/metadata/health', op: 'lt', value: 20}`. To revisit an exact
+entry, use `after: seq - 1, through: seq`. Preserve returned `through`, filters
+and `nextAfter` while paging: new live entries cannot change that query's results.
+Continue until `nextAfter` is null, including when a page has no matching entries.
+Missing projected fields are listed explicitly in `missingFields`.
+
+Recorded data includes keyboard edges, codes, modifiers and held keys; pointer
+edges/movement and wheel input; player/agent/synthetic attribution; console messages,
+JavaScript errors and rejection stacks; GameKit signals/audio events; lifecycle
+and agent action IDs. Coordinates are relative to the iframe viewport. These are
+DOM events, not an authoritative replay of what game code consumed. Gamepad and
+sensor polling are not recorded. Audio entries may update coalesced counts.
+
+State sampling runs after rendered frames and manual harness steps. It captures
+metadata, game observations and `snapshotState()` when available, with a
+`stateStatus` distinguishing available, unavailable, unsupported and failed
+snapshots. This is the game's serializable state, not the JavaScript heap. It
+does not record historical screenshots or restore/rewind the live game.
+
+Collection aims for every frame. Serialization errors, states above 120,000
+characters, buffer overflow and missing frames produce explicit gap entries.
+A sample taking over 4 ms triggers a documented 100 ms cooldown. The iframe keeps
+at most approximately 1 million characters / 4,096 queued entries, resending
+unacknowledged batches every 250 ms; the CLI acknowledges only written batches.
+An abrupt close can lose the unacknowledged tail. Check coverage before drawing
+conclusions, and do not infer absent values or transitions from a gap.
+
+Storage stops explicitly at 512 MiB compressed or 100,000 batches, preserving the
+earlier history; up to 256 instances fit in one session. Queries return at most
+200 entries / 512 KiB per page and bound each scan to 20,000 entries / 16 MiB of
+decoded batches. Pagination exposes the remaining range rather than truncating it
+silently. Query arguments accept no JavaScript, file paths or external URLs.
+
 This affects creator iteration/return (measurement questions 4–5). Existing local
 delegation events still count tasks; live-control success and usage have no aggregate
-query yet. Screenshots, inputs, observations and tab IDs stay local and are not
-added to telemetry. This is an explicit measurement gap.
+query yet. Journal records are stored locally; selected records are returned to
+the requesting agent. Screenshots, inputs, observations and tab IDs are not added
+to platform telemetry. This is an explicit measurement gap.
 
 Upload/paste images, attach a screenshot, export recent diagnostic input/error events,
 or enable canvas recording before saving a recent clip. Media is stored in private local

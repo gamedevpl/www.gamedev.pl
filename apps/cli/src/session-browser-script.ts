@@ -5,6 +5,7 @@ import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
 import { WORKBENCH_BUILD_ERROR_SCRIPT } from './workbench-build-error-script.js';
 import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
 import { LIVE_GAME_SCRIPT } from './live-game-script.js';
+import { LIVE_JOURNAL_SCRIPT } from './live-journal-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
 const panel = el('panel'), draft = el('prompt');
@@ -152,6 +153,7 @@ async function tick() {
 }
 ${WORKBENCH_PLAYER_SCRIPT}
 ${LIVE_GAME_SCRIPT}
+${LIVE_JOURNAL_SCRIPT}
 ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
 ${WORKBENCH_ONBOARDING_SCRIPT}

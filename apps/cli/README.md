@@ -902,6 +902,13 @@ Control ends with the task or a disconnected tab. See
 [live Play control](../../docs/play-workbench.md#let-an-agent-inspect-and-control-this-play-session)
 for frame budgets, selection, cancellation and observation limits.
 
+`game_journal` lists recorded instances and coverage; `game_journal_read` searches
+history by time, frame, event kind or field value. Agents can sample and revisit
+saved states across tasks and build changes without taking control. Records include
+input attribution, console/errors and the game's serializable state when available.
+See [session journal](../../docs/play-workbench.md#query-the-recorded-session-journal)
+for pagination, field selection, retention and explicit gaps.
+
 Interactive local delegation to Codex, Claude, and Copilot automatically connects a
 session-scoped `gamedevpl_local` MCP server when the CLI preview is available.
 `preview_status` reports build errors and freshness. `capture_game` starts a desktop or

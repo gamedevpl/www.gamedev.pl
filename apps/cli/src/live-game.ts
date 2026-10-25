@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { liveArguments, liveHello, liveResult, type LiveToolName } from './live-game-protocol.js';
+import { createJournalStore } from './live-journal-store.js';
 
 type Tab = { socket: WebSocket; tabId: string; sourceId: number; revision: string };
 type Pending = { tab: Tab; finish(error?: Error, data?: unknown): void };
@@ -12,6 +13,7 @@ export function findLiveGame(url: string | undefined) {
 }
 
 export function createLiveGame(currentSource: () => number) {
+  const journal = createJournalStore();
   const tabs = new Map<WebSocket, Tab>();
   const pending = new Map<string, Pending>();
   let registered = '';
@@ -73,6 +75,7 @@ export function createLiveGame(currentSource: () => number) {
           const next = hello.data;
           if (old && (old.tabId !== next.tabId || old.sourceId !== next.sourceId || old.revision !== next.revision)) {
             invalidate(old, 'The displayed game changed.');
+            journal.disconnect(old.tabId);
             tabs.delete(socket);
           }
           if (!tabs.has(socket)) tabs.set(socket, { socket, ...next });
@@ -81,6 +84,24 @@ export function createLiveGame(currentSource: () => number) {
         const tab = tabs.get(socket);
         if (!tab) return;
         const message = raw as { type?: string };
+        if (message.type === 'live:journal') {
+          try {
+            const result = journal.append(tab, raw);
+            send(socket, {
+              type: 'live:journal-ack',
+              recordingId: (raw as { recordingId: string }).recordingId,
+              ...result,
+            });
+          } catch {
+            journal.reject(tab.tabId, 'Invalid journal batch or instance limit reached.');
+            send(socket, {
+              type: 'live:journal-ack',
+              recordingId: (raw as { recordingId: string }).recordingId,
+              stopped: 'Invalid journal batch or instance limit reached.',
+            });
+          }
+          return;
+        }
         if (message.type === 'live:select') {
           selected = socket;
           return;
@@ -97,14 +118,20 @@ export function createLiveGame(currentSource: () => number) {
       });
       socket.once('close', () => {
         const tab = tabs.get(socket);
-        if (tab) invalidate(tab, 'Play tab disconnected.');
+        if (tab) {
+          invalidate(tab, 'Play tab disconnected.');
+          journal.disconnect(tab.tabId);
+        }
         tabs.delete(socket);
         if (selected === socket) selected = undefined;
       });
     },
     register(url: string) {
       if (registered && registry.get(registered) === api) registry.delete(registered);
-      for (const tab of tabs.values()) invalidate(tab, 'Preview changed.');
+      for (const tab of tabs.values()) {
+        invalidate(tab, 'Preview changed.');
+        journal.disconnect(tab.tabId);
+      }
       selected = undefined;
       registered = url;
       if (url) registry.set(url, api);
@@ -119,6 +146,12 @@ export function createLiveGame(currentSource: () => number) {
       revoked.delete(task);
     },
     async call(task: string, name: LiveToolName, raw: unknown, signal: AbortSignal) {
+      signal.throwIfAborted();
+      if (name === 'game_journal') {
+        liveArguments.game_journal.parse(raw);
+        return { data: journal.status() };
+      }
+      if (name === 'game_journal_read') return { data: journal.read(liveArguments.game_journal_read.parse(raw)) };
       const args = liveArguments[name].parse(raw);
       signal.throwIfAborted();
       if (busy) throw Error('Another live game operation is running.');
@@ -161,6 +194,7 @@ export function createLiveGame(currentSource: () => number) {
       clearInterval(heartbeat);
       tabs.clear();
       revoked.clear();
+      journal.close();
     },
   };
   return api;

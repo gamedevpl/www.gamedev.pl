@@ -31,6 +31,12 @@ See `docs/play-workbench.md` for selection, frame limits and creator revocation.
 Test takeover with a real GameKit game: pausing updates alone leaves an already
 scheduled render callback able to increment the frame counter. Local control must
 hold that callback too, preserve RAF cancellation, and resume it on release.
+`game_journal` and `game_journal_read` query retained local session history without
+requiring a connected tab or control ownership. Query broadly, then inspect exact
+sequence IDs or field projections; preserve the `through` watermark when paging.
+Treat coverage gaps and unsupported `snapshotState()` as unknown state, not empty
+state. The recorder must freeze values when collected, acknowledge after writing,
+and never let serialization failures break the game's frame or step callback.
 
 ## Session loop (what a round usually does)
 

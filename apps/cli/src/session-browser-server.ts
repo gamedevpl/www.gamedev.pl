@@ -5,6 +5,7 @@ import { EVIDENCE_MARKER, shownPrompt } from './workbench-evidence.js';
 import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
 import { embedGameHtml, AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 import { createLiveGame } from './live-game.js';
+import { LIVE_JOURNAL_BRIDGE } from './live-journal-bridge.js';
 import { WORKBENCH_GAME_BRIDGE } from './workbench-game-bridge.js';
 import { workbenchArtifacts } from './workbench-artifacts.js';
 import { workbenchActionSchema, WORKBENCH_ACTIONS } from './workbench-actions.js';
@@ -257,7 +258,8 @@ export async function startSessionBrowser(
             ? {
                 html: embedGameHtml(
                   data.html,
-                  WORKBENCH_GAME_BRIDGE + (current.url.startsWith('http://127.0.0.1:') ? AGENT_PLAY_BRIDGE : ''),
+                  WORKBENCH_GAME_BRIDGE +
+                    (current.url.startsWith('http://127.0.0.1:') ? LIVE_JOURNAL_BRIDGE + AGENT_PLAY_BRIDGE : ''),
                 ),
               }
             : {}),
