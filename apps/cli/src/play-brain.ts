@@ -33,7 +33,7 @@ import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 
-// Agents app-agent can hand Play's tools to (per-run MCP servers).
+// Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
 
 export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): string | undefined {
@@ -173,9 +173,9 @@ export async function startPlayBrain(input: {
           })
         : undefined,
     ));
-  // The running turn's signal: Ctrl+C stops the agent and its tool.
+  // The running turn's signal; Ctrl+C stops the agent and tool.
   let turnAbort = new AbortController();
-  // Re-enters the turn's writer lock, so agent deliveries don't self-block.
+  // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
   const permission = () => taskPermissionMode(spec, ws.permissionMode);
   // Play's tools for the agent; bound once the agent exists.
