@@ -27,6 +27,7 @@ import { gameSourcePath, gameSourceRoot } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
+import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 
@@ -195,7 +196,10 @@ export async function startPlayBrain(input: {
       writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
     }),
     dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: false, only: true },
-    agents: () => (input.agents ?? brainAgents)(ws.root).filter((candidate) => candidate.name === name),
+    agents: () =>
+      (input.agents ?? brainAgents)(ws.root)
+        .filter((candidate) => candidate.name === name)
+        .map((candidate) => withSavedSelection(candidate, ws.env)),
     agent: name,
     serverName: 'gamedevpl',
     mcpUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/agent/mcp`,
@@ -356,6 +360,20 @@ export async function startPlayBrain(input: {
       await new Promise((resolve) => server.close(resolve));
     },
   };
+}
+
+// The model and effort saved with /model, read on every run as the workshop does (configureAdapter).
+export function withSavedSelection(agent: CodingAgent, env: NodeJS.ProcessEnv): CodingAgent {
+  const run: CodingAgent['run'] = (task) => {
+    const selection = readAgentSelection(agent.name, env);
+    validateSelection(agent.name, selection);
+    return agent.run({
+      ...task,
+      ...(selection.model && !task.model ? { model: selection.model } : {}),
+      ...(selection.effort && !task.effort ? { effort: selection.effort } : {}),
+    });
+  };
+  return Object.assign(Object.create(agent) as CodingAgent, { run });
 }
 
 // The agent's conversation as session lines, so the terminal and the browser panel show it.
