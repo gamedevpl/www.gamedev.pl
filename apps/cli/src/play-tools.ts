@@ -26,7 +26,7 @@ export type PlayToolsInput = {
   write: (line: string) => void;
   fetch?: typeof fetch;
   pollMs?: number;
-  // Runs a delivery inside the turn's checkout writer lock (tool calls arrive outside its async context).
+  // Runs delivery inside the turn's writer lock (tool calls arrive outside it).
   writer?: <T>(run: () => Promise<T>) => Promise<T>;
 };
 

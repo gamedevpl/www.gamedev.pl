@@ -33,7 +33,7 @@ import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 
-// Agents that take a per-run MCP server: the only ones app-agent can hand Play's tools to.
+// Agents app-agent can hand Play's tools to (per-run MCP servers).
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
 
 export function brainRequested(env: NodeJS.ProcessEnv): boolean {
@@ -51,7 +51,7 @@ type Prompt = (choices: string[], question: string, signal?: AbortSignal) => Pro
 
 export type PlayBrain = {
   agent: AppAgent;
-  // One creator message: runs until the agent is idle and nothing waits for the creator.
+  // One creator message, until the agent idles and nothing awaits the creator.
   turn(text: string): Promise<void>;
   close(): Promise<void>;
 };
@@ -72,7 +72,7 @@ function instructions(ws: Workshop): string {
   ].join('\n');
 }
 
-// The creator's permission mode decides the agent CLI's own prompts; Ask leaves them all to the creator.
+// The creator's permission mode answers the agent CLI's own prompts.
 export function decideApproval(mode: PermissionMode, request: ApprovalRequest): ApprovalDecision | undefined {
   if (mode === 'yolo') return 'approve';
   if (mode === 'auto' && request.kind === 'file-change') return 'approve';
@@ -115,7 +115,7 @@ export async function startPlayBrain(input: {
   write: (line: string) => void;
   activity: (text: string) => void;
   agents?: (root: string) => CodingAgent[];
-  // The workshop's preflight: refuses a stale or conflicting checkout. Tests replace it.
+  // The workshop's stale/conflict preflight; tests replace it.
   ready?: () => Promise<boolean>;
 }): Promise<PlayBrain | undefined> {
   const { ws, write } = input;
@@ -126,7 +126,7 @@ export async function startPlayBrain(input: {
   const local = !ws.runAdapter;
   const env = subscriptionEnv(childEnv(ws.env, ''));
   if (local) {
-    // Ctrl+C (or a browser-worker shutdown) cancels setup, as it cancels the workshop's.
+    // Ctrl+C or worker shutdown cancels setup, as in the workshop.
     const setup = new AbortController();
     ws.abort.current = setup;
     try {
@@ -177,12 +177,12 @@ export async function startPlayBrain(input: {
           })
         : undefined,
     ));
-  // The running turn's signal: Ctrl+C stops the agent and whatever tool it is in.
+  // The running turn's signal: Ctrl+C stops the agent and its tool.
   let turnAbort = new AbortController();
-  // Re-enters the running turn's checkout writer lock, so a delivery the agent asks for does not lock itself out.
+  // Re-enters the turn's writer lock, so agent deliveries don't self-block.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
   const permission = () => taskPermissionMode(spec, ws.permissionMode);
-  // The agent reaches Play's tools here; the handler is bound once the agent exists.
+  // Play's tools for the agent; bound once the agent exists.
   const bound: { handle?: ReturnType<typeof createAppAgentHandler> } = {};
   const server = createServer((req, res) => {
     void (bound.handle?.(req, res) ?? Promise.resolve(false)).then((handled) => {
@@ -228,7 +228,7 @@ export async function startPlayBrain(input: {
     !state.session?.notes?.length &&
     !state.session?.approvals.length &&
     !state.actions.some((action) => action.status === 'pending' || action.status === 'running');
-  // Something the creator has to answer: the agent CLI's own prompt or an app action.
+  // A CLI prompt or app action awaiting the creator.
   const waiting = (state: AppAgentState) =>
     Boolean(state.session?.approvals.length) || state.actions.some((action) => action.status === 'pending');
   const next = (signal: AbortSignal) =>
@@ -252,7 +252,7 @@ export async function startPlayBrain(input: {
           ? 'Allow these permissions until the current turn ends?'
           : 'Allow this invocation once?';
       const question = `${name} requests ${request.kind} permission.\n${requestDetail(request)}\n${duration}`;
-      // As in the workshop: what the creator cannot see in full is never allowed.
+      // As in the workshop: never allow what cannot be shown in full.
       const fits = question.length <= 7500;
       if (!fits) write(`${name}: permission request is too large to display completely; denied.`);
       const choice = fits ? await input.prompt([ALLOW, DENY], question, signal) : DENY;
@@ -286,7 +286,7 @@ export async function startPlayBrain(input: {
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
     let ok = false;
-    // Whether the request finished (answered or green); otherwise /retry resumes it, as in the workshop.
+    // Answered or green; otherwise /retry resumes it, as in the workshop.
     let finished = false;
     try {
       presence?.phase('editing');
@@ -302,7 +302,7 @@ export async function startPlayBrain(input: {
           if (signal.aborted) return;
           continue;
         }
-        // Settled is not done: an agent that failed (auth, quota, crash) leaves the request for /retry.
+        // A failed agent run (auth, quota, crash) leaves the request for /retry.
         const outcome = state.session?.turns.at(-1)?.result;
         if (!outcome?.ok) {
           write(`${name} did not finish: ${outcome?.error ?? outcome?.status ?? 'no result'}. Nothing was delivered.`);
@@ -314,7 +314,7 @@ export async function startPlayBrain(input: {
           return;
         }
         presence?.phase('verifying');
-        // A steer now would start a run the checks and delivery do not wait for.
+        // No steering while verifying: checks and delivery would not wait.
         ws.onSteering?.(undefined);
         const result = await runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: signal });
         if (signal.aborted) return;
@@ -344,7 +344,7 @@ export async function startPlayBrain(input: {
           ].join('\n'),
         );
       }
-      // Parity with the workshop: green edits are offered for delivery unless the agent already proposed it.
+      // As in the workshop: offer green edits unless the agent proposed delivery.
       const proposed = agent
         .get()
         .actions.some(
@@ -371,7 +371,7 @@ export async function startPlayBrain(input: {
     agent,
     async turn(text) {
       if (!(await (input.ready ?? (() => readyToEdit({ api: input.api, ws, write })))())) return;
-      // One writer at a time, as in the workshop: no pull, history edit or code-panel save mid-turn.
+      // One checkout writer at a time, as in the workshop.
       await withCheckoutWriter(ws.root, async () => {
         const reenter = AsyncResource.bind((run: () => Promise<unknown>) => run());
         inTurn = <T>(run: () => Promise<T>) => reenter(run) as Promise<T>;
@@ -393,7 +393,7 @@ export async function startPlayBrain(input: {
   };
 }
 
-// The model and effort saved with /model, read on every run as the workshop does (configureAdapter).
+// Applies /model's saved model and effort on every run, like configureAdapter.
 export function withSavedSelection(agent: CodingAgent, env: NodeJS.ProcessEnv): CodingAgent {
   const run: CodingAgent['run'] = (task) => {
     const selection = readAgentSelection(agent.name, env);
@@ -407,7 +407,7 @@ export function withSavedSelection(agent: CodingAgent, env: NodeJS.ProcessEnv): 
   return Object.assign(Object.create(agent) as CodingAgent, { run });
 }
 
-// The agent's conversation as session lines, so the terminal and the browser panel show it.
+// The agent's conversation as session lines for terminal and browser.
 function mirror(agent: AppAgent, write: (line: string) => void, activity: (text: string) => void): () => void {
   const shown = new Map<number, number>();
   let busy = false;

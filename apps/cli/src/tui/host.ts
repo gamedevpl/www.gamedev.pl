@@ -132,7 +132,7 @@ export async function runInkRepl(input: {
       platform: { api: input.api, signedIn: () => Boolean(uid || token) },
     },
   );
-  // GAMEDEVPL_BRAIN=app-agent: in builder self mode a genaicode app-agent takes the creator's messages.
+  // GAMEDEVPL_BRAIN=app-agent: a genaicode app-agent takes self-builder messages.
   let brain: { workshop: Workshop; started?: PlayBrain } | undefined;
   const closeBrain = async (): Promise<void> => {
     const closing = brain?.started;
@@ -336,7 +336,7 @@ export async function runInkRepl(input: {
       ) {
         if (brain && brain.workshop !== workshop) await closeBrain();
         try {
-          // A published game takes changes through a new improvement round, which the workshop opens below.
+          // Published games change via an improvement round, opened by the workshop below.
           const published = !!token && (await getStatus(input.api, token)).status === 'published';
           if (!published && !brain) {
             session.setActivity('Starting the Play agent');
