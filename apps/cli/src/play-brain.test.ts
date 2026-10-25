@@ -168,9 +168,13 @@ describe('play brain', () => {
         return 'Fixed the syntax.';
       },
     ]);
+    const steering: boolean[] = [];
+    t.ws.onSteering = (send) => steering.push(Boolean(send));
     const brain = await t.start(1);
     await brain.turn('make the snake faster');
     expect(t.tasks).toHaveLength(2);
+    // Steering pauses while the host verifies a settled agent.
+    expect(steering).toEqual([true, false, true, false, false]);
     expect(t.lines).toContain('verify failed at typecheck');
     expect(t.lines).toContain('✓ static ladder green');
     expect(t.picks).toEqual(['Deliver snake?']);
