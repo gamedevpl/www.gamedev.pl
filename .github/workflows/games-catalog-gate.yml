@@ -76,7 +76,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # No job that checks out or runs games-repo code may mint a GitHub OIDC token:
 # only the pointer job below, which never checks the games repo out, gets one.
@@ -278,21 +278,29 @@ jobs:
             fi
             file_count=$(jq '.files | length' "$compare")
             if [ "$file_count" -ge 300 ]; then
-              echo "Compare listed ${file_count} files (GitHub cap) — full catalog gate"
+              echo "Compare listed ${file_count} files (GitHub cap) — fetching baseline to classify via git diff"
+              if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
+                git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
+                  fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                  || { echo "Baseline fetch failed — full catalog gate"; rm -f "$compare"; return 1; }
+              fi
+              files=$(git diff --no-renames --name-only "$parent" "$SHA")
+              diffs_json=$(mktemp)
+              echo "{}" > "$diffs_json"
               rm -f "$compare"
-              return 1
-            fi
-            files=$(jq -r '.files[]? | [.filename, (.previous_filename // empty)] | .[] | select(. != "")' "$compare")
-            diffs_json=$(mktemp)
-            jq -c '[.files[]? | select(.filename != null and .patch != null) | {key: .filename, value: .patch}] | from_entries' "$compare" > "$diffs_json"
-            rm -f "$compare"
-            # Checkout is shallow. Fetch the last-published SHA so --base can
-            # git-diff when GitHub omitted a patch (binary / too large). Compare
-            # patches are the primary input and work without this object.
-            if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
-              git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
-                fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
-                || echo "Baseline fetch failed — classify from compare patches only"
+            else
+              files=$(jq -r '.files[]? | [.filename, (.previous_filename // empty)] | .[] | select(. != "")' "$compare")
+              diffs_json=$(mktemp)
+              jq -c '[.files[]? | select(.filename != null and .patch != null) | {key: .filename, value: .patch}] | from_entries' "$compare" > "$diffs_json"
+              rm -f "$compare"
+              # Checkout is shallow. Fetch the last-published SHA so --base can
+              # git-diff when GitHub omitted a patch (binary / too large). Compare
+              # patches are the primary input and work without this object.
+              if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
+                git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
+                  fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                  || echo "Baseline fetch failed — classify from compare patches only"
+              fi
             fi
             set +e
             scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --diffs-json "$diffs_json" --json)
