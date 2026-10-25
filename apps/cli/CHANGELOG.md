@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Live Play keeps control during slow frame-counted actions, lets you interrupt them between frames, and explains response timeouts.
+- Live Play keeps control during slow frame-counted actions, lets you interrupt them between frames, and explains response timeouts (#1979).
 
 ## 0.58.0 — 2026-10-25
 

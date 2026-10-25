@@ -110,7 +110,7 @@ it('rejects arbitrary execution, excess frames and extra fields before sending c
   expect(first.socket.send).not.toHaveBeenCalled();
 });
 
-it.each(['abort', 'disconnect', 'build', 'source', 'timeout'])(
+it.each(['abort', 'disconnect', 'build', 'source', 'timeout', 'lease'])(
   'releases control and refuses late action replies on %s',
   async (reason) => {
     vi.useFakeTimers();
@@ -120,7 +120,8 @@ it.each(['abort', 'disconnect', 'build', 'source', 'timeout'])(
     first.reply();
     await take;
     const act = game.call('task', 'game_act', { actions: [{ kind: 'step', frames: 30 }] }, signal.signal);
-    const failure = expect(act).rejects.toThrow();
+    const failure = expect(act).rejects.toThrow(reason === 'lease' ? 'heartbeat/lease expired' : undefined);
+    if (reason === 'lease') first.message({ type: 'live:expired' });
     if (reason === 'abort') signal.abort();
     if (reason === 'disconnect') first.socket.emit('close');
     if (reason === 'build') first.hello('new-build');
