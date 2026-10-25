@@ -53,7 +53,7 @@ const command = z.discriminatedUnion('kind', [
     .strict(),
   z.object({ id, kind: z.literal('stop'), taskId: generation }).strict(),
 ]);
-// The browser chat's own answers to the Play agent; messages still go through /commands.
+// Browser chat answers to the Play agent; messages use /commands.
 const agentCommand = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('action'), id, decision: z.enum(['approve', 'reject']) }).strict(),
   z.object({ kind: z.literal('approval'), id, decision: z.enum(['approve', 'deny']) }).strict(),
@@ -80,7 +80,7 @@ export async function startSessionBrowser(
     detached?: boolean;
     workspace?: () => { mode: string; slug: string; suggestedSlug?: string };
     canStop?: () => boolean;
-    // The Play agent (GAMEDEVPL_BRAIN=app-agent) once it runs; the browser shows its chat.
+    // The running Play agent (GAMEDEVPL_BRAIN=app-agent); the browser shows its chat.
     agent?: () => AppAgent | undefined;
   } = {},
 ) {

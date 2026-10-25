@@ -245,7 +245,7 @@ export async function startPlayBrain(input: {
       signal.addEventListener('abort', done, { once: true });
     });
 
-  // Asks in the terminal and the Play panel; a card answered in the browser chat withdraws the question.
+  // Asks in the terminal; a browser card answer withdraws the question.
   const ask = async (choices: string[], question: string, open: () => boolean, signal: AbortSignal) => {
     const asked = new AbortController();
     const off = agent.subscribe(() => {
