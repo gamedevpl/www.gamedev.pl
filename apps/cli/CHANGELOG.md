@@ -16,6 +16,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Upgrade `zod` to 4.6.7 and use namespace imports so esbuild tree-shakes unused schemas and locales from the CLI bundle.
 - Bump `genaicode` to 2.21.0 for `app-agent` tool registration (#1971).
 - Play agent on `genaicode/app-agent` behind `GAMEDEVPL_BRAIN=app-agent`; the workshop stays the default (#1972).
+- Flagged Play agent also runs in the browser panel: one session with the terminal (#1973).
 
 ## 0.56.0 — 2026-10-21
 
