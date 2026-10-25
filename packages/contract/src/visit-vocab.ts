@@ -197,6 +197,7 @@ export const CLI_STEPS = [
   'recovery_succeeded',
   'recovery_failed',
   'recovery_canceled',
+  'brain_turn',
 ] as const;
 export type CliStep = (typeof CLI_STEPS)[number];
 

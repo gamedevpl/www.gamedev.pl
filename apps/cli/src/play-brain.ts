@@ -31,10 +31,6 @@ import { offerSubmit, type Workshop } from './workshop.js';
 // Agents that take a per-run MCP server: the only ones app-agent can hand Play's tools to.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
 
-export function brainRequested(env: NodeJS.ProcessEnv): boolean {
-  return env.GAMEDEVPL_BRAIN === 'app-agent';
-}
-
 export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): string | undefined {
   const names = ws.adapters
     .map((spec) => spec.name)
@@ -266,6 +262,7 @@ export async function startPlayBrain(input: {
       let ok = false;
       try {
         presence?.phase('editing');
+        ws.telemetry?.record('brain_turn', { adapter: name });
         agent.send(text);
         for (;;) {
           const state = agent.get();
@@ -290,6 +287,7 @@ export async function startPlayBrain(input: {
             break;
           }
           write(`verify failed at ${result.stage}`);
+          ws.telemetry?.record('verify_failed', { adapter: name, stage: result.stage });
           if (repairs >= MAX_LOCAL_REPAIRS) {
             write(
               `Checks still fail after ${MAX_LOCAL_REPAIRS} automatic repairs. Edits remain local; /diff to inspect. Nothing was delivered.`,

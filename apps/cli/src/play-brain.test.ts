@@ -69,6 +69,7 @@ function setup(steps: Step[], answers: string[] = []) {
   const prompts: Array<{ choices: string[]; question: string }> = [];
   const picks: string[] = [];
   let red = 0;
+  const recorded: Array<[string, unknown]> = [];
   const api: ApiClient = {
     origin: 'https://gamedev.test',
     request: async <T>(_method: string, path: string) => {
@@ -91,6 +92,7 @@ function setup(steps: Step[], answers: string[] = []) {
     },
     abort: { current: null },
     runAdapter: async () => ({ code: 0 }),
+    telemetry: { record: (step, dims) => recorded.push([step, dims]), flush: async () => {} },
     run: () => (red-- > 0 ? { status: 1, stderr: 'game.ts(1,1): error TS1005' } : { status: 0, stderr: '' }),
   };
   const start = async (failing = 0, prompt?: Parameters<typeof startPlayBrain>[0]['prompt']) => {
@@ -112,7 +114,7 @@ function setup(steps: Step[], answers: string[] = []) {
     return brain!;
   };
   const edit = (content: string) => writeGameFiles(root, 'snake', [{ path: 'game.ts', content }]);
-  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws };
+  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, recorded };
 }
 
 describe('play brain', () => {
@@ -160,6 +162,10 @@ describe('play brain', () => {
     expect(t.lines).toContain('verify failed at typecheck');
     expect(t.lines).toContain('✓ static ladder green');
     expect(t.picks).toEqual(['Deliver snake?']);
+    expect(t.recorded).toEqual([
+      ['brain_turn', { adapter: 'claude' }],
+      ['verify_failed', { adapter: 'claude', stage: 'typecheck' }],
+    ]);
   });
 
   it('stops after two repairs that stay red', async () => {
