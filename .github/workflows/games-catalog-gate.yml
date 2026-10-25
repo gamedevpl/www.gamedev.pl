@@ -284,7 +284,7 @@ jobs:
                   fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
                   || { echo "Baseline fetch failed — full catalog gate"; rm -f "$compare"; return 1; }
               fi
-              files=$(git diff --name-only "$parent" "$SHA")
+              files=$(git diff --no-renames --name-only "$parent" "$SHA")
               diffs_json=$(mktemp)
               echo "{}" > "$diffs_json"
               rm -f "$compare"
