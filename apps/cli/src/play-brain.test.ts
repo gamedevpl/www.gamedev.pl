@@ -93,15 +93,17 @@ function setup(steps: Step[], answers: string[] = []) {
     runAdapter: async () => ({ code: 0 }),
     run: () => (red-- > 0 ? { status: 1, stderr: 'game.ts(1,1): error TS1005' } : { status: 0, stderr: '' }),
   };
-  const start = async (failing = 0) => {
+  const start = async (failing = 0, prompt?: Parameters<typeof startPlayBrain>[0]['prompt']) => {
     red = failing;
     const brain = await startPlayBrain({
       api,
       ws,
-      prompt: async (choices, question) => {
-        prompts.push({ choices, question });
-        return answers.shift() ?? choices.at(-1)!;
-      },
+      prompt:
+        prompt ??
+        (async (choices, question) => {
+          prompts.push({ choices, question });
+          return answers.shift() ?? choices.at(-1)!;
+        }),
       write: (line) => lines.push(line),
       activity: () => {},
       agents: () => [fake.agent],
@@ -180,6 +182,31 @@ describe('play brain', () => {
     expect(t.tasks).toHaveLength(3);
     expect(t.lines.at(-1)).toMatch(/Checks still fail after 2 automatic repairs/);
     expect(t.picks).toEqual([]);
+  });
+
+  it('withdraws the terminal question when the browser chat answers the card', async () => {
+    const t = setup([
+      async (task) => await callTool(task, 'game_publish', { approval_summary: 'Publish snake' }),
+      async (task) => {
+        expect(task.prompt).toContain('The user rejected action #1 (Publish snake).');
+        return 'Not published.';
+      },
+    ]);
+    const started: { brain?: PlayBrain } = {};
+    const withdrawn: boolean[] = [];
+    const prompt = (_choices: string[], _question: string, signal?: AbortSignal) =>
+      new Promise<string>((resolve) => {
+        // The creator clicks Reject in the browser chat instead.
+        setTimeout(() => started.brain!.agent.decide('1', 'reject'), 5);
+        signal!.addEventListener('abort', () => {
+          withdrawn.push(true);
+          resolve('');
+        });
+      });
+    started.brain = await t.start(0, prompt);
+    await started.brain.turn('publish it');
+    expect(withdrawn).toEqual([true]);
+    expect(t.lines).toContain('Not published.');
   });
 
   it('asks the creator before a delivery the agent proposes, and tells the agent the answer', async () => {

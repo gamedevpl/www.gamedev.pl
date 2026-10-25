@@ -221,22 +221,32 @@ export async function startPlayBrain(input: {
       signal.addEventListener('abort', done, { once: true });
     });
 
+  // Asks in the terminal and the Play panel; a card answered in the browser chat withdraws the question.
+  const ask = async (choices: string[], question: string, open: () => boolean, signal: AbortSignal) => {
+    const asked = new AbortController();
+    const off = agent.subscribe(() => {
+      if (!open()) asked.abort();
+    });
+    try {
+      const choice = await input.prompt(choices, question, AbortSignal.any([signal, asked.signal]));
+      return asked.signal.aborted || signal.aborted ? undefined : choice;
+    } finally {
+      off();
+    }
+  };
   const answer = async (state: AppAgentState, signal: AbortSignal) => {
     for (const request of state.session?.approvals ?? []) {
-      const choice = await input.prompt([ALLOW, DENY], `${name} asks: ${request.summary ?? request.kind}`, signal);
-      try {
-        agent.approve(request.id, choice === ALLOW ? 'approve' : 'deny');
-      } catch {
-        // Withdrawn meanwhile.
-      }
+      const open = () => Boolean(agent.get().session?.approvals.some((item) => item.id === request.id));
+      const choice = await ask([ALLOW, DENY], `${name} asks: ${request.summary ?? request.kind}`, open, signal);
+      if (choice === undefined || !open()) continue;
+      agent.approve(request.id, choice === ALLOW ? 'approve' : 'deny');
     }
     for (const action of state.actions.filter((candidate) => candidate.status === 'pending')) {
-      const choice = await input.prompt([APPROVE, REJECT], action.summary, signal);
-      try {
-        agent.decide(action.id, choice === APPROVE ? 'approve' : 'reject');
-      } catch {
-        // Decided elsewhere meanwhile.
-      }
+      const open = () =>
+        agent.get().actions.some((candidate) => candidate.id === action.id && candidate.status === 'pending');
+      const choice = await ask([APPROVE, REJECT], action.summary, open, signal);
+      if (choice === undefined || !open()) continue;
+      agent.decide(action.id, choice === APPROVE ? 'approve' : 'reject');
     }
   };
 
@@ -261,6 +271,7 @@ export async function startPlayBrain(input: {
           const state = agent.get();
           if (waiting(state)) {
             await answer(state, signal);
+            if (signal.aborted) return;
             continue;
           }
           if (!settled(state)) {

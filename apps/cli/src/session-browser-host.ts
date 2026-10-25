@@ -4,6 +4,7 @@ import type { ApiClient } from './api.js';
 import { openUrl } from './open-url.js';
 import type { SessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
+import type { AppAgent } from 'genaicode/app-agent';
 
 export function sessionBrowserHost(
   session: SessionController,
@@ -12,6 +13,7 @@ export function sessionBrowserHost(
   canStop?: () => boolean,
   detached = headless,
   code?: CodeOptions,
+  agent?: () => AppAgent | undefined,
 ) {
   let preview = '';
   let opening: ReturnType<typeof startSessionBrowser> | undefined;
@@ -23,7 +25,7 @@ export function sessionBrowserHost(
     }
   });
   const start = () =>
-    (opening ??= startSessionBrowser(session, { detached, workspace, canStop, code }).catch((error: unknown) => {
+    (opening ??= startSessionBrowser(session, { detached, workspace, canStop, code, agent }).catch((error: unknown) => {
       opening = undefined;
       throw error;
     }));
@@ -53,10 +55,12 @@ export function sessionBrowserHost(
     async open(url: string): Promise<boolean> {
       if (closed) return false;
       if (!preview || preview !== url) return openUrl(url);
-      opening ??= startSessionBrowser(session, { detached, workspace, canStop, code }).catch((error: unknown) => {
-        opening = undefined;
-        throw error;
-      });
+      opening ??= startSessionBrowser(session, { detached, workspace, canStop, code, agent }).catch(
+        (error: unknown) => {
+          opening = undefined;
+          throw error;
+        },
+      );
       try {
         const server = await opening;
         if (closed) return false;

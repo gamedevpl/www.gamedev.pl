@@ -130,6 +130,7 @@ export async function runInkRepl(input: {
       env: input.env,
       platform: { api: input.api, signedIn: () => Boolean(uid || token) },
     },
+    () => brain?.started?.agent,
   );
   // GAMEDEVPL_BRAIN=app-agent: in builder self mode a genaicode app-agent takes the creator's messages.
   let brain: { workshop: Workshop; started?: PlayBrain } | undefined;

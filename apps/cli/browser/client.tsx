@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import { PlayShell } from './shell.js';
 import { initializeWorkbenchResize } from './workbench-resize.js';
 import '../../web/src/core/styles/tokens.css';
+import 'genaicode/react/styles.css';
 import './style.css';
 import '../../web/src/surfaces/studio/code-surface-editor.css';
 import './code-panel.css';

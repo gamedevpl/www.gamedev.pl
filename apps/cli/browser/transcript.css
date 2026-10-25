@@ -139,3 +139,25 @@
 #attachments > .attachment-sent {
   opacity: 0.6;
 }
+
+/* The Play agent's chat fills the conversation; Play's own composer below takes the messages. */
+#conversation.play-agent {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+#conversation.play-agent > .gc-chat {
+  flex: 1;
+  min-height: 0;
+}
+#conversation.play-agent .gc-composer {
+  display: none;
+}
+#conversation.play-agent .gc-app-controls select {
+  display: none;
+}
+#conversation.play-agent .play-agent-status {
+  padding: 6px 12px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+}
