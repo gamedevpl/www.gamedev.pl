@@ -7,6 +7,7 @@ import { approvalEnv } from './agent-approval.js';
 import { childEnv } from './delegate.js';
 import { localPreviewTools, LOCAL_PREVIEW_INSTRUCTIONS } from './local-preview-tools.js';
 import { readGameCapturePlan } from './capture-scenario.js';
+import { LIVE_GAME_INSTRUCTIONS } from './live-game-protocol.js';
 import type { taskOutput } from './task-output.js';
 
 export function claudeAbsolutePath(path: string): string {
@@ -95,7 +96,7 @@ export async function runPermissionTask(
               'Continue this unfinished request in the resumed conversation. Keep existing edits and completed work; do not repeat completed actions. The pending tool was not approved before restarting.',
             ]
           : []),
-        ...(tools && input.previewUrl ? [LOCAL_PREVIEW_INSTRUCTIONS] : []),
+        ...(tools && input.previewUrl ? [LOCAL_PREVIEW_INSTRUCTIONS, LIVE_GAME_INSTRUCTIONS] : []),
       ].join('\n');
       const result = await (ws.runAdapter ?? defaultAdapterRun)({
         spec,

@@ -894,6 +894,14 @@ available for scripts and recovery under another slug.
 
 ### Local browser tools for delegated tasks
 
+In the local Play workbench, the same MCP connection also supplies `game_observe`,
+`game_take_control`, `game_act` and `game_release_control`. These inspect and drive
+the creator's existing game instance, with a visible **Take back control** button.
+Sending from a tab selects it; Session details also offers explicit tab selection.
+Control ends with the task or a disconnected tab. See
+[live Play control](../../docs/play-workbench.md#let-an-agent-inspect-and-control-this-play-session)
+for frame budgets, selection, cancellation and observation limits.
+
 Interactive local delegation to Codex, Claude, and Copilot automatically connects a
 session-scoped `gamedevpl_local` MCP server when the CLI preview is available.
 `preview_status` reports build errors and freshness. `capture_game` starts a desktop or

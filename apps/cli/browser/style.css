@@ -1,3 +1,4 @@
+@import './live-game.css';
 :root {
   color-scheme: dark;
   --height: 100dvh;

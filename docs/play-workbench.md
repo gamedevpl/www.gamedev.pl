@@ -247,6 +247,52 @@ an EditorKit persist-to-source editor.
 
 ## Evidence
 
+### Let an agent inspect and control this play session
+
+Local delegated Claude, Codex and Copilot tasks receive `game_observe`,
+`game_take_control`, `game_act` and `game_release_control` through their existing
+task-scoped MCP connection. The optional `--brain app-agent` path exposes the same
+tools. No additional model, browser installation or platform round is needed to
+observe. Ask the agent to look at the problem, then ask it to take control when
+you want it to reproduce the behavior.
+
+`game_observe` reads the game already running in your Play tab: the rendered build
+revision, current frame, GameKit snapshot/observation, UI targets, recent diagnostics
+and a screenshot. It does not pause or restart the game. While you play, these reads
+are not an atomic recording; take control for frame-stable observations. The canvas
+composite may omit DOM overlays. Missing game-authored observations remain unknown.
+
+Sending a message selects that tab. With several tabs and no selection, the tools
+require a tab ID from their available-tab list; **Session details → Use this game
+tab for the agent** selects explicitly. Once control is acquired, subsequent calls
+remain pinned to that task, tab and shown build. A source change, reload or tab close
+invalidates it. A paired phone and a raw `--preview` window are not controllable.
+
+Taking control pauses real-time play and blocks keyboard and pointer input in the game frame.
+`game_act` supports step, press, tap, click, move and drag, up to 32 actions and 600
+frames per call (300 per action). It accepts no JavaScript, URLs or paths. Existing
+`capture_game` plans still start a separate fresh game; they never take over this tab.
+GameKit frame stepping is required for control; `.persist()` is not required.
+
+The visible **Take back control** button works even with Play controls hidden.
+It immediately releases input and revokes control for the current task. The agent
+must wait for a new creator request before taking control again. Normal release,
+task completion/cancellation, disconnect and expired heartbeats release input and
+resume play. The frame has its own five-second lease watchdog. Build replacements
+wait until control and in-flight observations finish. No action is automatically
+replayed after an uncertain result; the agent must observe again.
+
+The connection reuses Play's authenticated loopback presence socket. The CLI routes
+it only to MCP tasks for the same local preview, correlates replies with the exact
+tab and request, bounds message sizes and serializes operations. Game output is
+untrusted data. Neither MCP credentials nor source files enter the iframe, whose
+sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
+
+This affects creator iteration/return (measurement questions 4–5). Existing local
+delegation events still count tasks; live-control success and usage have no aggregate
+query yet. Screenshots, inputs, observations and tab IDs stay local and are not
+added to telemetry. This is an explicit measurement gap.
+
 Upload/paste images, attach a screenshot, export recent diagnostic input/error events,
 or enable canvas recording before saving a recent clip. Media is stored in private local
 files until the session ends. A request can carry eight attachments, each up to 16 MB;

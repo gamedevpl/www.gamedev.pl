@@ -17,6 +17,8 @@ it.each(['ordinary', 'question', 'choice'])(
       choices: kind === 'choice' ? ['Red'] : [],
     };
     const context = {
+      liveHello: vi.fn(),
+      liveSend: vi.fn(),
       buildErrorControls: () => {},
       api,
       draft,
@@ -40,6 +42,7 @@ it.each(['ordinary', 'question', 'choice'])(
     runInNewContext(SESSION_BROWSER_SCRIPT.slice(start, end), context);
     const client = context as typeof context & { send(command: unknown): void };
     client.send({ kind: 'input', promptId: 1, text: draft.value });
+    expect(context.liveSend).toHaveBeenCalledWith({ type: 'live:select' });
     await vi.waitFor(() => expect(context.pending).toBeUndefined());
     expect(context.attachments.map((a: { sent?: boolean }) => Boolean(a.sent))).toEqual(
       kind === 'ordinary' ? [true, true] : [false, false],
@@ -84,6 +87,8 @@ it.each(['restored', 'late acceptance', 'late failure'])(
       .mockResolvedValue({ status: 'accepted' });
     const fields = new Map<string, { textContent: string; disabled: boolean; children: never[] }>();
     const context = {
+      liveHello: vi.fn(),
+      liveSend: vi.fn(),
       buildErrorControls: () => {},
       pending: {
         envelope: { sessionId: 'old', command: { kind: 'input' } },

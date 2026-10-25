@@ -3,7 +3,8 @@ import { isJsonContentType } from './workbench-http.js';
 import { CLI_VERSION } from './update.js';
 import { EVIDENCE_MARKER, shownPrompt } from './workbench-evidence.js';
 import { lanAddresses, startPhonePreview, type PhoneReport } from './workbench-phone.js';
-import { embedGameHtml } from '@gamedevpl/contract';
+import { embedGameHtml, AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
+import { createLiveGame } from './live-game.js';
 import { WORKBENCH_GAME_BRIDGE } from './workbench-game-bridge.js';
 import { workbenchArtifacts } from './workbench-artifacts.js';
 import { workbenchActionSchema, WORKBENCH_ACTIONS } from './workbench-actions.js';
@@ -96,6 +97,7 @@ export async function startSessionBrowser(
   let sequence = 0;
   let preview: { url: string; abort: AbortController; source: PreviewSource } | undefined;
   let sourceId = 0;
+  const liveGame = createLiveGame(() => sourceId);
   let stopped = false;
   let phone: Awaited<ReturnType<typeof startPhonePreview>> | undefined;
   let phoneOpening = false;
@@ -251,7 +253,14 @@ export async function startSessionBrowser(
         }
         reply(200, {
           ...data,
-          ...('html' in data ? { html: embedGameHtml(data.html, WORKBENCH_GAME_BRIDGE) } : {}),
+          ...('html' in data
+            ? {
+                html: embedGameHtml(
+                  data.html,
+                  WORKBENCH_GAME_BRIDGE + (current.url.startsWith('http://127.0.0.1:') ? AGENT_PLAY_BRIDGE : ''),
+                ),
+              }
+            : {}),
           sourceId: currentId,
         });
         return;
@@ -379,7 +388,12 @@ export async function startSessionBrowser(
   });
   attachPlayPresence(
     server,
-    presence,
+    {
+      connect(socket) {
+        presence.connect(socket);
+        liveGame.connect(socket);
+      },
+    },
     (req) =>
       Boolean(origin) &&
       req.url === '/presence' &&
@@ -387,6 +401,7 @@ export async function startSessionBrowser(
       (!req.headers.origin || req.headers.origin === origin) &&
       (!req.headers['sec-fetch-site'] || ['same-origin', 'none'].includes(String(req.headers['sec-fetch-site']))) &&
       presenceToken(req, token),
+    4 * 1024 * 1024,
   );
   server.requestTimeout = 10_000;
   server.headersTimeout = 10_000;
@@ -402,6 +417,7 @@ export async function startSessionBrowser(
       });
     });
   } catch (error) {
+    liveGame.close();
     presence.close();
     unsubscribe();
     artifacts.close();
@@ -411,6 +427,7 @@ export async function startSessionBrowser(
     url: `${origin}/#${token}`,
     setSource(key: string, source: PreviewSource) {
       if (stopped || preview?.url === key) return;
+      liveGame.register('');
       revokePhone();
       preview?.abort.abort();
       preview = { url: key, abort: new AbortController(), source };
@@ -424,8 +441,10 @@ export async function startSessionBrowser(
       preview?.abort.abort();
       preview = { url, abort, source };
       sourceId++;
+      liveGame.register(url);
     },
     clearPreview() {
+      liveGame.register('');
       revokePhone();
       preview?.abort.abort();
       preview = undefined;
@@ -433,6 +452,7 @@ export async function startSessionBrowser(
     },
     async close() {
       stopped = true;
+      liveGame.close();
       code.close();
       presence.close();
       unsubscribe();

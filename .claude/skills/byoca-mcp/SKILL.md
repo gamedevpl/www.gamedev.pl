@@ -23,6 +23,15 @@ errors. The former `capture` name remains callable for compatibility. These tool
 need no shell sandbox escalation, execute no checkout npm scripts, and never open
 a platform round or publish. See `apps/cli/README.md` for the local contract.
 
+Local Play also exposes `game_observe`, `game_take_control`, `game_act` and
+`game_release_control` for the creator's existing browser tab. These require the
+workbench, preserve the current instance, and release control on task completion,
+cancellation or disconnect. `capture_game` still starts a separate fresh instance.
+See `docs/play-workbench.md` for selection, frame limits and creator revocation.
+Test takeover with a real GameKit game: pausing updates alone leaves an already
+scheduled render callback able to increment the frame counter. Local control must
+hold that callback too, preserve RAF cancellation, and resume it on release.
+
 ## Session loop (what a round usually does)
 
 Source of truth: `ROUND_SEQUENCE` (returned by `start` as `sequence`) and `MCP_INSTRUCTIONS`

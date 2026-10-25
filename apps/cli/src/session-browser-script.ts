@@ -4,6 +4,7 @@ import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
 import { WORKBENCH_TOOLS_SCRIPT } from './workbench-tools-script.js';
 import { WORKBENCH_BUILD_ERROR_SCRIPT } from './workbench-build-error-script.js';
 import { PLAY_PRESENCE_SCRIPT } from './play-presence-script.js';
+import { LIVE_GAME_SCRIPT } from './live-game-script.js';
 export const SESSION_BROWSER_SCRIPT = String.raw`
 const el = id => document.getElementById(id);
 const panel = el('panel'), draft = el('prompt');
@@ -68,6 +69,7 @@ function render(next) {
     }
   }
   if (sourceId !== state.sourceId) {
+    liveRelease();
     sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
     failedBuild=undefined;el('notice').textContent='';updateBuildError();
@@ -96,6 +98,7 @@ async function deliver() {
 }
 function send(command, clearActionDraft=false) {
   if (!online || !state || pending || sending) return;
+  liveHello();liveSend({type:'live:select'});
   pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&staged().length?{attachments:staged().map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:staged().map(a=>a.id), clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
@@ -112,6 +115,7 @@ el('fullscreen').onclick = () => { const request = document.fullscreenElement ? 
 function viewport() { document.body.dataset.compact=String((window.visualViewport?.height||window.innerHeight)<=520); document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
 window.visualViewport?.addEventListener('resize', viewport); viewport();
 async function apply(force=false,automatic=false) {
+  if (liveControlled || liveOperation) { el('notice').textContent='Take back control before applying an update.'; return; }
   if (loading) return;
   loading = true; el('apply').disabled = true;
   const expectedSource = sourceId;
@@ -147,6 +151,7 @@ async function tick() {
   setTimeout(tick, 1000);
 }
 ${WORKBENCH_PLAYER_SCRIPT}
+${LIVE_GAME_SCRIPT}
 ${WORKBENCH_TOOLS_SCRIPT}
 ${WORKBENCH_NAVIGATION_SCRIPT}
 ${WORKBENCH_ONBOARDING_SCRIPT}

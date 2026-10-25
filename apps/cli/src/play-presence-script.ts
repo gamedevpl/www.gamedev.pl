@@ -6,6 +6,7 @@ function holdPresence() {
   try {
     const socket=new WebSocket(url,presenceProtocols);
     presenceSocket=socket;
+    dispatchEvent(new CustomEvent('play-presence-connected',{detail:socket}));
     socket.onerror=()=>socket.close();
     socket.onclose=()=>{
       if(presenceSocket===socket)presenceSocket=undefined;

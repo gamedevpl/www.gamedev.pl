@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- In local Play, agents can inspect your running game, take control for frame-counted moves, and return it without restarting. Take back control at any time; task cancellation and lost connections release it automatically.
 - Preview: `--brain app-agent` lets Claude Code, Codex or Copilot drive Play with its steps as tools; the browser shows its chat, and deliveries still ask you first (#1974).
 
 ### Internal

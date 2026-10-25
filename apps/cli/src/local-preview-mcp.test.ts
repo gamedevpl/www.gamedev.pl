@@ -66,6 +66,10 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   expect((await f.rpc('initialize')).data.result.capabilities).toEqual({ tools: {} });
   expect((await f.rpc('tools/list')).data.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
     'report_progress',
+    'game_observe',
+    'game_take_control',
+    'game_act',
+    'game_release_control',
     'preview_status',
     'capture_game',
     'capture_status',
