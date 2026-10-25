@@ -73,6 +73,8 @@ export function createPlayJournalTools(deps: CreatorNotesToolsDeps): Record<stri
         : entry.data;
       const item = { ...entry, data };
       const size = Buffer.byteLength(JSON.stringify(item));
+      if (!entries.length && size > 256_000)
+        return toolErr('Projected entry exceeds the response budget. Request fewer or narrower fields.');
       if (entries.length >= q.limit || bytes + size > 256_000) {
         nextAfter = entries.at(-1)?.seq ?? entry.seq;
         break;

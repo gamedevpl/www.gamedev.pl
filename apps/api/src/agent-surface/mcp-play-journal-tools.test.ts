@@ -6,7 +6,7 @@ import { createPlayJournalTools } from './mcp-play-journal-tools.js';
 import type { CreatorNotesToolsDeps } from './mcp-creator-notes-tools.js';
 import type { ToolContext } from './mcp-tool-support.js';
 const now = Date.now();
-async function fixture() {
+async function fixture(data?: Record<string, unknown>) {
   const store = new InMemoryStore();
   await store.createSubmission(12, 'g:creator', 'Test');
   const record = (await store.getSubmission(12)) as SubmissionRecord;
@@ -15,12 +15,12 @@ async function fixture() {
     startedAt: now,
     version: 'build-1',
     droppedEntries: 0,
-    entries: Array.from({ length: 100 }, (_, i) => ({
+    entries: Array.from({ length: data ? 1 : 100 }, (_, i) => ({
       seq: i,
       frame: i,
       timeMs: i * 16,
       kind: 'state',
-      data: { stateStatus: 'unsupported', x: i },
+      data: data ?? { stateStatus: 'unsupported', x: i },
     })),
   });
   const deps: CreatorNotesToolsDeps = {
@@ -74,4 +74,10 @@ it('refuses cross-task, public and stale-managed-session reads', async () => {
       )
     ).isError,
   ).toBe(true);
+});
+
+it('reports oversized projections without advancing past the recorded entry', async () => {
+  const { call } = await fixture({ nested: { leaf: 'x'.repeat(90_000) } });
+  expect((await call({ fields: ['', '/nested', '/nested/leaf'] })).isError).toBe(true);
+  expect((await call()).structuredContent).toMatchObject({ entries: [{ seq: 0 }], nextAfter: null });
 });
