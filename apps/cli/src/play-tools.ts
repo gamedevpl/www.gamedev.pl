@@ -6,6 +6,7 @@ import { formatError } from './errors.js';
 import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { postTurn } from './turn.js';
+import type { CliTelemetry } from './telemetry.js';
 import { runLadderAsync } from './verify.js';
 
 type VerifyRun = NonNullable<Parameters<typeof runLadderAsync>[0]['run']>;
@@ -26,6 +27,9 @@ export type PlayToolsInput = {
   write: (line: string) => void;
   fetch?: typeof fetch;
   pollMs?: number;
+  // Runs delivery in the turn's writer lock; tool calls arrive outside.
+  writer?: <T>(run: () => Promise<T>) => Promise<T>;
+  telemetry?: CliTelemetry;
 };
 
 const CAPTURE_SCHEMA = {
@@ -52,16 +56,19 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
           : 'Delivery is blocked by an active platform agent; finish it in Studio first.',
       );
     // submitGame runs typecheck and check:static itself and refuses a red result.
-    const result = await submitGame({
-      api: input.api,
-      slug: input.slug,
-      dest: input.root,
-      run: input.run,
-      publish,
-      expectedSession: session ?? undefined,
-      abort: input.abort(),
-      onProgress: input.write,
-    });
+    const submit = () =>
+      submitGame({
+        api: input.api,
+        slug: input.slug,
+        dest: input.root,
+        run: input.run,
+        publish,
+        expectedSession: session ?? undefined,
+        abort: input.abort(),
+        onProgress: input.write,
+      });
+    const result = await (input.writer ? input.writer(submit) : submit());
+    if (result.kind === 'delivered') input.telemetry?.record('delivered');
     return formatSubmitLines(result, input.slug).join('\n');
   };
   return [

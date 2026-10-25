@@ -9,6 +9,7 @@ import { createElement } from 'react';
 import { EXIT_GREEN } from '../exit-codes.js';
 import { formatError } from '../errors.js';
 import { handleReplLine, replBanner } from '../repl.js';
+import { getStatus } from '../turn.js';
 import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
@@ -23,6 +24,7 @@ import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 import { bufferTerminalInput } from './input-frame.js';
 import { startPlayOutput } from '../play-output.js';
+import { brainRequested, startPlayBrain, type PlayBrain } from '../play-brain.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -130,6 +132,13 @@ export async function runInkRepl(input: {
       platform: { api: input.api, signedIn: () => Boolean(uid || token) },
     },
   );
+  // GAMEDEVPL_BRAIN=app-agent: a genaicode app-agent takes self-builder messages.
+  let brain: { workshop: Workshop; started?: PlayBrain } | undefined;
+  const closeBrain = async (): Promise<void> => {
+    const closing = brain?.started;
+    brain = undefined;
+    await closing?.close().catch(() => undefined);
+  };
   let stopUpdateNotice: (() => void) | undefined;
   let watch: ReturnType<typeof createRoundWatch> | undefined;
   try {
@@ -318,6 +327,44 @@ export async function runInkRepl(input: {
         }
         continue;
       }
+      if (
+        brainRequested(input.env) &&
+        workshop?.builder === 'self' &&
+        line.trim() &&
+        !/^[!/]/.test(line.trimStart()) &&
+        !session.get().question
+      ) {
+        if (brain && brain.workshop !== workshop) await closeBrain();
+        try {
+          // Published games or a Studio builder switch go to the workshop below.
+          const status = token ? await getStatus(input.api, token) : undefined;
+          const toWorkshop = status?.status === 'published' || (!!status?.builder && status.builder !== 'self');
+          if (!toWorkshop && !brain) {
+            session.setActivity('Starting the Play agent');
+            brain = {
+              workshop,
+              started: await startPlayBrain({
+                api: input.api,
+                ws: workshop,
+                prompt: session.prompt,
+                write: (text) => session.writeLine(text),
+                activity: (text) => session.setActivity(text),
+              }),
+            };
+            session.setActivity('');
+            if (!brain.started) session.writeLine('No installed agent can run Play tools; using the workshop.');
+          }
+          if (!toWorkshop && brain?.started) {
+            await brain.started.turn(line);
+            saveHistory();
+            continue;
+          }
+        } catch (error) {
+          session.setActivity('');
+          session.writeLine(formatError(error));
+          continue;
+        }
+      }
       const turnScope = historyScope;
       let result;
       try {
@@ -409,6 +456,7 @@ export async function runInkRepl(input: {
     stopUpdateNotice?.();
     watch?.stop();
     stopOutput?.();
+    await closeBrain();
     session.close();
     await browser.close();
     unmount();
