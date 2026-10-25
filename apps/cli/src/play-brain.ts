@@ -281,7 +281,8 @@ export async function startPlayBrain(input: {
     const before = localGameFiles(ws.root, ws.slug);
     const presence = local ? localActivity(ws.activityApi, ws.token, name) : undefined;
     ws.onLocalTask?.(name);
-    ws.onSteering?.(async (steer) => agent.send(steer));
+    const steer = async (message: string) => agent.send(message);
+    ws.onSteering?.(steer);
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
     let ok = false;
@@ -307,6 +308,8 @@ export async function startPlayBrain(input: {
           return;
         }
         presence?.phase('verifying');
+        // A steer now would start a run the checks and delivery do not wait for.
+        ws.onSteering?.(undefined);
         const result = await runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: signal });
         if (signal.aborted) return;
         if (result.ok) {
@@ -324,6 +327,7 @@ export async function startPlayBrain(input: {
         repairs++;
         write(`Sending validation errors back to ${name} — repair ${repairs}/${MAX_LOCAL_REPAIRS}. Ctrl+C stops.`);
         presence?.phase('editing');
+        ws.onSteering?.(steer);
         agent.notify(
           [
             `The checks failed at ${result.stage}. Repair the game; keep the requested behavior. Do not weaken checks.`,
