@@ -137,7 +137,8 @@ describe('play brain', () => {
     expect(brainAgent({ adapters: [spec('muse'), spec('codex'), spec('claude')], selectedAgent: 'claude' })).toBe(
       'claude',
     );
-    expect(brainAgent({ adapters: [spec('muse'), spec('codex')], selectedAgent: 'muse' })).toBe('codex');
+    expect(brainAgent({ adapters: [spec('muse'), spec('codex')], selectedAgent: 'muse' })).toBeUndefined();
+    expect(brainAgent({ adapters: [spec('muse'), spec('codex')] })).toBe('codex');
     expect(brainAgent({ adapters: [spec('muse'), spec('gemini')] })).toBeUndefined();
   });
 

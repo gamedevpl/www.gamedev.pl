@@ -43,7 +43,9 @@ export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): st
   const names = ws.adapters
     .map((spec) => spec.name)
     .filter((name) => (BRAIN_AGENTS as readonly string[]).includes(name));
-  return ws.selectedAgent && names.includes(ws.selectedAgent) ? ws.selectedAgent : names[0];
+  // A picked agent that cannot drive Play keeps the workshop.
+  if (ws.selectedAgent) return names.includes(ws.selectedAgent) ? ws.selectedAgent : undefined;
+  return names[0];
 }
 
 type Prompt = (choices: string[], question: string, signal?: AbortSignal) => Promise<string>;
