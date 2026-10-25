@@ -19,7 +19,8 @@ vi.mock('./prepare-workspace.js', () => ({
     ),
 }));
 
-type Step = (task: AgentTask) => Promise<string>;
+// A step returns the agent's final message, or a failed result.
+type Step = (task: AgentTask) => Promise<string | AgentResult>;
 
 function fakeAgent(steps: Step[]): { agent: CodingAgent; tasks: AgentTask[] } {
   const tasks: AgentTask[] = [];
@@ -30,9 +31,10 @@ function fakeAgent(steps: Step[]): { agent: CodingAgent; tasks: AgentTask[] } {
     run(task) {
       tasks.push(task);
       const step = steps.shift() ?? (async () => 'nothing to do');
-      const done = step(task).then((text) => {
+      const done = step(task).then((outcome) => {
+        if (typeof outcome !== 'string') return { text: outcome.error ?? '', result: outcome };
         const result: AgentResult = { status: 'completed', ok: true, exitCode: 0, signal: null, sessionId: 's1' };
-        return { text, result };
+        return { text: outcome, result };
       });
       return {
         result: done.then(({ result }) => result),
@@ -332,5 +334,20 @@ describe('play brain', () => {
     t.ws.abort.current!.abort();
     await expect(starting).rejects.toThrow('setup cancelled');
     expect(t.ws.abort.current).toBeNull();
+  });
+
+  it('keeps a request the agent failed to finish for /retry, without checks or delivery', async () => {
+    const t = setup([
+      async () => {
+        t.edit('export const speed = 2;\n');
+        return { status: 'failed', ok: false, exitCode: 1, signal: null, error: 'quota exhausted' };
+      },
+    ]);
+    const brain = await t.start();
+    await brain.turn('make the snake faster');
+    expect(t.lines).toContain('claude did not finish: quota exhausted. Nothing was delivered.');
+    expect(t.lines).not.toContain('✓ static ladder green');
+    expect(t.picks).toEqual([]);
+    expect(t.ws.failedTask).toMatchObject({ request: 'make the snake faster' });
   });
 });
