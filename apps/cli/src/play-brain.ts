@@ -27,6 +27,7 @@ import { gameSourcePath, gameSourceRoot } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
+import { requestDetail } from './agent-approval.js';
 import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
@@ -152,12 +153,15 @@ export async function startPlayBrain(input: {
             return undefined;
           })
         : Promise.resolve(undefined));
+  // Each creator turn gets the workshop's per-task capture budget.
+  const captureBudget = { used: 0 };
   let captureServer: Promise<(CaptureServer & { close(): Promise<void> }) | undefined> | undefined;
   const capture = () =>
     (captureServer ??= preview().then(async (url) =>
       url
         ? await startLocalPreviewMcp({
             previewUrl: url,
+            captureBudget,
             abort: lifetime.signal,
             write,
             readCapturePlan: () => readGameCapturePlan(ws.root, ws.slug),
@@ -234,7 +238,15 @@ export async function startPlayBrain(input: {
 
   const answer = async (state: AppAgentState, signal: AbortSignal) => {
     for (const request of state.session?.approvals ?? []) {
-      const choice = await input.prompt([ALLOW, DENY], `${name} asks: ${request.summary ?? request.kind}`, signal);
+      const duration =
+        request.scope === 'turn'
+          ? 'Allow these permissions until the current turn ends?'
+          : 'Allow this invocation once?';
+      const question = `${name} requests ${request.kind} permission.\n${requestDetail(request)}\n${duration}`;
+      // As in the workshop: what the creator cannot see in full is never allowed.
+      const fits = question.length <= 7500;
+      if (!fits) write(`${name}: permission request is too large to display completely; denied.`);
+      const choice = fits ? await input.prompt([ALLOW, DENY], question, signal) : DENY;
       try {
         agent.approve(request.id, choice === ALLOW ? 'approve' : 'deny');
       } catch {
@@ -253,6 +265,7 @@ export async function startPlayBrain(input: {
 
   const unlockedTurn = async (text: string): Promise<void> => {
     turnAbort = new AbortController();
+    captureBudget.used = 0;
     const signal = turnAbort.signal;
     ws.abort.current = turnAbort;
     signal.addEventListener('abort', () => agent.stop(), { once: true });
