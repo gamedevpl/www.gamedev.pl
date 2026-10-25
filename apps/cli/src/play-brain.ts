@@ -282,6 +282,8 @@ export async function startPlayBrain(input: {
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
     let ok = false;
+    // Whether the request finished (answered or green); otherwise /retry resumes it, as in the workshop.
+    let finished = false;
     try {
       presence?.phase('editing');
       ws.telemetry?.record('brain_turn', { adapter: name });
@@ -299,13 +301,16 @@ export async function startPlayBrain(input: {
           continue;
         }
         const changed = changedPaths(before, localGameFiles(ws.root, ws.slug)).length > 0;
-        if (!changed) return;
+        if (!changed) {
+          finished = true;
+          return;
+        }
         presence?.phase('verifying');
         const result = await runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: signal });
         if (signal.aborted) return;
         if (result.ok) {
           write('✓ static ladder green');
-          ok = true;
+          ok = finished = true;
           break;
         }
         write(`verify failed at ${result.stage}`);
@@ -344,6 +349,11 @@ export async function startPlayBrain(input: {
       if (ws.abort.current === turnAbort) ws.abort.current = null;
       await presence?.finish(signal.aborted ? 'stopped' : ok ? 'ready' : 'failed');
       if (signal.aborted) write(`${name} stopped — the tree keeps whatever it wrote; /diff to see`);
+      if (finished) delete ws.failedTask;
+      else {
+        ws.failedTask = { request: text, agent: name, before };
+        if (!ws.unattended) write(`Task saved locally — /retry resumes it with ${name}; /diff shows partial edits.`);
+      }
     }
   };
 
