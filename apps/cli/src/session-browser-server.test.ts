@@ -2,7 +2,10 @@ import { startPhonePreview } from './workbench-phone.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { once } from 'node:events';
+import WebSocket from 'ws';
+import { findLiveGame } from './live-game.js';
 import { createSessionController } from './session-controller.js';
 import { startSessionBrowser } from './session-browser-server.js';
 import { savePlayJournal, type PlayJournal } from './workbench-launch.js';
@@ -262,6 +265,27 @@ it('serves only explicitly bound preview snapshots and fences a switched source'
   expect(built.html).toContain('test game');
   expect(built.html).toContain('gdpl-embed');
   expect(built.html).toContain('gdpl-workbench-game');
+  const live = findLiveGame(`http://127.0.0.1:${address.port}/${'a'.repeat(48)}/`)!;
+  const socket = new WebSocket(`${url.origin.replace('http:', 'ws:')}/presence`, { headers });
+  cleanup.push(async () => {
+    socket.terminate();
+  });
+  await once(socket, 'open');
+  socket.send(JSON.stringify({ type: 'live:hello', tabId: randomUUID(), sourceId: built.sourceId, revision }));
+  const recordingId = randomUUID();
+  const ack = once(socket, 'message');
+  socket.send(
+    JSON.stringify({
+      type: 'live:journal',
+      recordingId,
+      startedAt: 1,
+      entries: [{ seq: 1, timeMs: 1, frame: 1, kind: 'state', data: {} }],
+    }),
+  );
+  expect(JSON.parse(String((await ack)[0]))).toMatchObject({ type: 'live:journal-ack', through: 1 });
+  expect(await live.call('reader', 'game_journal_code', { recordingId }, AbortSignal.timeout(2000))).toMatchObject({
+    data: { available: true, revision, content: html, format: 'assembled-html-before-host-bridges' },
+  });
   expect(await fetch(`${url.origin}/preview/status`, { headers }).then((r) => r.json())).toMatchObject({
     canRetry: false,
   });
