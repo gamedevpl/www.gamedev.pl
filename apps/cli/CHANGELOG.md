@@ -7,8 +7,16 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- A game mounted before its iframe has a size no longer keeps an invisible zero-size canvas; resizing refits it automatically (#1976).
+- Live Play resolves key aliases and codes, attributes control cleanup correctly, keeps reclaim controls clear of drawers and editor views, and permits repeated release after reclaim. A full journal stops accepting new recording metadata (#1976).
+
 ### Added
 
+- Journal tools report missing snapshots and requested fields, with guidance for agents to instrument the game, verify a new build and reproduce without rewriting old history (#1976).
+- Local Play keeps a queryable session journal: agents can search earlier inputs, errors and saved game states, sample any recorded frame range, and revisit history across tasks and build changes (#1976).
+- In local Play, agents can inspect your running game, take control for frame-counted moves, and return it without restarting. Take back control at any time; task cancellation and lost connections release it automatically (#1976).
 - Preview: `--brain app-agent` lets Claude Code, Codex or Copilot drive Play with its steps as tools; the browser shows its chat, and deliveries still ask you first (#1974).
 
 ### Internal

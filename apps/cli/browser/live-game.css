@@ -1,0 +1,40 @@
+#agent-control {
+  position: fixed;
+  z-index: 950;
+  left: 50%;
+  bottom: calc(100vh - var(--height) + var(--notice-space, 0px) + max(12px, env(safe-area-inset-bottom)));
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 8px 12px;
+  border: 1px solid var(--turquoise);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 4px 24px #0008;
+}
+body:has(#agent-control:not([hidden])) :is(#panel, #workbench-tools) {
+  height: calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px) - var(--live-control-space, 0px));
+}
+body:has(#agent-control:not([hidden])):has(#code-panel[data-view^='editor-chat']:not([hidden])) #panel {
+  height: calc(var(--code-chat-height) - var(--live-control-space, 0px));
+}
+#agent-reclaim {
+  background: var(--turquoise);
+  color: #06251e;
+}
+
+body:has(#agent-control:not([hidden])):has(#code-panel[data-view='editor-chat-preview']:not([hidden])) #panel {
+  height: calc(
+    var(--code-chat-height) - max(0px, calc(var(--live-control-space, 0px) + 14px - var(--code-preview-height)))
+  );
+}
+
+body:has(#code-panel[data-view^='editor']:not([hidden])) #agent-control {
+  bottom: calc(100vh - var(--height) + max(12px, env(safe-area-inset-bottom)));
+}

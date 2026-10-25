@@ -9,6 +9,8 @@ export default defineConfig({
       'src/play-maximized-code.test.ts',
       'src/play-drafts-code.test.ts',
       'src/play-resize-code.test.ts',
+      'src/play-live-game.test.ts',
+      'src/play-live-journal.test.ts',
     ],
     testTimeout: 90_000,
     hookTimeout: 90_000,

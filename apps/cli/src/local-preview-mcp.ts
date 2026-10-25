@@ -1,4 +1,6 @@
 import { progressTool, progressReporter } from './local-progress.js';
+import { liveGameTools } from './live-game-tools.js';
+import type { LiveToolName } from './live-game-protocol.js';
 import type { ApproveTool } from './agent-approval.js';
 import { resolvePermissions, type AgentTask } from 'genaicode/agents';
 import { claudeLocalApproval } from './claude-local-approval.js';
@@ -111,6 +113,7 @@ export async function startLocalPreviewMcp(input: {
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
+  const live = liveGameTools(() => input.previewUrl);
   const sandbox = resolvePermissions(input.sandbox?.permissions).sandbox;
   const approval = input.onApproval
     ? claudeLocalApproval(input.onApproval, sandbox ? { sandbox, cwd: input.sandbox!.cwd } : {}, input.write)
@@ -159,6 +162,7 @@ export async function startLocalPreviewMcp(input: {
     }
   }
   async function call(name: unknown, raw: unknown, requestSignal: AbortSignal) {
+    if (live.tools.some((tool) => tool.name === name)) return live.call(name as LiveToolName, raw ?? {}, requestSignal);
     if (approval && name === approval.name) return approval.call(raw, requestSignal);
     const args = raw ?? {};
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid arguments.');
@@ -223,6 +227,7 @@ export async function startLocalPreviewMcp(input: {
   }
   const availableTools = [
     progressTool,
+    ...(source ? live.tools : []),
     ...(source ? TOOLS : []),
     ...(approval
       ? [{ name: approval.name, description: approval.description, inputSchema: approval.inputSchema }]
@@ -337,6 +342,7 @@ export async function startLocalPreviewMcp(input: {
   });
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const stop = (): void => {
+    live.close();
     controller.abort();
     server.closeAllConnections();
     server.close();

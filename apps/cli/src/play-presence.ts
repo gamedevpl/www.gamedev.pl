@@ -70,8 +70,9 @@ export function attachPlayPresence(
   server: Server,
   presence: Pick<ReturnType<typeof playPresence>, 'connect'>,
   authorize: (request: IncomingMessage) => boolean,
+  maxPayload = 1024,
 ) {
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
+  const sockets = new WebSocketServer({ noServer: true, maxPayload });
   server.on('upgrade', (request, socket, head) => {
     if (!authorize(request)) {
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');

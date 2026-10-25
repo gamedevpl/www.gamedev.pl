@@ -25,7 +25,7 @@ export const WORKBENCH_GAME_BRIDGE = String.raw`
     let data, error;
     try {
       const h=harness();
-      if(m.type==='capabilities') data={ready:h?!!h.ready:document.readyState==='complete',state:typeof h?.snapshotState==='function'&&typeof h?.restoreState==='function',validate:typeof h?.validateState==='function',safe:typeof h?.canHotReload==='function'&&h.canHotReload()===true,record:!!canvas()?.captureStream&&typeof MediaRecorder==='function'};
+      if(m.type==='capabilities') data={ready:h?!!h.ready:document.readyState==='complete',control:typeof h?.step==='function',state:typeof h?.snapshotState==='function'&&typeof h?.restoreState==='function',validate:typeof h?.validateState==='function',safe:typeof h?.canHotReload==='function'&&h.canHotReload()===true,record:!!canvas()?.captureStream&&typeof MediaRecorder==='function'};
       else if(m.type==='snapshot') { data=h?.snapshotState?.(); if(JSON.stringify(data??null).length>1000000)throw Error('State too large'); }
       else if(m.type==='restore') { if(typeof h?.restoreState!=='function')throw Error('State restoration unsupported'); if(typeof h.validateState==='function'&&h.validateState(m.data)!==true)throw Error('State incompatible with this build'); data=h.restoreState(m.data)===true; }
       else if(m.type==='trace') data={format:'gamedevpl-diagnostics-v1',replayable:false,events:[...events],metadata:h?.metadata??null,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio}};

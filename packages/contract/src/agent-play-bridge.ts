@@ -1,10 +1,9 @@
 // Agent play executor; see the website's docs/agent-play-mode.md.
 
-// Served only to reviewers, so other documents lack it.
-
-// Takes the player bridge's helpers off window.__GDPL_BRIDGE__.
+// Reviewer pages and local Play opt into this executor.
 
 import { AGENT_PLAY_BRIDGE_SURFACE } from './agent-play-bridge-surface.js';
+import { AGENT_PLAY_LEASE } from './agent-play-lease.js';
 
 export const AGENT_PLAY_BRIDGE =
   `(function(){
@@ -36,6 +35,7 @@ export const AGENT_PLAY_BRIDGE =
   // that hole is documented rather than pretended away.
 ` +
   AGENT_PLAY_BRIDGE_SURFACE +
+  AGENT_PLAY_LEASE +
   `
   // Set at assemble time once the games repo carries AGENT.json's hiddenFields into the
   // document; null until then, and the host renders that as a warning.
@@ -48,9 +48,6 @@ export const AGENT_PLAY_BRIDGE =
     return out;
   }
   function agentGoal(){
-    // The generated document carries How-to-play as a dt/dd legend; the goal is its
-    // first row and the hint is a paragraph. Both are hidden by the host's chrome CSS
-    // but still in the DOM, which is the only place the page can read them from.
     var rows=legendRows();
     return {rows:rows,kit:kitRows(),hint:text(document.querySelector('.hint'))};
   }
@@ -111,20 +108,19 @@ export const AGENT_PLAY_BRIDGE =
     var dt=1/agentFps;
     for(var i=0;i<count;i++){
       if(agentTilt&&typeof h.injectSensing==='function'){try{h.injectSensing({tilt:agentTilt});}catch(err){}}
-      try{h.step(dt,{present:true});}catch(err){agentNote('error',AGENT_STR((err&&err.message)||err));break;}
+      try{h.step(dt,{present:true});}catch(err){agentNote('error',AGENT_STR((err&&err.message)||err));if(agentLeased)throw err;break;}
     }
   }
   var AGENT_KEY_ALIASES={left:{key:'ArrowLeft',code:'ArrowLeft'},right:{key:'ArrowRight',code:'ArrowRight'},
     up:{key:'ArrowUp',code:'ArrowUp'},down:{key:'ArrowDown',code:'ArrowDown'},space:{key:' ',code:'Space'},
-    enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'}};
+    enter:{key:'Enter',code:'Enter'},escape:{key:'Escape',code:'Escape'},' ':{key:' ',code:'Space'}};
   function agentResolveKey(token){
-    var raw=AGENT_STR(token==null?'':token);
-    var lower=raw.toLowerCase();
+    var raw=AGENT_STR(token==null?'':token),lower=raw.toLowerCase();
     if(Object.prototype.hasOwnProperty.call(AGENT_KEY_ALIASES,lower))return AGENT_KEY_ALIASES[lower];
-    if(raw.length===1)return {key:raw.toLowerCase(),code:'Key'+raw.toUpperCase()};
+    if(/^[a-z]$/i.test(raw))return {key:raw,code:'Key'+raw.toUpperCase()};if(/^[0-9]$/.test(raw))return {key:raw,code:'Digit'+raw};
     return {key:raw,code:raw};
   }
-  // Held input we synthesized, so closing the mode cannot hand a human a stuck key.
+  // Track synthetic input so release cannot leave keys stuck.
   var agentHeldKeys=[],agentPointerIsDown=false,agentPointerAt={x:0,y:0};
   function agentNoteHeld(type,key,code){
     var i;
@@ -133,7 +129,7 @@ export const AGENT_PLAY_BRIDGE =
       agentPut(agentHeldKeys,{key:key,code:code});
       return;
     }
-    // Rebuilt, not spliced: a key left held is an input the reviewer cannot clear.
+    // Rebuild held keys; game code may replace splice.
     var keep=[];
     for(i=0;i<agentHeldKeys.length;i++)if(agentHeldKeys[i].key!==key)agentPut(keep,agentHeldKeys[i]);
     agentHeldKeys=keep;
@@ -149,6 +145,7 @@ export const AGENT_PLAY_BRIDGE =
     agentTilt=null;
   }
   function agentKey(type,key,code){
+    var resolved=agentResolveKey(key);key=resolved.key;code=code||resolved.code;
     agentNoteHeld(type,key,code);
     var target=agentCanvas()||window,ev;
     try{ev=new KeyboardEvent(type,{key:key,code:code,bubbles:true,cancelable:true});}
@@ -223,9 +220,10 @@ export const AGENT_PLAY_BRIDGE =
     agentState('hello');
   }
   function agentDisable(){
+    agentLeaseEnd();
     if(!agentOn)return;
     agentOn=false;
-    agentReleaseInput();
+    agentReleaseInput();agentLeaseReleased();
     agentSetStepped(false);
   }
   function agentRun(command,id){
@@ -481,9 +479,11 @@ export const AGENT_PLAY_BRIDGE =
   }
 
   function handleAgentMessage(m){
-    if(m.type==='agent:enable'){agentEnable(m.fps);return;}
+    if(m.type==='agent:observe'){agentState('observe',m.id);return;}
+    if(m.type==='agent:heartbeat'){agentHeartbeat();return;}
+    if(m.type==='agent:enable'){agentEnable(m.fps);if(m.lease)agentLeaseStart();if(m.id)agentState('control',m.id);return;}
     if(m.type==='agent:policy'){if(!agentOn)agentEnable();agentRunPolicy(AGENT_STR(m.code||''),m.budget);return;}
-    if(m.type==='agent:disable'){agentDisable();return;}
+    if(m.type==='agent:disable'){agentDisable();if(m.id)agentState('released',m.id);return;}
     if(m.type!=='agent:command')return;
     if(!agentOn){agentEnable();return;}
     try{agentRun(m.command||{},m.id);}

@@ -65,6 +65,12 @@ export function PlayShell() {
         <Icon name="menu" />
         <span>Show controls</span>
       </button>
+      <div id="agent-control" hidden role="status">
+        <span>Agent controls this game</span>
+        <button id="agent-reclaim" type="button">
+          Take back control
+        </button>
+      </div>
       <div id="preview-feedback">
         <BuildError />
         <pre id="notice" role="status" />
@@ -201,6 +207,9 @@ export function PlayShell() {
             <div id="prompt-history" />
           </section>
           <section id="details-section" hidden>
+            <button id="agent-select" type="button">
+              Use this game tab for the agent
+            </button>
             <label htmlFor="policy">When a new build is ready</label>
             <select id="policy">
               <option value="ask">Ask before update</option>

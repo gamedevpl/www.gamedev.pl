@@ -403,7 +403,7 @@ const BRIDGE = `(function(){
   function fitGameCanvas(){
     var canvas=el('game');
     if(!canvas||!canvas.width||!canvas.height)return;
-    var bounds=document.body.getBoundingClientRect();
+    var bounds=document.body.getBoundingClientRect();if(bounds.width<=0||bounds.height<=0)return;
     canvas.style.setProperty('--gdpl-canvas-ratio',String(canvas.width/canvas.height));
     canvas.style.setProperty('--gdpl-embed-width',String(bounds.width)+'px');
     canvas.style.setProperty('--gdpl-embed-height',String(bounds.height)+'px');
@@ -414,7 +414,7 @@ const BRIDGE = `(function(){
   }
   addEventListener('resize',scheduleGameCanvasFit);
   function init(){
-    scheduleGameCanvasFit();
+    scheduleGameCanvasFit();if(typeof ResizeObserver!=='undefined')new ResizeObserver(fitGameCanvas).observe(document.body);
     // Bleed games reshape the bitmap after their own resize debounce; follow it.
     var g=el('game');
     if(g&&'MutationObserver'in window){new MutationObserver(fitGameCanvas).observe(g,{attributes:true,attributeFilter:['width','height']});}

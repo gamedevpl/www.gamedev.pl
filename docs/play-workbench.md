@@ -247,6 +247,142 @@ an EditorKit persist-to-source editor.
 
 ## Evidence
 
+### Let an agent inspect and control this play session
+
+Local delegated Claude, Codex and Copilot tasks receive `game_observe`,
+`game_take_control`, `game_act` and `game_release_control` through their existing
+task-scoped MCP connection. The optional `--brain app-agent` path exposes the same
+tools. No additional model, browser installation or platform round is needed to
+observe. Ask the agent to look at the problem, then ask it to take control when
+you want it to reproduce the behavior.
+
+`game_observe` reads the game already running in your Play tab: the rendered build
+revision, current frame, GameKit snapshot/observation, UI targets, recent diagnostics
+and a screenshot. It does not pause or restart the game. While you play, these reads
+are not an atomic recording; take control for frame-stable observations. The canvas
+composite may omit DOM overlays. Missing game-authored observations remain unknown.
+
+Sending a message selects that tab. With several tabs and no selection, the tools
+require a tab ID from their available-tab list; **Session details → Use this game
+tab for the agent** selects explicitly. Once control is acquired, subsequent calls
+remain pinned to that task, tab and shown build. A source change, reload or tab close
+invalidates it. A paired phone and a raw `--preview` window are not controllable.
+
+Taking control pauses real-time play and blocks keyboard and pointer input in the game frame.
+`game_act` supports step, press, tap, click, move and drag, up to 32 actions and 600
+frames per call (300 per action). It accepts no JavaScript, URLs or paths. Existing
+`capture_game` plans still start a separate fresh game; they never take over this tab.
+GameKit frame stepping is required for control; `.persist()` is not required.
+
+The visible **Take back control** button works even with Play controls hidden.
+It immediately releases input and revokes control for the current task. The agent
+must wait for a new creator request before taking control again. Normal release,
+task completion/cancellation, disconnect and expired heartbeats release input and
+resume play. The frame has its own five-second lease watchdog. Build replacements
+wait until control and in-flight observations finish. No action is automatically
+replayed after an uncertain result; the agent must observe again.
+
+The connection reuses Play's authenticated loopback presence socket. The CLI routes
+it only to MCP tasks for the same local preview, correlates replies with the exact
+tab and request, bounds message sizes and serializes operations. Game output is
+untrusted data. Neither MCP credentials nor source files enter the iframe, whose
+sandbox remains `allow-scripts allow-pointer-lock` without `allow-same-origin`.
+
+### Query the recorded session journal
+
+Local Play records a journal automatically, before a delegated task starts. The
+CLI keeps compressed, indexed batches in a private temporary directory until the
+Play process closes. Old recordings remain queryable across agent tasks, build
+replacements and tab closure. Each iframe instance has a separate `recordingId`,
+with its tab, source and build revision; frame numbers may reset within an instance,
+so the monotonic `seq` is the exact entry identifier. `timeMs` is elapsed time
+since recording began; `startedAt` is its wall-clock Unix timestamp in milliseconds.
+
+`game_journal` lists recordings, retained sequence ranges, collection times, reported
+gaps and storage status. `game_journal_read` reads any retained interval without
+pausing, taking control, or modifying the game. There is no per-task query quota.
+Queries support frame/time ranges, event kinds, field predicates, state sampling
+with `everyFrames`, and field projection using JSON pointers into `entry.data`.
+
+For example, after finding an input or error at frame 450:
+
+```json
+{
+  "recordingId": "<ID from game_journal>",
+  "fromFrame": 420,
+  "toFrame": 480,
+  "kinds": ["state"],
+  "everyFrames": 10,
+  "fields": ["/metadata", "/persistedState", "/heldKeys"]
+}
+```
+
+Then remove `everyFrames` to inspect every recorded state in a narrower range.
+To search health changes, use a predicate such as
+`where: {path: '/metadata/health', op: 'lt', value: 20}`. To revisit an exact
+entry, use `after: seq - 1, through: seq`. Preserve returned `through`, filters
+and `nextAfter` while paging: new live entries cannot change that query's results.
+Continue until `nextAfter` is null, including when a page has no matching entries.
+Missing projected fields are listed explicitly in `missingFields`.
+
+Both tools also return an `instrumentation` report and `instrumentationHelp`.
+The report distinguishes an absent/not-ready harness, observed state samples,
+unsupported or unavailable snapshots, and snapshot-provider errors. It includes
+snapshot-status counts and the latest evidence sequence; snapshot availability
+does not imply that every useful debugging field exists. Capture gaps remain a
+separate coverage concern rather than proof of missing game instrumentation.
+
+For requested fields and predicates, `fieldAvailability` counts present/missing
+values among examined entries in the page, before the predicate is applied. This
+distinguishes “no collisions matched” from “collision data is absent from these samples”.
+Zero present and missing counts mean no evidence in that page, not missing
+instrumentation; continue pagination or choose an appropriate range/event kind.
+
+An agent can then inspect the game source and add the observations needed for the
+debugging task through its existing editing tools. For GameKit, consult the
+installed Kit's observation and `.persist(...)` contracts. Keep serialization
+synchronous, small and free of side effects; fix a broken provider instead of
+adding another one. Verify the change, release control, apply the new build through
+the normal Play workflow, reproduce, and query its new recording/revision. These
+MCP tools remain read-only, and adding instrumentation cannot backfill old history.
+
+Recorded data includes keyboard edges, codes, modifiers and held keys; pointer
+edges/movement and wheel input; player/agent/synthetic attribution; console messages,
+JavaScript errors and rejection stacks; GameKit signals/audio events; lifecycle
+and agent action IDs. Coordinates are relative to the iframe viewport. These are
+DOM events, not an authoritative replay of what game code consumed. Gamepad and
+sensor polling are not recorded. Audio entries may update coalesced counts.
+Cleanup input carries `cleanup: true` and belongs to the owner whose held input
+is being released. The takeover marker follows player-input cleanup; the release
+marker follows agent-input cleanup, including watchdog expiry. Releasing control
+again after reclaim is a successful no-op and cannot affect another task's lease.
+
+State sampling runs after rendered frames and manual harness steps. It captures
+metadata, game observations and `snapshotState()` when available, with a
+`stateStatus` distinguishing available, unavailable, unsupported and failed
+snapshots. This is the game's serializable state, not the JavaScript heap. It
+does not record historical screenshots or restore/rewind the live game.
+
+Collection aims for every frame. Serialization errors, states above 120,000
+characters, buffer overflow and missing frames produce explicit gap entries.
+A sample taking over 4 ms triggers a documented 100 ms cooldown. The iframe keeps
+at most approximately 1 million characters / 4,096 queued entries, resending
+unacknowledged batches every 250 ms; the CLI acknowledges only written batches.
+An abrupt close can lose the unacknowledged tail. Check coverage before drawing
+conclusions, and do not infer absent values or transitions from a gap.
+
+Storage stops explicitly at 512 MiB compressed or 100,000 batches, preserving the
+earlier history; up to 256 instances fit in one session. Queries return at most
+200 entries / 512 KiB of entry payload per page and bound each scan to 20,000 entries / 16 MiB of
+decoded batches. Pagination exposes the remaining range rather than truncating it
+silently. Query arguments accept no JavaScript, file paths or external URLs.
+
+This affects creator iteration/return (measurement questions 4–5). Existing local
+delegation events still count tasks; live-control success and usage have no aggregate
+query yet. Journal records are stored locally; selected records are returned to
+the requesting agent. Screenshots, inputs, observations and tab IDs are not added
+to platform telemetry. This is an explicit measurement gap.
+
 Upload/paste images, attach a screenshot, export recent diagnostic input/error events,
 or enable canvas recording before saving a recent clip. Media is stored in private local
 files until the session ends. A request can carry eight attachments, each up to 16 MB;

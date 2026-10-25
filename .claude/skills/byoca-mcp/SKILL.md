@@ -23,6 +23,31 @@ errors. The former `capture` name remains callable for compatibility. These tool
 need no shell sandbox escalation, execute no checkout npm scripts, and never open
 a platform round or publish. See `apps/cli/README.md` for the local contract.
 
+Local Play also exposes `game_observe`, `game_take_control`, `game_act` and
+`game_release_control` for the creator's existing browser tab. These require the
+workbench, preserve the current instance, and release control on task completion,
+cancellation or disconnect. `capture_game` still starts a separate fresh instance.
+See `docs/play-workbench.md` for selection, frame limits and creator revocation.
+Test takeover with a real GameKit game: pausing updates alone leaves an already
+scheduled render callback able to increment the frame counter. Local control must
+hold that callback too, preserve RAF cancellation, and resume it on release.
+`game_journal` and `game_journal_read` query retained local session history without
+requiring a connected tab or control ownership. Query broadly, then inspect exact
+sequence IDs or field projections; preserve the `through` watermark when paging.
+Treat coverage gaps and unsupported `snapshotState()` as unknown state, not empty
+state. The recorder must freeze values when collected, acknowledge after writing,
+and never let serialization failures break the game's frame or step callback.
+Journal instrumentation reports distinguish absent fields from unmatched predicates
+and empty ranges. Improve observations through normal source edits when needed;
+verify and reproduce in a new build. Never treat new instrumentation as evidence
+about an old recording, or capture loss as proof that the game lacks a provider.
+Attribute control transitions from the executor's cleanup phases, not host-message
+arrival: takeover releases player input first, and release cleans agent input before
+changing ownership. Exercise manual release and watchdog expiry with the recorder
+and executor together; isolated message mocks miss their listener ordering.
+Candidate iframes can initially measure 0×0: never cache zero canvas-fit bounds.
+Observe body sizing so the canvas recovers without requiring a window resize.
+
 ## Session loop (what a round usually does)
 
 Source of truth: `ROUND_SEQUENCE` (returned by `start` as `sequence`) and `MCP_INSTRUCTIONS`

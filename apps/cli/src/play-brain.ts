@@ -33,6 +33,8 @@ import { requestDetail } from './agent-approval.js';
 import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
+import { liveGameAppTools } from './live-game-app-tools.js';
+import { LIVE_GAME_INSTRUCTIONS } from './live-game-protocol.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
@@ -66,6 +68,7 @@ function instructions(ws: Workshop): string {
     'After your edits call `game_verify` and fix what it reports. Use `game_capture` to look at visual changes before you say they work.',
     'When the checks are green and the game changed, call `game_submit` to deliver a preview; the creator approves it. Call `game_publish` only when the creator asked to publish.',
     'Questions about the game need no round: answer them from the files.',
+    LIVE_GAME_INSTRUCTIONS,
   ].join('\n');
 }
 
@@ -177,6 +180,7 @@ export async function startPlayBrain(input: {
     ));
   // The running turn's signal; Ctrl+C stops the agent and tool.
   let turnAbort = new AbortController();
+  const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]));
   // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
   const permission = () => taskPermissionMode(spec, ws.permissionMode);
@@ -194,19 +198,22 @@ export async function startPlayBrain(input: {
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: instructions(ws),
-    tools: playAppTools({
-      api: input.api,
-      telemetry: ws.telemetry,
-      token: ws.token,
-      slug: ws.slug,
-      root: ws.root,
-      run: ws.run,
-      abort: () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
-      preview,
-      capture,
-      write,
-      writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
-    }),
+    tools: [
+      ...live.tools,
+      ...playAppTools({
+        api: input.api,
+        telemetry: ws.telemetry,
+        token: ws.token,
+        slug: ws.slug,
+        root: ws.root,
+        run: ws.run,
+        abort: () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
+        preview,
+        capture,
+        write,
+        writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
+      }),
+    ],
     dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: false, only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
@@ -300,7 +307,14 @@ export async function startPlayBrain(input: {
     captureBudget.used = 0;
     const signal = turnAbort.signal;
     ws.abort.current = turnAbort;
-    signal.addEventListener('abort', () => agent.stop(), { once: true });
+    signal.addEventListener(
+      'abort',
+      () => {
+        live.close();
+        agent.stop();
+      },
+      { once: true },
+    );
     const before = localGameFiles(ws.root, ws.slug);
     const presence = local ? localActivity(ws.activityApi, ws.token, name) : undefined;
     ws.onLocalTask?.(name);
@@ -381,6 +395,7 @@ export async function startPlayBrain(input: {
         );
       if (!proposed) await offerSubmit({ api: input.api, ws, write });
     } finally {
+      live.close();
       ws.onSteering?.(undefined);
       ws.onLocalTask?.('');
       // Keep the writer lock until the stopped agent and actions exit.
@@ -412,6 +427,7 @@ export async function startPlayBrain(input: {
       });
     },
     async close() {
+      live.close();
       lifetime.abort();
       unmirror();
       bound.handle?.close();
