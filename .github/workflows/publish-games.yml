@@ -53,14 +53,13 @@ on:
         required: false
         default: false
 
-# Two publishes racing would interleave their pointer writes. Cancel the older
-# run instead of queuing: the games repo can dispatch many times in a merge
-# train, and each bake is a full catalog assemble — only the newest SHA is
-# worth publishing. Snapshot prefixes are immutable, so a cancelled mid-bake
-# leaves no half-written pointer (the pointer write is the last step).
+# Two publishes racing would interleave their pointer writes. Queue instead of
+# cancelling: long-running full gates otherwise enter a starvation loop where
+# every new merge cancels an in-progress publish before it can advance the
+# snapshot pointer.
 concurrency:
   group: games-snapshot-publish
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
