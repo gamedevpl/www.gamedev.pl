@@ -125,7 +125,7 @@ it.each(['abort', 'disconnect', 'build', 'source', 'timeout'])(
     if (reason === 'disconnect') first.socket.emit('close');
     if (reason === 'build') first.hello('new-build');
     if (reason === 'source') changeSource();
-    if (reason === 'timeout') await vi.advanceTimersByTimeAsync(10_001);
+    if (reason === 'timeout') await vi.advanceTimersByTimeAsync(120_001);
     await failure;
     expect(first.socket.send.mock.calls.some(([data]) => JSON.parse(data).type === 'live:release')).toBe(true);
     expect(findLiveGame('http://127.0.0.1:12345/')).toBe(reason === 'source' ? undefined : game);

@@ -15,6 +15,14 @@ export const AGENT_PLAY_LEASE = `
       if(Object.prototype.hasOwnProperty.call(agentRafIds,id)){agentCaf.call(window,agentRafIds[id]);delete agentRafIds[id];}
     };
   }
+  function agentDisable(){
+    agentCancelCommand();
+    agentLeaseEnd();
+    if(!agentOn)return;
+    agentOn=false;
+    agentReleaseInput();agentLeaseReleased();
+    agentSetStepped(false);
+  }
   function agentHeartbeat(){
     clearTimeout(agentLeaseTimer);
     if(agentLeased)agentLeaseTimer=setTimeout(function(){agentDisable();agentState('lease expired');},5000);
