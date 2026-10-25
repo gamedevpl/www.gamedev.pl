@@ -11,7 +11,7 @@ type Snapshot = {
   diffs?: SessionDiffInfo[];
   readDiff?: (id: number) => Promise<SessionDiff>;
   workspace?: { mode: string };
-  // Set while the Play agent (GAMEDEVPL_BRAIN=app-agent) takes the creator's messages.
+  // Set while the Play agent (GAMEDEVPL_BRAIN=app-agent) takes messages.
   agent?: AppAgentState;
 };
 
@@ -106,7 +106,7 @@ function sessionMessages(lines: string[], diffs: SessionDiffInfo[]): SessionMess
   return messages;
 }
 
-// Session lines the agent chat does not already show: slash commands, checks, delivery.
+// Session lines the agent chat lacks: slash commands, checks, delivery.
 function playLines(lines: string[], state: AppAgentState): string[] {
   const turns = [...state.history, ...(state.session?.turns ?? [])];
   const prompts = new Set(turns.map((turn) => userText(turn.prompt).trim()));
@@ -187,8 +187,7 @@ function OutputBlock({
   );
 }
 
-// The Play agent's chat. Messages still go through Play's own composer (attachments, slash commands,
-// the terminal's queue); the chat answers its cards and prompts itself.
+// The Play agent's chat; messages still go through Play's composer.
 function AgentConversation({
   state,
   log,

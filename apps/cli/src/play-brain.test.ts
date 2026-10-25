@@ -11,7 +11,7 @@ import { writeGameFiles } from './checkout.js';
 import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
 import type { Workshop } from './workshop.js';
 
-// Setup waits until it is cancelled; only a local (non-runAdapter) workshop reaches it.
+// Setup waits for cancel; only local (non-runAdapter) workshops reach it.
 vi.mock('./prepare-workspace.js', () => ({
   prepareWorkspace: (input: { abort: AbortSignal }) =>
     new Promise((_, reject) =>
@@ -266,7 +266,7 @@ describe('play brain', () => {
     const t = setup([
       async (task) => await callTool(task, 'game_submit', { approval_summary: 'Deliver snake' }),
       async (task) => {
-        // The fake platform refuses the upload; the lock let submit get that far.
+        // The fake platform refuses the upload; the lock let submit through.
         expect(task.prompt).toContain('Action #1 failed: unexpected /api/');
         expect(task.prompt).not.toContain('Another CLI operation owns this checkout');
         return 'Delivery failed.';
