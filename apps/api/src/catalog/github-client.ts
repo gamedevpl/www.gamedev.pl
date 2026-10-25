@@ -5,6 +5,7 @@ import {
   CATALOG_ORIENTATIONS,
   MAX_MULTIPLAYER_SLOTS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
+  parseCatalogLinks,
   type CatalogEditor,
   type CatalogEntry,
   type CatalogMedia,
@@ -1593,6 +1594,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
         ? { touch: touch as CatalogGameTouch }
         : {}),
       ...(effort !== undefined ? { effort } : {}),
+      ...withLinks(parseCatalogLinks(candidate.links)),
     });
   }
 
@@ -1702,7 +1704,12 @@ export function catalogEntryFromSpec(
     editor: parseEditor(frontmatter.editor),
     orientation: parseOrientation(frontmatter),
     submittedBy: parseSubmittedBy(frontmatter.submitted_by),
+    ...withLinks(parseCatalogLinks({ youtube: frontmatter.youtube, x: frontmatter.x, source: frontmatter.source })),
   };
+}
+
+function withLinks(links: CatalogEntry['links']): Pick<CatalogEntry, 'links'> {
+  return links ? { links } : {};
 }
 
 export { parseSpecTitle };

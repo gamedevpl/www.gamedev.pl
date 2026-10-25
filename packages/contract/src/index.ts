@@ -10,6 +10,7 @@ export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } f
 export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './builder-availability.js';
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
 export { CATALOG_PUBLISHED_STATUS, isListedEntry, isPublishedEntry } from './catalog-entry.js';
+export { parseCatalogLinks, type CatalogLinks } from './catalog-links.js';
 export type {
   CatalogEntry,
   CatalogEditor,

@@ -1,3 +1,4 @@
+import type { CatalogLinks } from './catalog-links.js';
 import type { CatalogOrientation, CatalogTouch } from './catalog-vocab.js';
 
 // One screenshot listed in a game's SPEC media block.
@@ -73,6 +74,7 @@ export interface CatalogEntry {
   creatorHandle?: string | null;
   // Handles whose proposals were merged into the live version.
   contributorHandles?: string[];
+  links?: CatalogLinks | null;
   // 0..1 bake-time development effort; absent when unknown.
   effort?: number;
   // Authored catalog hook; generated enrichment fills missing languages.

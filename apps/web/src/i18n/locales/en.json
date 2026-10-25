@@ -258,6 +258,7 @@
     "aboutGame": "About this game",
     "videos": "Videos on YouTube",
     "followX": "Follow on X",
+    "source": "Source code",
     "agent": {
       "title": "Agent mode",
       "menu": "Agent mode",
@@ -2080,6 +2081,7 @@
     "playPreview": "Play {{title}} in theater mode",
     "openTheater": "Play in theater",
     "videos": "Clips and devlog:",
+    "source": "Source code",
     "screenshots": "Screenshots",
     "viewScreenshot": "View screenshot {{number}}",
     "breadcrumbAria": "Game location"
