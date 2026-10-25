@@ -8,6 +8,8 @@ import { handleReplLine } from '../repl.js';
 import { render } from 'ink';
 import { PassThrough } from 'node:stream';
 import type { TuiSession } from './session.js';
+import { startPlayBrain } from '../play-brain.js';
+import type { Workshop } from '../workshop.js';
 
 vi.mock('ink', () => ({ render: vi.fn(() => ({ unmount: vi.fn() })) }));
 vi.mock('./app.js', () => ({ ReplApp: () => null }));
@@ -17,6 +19,7 @@ vi.mock('../telemetry.js', () => ({ createCliTelemetry: () => ({ record: vi.fn()
 vi.mock('../update-notice.js', () => ({ startUpdateNotice: () => vi.fn() }));
 vi.mock('./round-watch.js', () => ({ createRoundWatch: () => ({ poke: vi.fn(), stop: vi.fn() }) }));
 vi.mock('../repl.js', () => ({ handleReplLine: vi.fn(), replBanner: () => '' }));
+vi.mock('../play-brain.js', () => ({ brainRequested: () => true, startPlayBrain: vi.fn() }));
 vi.mock('./session.js', async (original) => {
   const actual = await original<typeof import('./session.js')>();
   return {
@@ -126,4 +129,23 @@ it('paints the workspace and overlaps account and Studio reads before accepting 
     await run;
     stdin.destroy();
   }
+});
+
+it('sends a request for a published game to the improvement round instead of the Play agent', async () => {
+  const workshop = { slug: 'snake', root: '/tmp/snake', token: 'live', builder: 'self' } as Workshop;
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'snake', workshop })
+    .mockResolvedValueOnce({ next: 'quit' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live' ? { status: 'published', slug: 'snake' } : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout snake',
+  });
+  expect(startPlayBrain).not.toHaveBeenCalled();
+  expect(vi.mocked(handleReplLine).mock.calls[1]![0]).toMatchObject({ line: 'add ramps', token: 'live' });
 });
