@@ -24,7 +24,8 @@ import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 import { bufferTerminalInput } from './input-frame.js';
 import { startPlayOutput } from '../play-output.js';
-import { brainRequested, startPlayBrain, type PlayBrain } from '../play-brain.js';
+import { startPlayBrain, type PlayBrain } from '../play-brain.js';
+import { brainChoice, brainRequested } from '../play-brain-choice.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -353,7 +354,8 @@ export async function runInkRepl(input: {
               }),
             };
             session.setActivity('');
-            if (!brain.started) session.writeLine('No installed agent can run Play tools; using the workshop.');
+            if (!brain.started && brainChoice(input.env) === 'app-agent')
+              session.writeLine('No installed agent can run Play tools (claude, codex, copilot); using the workshop.');
           }
           if (!toWorkshop && brain?.started) {
             await brain.started.turn(line);

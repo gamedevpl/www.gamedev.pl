@@ -81,8 +81,8 @@ function setup(steps: Step[], answers: string[] = []) {
   const prompts: Array<{ choices: string[]; question: string }> = [];
   const picks: string[] = [];
   let red = 0;
-  const ready = { value: true };
   const recorded: Array<[string, unknown]> = [];
+  const ready = { value: true };
   const api: ApiClient = {
     origin: 'https://gamedev.test',
     request: async <T>(_method: string, path: string) => {
@@ -181,6 +181,7 @@ describe('play brain', () => {
     expect(t.lines).toContain('✓ static ladder green');
     expect(t.picks).toEqual(['Deliver snake?']);
     expect(t.recorded).toEqual([
+      ['brain_turn', { adapter: 'claude' }],
       ['delegate_used', { adapter: 'claude' }],
       ['verify_failed', { adapter: 'claude', stage: 'typecheck' }],
     ]);

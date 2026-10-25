@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { BRAIN_ENV, parseBrainChoice } from './play-brain-choice.js';
 import { selectWorkbenchEntry } from './workbench-entry.js';
 import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.js';
 export { openCheckoutGame } from './local-recovery.js';
@@ -163,6 +164,8 @@ export async function runCli(
 
   try {
     choosePermissionMode(flags.permissions, verb === '__play-session' ? env : {});
+    // Children (the Play worker) inherit the choice through the environment.
+    if (flags.brain !== undefined) env = { ...env, [BRAIN_ENV]: parseBrainChoice(flags.brain) };
     const workbench = selectWorkbenchEntry({
       verb,
       args,

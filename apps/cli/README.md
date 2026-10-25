@@ -804,6 +804,17 @@ This resumes the same conversation with a sandbox and keeps local edits; later t
 in this CLI session use Auto too. To select it before starting a task, use
 `/permissions auto` or `gamedevpl --permissions auto`. A sandbox escape is denied.
 
+### Play agent (preview)
+
+`gamedevpl connect <slug> --brain app-agent` (or `GAMEDEVPL_BRAIN=app-agent`) lets your
+own agent drive a self-built game: it gets Play's steps as tools (open a round, run the
+checks, look at the live preview, deliver a preview or publish) and decides when to use
+them. The CLI still runs the checks after each edit and sends failures back to the agent
+up to two times. A delivery the agent proposes waits for your Approve, in the terminal or in
+the browser chat. It needs Claude Code, Codex or Copilot; other agents keep the workshop.
+Your agent subscription pays for the work. `--brain auto` falls back silently when no such
+agent is installed; `--brain repl` keeps the workshop.
+
 An updated CLI restarts raw previews from older versions. For an existing browser
 workspace, it tells you to finish active work and run `gamedevpl stop`, then
 `gamedevpl play`, so an agent is not interrupted by an update.

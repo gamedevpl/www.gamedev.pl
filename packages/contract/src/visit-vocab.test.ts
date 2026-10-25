@@ -213,6 +213,7 @@ describe('visit vocab', () => {
       'recovery_succeeded',
       'recovery_failed',
       'recovery_canceled',
+      'brain_turn',
     ]);
   });
 

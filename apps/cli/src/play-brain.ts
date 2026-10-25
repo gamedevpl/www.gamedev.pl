@@ -37,10 +37,6 @@ import { withCheckoutWriter } from './workbench-lock.js';
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
 
-export function brainRequested(env: NodeJS.ProcessEnv): boolean {
-  return env.GAMEDEVPL_BRAIN === 'app-agent';
-}
-
 export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): string | undefined {
   const names = ws.adapters
     .map((spec) => spec.name)
@@ -317,6 +313,7 @@ export async function startPlayBrain(input: {
     let finished = false;
     try {
       presence?.phase('editing');
+      ws.telemetry?.record('brain_turn', { adapter: name });
       ws.telemetry?.record('delegate_used', { adapter: name });
       agent.send(text);
       for (;;) {

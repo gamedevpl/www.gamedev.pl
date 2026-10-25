@@ -34,7 +34,8 @@ export const BLURB: Record<SlashVerb, string> = {
   profile: 'signed-in profile',
   handle: 'get or set handle',
   builder: 'who builds — builder <slug> globally; choose [self|platform] in a checkout',
-  connect: 'open a game session — connect <slug>; --manual for MCP setup',
+  connect:
+    'open a game session — connect <slug>; --manual for MCP setup; --brain app-agent lets your agent drive Play (claude, codex, copilot)',
   delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
   checkout: 'download and open local files — checkout [slug]; --version <version> restores sources in this checkout',
   stash: 'save local drafts without delivery — stash [push [-m text]|list|show|apply|pop|drop [id]|continue|abort]',
