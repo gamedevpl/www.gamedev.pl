@@ -18,7 +18,7 @@ function fakeAgent(steps: Step[]): { agent: CodingAgent; tasks: AgentTask[] } {
   const agent: CodingAgent = {
     name: 'claude',
     command: process.execPath,
-    capabilities: { resume: true, mcp: true },
+    capabilities: { resume: true, mcp: true, approvals: true },
     run(task) {
       tasks.push(task);
       const step = steps.shift() ?? (async () => 'nothing to do');
@@ -276,5 +276,32 @@ describe('play brain', () => {
     expect(t.lines).toContain('Not published.');
     // The agent proposed a delivery itself: no second offer from the workshop.
     expect(t.picks).toEqual([]);
+  });
+
+  it('shows the full permission request before the creator allows it', async () => {
+    const t = setup(
+      [
+        async (task) =>
+          await task.onApproval!(
+            { id: 'a1', kind: 'command', summary: 'tidy up', detail: { input: { command: 'rm -rf build' } } },
+            new AbortController().signal,
+          ),
+        async (task) =>
+          await task.onApproval!(
+            { id: 'a2', kind: 'other', detail: { blob: 'x'.repeat(8000) } },
+            new AbortController().signal,
+          ),
+      ],
+      ['Allow'],
+    );
+    const brain = await t.start();
+    await brain.turn('clean the build');
+    expect(t.prompts[0]!.question).toContain('Command: rm -rf build');
+    expect(t.prompts[0]!.question).toContain('Allow this invocation once?');
+    expect(t.lines).toContain('approve');
+    await brain.turn('again');
+    expect(t.prompts).toHaveLength(1);
+    expect(t.lines).toContain('claude: permission request is too large to display completely; denied.');
+    expect(t.lines).toContain('deny');
   });
 });
