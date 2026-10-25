@@ -1,3 +1,6 @@
+import { FeedbackReceipt } from './FeedbackReceipt.js';
+import { useJournalAttachment } from './studioPlayJournalHooks.js';
+import { JournalAttachmentControl } from './StudioPlayJournal.js';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BuilderModeBadge } from '../../BuilderModeBadge.js';
@@ -75,6 +78,7 @@ export function FeedbackPanel({
   onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
+  const journalAttachment = useJournalAttachment();
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +182,8 @@ export function FeedbackPanel({
     const seqAtSend = seededSeq.current;
     // What this send carries; a pick mid-flight must not resend them.
     const currentAttachments = [...attachments];
+    const journalAtSend =
+      (chooseBuilder ? builder : (roundBuilder ?? builder)) === 'platform' ? journalAttachment.attached : null;
     const sentIds = currentAttachments.map((item) => item.id);
     setError(null);
     setNotice(null);
@@ -198,10 +204,12 @@ export function FeedbackPanel({
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
       // Normalized to PNG for the backend's signature check.
-      let context: { referenceImages: string[] } | undefined;
+      let context: import('../../submissionApi.js').FeedbackContext | undefined = journalAtSend
+        ? { playJournal: journalAtSend }
+        : undefined;
       if (currentAttachments.length > 0) {
         const referenceImages = await toBase64PngList(currentAttachments.map((a) => a.dataUrl));
-        if (referenceImages.length > 0) context = { referenceImages };
+        if (referenceImages.length > 0) context = { ...context, referenceImages };
       }
       // New job from an improvement hands the thread over once ready.
       let handoffToken: string | undefined;
@@ -233,6 +241,7 @@ export function FeedbackPanel({
         saveLastBuilder(handoffToken ?? token, roundBuilder);
         recordStudioStep('builder_chosen', roundBuilder);
       }
+      if (journalAtSend) journalAttachment.setAttached(null);
       setState('sent');
       // A pick landed mid-send; drop what this send carried.
       if (seededSeq.current !== seqAtSend) dropAttachments(sentIds);
@@ -343,20 +352,7 @@ export function FeedbackPanel({
   // Studio echoes into the thread already — a second Sent! would repeat it.
   const sentReceipt =
     state === 'sent' && !notice && !error ? (
-      <div className="status-feedback-receipt" role="status">
-        <span className="status-feedback-sent">
-          <PixelIcon name="check" size={13} />
-          <span className="status-feedback-sent-text">{t(sentSelfKey ?? 'statusView.feedback.sent')}</span>
-        </span>
-        <button
-          type="button"
-          className="status-feedback-receipt-dismiss"
-          onClick={() => setState('idle')}
-          aria-label={t('statusView.feedback.dismissSent')}
-        >
-          <PixelIcon name="close" size={11} />
-        </button>
-      </div>
+      <FeedbackReceipt textKey={sentSelfKey ?? 'statusView.feedback.sent'} onDismiss={() => setState('idle')} />
     ) : null;
 
   // Compact composer: field above, builder/send toolbar below.
@@ -386,6 +382,11 @@ export function FeedbackPanel({
         titleKey={titleKey}
         attachmentsApi={attachmentsApi}
         builderControls={builderControls}
+        journalControl={
+          effectiveBuilder === 'platform' ? (
+            <JournalAttachmentControl attachment={journalAttachment} disabled={sending} />
+          ) : null
+        }
         showStop={showStop}
         stopRequested={stopRequested}
         onStopAndSwitchToSelf={() => void stopAndSwitchToSelf()}
@@ -396,6 +397,9 @@ export function FeedbackPanel({
   return (
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
+      {effectiveBuilder === 'platform' ? (
+        <JournalAttachmentControl attachment={journalAttachment} disabled={sending} />
+      ) : null}
       <p className="status-feedback-hint">{t(hintKey)}</p>
       {builderSelector ? <div className="builder-mode-row">{builderControls}</div> : null}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (

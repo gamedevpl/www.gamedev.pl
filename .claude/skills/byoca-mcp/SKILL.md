@@ -1569,3 +1569,12 @@ Inspect coverage, freshness, truncation and sample size before drawing conclusio
 `no_traffic` and `no_valid_windows` do not mean zero FPS. Active-agent events are
 excluded. This read does not grant permission to change a game.
 See [creator performance access](../../../docs/creator-game-performance.md).
+
+## Studio play journal attachments
+
+Studio records into a bounded browser buffer. Only an explicit attachment sent with
+creator feedback uploads it. Managed builders read the immutable artifact through
+`read_play_journal`, scoped to their job. Do not connect this to local live-control
+tools or silently upload the live buffer. Preserve the selected build identity when
+the game updates before sending. Improvement jobs need their copy before dispatch;
+copying after dispatch races the agent's first read. See `docs/studio-play-journals.md`.

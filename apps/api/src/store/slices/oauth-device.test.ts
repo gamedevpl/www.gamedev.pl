@@ -182,5 +182,5 @@ it('writes timestamp TTL fields and provisions cleanup for both collections', as
   expect(expiring).toBe(2);
   const setup = readFileSync(new URL('../../../../../infra/setup-gcp.sh', import.meta.url), 'utf8');
   expect(setup).toContain('OAUTH_DEVICE_GROUPS="oauthDeviceAuthorizations oauthDeviceCodes"');
-  expect(setup).toContain('for GROUP in $TELEMETRY_GROUPS $OAUTH_DEVICE_GROUPS; do');
+  expect(setup).toContain('for GROUP in playJournals $TELEMETRY_GROUPS $OAUTH_DEVICE_GROUPS; do');
 });

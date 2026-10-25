@@ -1,9 +1,8 @@
+import { prepareCreatorPlaytestAttachment } from '../platform/creator-playtest-attachment.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { GitHubClient } from '../catalog/github-client.js';
-import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { dropCreatorReferenceImages } from '../platform/creator-media-store.js';
-import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { peekQuota } from '../platform/quota-peek.js';
@@ -19,7 +18,6 @@ import {
   shouldSteerFeedbackViaInbox,
   type BuilderKind,
 } from './builder.js';
-import type { ChatAgentImage } from './chat-agent.js';
 import type { ChatOrchestration } from './chat-orchestration.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { FeedbackRequestSchema, TurnRequestSchema } from './feedback-request.js';
@@ -174,31 +172,20 @@ export async function handleCreatorFeedback(
   if (record?.state === 'publishing')
     return reply.status(409).send({ error: 'this game is currently publishing; try again in a moment' });
 
+  if (parsed.data.context?.playJournal && (parsed.data.builder ?? builderOf(record)) !== 'platform')
+    return reply.status(400).send({ error: 'Play journals can only be attached to managed-agent requests.' });
   const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
   const creatorLocale = record?.locale ?? 'en';
-  let shotId: string | undefined;
-  let referenceImageShotIds: string[] = [];
-  let referenceImages: ChatAgentImage[] = [];
-  if (store && parsed.data.context?.screenshotPng) {
-    try {
-      shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
-      invalidateMedia(jobId);
-    } catch (shotError) {
-      request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-    }
-  }
-  if (store && parsed.data.context?.referenceImages?.length) {
-    try {
-      const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
-      referenceImageShotIds = stored.ids;
-      referenceImages = stored.images;
-      invalidateMedia(jobId);
-    } catch (shotError) {
-      request.log.error({ err: shotError }, 'failed to store creator reference images');
-    }
-  }
+  const { shotId, referenceImageShotIds, referenceImages, playJournal, contextBlock } =
+    await prepareCreatorPlaytestAttachment({
+      store,
+      jobId,
+      uid: request.user!.uid,
+      context: parsed.data.context,
+      invalidateMedia,
+      log: request.log,
+    });
   const dropReferences = () => dropCreatorReferenceImages(store, jobId, referenceImageShotIds);
-  const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
   const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
   const requestedBuilder = parsed.data.builder;
   const builderChanging = Boolean(
@@ -246,7 +233,7 @@ export async function handleCreatorFeedback(
 
   let studioAckText: string | undefined;
   let creatorMessageQueued = false;
-  if (record && !builderChanging) {
+  if (record && !builderChanging && !playJournal) {
     const chatOutcome = await runChatAgent({
       jobId,
       message: sanitizedFeedback,

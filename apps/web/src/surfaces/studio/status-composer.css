@@ -417,3 +417,21 @@
   gap: 6px;
   min-width: 0;
 }
+
+.studio-journal-attachment {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.studio-journal-attachment button {
+  flex: none;
+}
+.studio-journal-attachment small {
+  flex: 1 1 12rem;
+  overflow-wrap: anywhere;
+}

@@ -23,6 +23,7 @@ interface CompactFeedbackComposerProps {
   titleKey: string;
   attachmentsApi: ComposerAttachmentsApi;
   builderControls: ReactNode;
+  journalControl?: ReactNode;
   showStop: boolean;
   stopRequested: boolean;
   onStopAndSwitchToSelf: () => void;
@@ -48,6 +49,7 @@ export function CompactFeedbackComposer({
   titleKey,
   attachmentsApi,
   builderControls,
+  journalControl,
   showStop,
   stopRequested,
   onStopAndSwitchToSelf,
@@ -92,6 +94,7 @@ export function CompactFeedbackComposer({
       {routeNoteKey && !sending && !isSent && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}
+      {journalControl}
       <textarea
         ref={inputRef}
         className="status-feedback-input"

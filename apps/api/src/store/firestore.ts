@@ -1,4 +1,5 @@
-import { OAuthFacade } from './oauth-facade.js';
+import { PlayJournalFacade } from './play-journal-facade.js';
+import { FirestorePlayJournalsStore } from './slices/play-journals.js';
 import { FirestoreShelfStore } from './slices/shelf.js';
 import { createShelfMirror, type ShelfMirror } from '../creation/shelf-mirror.js';
 import { invalidateTransferInboxCache } from '../creation/transfer-inbox-cache.js';
@@ -17,14 +18,7 @@ import type { BuildEvent, SubmissionStatus } from '../platform/submission-status
 import type { AccessTokenRecord } from './records/access-tokens.js';
 import type { BetaInvite, ClaimBetaInviteResult, CreatedBetaInvite, WaitlistEntry } from './records/access.js';
 import type { CreatorAgentKeyRecord, GameAgentKeyRecord } from './records/agent-keys.js';
-import type {
-  BuildPreview,
-  BuildPreviewSummary,
-  BuildShot,
-  BuildShotSummary,
-  CreatorMessage,
-  CreatorMessageOrigin,
-} from './records/build-log.js';
+import type { CreatorMessage, CreatorMessageOrigin } from './records/build-log.js';
 import type { CatalogEnrichmentRecord } from './records/catalog-enrichment.js';
 import type {
   ContributorBlockRecord,
@@ -51,20 +45,13 @@ import type {
 import type { AgentEndedBy, BuilderHandoff } from './records/rounds.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './records/social.js';
 import type { SubmissionRecord } from './records/submission.js';
-import type { ManagedSessionOutcome, ManagedSessionStep } from './records/managed-session.js';
 import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
 import { FirestoreGameAdmissionStore } from './slices/game-admission.js';
 import { FirestoreBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
-import {
-  FirestoreBuildMediaStore,
-  type BuildShotCountOptions,
-  type DeliveryShotOutcome,
-  type DeliveryShotQuery,
-  type BuildShotListOptions,
-} from './slices/build-media.js';
+import { FirestoreBuildMediaStore } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { FirestoreCreatorMemoryStore, type CreatorMemoryRecord } from './slices/creator-memory.js';
 import { FirestoreCreatorNotesStore, type CreatorNotesRecord } from './slices/creator-notes.js';
@@ -109,7 +96,7 @@ import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } from './shelf-guard-firestore.js';
 
-export class FirestoreStore extends OAuthFacade implements Store {
+export class FirestoreStore extends PlayJournalFacade implements Store {
   private db: GuardedFirestore;
   private telemetryStore: TelemetryStore;
   listTelemetryEventsAcross?: TelemetryStore['listTelemetryEventsAcross'];
@@ -144,7 +131,8 @@ export class FirestoreStore extends OAuthFacade implements Store {
   protected submissionQueryStore: FirestoreSubmissionQueryStore;
   protected shelfStore: FirestoreShelfStore;
   private buildLogStore: FirestoreBuildLogStore;
-  private buildMediaStore: FirestoreBuildMediaStore;
+  protected playJournalsStore: FirestorePlayJournalsStore;
+  protected buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
   private creatorMemoryStore: FirestoreCreatorMemoryStore;
   private creatorNotesStore: FirestoreCreatorNotesStore;
@@ -186,6 +174,7 @@ export class FirestoreStore extends OAuthFacade implements Store {
     this.submissionQueryStore = new FirestoreSubmissionQueryStore(this.db);
     this.shelfStore = new FirestoreShelfStore(this.db);
     this.buildLogStore = new FirestoreBuildLogStore(this.db);
+    this.playJournalsStore = new FirestorePlayJournalsStore(this.db);
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
     this.creatorMemoryStore = new FirestoreCreatorMemoryStore(this.db);
@@ -790,74 +779,6 @@ export class FirestoreStore extends OAuthFacade implements Store {
 
   async countBuildEvents(jobId: number): Promise<number> {
     return this.buildLogStore.countBuildEvents(jobId);
-  }
-
-  async appendBuildShot(
-    jobId: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
-    generation?: number,
-  ): Promise<BuildShot> {
-    return this.buildMediaStore.appendBuildShot(jobId, shot, generation);
-  }
-
-  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
-    return this.buildMediaStore.listBuildShots(jobId, opts);
-  }
-
-  async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
-    return this.buildMediaStore.getBuildShot(jobId, id);
-  }
-
-  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
-    return this.buildMediaStore.countBuildShots(jobId, opts);
-  }
-
-  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
-    return this.buildMediaStore.countDeliveryShots(jobId, query);
-  }
-
-  async appendDeliveryShot(
-    jobId: number,
-    query: DeliveryShotQuery & { max: number; id?: string },
-    shot: Omit<BuildShot, 'id' | 'createdAt'>,
-  ): Promise<DeliveryShotOutcome> {
-    return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
-  }
-
-  async deleteBuildShots(jobId: number, ids: readonly string[]): Promise<void> {
-    return this.buildMediaStore.deleteBuildShots(jobId, ids);
-  }
-
-  async markReferenceSeen(jobId: number, shotId: string): Promise<void> {
-    return this.buildMediaStore.markReferenceSeen(jobId, shotId);
-  }
-
-  async stepManagedSession(...step: ManagedSessionStep): Promise<ManagedSessionOutcome> {
-    return this.buildMediaStore.stepManagedSession(...step);
-  }
-
-  async appendBuildPreview(
-    jobId: number,
-    preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
-    generation?: number,
-  ): Promise<BuildPreview> {
-    return this.buildMediaStore.appendBuildPreview(jobId, preview, generation);
-  }
-
-  async listBuildPreviews(jobId: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
-    return this.buildMediaStore.listBuildPreviews(jobId, opts);
-  }
-
-  async getBuildPreview(jobId: number, id: string): Promise<BuildPreview | null> {
-    return this.buildMediaStore.getBuildPreview(jobId, id);
-  }
-
-  async countBuildPreviews(jobId: number): Promise<number> {
-    return this.buildMediaStore.countBuildPreviews(jobId);
-  }
-
-  async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
-    return this.buildMediaStore.pruneBuildPreviews(jobId, keep);
   }
 
   async appendCreatorMessage(

@@ -19,6 +19,7 @@ export interface PlaytestFeedbackContext {
     progress?: string[];
   };
   referenceImages?: string[];
+  playJournal?: import('@gamedevpl/contract').PlayJournalAttachment;
 }
 
 // Fenced playtest context block, plus a stored screenshot id for agent fetch.
@@ -26,9 +27,15 @@ export function formatPlaytestContextBlock(
   context: PlaytestFeedbackContext | undefined,
   shotId?: string,
   referenceImageShotIds?: string[],
+  playJournalAttachmentId?: string,
 ): string | null {
   if (!context) return null;
   const lines: string[] = [];
+  if (playJournalAttachmentId)
+    lines.push(
+      `playJournalAttachmentId: ${playJournalAttachmentId}`,
+      'Read this explicitly attached recording with read_play_journal.',
+    );
   const instrumentation = context.instrumentation;
   if (instrumentation) {
     if (typeof instrumentation.playSeconds === 'number') {

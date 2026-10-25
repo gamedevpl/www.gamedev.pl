@@ -1,10 +1,10 @@
+import { StudioJournalCreatorProvider } from './StudioPlayJournal.js';
 import { canShareStudioGame, canClaimPublishHandle } from './studio-header-permissions.js';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../AuthContext.js';
 import { AuthModal } from '../../AuthModal.js';
 import { ClaimHandleModal } from '../../ClaimHandleModal.js';
-import { StudioCreatorProfileProvider } from '../../studioCreatorProfile.js';
 import type { GameHealth } from '../../healthApi.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { studioPath, type StudioTab } from '../../core/router.js';
@@ -682,8 +682,9 @@ export function CreatorStudioView({
     />
   );
 
+  const theaterSlug = stageSource.origin.kind === 'delivered' ? activeGame?.slug : undefined;
   return (
-    <StudioCreatorProfileProvider>
+    <StudioJournalCreatorProvider gameKey={selected}>
       <section
         className={`studio-panel${posture === 'play' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}
       >
@@ -958,22 +959,17 @@ export function CreatorStudioView({
                         onExit={() => onNavigate('/')}
                       />
 
-                      {theaterOpen ? (
-                        stageSource.origin.kind === 'delivered' && activeGame.slug ? (
-                          <GameTheater
-                            title={activeGame.title}
-                            badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
-                            source={{ slug: activeGame.slug }}
-                            onExit={() => setTheaterOpen(false)}
-                          />
-                        ) : stageSource.rawHtml ? (
-                          <GameTheater
-                            title={activeGame.title}
-                            badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
-                            source={{ html: stageSource.rawHtml }}
-                            onExit={() => setTheaterOpen(false)}
-                          />
-                        ) : null
+                      {theaterOpen && (theaterSlug || stageSource.rawHtml) ? (
+                        <GameTheater
+                          title={activeGame.title}
+                          badge={
+                            theaterSlug
+                              ? { icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }
+                              : { icon: 'wrench', label: t('statusView.draftBadge') }
+                          }
+                          source={theaterSlug ? { slug: theaterSlug } : { html: stageSource.rawHtml! }}
+                          onExit={() => setTheaterOpen(false)}
+                        />
                       ) : null}
 
                       {/* The stage: always mounted, always full-bleed. Every surface below
@@ -987,6 +983,7 @@ export function CreatorStudioView({
                           title={activeGame.title}
                           slug={activeGame.slug ?? undefined}
                           editable={activeGame.editable}
+                          journalEnabled={studioStatus?.builder === 'platform'}
                           published={playtestPublished}
                           source={stageSource}
                           posture={posture}
@@ -1222,6 +1219,6 @@ export function CreatorStudioView({
           </div>
         ) : null}
       </section>
-    </StudioCreatorProfileProvider>
+    </StudioJournalCreatorProvider>
   );
 }

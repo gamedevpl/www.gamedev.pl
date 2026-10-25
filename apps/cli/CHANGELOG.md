@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Extract the browser journal recorder for explicit Studio attachments (#1982).
+
 ## 0.58.0 — 2026-10-25
 
 ### Added

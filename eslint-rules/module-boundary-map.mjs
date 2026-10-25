@@ -46,6 +46,11 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'mcp-managed-context-tools': 'agent-surface',
+  'erase-creator-attachments': 'platform',
+  'creator-playtest-attachment': 'platform',
+  'mcp-play-journal-tools': 'agent-surface',
+  'play-journal': 'platform',
   'creator-performance': 'creation',
   'game-liveness': 'creation',
   'creator-performance-route': 'creation',
