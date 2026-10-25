@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Internal
 
 - Upgrade `zod` to 4.6.7 and use namespace imports so esbuild tree-shakes unused schemas and locales from the CLI bundle.
+- Bump `genaicode` to 2.21.0 for `app-agent` tool registration (#1971).
 
 ## 0.56.0 — 2026-10-21
 
