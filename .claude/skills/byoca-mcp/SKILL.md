@@ -37,6 +37,10 @@ sequence IDs or field projections; preserve the `through` watermark when paging.
 Treat coverage gaps and unsupported `snapshotState()` as unknown state, not empty
 state. The recorder must freeze values when collected, acknowledge after writing,
 and never let serialization failures break the game's frame or step callback.
+Journal instrumentation reports distinguish absent fields from unmatched predicates
+and empty ranges. Improve observations through normal source edits when needed;
+verify and reproduce in a new build. Never treat new instrumentation as evidence
+about an old recording, or capture loss as proof that the game lacks a provider.
 
 ## Session loop (what a round usually does)
 

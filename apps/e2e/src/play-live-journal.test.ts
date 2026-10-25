@@ -65,6 +65,20 @@ it.skipIf(!findChromium())(
       const old = historic.entries[4]!;
       const exact = { recordingId, after: old.seq - 1, through: old.seq };
       const retained = await read(exact);
+      expect(retained).toMatchObject({
+        instrumentation: { snapshotStatus: 'available', nextStep: 'inspect_recorded_fields' },
+      });
+      const missing = await read({
+        recordingId,
+        kinds: ['state'],
+        after: old.seq - 1,
+        through: old.seq,
+        where: { path: '/persistedState/collisions', op: 'eq', value: true },
+      });
+      expect(missing).toMatchObject({
+        entries: [],
+        fieldAvailability: { paths: { '/persistedState/collisions': { present: 0, missing: 1 } } },
+      });
       expect(retained.entries[0]?.data).toMatchObject({
         persistedState: { x: Number(initial.data.observation.snapshot.x) + 5, frame: old.frame },
         stateStatus: 'available',

@@ -3,6 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { journalBatch, type JournalEntry, type JournalQuery } from './live-journal-protocol.js';
+import {
+  journalInstrumentation,
+  observeInstrumentation,
+  instrumentationReport,
+  INSTRUMENTATION_HELP,
+  type JournalInstrumentation,
+} from './live-journal-instrumentation.js';
 
 type Chunk = {
   offset: number;
@@ -31,6 +38,7 @@ type Recording = Source & {
   reportedGaps: number;
   connected: boolean;
   receivedAt: number;
+  instrumentation: JournalInstrumentation;
 };
 function pointer(data: unknown, path: string): unknown {
   if (!path) return data;
@@ -79,8 +87,10 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
     retention: 'until Play closes',
     replayable: false,
     rejected,
-    recordings: [...recordings.values()].map(({ chunks, ...record }) => ({
+    instrumentationHelp: INSTRUMENTATION_HELP,
+    recordings: [...recordings.values()].map(({ chunks, instrumentation, ...record }) => ({
       ...record,
+      instrumentation: instrumentationReport(instrumentation),
       chunks: chunks.length,
       tail: 'Only acknowledged batches are available; an abrupt close may lose buffered entries.',
     })),
@@ -132,6 +142,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
           reportedGaps: 0,
           connected: true,
           receivedAt: Date.now(),
+          instrumentation: journalInstrumentation(),
         };
         recordings.set(batch.recordingId, recording);
       }
@@ -191,6 +202,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
       recording.reportedGaps += fresh.filter((entry) => entry.kind === 'gap').length;
       recording.connected = true;
       recording.receivedAt = Date.now();
+      for (const entry of fresh) observeInstrumentation(recording.instrumentation, entry);
       return { through: last };
     },
     disconnect(tabId: string) {
@@ -206,6 +218,8 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
         decoded = 0,
         more = false;
       const entries: JournalEntry[] = [];
+      const fields = [...new Set([...(query.fields ?? []), ...(query.where ? [query.where.path] : [])])];
+      const fieldAvailability = Object.fromEntries(fields.map((path) => [path, { present: 0, missing: 0 }]));
       outer: for (const chunk of record.chunks) {
         if (chunk.last <= cursor || chunk.first > through) continue;
         if (
@@ -228,14 +242,18 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
             more = true;
             break outer;
           }
-          const include =
+          const inRange =
             (query.fromFrame === undefined || entry.frame >= query.fromFrame) &&
             (query.toFrame === undefined || entry.frame <= query.toFrame) &&
             (query.fromTimeMs === undefined || entry.timeMs >= query.fromTimeMs) &&
             (query.toTimeMs === undefined || entry.timeMs <= query.toTimeMs) &&
             (!query.kinds || query.kinds.includes(entry.kind)) &&
-            (entry.kind !== 'state' || (entry.frame - (query.fromFrame ?? 0)) % (query.everyFrames ?? 1) === 0) &&
-            matches(entry.data, query.where);
+            (entry.kind !== 'state' || (entry.frame - (query.fromFrame ?? 0)) % (query.everyFrames ?? 1) === 0);
+          if (inRange)
+            for (const path of fields) {
+              fieldAvailability[path]![pointer(entry.data, path) === undefined ? 'missing' : 'present']++;
+            }
+          const include = inRange && matches(entry.data, query.where);
           if (include) {
             const data = query.fields
               ? Object.fromEntries(query.fields.map((path) => [path, pointer(entry.data, path) ?? null]))
@@ -271,6 +289,13 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
         nextAfter: more ? cursor : null,
         scanned,
         entries,
+        instrumentation: instrumentationReport(record.instrumentation),
+        instrumentationHelp: INSTRUMENTATION_HELP,
+        fieldAvailability: {
+          scope:
+            'examined entries in this page matching range/kinds/sampling, before where filtering; zero counts mean no evidence',
+          paths: fieldAvailability,
+        },
         coverage: {
           missingEntries: record.missingEntries,
           reportedGaps: record.reportedGaps,

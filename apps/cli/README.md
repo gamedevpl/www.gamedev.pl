@@ -908,6 +908,9 @@ saved states across tasks and build changes without taking control. Records incl
 input attribution, console/errors and the game's serializable state when available.
 See [session journal](../../docs/play-workbench.md#query-the-recorded-session-journal)
 for pagination, field selection, retention and explicit gaps.
+Responses also identify missing snapshots or requested fields and explain how a
+builder can extend source instrumentation, verify the change and reproduce in a
+new build. New instrumentation never fills in missing historical data.
 
 Interactive local delegation to Codex, Claude, and Copilot automatically connects a
 session-scoped `gamedevpl_local` MCP server when the CLI preview is available.

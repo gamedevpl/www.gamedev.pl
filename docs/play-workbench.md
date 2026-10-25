@@ -325,6 +325,27 @@ and `nextAfter` while paging: new live entries cannot change that query's result
 Continue until `nextAfter` is null, including when a page has no matching entries.
 Missing projected fields are listed explicitly in `missingFields`.
 
+Both tools also return an `instrumentation` report and `instrumentationHelp`.
+The report distinguishes an absent/not-ready harness, observed state samples,
+unsupported or unavailable snapshots, and snapshot-provider errors. It includes
+snapshot-status counts and the latest evidence sequence; snapshot availability
+does not imply that every useful debugging field exists. Capture gaps remain a
+separate coverage concern rather than proof of missing game instrumentation.
+
+For requested fields and predicates, `fieldAvailability` counts present/missing
+values among examined entries in the page, before the predicate is applied. This
+distinguishes “no collisions matched” from “collision data is absent from these samples”.
+Zero present and missing counts mean no evidence in that page, not missing
+instrumentation; continue pagination or choose an appropriate range/event kind.
+
+An agent can then inspect the game source and add the observations needed for the
+debugging task through its existing editing tools. For GameKit, consult the
+installed Kit's observation and `.persist(...)` contracts. Keep serialization
+synchronous, small and free of side effects; fix a broken provider instead of
+adding another one. Verify the change, release control, apply the new build through
+the normal Play workflow, reproduce, and query its new recording/revision. These
+MCP tools remain read-only, and adding instrumentation cannot backfill old history.
+
 Recorded data includes keyboard edges, codes, modifiers and held keys; pointer
 edges/movement and wheel input; player/agent/synthetic attribution; console messages,
 JavaScript errors and rejection stacks; GameKit signals/audio events; lifecycle
@@ -348,7 +369,7 @@ conclusions, and do not infer absent values or transitions from a gap.
 
 Storage stops explicitly at 512 MiB compressed or 100,000 batches, preserving the
 earlier history; up to 256 instances fit in one session. Queries return at most
-200 entries / 512 KiB per page and bound each scan to 20,000 entries / 16 MiB of
+200 entries / 512 KiB of entry payload per page and bound each scan to 20,000 entries / 16 MiB of
 decoded batches. Pagination exposes the remaining range rather than truncating it
 silently. Query arguments accept no JavaScript, file paths or external URLs.
 
