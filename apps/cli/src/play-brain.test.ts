@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { AsyncResource } from 'node:async_hooks';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -69,6 +70,7 @@ function setup(steps: Step[], answers: string[] = []) {
   const prompts: Array<{ choices: string[]; question: string }> = [];
   const picks: string[] = [];
   let red = 0;
+  const ready = { value: true };
   const api: ApiClient = {
     origin: 'https://gamedev.test',
     request: async <T>(_method: string, path: string) => {
@@ -93,24 +95,27 @@ function setup(steps: Step[], answers: string[] = []) {
     runAdapter: async () => ({ code: 0 }),
     run: () => (red-- > 0 ? { status: 1, stderr: 'game.ts(1,1): error TS1005' } : { status: 0, stderr: '' }),
   };
-  const start = async (failing = 0) => {
+  const start = async (failing = 0, prompt?: Parameters<typeof startPlayBrain>[0]['prompt']) => {
     red = failing;
     const brain = await startPlayBrain({
       api,
       ws,
-      prompt: async (choices, question) => {
-        prompts.push({ choices, question });
-        return answers.shift() ?? choices.at(-1)!;
-      },
+      prompt:
+        prompt ??
+        (async (choices, question) => {
+          prompts.push({ choices, question });
+          return answers.shift() ?? choices.at(-1)!;
+        }),
       write: (line) => lines.push(line),
       activity: () => {},
       agents: () => [fake.agent],
+      ready: async () => ready.value,
     });
     brains.push(brain!);
     return brain!;
   };
   const edit = (content: string) => writeGameFiles(root, 'snake', [{ path: 'game.ts', content }]);
-  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws };
+  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, ready };
 }
 
 describe('play brain', () => {
@@ -180,6 +185,39 @@ describe('play brain', () => {
     expect(t.tasks).toHaveLength(3);
     expect(t.lines.at(-1)).toMatch(/Checks still fail after 2 automatic repairs/);
     expect(t.picks).toEqual([]);
+  });
+
+  it('keeps a stale or conflicting checkout away from the agent, as the workshop does', async () => {
+    const t = setup([async () => 'never']);
+    const brain = await t.start();
+    t.ready.value = false;
+    await brain.turn('make the snake faster');
+    expect(t.tasks).toEqual([]);
+    t.ready.value = true;
+    mkdirSync(join(t.ws.root, '.gamedev'), { recursive: true });
+    writeFileSync(join(t.ws.root, '.gamedev', 'merge.json'), '{}');
+    await expect(brain.turn('make the snake faster')).rejects.toThrow(/A merge is pending/);
+    expect(t.tasks).toEqual([]);
+  });
+
+  it('runs a delivery approved outside the turn (the browser chat) inside its checkout lock', async () => {
+    const t = setup([
+      async (task) => await callTool(task, 'game_submit', { approval_summary: 'Deliver snake' }),
+      async (task) => {
+        // The fake platform refuses the upload; the lock let submit get that far.
+        expect(task.prompt).toContain('Action #1 failed: unexpected /api/');
+        expect(task.prompt).not.toContain('Another CLI operation owns this checkout');
+        return 'Delivery failed.';
+      },
+    ]);
+    const outside = new AsyncResource('browser');
+    const started: { brain?: PlayBrain } = {};
+    started.brain = await t.start(0, async () => {
+      outside.runInAsyncScope(() => started.brain!.agent.decide('1', 'approve'));
+      return 'Approve';
+    });
+    await started.brain.turn('deliver it');
+    expect(t.lines).toContain('Delivery failed.');
   });
 
   it('asks the creator before a delivery the agent proposes, and tells the agent the answer', async () => {

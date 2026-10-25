@@ -26,6 +26,8 @@ export type PlayToolsInput = {
   write: (line: string) => void;
   fetch?: typeof fetch;
   pollMs?: number;
+  // Runs a delivery inside the turn's checkout writer lock (tool calls arrive outside its async context).
+  writer?: <T>(run: () => Promise<T>) => Promise<T>;
 };
 
 const CAPTURE_SCHEMA = {
@@ -52,16 +54,18 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
           : 'Delivery is blocked by an active platform agent; finish it in Studio first.',
       );
     // submitGame runs typecheck and check:static itself and refuses a red result.
-    const result = await submitGame({
-      api: input.api,
-      slug: input.slug,
-      dest: input.root,
-      run: input.run,
-      publish,
-      expectedSession: session ?? undefined,
-      abort: input.abort(),
-      onProgress: input.write,
-    });
+    const submit = () =>
+      submitGame({
+        api: input.api,
+        slug: input.slug,
+        dest: input.root,
+        run: input.run,
+        publish,
+        expectedSession: session ?? undefined,
+        abort: input.abort(),
+        onProgress: input.write,
+      });
+    const result = await (input.writer ? input.writer(submit) : submit());
     return formatSubmitLines(result, input.slug).join('\n');
   };
   return [
