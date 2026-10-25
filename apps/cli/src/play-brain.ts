@@ -200,6 +200,7 @@ export async function startPlayBrain(input: {
     instructions: instructions(ws),
     tools: playAppTools({
       api: input.api,
+      telemetry: ws.telemetry,
       token: ws.token,
       slug: ws.slug,
       root: ws.root,
@@ -316,6 +317,7 @@ export async function startPlayBrain(input: {
     let finished = false;
     try {
       presence?.phase('editing');
+      ws.telemetry?.record('delegate_used', { adapter: name });
       agent.send(text);
       for (;;) {
         const state = agent.get();
@@ -351,6 +353,7 @@ export async function startPlayBrain(input: {
           break;
         }
         write(`verify failed at ${result.stage}`);
+        ws.telemetry?.record('verify_failed', { adapter: name, stage: result.stage });
         if (repairs >= MAX_LOCAL_REPAIRS) {
           write(
             `Checks still fail after ${MAX_LOCAL_REPAIRS} automatic repairs. Edits remain local; /diff to inspect. Nothing was delivered.`,

@@ -82,6 +82,7 @@ function setup(steps: Step[], answers: string[] = []) {
   const picks: string[] = [];
   let red = 0;
   const ready = { value: true };
+  const recorded: Array<[string, unknown]> = [];
   const api: ApiClient = {
     origin: 'https://gamedev.test',
     request: async <T>(_method: string, path: string) => {
@@ -98,6 +99,7 @@ function setup(steps: Step[], answers: string[] = []) {
     env: { XDG_CONFIG_HOME: root },
     adapters: [{ name: 'claude', command: 'claude' } as AdapterSpec],
     builder: 'self',
+    telemetry: { record: (step, dims) => recorded.push([step, dims]), flush: async () => {} },
     pick: async (choices, question) => {
       picks.push(question);
       return choices.at(-1)!;
@@ -126,7 +128,7 @@ function setup(steps: Step[], answers: string[] = []) {
     return brain!;
   };
   const edit = (content: string) => writeGameFiles(root, 'snake', [{ path: 'game.ts', content }]);
-  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, ready };
+  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, recorded, ready };
 }
 
 describe('play brain', () => {
@@ -178,6 +180,10 @@ describe('play brain', () => {
     expect(t.lines).toContain('verify failed at typecheck');
     expect(t.lines).toContain('✓ static ladder green');
     expect(t.picks).toEqual(['Deliver snake?']);
+    expect(t.recorded).toEqual([
+      ['delegate_used', { adapter: 'claude' }],
+      ['verify_failed', { adapter: 'claude', stage: 'typecheck' }],
+    ]);
   });
 
   it('stops after two repairs that stay red', async () => {
