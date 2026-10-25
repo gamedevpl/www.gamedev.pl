@@ -196,6 +196,7 @@ export async function startPlayBrain(input: {
     instructions: instructions(ws),
     tools: playAppTools({
       api: input.api,
+      telemetry: ws.telemetry,
       token: ws.token,
       slug: ws.slug,
       root: ws.root,
@@ -313,6 +314,7 @@ export async function startPlayBrain(input: {
     try {
       presence?.phase('editing');
       ws.telemetry?.record('brain_turn', { adapter: name });
+      ws.telemetry?.record('delegate_used', { adapter: name });
       agent.send(text);
       for (;;) {
         const state = agent.get();

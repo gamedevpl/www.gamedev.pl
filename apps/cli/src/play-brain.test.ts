@@ -99,13 +99,13 @@ function setup(steps: Step[], answers: string[] = []) {
     env: { XDG_CONFIG_HOME: root },
     adapters: [{ name: 'claude', command: 'claude' } as AdapterSpec],
     builder: 'self',
+    telemetry: { record: (step, dims) => recorded.push([step, dims]), flush: async () => {} },
     pick: async (choices, question) => {
       picks.push(question);
       return choices.at(-1)!;
     },
     abort: { current: null },
     runAdapter: async () => ({ code: 0 }),
-    telemetry: { record: (step, dims) => recorded.push([step, dims]), flush: async () => {} },
     run: () => (red-- > 0 ? { status: 1, stderr: 'game.ts(1,1): error TS1005' } : { status: 0, stderr: '' }),
   };
   const start = async (failing = 0, prompt?: Parameters<typeof startPlayBrain>[0]['prompt']) => {
@@ -182,6 +182,7 @@ describe('play brain', () => {
     expect(t.picks).toEqual(['Deliver snake?']);
     expect(t.recorded).toEqual([
       ['brain_turn', { adapter: 'claude' }],
+      ['delegate_used', { adapter: 'claude' }],
       ['verify_failed', { adapter: 'claude', stage: 'typecheck' }],
     ]);
   });
