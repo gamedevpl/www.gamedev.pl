@@ -2362,6 +2362,8 @@
     "sessions_other": "{{count}} sessions"
   },
   "studioJournal": {
+    "attachShort": "Attach play log",
+    "attachedShort": "Log: {{seconds}} s",
     "attach": "Attach play recording",
     "remove": "Remove play recording",
     "attached": "Attached: {{seconds}} s. Sent with this message to the managed agent.",

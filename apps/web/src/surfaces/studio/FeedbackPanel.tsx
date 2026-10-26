@@ -384,7 +384,7 @@ export function FeedbackPanel({
         builderControls={builderControls}
         journalControl={
           effectiveBuilder === 'platform' ? (
-            <JournalAttachmentControl attachment={journalAttachment} disabled={sending} />
+            <JournalAttachmentControl compact attachment={journalAttachment} disabled={sending} />
           ) : null
         }
         showStop={showStop}

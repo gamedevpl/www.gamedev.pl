@@ -2378,6 +2378,8 @@
     "sessions_other": "{{count}} sesji"
   },
   "studioJournal": {
+    "attachShort": "Dołącz zapis",
+    "attachedShort": "Zapis: {{seconds}} s",
     "attach": "Dołącz zapis rozgrywki",
     "remove": "Usuń zapis rozgrywki",
     "attached": "Dołączono: {{seconds}} s. Trafi z tą wiadomością do managed agenta.",

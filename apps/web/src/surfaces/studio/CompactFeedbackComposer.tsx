@@ -94,7 +94,6 @@ export function CompactFeedbackComposer({
       {routeNoteKey && !sending && !isSent && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}
-      {journalControl}
       <textarea
         ref={inputRef}
         className="status-feedback-input"
@@ -210,6 +209,7 @@ export function CompactFeedbackComposer({
               }}
             />
           </div>
+          {journalControl}
           {builderControls}
         </div>
         <div className="status-composer-toolbar-right">

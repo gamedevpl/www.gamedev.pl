@@ -435,3 +435,24 @@
   flex: 1 1 12rem;
   overflow-wrap: anywhere;
 }
+
+.studio-journal-button {
+  flex: none;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.studio-journal-button[aria-pressed='true'] {
+  color: var(--text);
+  background: rgba(0, 228, 172, 0.12);
+}
+.studio-journal-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

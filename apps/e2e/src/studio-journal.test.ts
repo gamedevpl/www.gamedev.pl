@@ -146,7 +146,8 @@ it.skipIf(!browserPrerequisite().ok)(
         await page.setViewportSize({ width, height: 700 });
         await page.screenshot({ path: '/tmp/studio-journal-' + width + '.png' });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        expect((await page.locator('.studio-journal-attachment small').boundingBox())!.height).toBeLessThan(100);
+        expect((await page.locator('.status-composer').boundingBox())!.height).toBeLessThan(120);
+        expect((await page.locator('.studio-journal-button').boundingBox())!.height).toBeLessThan(100);
       }
       expect(errors).toEqual([]);
     } finally {

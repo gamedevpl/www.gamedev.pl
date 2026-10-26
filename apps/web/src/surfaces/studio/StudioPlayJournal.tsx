@@ -10,9 +10,11 @@ export function StudioPlayJournalProvider({ children }: { children: ReactNode })
 export function JournalAttachmentControl({
   attachment,
   disabled = false,
+  compact = false,
 }: {
   attachment: ReturnType<typeof useJournalAttachment>;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const { buffer, attached, setAttached } = attachment;
@@ -23,22 +25,29 @@ export function JournalAttachmentControl({
   const seconds = attached
     ? Math.round(((attached.entries.at(-1)?.timeMs ?? 0) - (attached.entries[0]?.timeMs ?? 0)) / 1000)
     : (available?.seconds ?? 0);
-  return (
+  const label = t(attached ? 'studioJournal.remove' : 'studioJournal.attach');
+  const help = selected
+    ? t(attached ? 'studioJournal.attached' : 'studioJournal.local', { seconds })
+    : t('studioJournal.empty');
+  const button = (
+    <button
+      type="button"
+      className={compact ? 'studio-journal-button' : 'secondary-btn'}
+      disabled={disabled || (!attached && !available)}
+      aria-label={label}
+      aria-pressed={Boolean(attached)}
+      title={`${label}. ${help}`}
+      onClick={() => setAttached(attached ? null : buffer.snapshot())}
+    >
+      {compact ? t(attached ? 'studioJournal.attachedShort' : 'studioJournal.attachShort', { seconds }) : label}
+    </button>
+  );
+  return compact ? (
+    button
+  ) : (
     <div className="studio-journal-attachment">
-      <button
-        type="button"
-        className="secondary-btn"
-        disabled={disabled || (!attached && !available)}
-        aria-pressed={Boolean(attached)}
-        onClick={() => setAttached(attached ? null : buffer.snapshot())}
-      >
-        {t(attached ? 'studioJournal.remove' : 'studioJournal.attach')}
-      </button>
-      {selected ? (
-        <small>{t(attached ? 'studioJournal.attached' : 'studioJournal.local', { seconds })}</small>
-      ) : (
-        <small>{t('studioJournal.empty')}</small>
-      )}
+      {button}
+      <small>{help}</small>
     </div>
   );
 }
