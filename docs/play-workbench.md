@@ -112,6 +112,14 @@ not reclaimed from its PID alone: a detached child agent may still be running. C
 that the previous child exited before removing that lock. Other editors and arbitrary
 shell commands do not participate in this lock.
 
+During a Play agent turn, the `gamedevpl://` Git helper forwards pushes to the
+owning Play process over its loopback endpoint. A fresh bearer binds each turn;
+requests must match its checkout, game and configured remote. The owner queues
+push reconciliation alongside its other deliveries in the existing writer context
+and waits for accepted work before releasing the lock. Expired connections fail
+without attempting a second local write. This leaves ordinary Git remotes on
+their normal transport and other CLI processes excluded from the checkout.
+
 ## Local code editor
 
 **Code** opens the Studio editor beside the game and Conversation. Its sidebar uses
