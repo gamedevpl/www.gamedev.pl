@@ -13,7 +13,9 @@ It uses the same running game; `capture_game(plan)` starts a fresh instance.
 
 Call `game_script_client({maxCalls: 200, timeoutMs: 60000})`. Write the strategy
 as `./heuristic.mjs` in the current game working directory, where the agent can
-write under the normal workspace policy. Do not write it under `/tmp` or `$TMPDIR`;
+write under the normal workspace policy. For Claude Write, resolve the current
+directory with `pwd` and pass the full absolute path `<cwd>/heuristic.mjs`. Do not
+write it under `/tmp` or `$TMPDIR`;
 that location can be denied. If a temporary-directory write is denied, try the
 working directory before asking the creator or abandoning the script. The `.mjs`
 file is not deliverable game source and stays local. Pass the returned `modulePath` as an argument: `node heuristic.mjs /temporary/path/client.mjs`.

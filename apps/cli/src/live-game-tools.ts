@@ -11,6 +11,7 @@ export function liveGameTools(preview: () => string | undefined) {
   let directActions = 0;
   let advised = false;
   let scriptReady = false;
+  let scriptActed = false;
   const clients = new Set<{ close(): void }>();
   const release = () => {
     for (const game of used) game.release(task, { taskEnded: false });
@@ -44,6 +45,9 @@ export function liveGameTools(preview: () => string | undefined) {
           });
           clients.add(client);
           scriptReady = true;
+          scriptActed = false;
+          directActions = 0;
+          advised = false;
           return {
             content: [
               {
@@ -52,7 +56,7 @@ export function liveGameTools(preview: () => string | undefined) {
                   modulePath: client.modulePath,
                   ...options,
                   usage:
-                    'Write the strategy as ./play-heuristic.mjs in your current working directory, not /tmp or $TMPDIR. The .mjs file is not delivered as game source. If a temporary-directory write is denied, try the working directory before asking the creator or falling back to direct actions. Run node ./play-heuristic.mjs MODULE_PATH, passing this modulePath as the argument. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
+                    'Write the strategy as ./play-heuristic.mjs in your current working directory, not /tmp or $TMPDIR. Claude Write needs an absolute path: use <cwd>/play-heuristic.mjs, resolving cwd with pwd. The .mjs file is not delivered as game source. If a temporary-directory write is denied, try the working directory before asking the creator or falling back to direct actions. Run node ./play-heuristic.mjs MODULE_PATH, passing this modulePath as the argument. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
                 }),
               },
             ],
@@ -65,8 +69,9 @@ export function liveGameTools(preview: () => string | undefined) {
       if (!game) throw Error('Open the local Play workbench for this checkout to inspect its running game.');
       used.add(game);
       const result = await game.call(task, name, args, signal);
+      if (name === 'game_act' && fromScript) scriptActed = true;
       const guidance =
-        name === 'game_act' && !fromScript && !scriptReady && !advised && ++directActions >= 2
+        name === 'game_act' && !fromScript && !scriptActed && !advised && ++directActions >= (scriptReady ? 1 : 2)
           ? ((advised = true),
             'For sustained play, call game_script_client now. Write ./play-heuristic.mjs in the working directory (not /tmp) and refine a bounded heuristic that calls observe/act locally; return compact progress and failure metrics. Use direct game_act only for a short probe or when a script is impractical.')
           : undefined;
@@ -93,6 +98,7 @@ export function liveGameTools(preview: () => string | undefined) {
       directActions = 0;
       advised = false;
       scriptReady = false;
+      scriptActed = false;
     },
   };
   return tools;
