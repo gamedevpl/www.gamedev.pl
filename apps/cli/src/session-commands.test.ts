@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSessionController } from './session-controller.js';
 import { createSessionCommands } from './session-commands.js';
 
+const steeredLines = (session: ReturnType<typeof createSessionController>) =>
+  session.get().lines.filter((line) => line.startsWith('› ['));
+
 describe('shared session commands', () => {
   it('routes the browser publish action through the publication alias', async () => {
     const session = createSessionController('');
@@ -77,8 +80,12 @@ describe('shared session commands', () => {
       steered.push(text);
     });
     const taskId = session.get().taskId;
-    expect(dispatch({ id: 'now', kind: 'queue', taskId, text: 'also add sound' }).status).toBe('accepted');
-    await vi.waitFor(() => expect(session.get().sending).toBe(false));
+    const sent = dispatch({ id: 'now', kind: 'queue', taskId, text: 'also add sound' });
+    expect(sent.status).toBe('stale');
+    expect(await sent.done).toEqual({ id: 'now', status: 'accepted' });
+    expect((await dispatch({ id: 'now', kind: 'queue', taskId, text: 'also add sound' }).done)?.status).toBe(
+      'accepted',
+    );
     expect(steered).toEqual(['also add sound']);
     expect(session.get().queued).toEqual([]);
     expect(session.get().lines.at(-1)).toBe('› [sent to active agent] also add sound');
@@ -86,6 +93,19 @@ describe('shared session commands', () => {
     expect(dispatch({ id: 'later', kind: 'queue', taskId, text: 'then publish' }).status).toBe('accepted');
     expect(steered).toEqual(['also add sound']);
     expect(session.get().queued).toEqual(['then publish']);
+    session.close();
+  });
+
+  it('keeps a browser message unaccepted when the agent refuses it', async () => {
+    const session = createSessionController('');
+    const dispatch = createSessionCommands(session);
+    session.setLocalTask('codex');
+    session.setSteering(async () => {
+      throw new Error('Turn ended.');
+    });
+    const sent = dispatch({ id: 'late', kind: 'queue', taskId: session.get().taskId, text: 'one more thing' });
+    expect((await sent.done)?.status).toBe('stale');
+    expect(steeredLines(session)).toEqual(['› [delivery not confirmed] one more thing']);
     session.close();
   });
 
