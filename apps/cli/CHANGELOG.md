@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Browser Play applies compatible GameKit behavior edits without restarting the game, preserving agent control and linking journal segments to code versions (#2002).
+
 ## 0.60.2 — 2026-10-26
 
 ### Fixed

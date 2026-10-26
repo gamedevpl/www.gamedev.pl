@@ -21,8 +21,9 @@ function loop(){if(!paused)h.step();requestAnimationFrame(loop)}paint();requestA
 window.fixture={boot,keys,position:()=>x,paused:()=>paused,pointing:()=>pointing};
 </script></body></html>`;
 
-export async function liveGameFixture() {
-  let current = html;
+export async function liveGameFixture(initial = html, hot?: unknown) {
+  let current = initial,
+    currentHot = hot;
   const preview = createServer((req, res) => {
     if (req.url === '/status')
       res.end(
@@ -31,8 +32,11 @@ export async function liveGameFixture() {
           busy: false,
           stale: false,
           error: '',
+          ...(currentHot ? { hot: true } : {}),
         }),
       );
+    else if (req.url === '/hot')
+      res.end(JSON.stringify({ revision: createHash('sha256').update(current).digest('hex'), hot: currentHot }));
     else res.end(current);
   });
   await new Promise<void>((resolve) => preview.listen(0, '127.0.0.1', resolve));
@@ -75,8 +79,9 @@ export async function liveGameFixture() {
   return {
     url: server.url,
     agent,
-    update() {
-      current = current.replace("'#ff8080'", "'#80ff80'");
+    update(next?: string, hot?: unknown) {
+      current = next ?? current.replace("'#ff8080'", "'#80ff80'");
+      currentHot = hot;
     },
     async close() {
       for (const mcp of agents) await mcp.close();

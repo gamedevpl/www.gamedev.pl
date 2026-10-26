@@ -17,6 +17,32 @@ export const journalBatch = z
     recordingId: z.string().uuid(),
     startedAt: z.number().nonnegative(),
     entries: z.array(journalEntry).min(1).max(256),
+    segment: z
+      .object({
+        runtimeInstanceId: z.string().uuid(),
+        buildEpoch: integer,
+        previousRecordingId: z.string().uuid().optional(),
+        transitionId: z.string().uuid().optional(),
+        stateVersion: integer.optional(),
+        observationVersion: integer.optional(),
+        frame: integer.optional(),
+        simulationTick: integer.optional(),
+        protocol: z.literal(1).optional(),
+        bootHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+        bundleHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+        sourceTreeHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 const path = z

@@ -1,13 +1,31 @@
 export const LIVE_GAME_SCRIPT = String.raw`
 const liveTabId=crypto.randomUUID();
-let liveSocket,liveControlled=false,liveOperation=false,liveEpoch=0,liveLeaseTimer;
+let liveRuntimeId=crypto.randomUUID();
+let liveSocket,liveControlled=false,liveOperation=false,liveEpoch=0,liveLeaseTimer,hotUpdating=false,hotUnavailable=false;
+const hotWaiters=new Map();
+function liveHotMessage(message){
+  return new Promise((resolve,reject)=>{
+    if(liveSocket?.readyState!==1){reject(Error('Live connection unavailable'));return;}
+    const timer=setTimeout(()=>{hotWaiters.delete(message.id);reject(Error('Update acknowledgement timed out'));},3000);
+    hotWaiters.set(message.id,{resolve,reject,timer});liveSend({type:'live:hot',...message});
+  });
+}
+async function liveHotUpdate(message){
+  try{return await liveHotMessage(message);}
+  catch(error){
+    if(error.definitive)throw error;
+    const transaction=await liveHotMessage({phase:'status',id:message.id});
+    if(['finish','abort'].includes(message.phase)&&transaction.state==='prepared')return liveHotMessage(message);
+    return transaction;
+  }
+}
 const liveReplies=new Map();
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{
   const control=el('agent-control');
   document.body.style.setProperty('--live-control-space',control.hidden?'0px':(control.getBoundingClientRect().height+12)+'px');
 }).observe(el('agent-control'));
 function liveSend(message){if(liveSocket?.readyState===1)liveSocket.send(JSON.stringify(message));}
-function liveHello(){liveSend({type:'live:hello',tabId:liveTabId,sourceId,revision});}
+function liveHello(){liveSend({type:'live:hello',tabId:liveTabId,sourceId,revision,instanceId:liveRuntimeId});}
 function livePost(type,extra={}){frame.contentWindow?.postMessage({source:'gdpl-host',type,...extra},'*');}
 function liveRelease(notify=false,reason='Control released'){
   liveEpoch++;clearTimeout(liveLeaseTimer);liveControlled=false;
@@ -30,6 +48,9 @@ function liveAsk(type,extra={}){
   });
 }
 addEventListener('message',e=>{
+  if(e.source===frame.contentWindow&&e.data?.source==='gdpl-workbench-hot'&&e.data.type==='unavailable'){
+    hotUnavailable=true;el('notice').textContent='Updated code stopped after an error. Inspect the journal or restart with update.';el('restart').hidden=false;
+  }
   const m=e.data;if(!m||m.source!=='gdpl-player'||m.type!=='agent:state')return;
   const p=liveReplies.get(m.id);
   if(p&&e.source===p.target){clearTimeout(p.timer);liveReplies.delete(m.id);p.resolve(m);}
@@ -39,9 +60,10 @@ async function liveRun(message){
   if(liveOperation){liveSend({type:'live:result',id:message.id,error:'Another game operation is running'});return;}
   liveOperation=true;
   const target=frame,shown=revision,epoch=liveEpoch,args=message.args||{};
-  const check=()=>{if(epoch!==liveEpoch||frame!==target||shown!==revision||message.sourceId!==sourceId)throw Error('Game or control changed; observe again');};
+  const check=()=>{if(epoch!==liveEpoch||frame!==target||shown!==revision||message.sourceId!==sourceId||hotUnavailable&&message.operation!=='game_release_control')throw Error('Game or control changed; observe again');};
   try{
-    if(!revision||loading||message.revision!==revision)throw Error('Displayed build changed or is loading');
+    if(!revision||hotUpdating||replacingFrame||message.revision!==revision)throw Error('Displayed build changed or is loading');
+    if(hotUnavailable&&message.operation!=='game_release_control')throw Error('Committed code is unavailable; restart with update or inspect the journal.');
     check();let observation;
     if(message.operation==='game_take_control'){
       const cap=await gameRequest(frame,'capabilities');check();
@@ -75,6 +97,9 @@ addEventListener('play-presence-connected',event=>{
   socket.addEventListener('open',liveHello);
   socket.addEventListener('message',event=>{
     let message;try{message=JSON.parse(event.data);}catch{return;}
+    if(message.type==='live:hot-result'){
+      const pending=hotWaiters.get(message.id);if(pending){clearTimeout(pending.timer);hotWaiters.delete(message.id);message.error?pending.reject(Object.assign(Error(message.error),{definitive:true})):pending.resolve(message.transaction);}
+    }
     if(message.type==='live:request')void liveRun(message);
     if(message.type==='live:release')liveRelease();
     if(message.type==='live:lease')liveLease();

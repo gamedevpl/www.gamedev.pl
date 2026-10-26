@@ -71,7 +71,7 @@ function render(next) {
   }
   if (sourceId !== state.sourceId) {
     liveRelease();
-    sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';
+    sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';replacingFrame=false;
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
     failedBuild=undefined;el('notice').textContent='';updateBuildError();
   }
@@ -116,7 +116,7 @@ el('fullscreen').onclick = () => { const request = document.fullscreenElement ? 
 function viewport() { document.body.dataset.compact=String((window.visualViewport?.height||window.innerHeight)<=520); document.documentElement.style.setProperty('--height', (window.visualViewport?.height || window.innerHeight) + 'px'); }
 window.visualViewport?.addEventListener('resize', viewport); viewport();
 async function apply(force=false,automatic=false) {
-  if (liveControlled || liveOperation) { el('notice').textContent='Take back control before applying an update.'; return; }
+  if (liveOperation) { el('notice').textContent='Wait for the current game operation to finish.'; return; }
   if (loading) return;
   loading = true; el('apply').disabled = true;
   const expectedSource = sourceId;
@@ -139,7 +139,7 @@ async function previewTick() {
         if (!build.error && !build.busy && !build.stale && build.revision) {
           candidate = build.revision;
           if (!revision) await apply();
-          else {el('apply').hidden=candidate===revision||el('policy').value==='freeze';if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);if(caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
+          else {el('apply').hidden=candidate===revision||el('policy').value==='freeze';if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);const hot=build.hot?await gameRequest(frame,'hot:status').catch(()=>null):null;if(hot?.ready||caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
         }
       }
     }

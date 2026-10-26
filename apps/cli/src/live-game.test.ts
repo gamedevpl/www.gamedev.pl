@@ -5,10 +5,199 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createLiveGame, findLiveGame } from './live-game.js';
 
 const games: ReturnType<typeof createLiveGame>[] = [];
+
+it('commits code epochs while retaining an idle lease and fencing actions behind fresh observation', async () => {
+  const { game, tab, signal } = fixture();
+  const htmlA = '<html>A</html>',
+    htmlB = '<html>B</html>';
+  const a = createHash('sha256').update(htmlA).digest('hex'),
+    b = createHash('sha256').update(htmlB).digest('hex');
+  game.retainBuild(1, { html: htmlA, revision: a });
+  game.retainBuild(1, { html: htmlB, revision: b });
+  const first = tab();
+  first.hello(a);
+  const take = game.call('owner', 'game_take_control', {}, signal.signal);
+  first.reply();
+  await take;
+  const id = randomUUID(),
+    recordingId = randomUUID(),
+    previousRecordingId = randomUUID(),
+    runtimeInstanceId = randomUUID();
+  const begin = {
+    type: 'live:hot',
+    phase: 'begin',
+    id,
+    sourceId: 1,
+    previousRevision: a,
+    revision: b,
+    expectedEpoch: 0,
+  };
+  first.message(begin);
+  expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0]).transaction.state).toBe('prepared');
+  await expect(game.call('owner', 'game_observe', {}, signal.signal)).rejects.toThrow('update');
+  const finish = {
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId,
+    previousRecordingId,
+    recordingId,
+    frame: 12,
+    simulationTick: 8,
+  };
+  first.message(finish);
+  first.hello(a);
+  await expect(game.call('other', 'game_take_control', {}, signal.signal)).rejects.toThrow('owns');
+  await expect(
+    game.call('owner', 'game_act', { actions: [{ kind: 'step', frames: 1 }] }, signal.signal),
+  ).rejects.toThrow('game_observe');
+  const observation = game.call('owner', 'game_observe', {}, signal.signal);
+  first.reply();
+  await observation;
+  const action = game.call('owner', 'game_act', { actions: [{ kind: 'step', frames: 1 }] }, signal.signal);
+  expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0]).revision).toBe(b);
+  first.reply();
+  await action;
+  first.message(finish);
+  first.message({ type: 'live:hot', phase: 'status', id });
+  expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0]).transaction).toMatchObject({
+    state: 'committed',
+    result: { epoch: 1 },
+  });
+  for (const record of [previousRecordingId, recordingId])
+    first.message({
+      type: 'live:journal',
+      recordingId: record,
+      startedAt: 1,
+      entries: [{ seq: 1, timeMs: 1, frame: 12, kind: 'state', data: { value: record } }],
+    });
+  const history = await game.call('reader', 'game_journal', {}, signal.signal);
+  expect(history.data.recordings.map((r: { revision: string }) => r.revision)).toEqual([a, b]);
+  first.hello(b);
+});
+
+it('refuses updates during an RPC and preserves a human revocation through commit', async () => {
+  const { game, tab, signal } = fixture();
+  const html = '<html>next</html>',
+    revision = createHash('sha256').update(html).digest('hex');
+  const previousRevision = 'a'.repeat(64);
+  game.retainBuild(1, { html, revision });
+  const first = tab();
+  first.hello(previousRevision);
+  const take = game.call('owner', 'game_take_control', {}, signal.signal);
+  const request = JSON.parse(first.socket.send.mock.calls.at(-1)![0]);
+  const id = randomUUID(),
+    begin = { type: 'live:hot', phase: 'begin', id, sourceId: 1, previousRevision, revision, expectedEpoch: 0 };
+  first.message(begin);
+  expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0]).error).toContain('Wait');
+  first.message({ type: 'live:result', id: request.id, data: {} });
+  await take;
+  first.message(begin);
+  first.message({ type: 'live:reclaim' });
+  first.message({
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId: randomUUID(),
+    previousRecordingId: randomUUID(),
+    recordingId: randomUUID(),
+    frame: 5,
+    simulationTick: 3,
+  });
+  expect(JSON.parse(first.socket.send.mock.calls.at(-1)![0]).transaction.state).toBe('committed');
+  await expect(game.call('owner', 'game_take_control', {}, signal.signal)).rejects.toThrow('revoked');
+});
 afterEach(() => {
   games.splice(0).forEach((game) => game.close());
   vi.useRealTimers();
 });
+it('releases an idle lease during a prepared update without reacquiring it on commit', async () => {
+  const { game, tab, signal } = fixture();
+  const html = '<html>release</html>',
+    revision = createHash('sha256').update(html).digest('hex');
+  const previousRevision = 'a'.repeat(64);
+  game.retainBuild(1, { html, revision });
+  const first = tab();
+  first.hello(previousRevision);
+  const take = game.call('owner', 'game_take_control', {}, signal.signal);
+  first.reply();
+  await take;
+  const id = randomUUID();
+  first.message({ type: 'live:hot', phase: 'begin', id, sourceId: 1, previousRevision, revision, expectedEpoch: 0 });
+  await expect(game.call('owner', 'game_release_control', {}, signal.signal)).resolves.toMatchObject({
+    data: { released: true },
+  });
+  first.message({
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId: randomUUID(),
+    previousRecordingId: randomUUID(),
+    recordingId: randomUUID(),
+    frame: 5,
+    simulationTick: 3,
+  });
+  const next = game.call('other', 'game_take_control', {}, signal.signal);
+  first.reply();
+  await next;
+});
+it('retains committed epochs and receipts when the same iframe reconnects', async () => {
+  const { game, tab } = fixture();
+  const a = 'a'.repeat(64),
+    html = '<html>B</html>',
+    b = createHash('sha256').update(html).digest('hex');
+  game.retainBuild(1, { html, revision: b });
+  const first = tab(),
+    instanceId = randomUUID();
+  first.message({ type: 'live:hello', tabId: first.id, instanceId, sourceId: 1, revision: a });
+  const id = randomUUID();
+  first.message({
+    type: 'live:hot',
+    phase: 'begin',
+    id,
+    sourceId: 1,
+    previousRevision: a,
+    revision: b,
+    expectedEpoch: 0,
+  });
+  first.message({
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId: randomUUID(),
+    previousRecordingId: randomUUID(),
+    recordingId: randomUUID(),
+    frame: 4,
+    simulationTick: 3,
+  });
+  first.socket.emit('close');
+  const second = tab();
+  second.message({ type: 'live:hello', tabId: first.id, instanceId, sourceId: 1, revision: b });
+  second.message({ type: 'live:hot', phase: 'status', id });
+  expect(JSON.parse(second.socket.send.mock.calls.at(-1)![0]).transaction).toMatchObject({
+    state: 'committed',
+    result: { epoch: 1 },
+  });
+  second.message({
+    type: 'live:hot',
+    phase: 'begin',
+    id: randomUUID(),
+    sourceId: 1,
+    previousRevision: b,
+    revision: b,
+    expectedEpoch: 1,
+  });
+  expect(JSON.parse(second.socket.send.mock.calls.at(-1)![0]).transaction.state).toBe('prepared');
+});
+
 function fixture() {
   let source = 1;
   const game = createLiveGame(() => source);

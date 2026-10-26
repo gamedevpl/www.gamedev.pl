@@ -93,7 +93,9 @@ it.skipIf(!findChromium())(
       fixture.update();
       await page.locator('#apply').waitFor();
       await page.click('#apply');
-      expect(await page.locator('#notice').textContent()).toContain('Take back control');
+      await expect.poll(() => page.locator('#notice').textContent(), { timeout: 6000 }).toContain('Take back control');
+      const kept = await agent.call('game_observe', { screenshot: false });
+      expect(kept.data.observation.snapshot.boot).toBe(observed.data.observation.snapshot.boot);
       await page.click('#agent-reclaim');
       await expect.poll(() => page.locator('#agent-control').isVisible()).toBe(false);
       await expect(agent.call('game_take_control')).rejects.toThrow('revoked');

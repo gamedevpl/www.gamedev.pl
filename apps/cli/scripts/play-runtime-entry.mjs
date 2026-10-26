@@ -17,6 +17,7 @@ const cliVersion = process.env.GAMEDEVPL_PREVIEW_VERSION;
 const instanceId = randomBytes(24).toString('hex');
 let html = '',
   revision = '',
+  hot,
   error = 'Preparing the first playable build…';
 let attemptedFingerprint = '',
   builtFingerprint = '',
@@ -74,9 +75,11 @@ function assemble() {
         ),
       ).href,
     ) +
-    '; process.stdout.write(assembleGame(' +
+    '; import {existsSync,readFileSync} from "node:fs"; const manifestPath=' +
+    JSON.stringify(join(workspaceRoot, 'games', slug, 'GAME.json')) +
+    '; const result=assembleGame(' +
     JSON.stringify(slug) +
-    ').html);';
+    '); if(existsSync(manifestPath)&&JSON.parse(readFileSync(manifestPath,"utf8")).hot?.protocol===1&&result.hot?.protocol!==1)throw Error("This game needs a newer Creator Kit for HMR. Run gamedevpl kit update, then retry the build."); process.stdout.write(JSON.stringify({html:result.html,hot:result.hot}));';
   currentBuild = execFile(
     process.execPath,
     [
@@ -90,7 +93,7 @@ function assemble() {
       cwd: workspaceRoot,
       env: { ...process.env, GAMEDEV_REPO_ROOT: workspaceRoot },
       timeout: 30000,
-      maxBuffer: 32 * 1024 * 1024,
+      maxBuffer: 64 * 1024 * 1024,
     },
     (failure, stdout, stderr) => {
       busy = false;
@@ -103,7 +106,27 @@ function assemble() {
         error = 'The assembler returned an empty game.';
         return;
       }
-      html = stdout;
+      let compiled;
+      try {
+        compiled = JSON.parse(stdout);
+      } catch {
+        error = 'The assembler returned an invalid build.';
+        return;
+      }
+      if (
+        typeof compiled.html !== 'string' ||
+        !compiled.html.trim() ||
+        Buffer.byteLength(compiled.html) > 32 * 1024 * 1024
+      ) {
+        error = 'The assembler returned an empty or oversized game.';
+        return;
+      }
+      if (sourceStamp() !== buildingFingerprint) {
+        dirtyAt = Date.now();
+        return;
+      }
+      html = compiled.html;
+      hot = compiled.hot;
       builtFingerprint = buildingFingerprint;
       revision = createHash('sha256').update(html).digest('hex');
       error = '';
@@ -160,6 +183,7 @@ const server = createServer((req, res) => {
         busy,
         stale: builtFingerprint !== stamp,
         canRetry: true,
+        hot: !!hot,
       }),
     );
     return;
@@ -168,6 +192,11 @@ const server = createServer((req, res) => {
     // Game documents are only supplied to the trusted shell as inert text.
     res.setHeader('content-type', 'text/plain; charset=utf-8');
     res.end(html);
+    return;
+  }
+  if (path === base + 'hot') {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ revision, hot }));
     return;
   }
   if (path !== base) {

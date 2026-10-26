@@ -6,6 +6,7 @@ import {
   MAX_MULTIPLAYER_SLOTS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
   parseCatalogLinks,
+  gameTypeScriptEntry,
   type CatalogEditor,
   type CatalogEntry,
   type CatalogMedia,
@@ -701,7 +702,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     entryPath: string,
     sourceKind: 'game' | 'GameKit module',
     overrides?: Record<string, string>,
-    /** When given, every module the walk loads is recorded here by root-relative path. */
+    // Retain loaded modules by root-relative path.
     collect?: Map<string, string>,
     options?: GetGameSourcesOptions,
   ): Promise<string> {
@@ -1268,14 +1269,18 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
+      const entry =
+        publishTs === null
+          ? gameTypeScriptEntry(gameTs, manifestSource)
+          : { source: publishTs, entryFile: 'publish.ts' };
       const gameJs = await bundleGameTypeScript(
-        publishTs ?? gameTs,
+        entry.source,
         ref,
         slug,
         overrides,
         undefined,
         options,
-        publishTs === null ? 'game.ts' : 'publish.ts',
+        entry.entryFile,
       );
       const bundleMs = Date.now() - bundleStartedAt;
 

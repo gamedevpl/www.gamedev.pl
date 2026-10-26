@@ -13,6 +13,7 @@ export default defineConfig({
       'src/play-live-heuristic.test.ts',
       'src/play-live-slow-actions.test.ts',
       'src/play-live-journal.test.ts',
+      'src/play-hot-game.test.ts',
     ],
     testTimeout: 90_000,
     hookTimeout: 90_000,

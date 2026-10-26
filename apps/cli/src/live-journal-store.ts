@@ -24,6 +24,7 @@ type Chunk = {
 };
 type Source = { tabId: string; sourceId: number; revision: string };
 type Recording = Source & {
+  segment?: ReturnType<typeof journalBatch.parse>['segment'];
   recordingId: string;
   startedAt: number;
   last: number;
@@ -132,6 +133,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024, codeFor?: (sour
         if (recordings.size >= 256) throw Error('Journal instance limit reached.');
         for (const previous of recordings.values()) if (previous.tabId === source.tabId) previous.connected = false;
         recording = {
+          ...(batch.segment ? { segment: batch.segment } : {}),
           tabId: source.tabId,
           sourceId: source.sourceId,
           revision: source.revision,

@@ -4,7 +4,7 @@ addEventListener('message', event => {
   const m=event.data;
   if(!m||m.source!=='gdpl-workbench-game'||typeof m.id!=='string')return;
   const p=requests.get(m.id);if(!p||event.source!==p.frame.contentWindow)return;
-  clearTimeout(p.timer);requests.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);
+  clearTimeout(p.timer);requests.delete(m.id);m.error?p.reject(Object.assign(Error(m.error),{definitive:m.definitive===true})):p.resolve(m.data);
 });
 function gameRequest(target,type,data,timeout=3000) {
   return new Promise((resolve,reject)=>{
@@ -23,17 +23,66 @@ async function ready(target) {
   }
   throw Error('Candidate did not become ready');
 }
-let swapEpoch=0,lastSwapError='';
+let swapEpoch=0,lastSwapError='',replacingFrame=false;
+function replacementBusy(){return typeof liveControlled!=='undefined'&&(liveControlled||liveOperation);}
+async function hotBuild(build,check){
+  const target=frame;
+  const before=await gameRequest(target,'hot:status');check();
+  if(!before||before.bootHash!==build.hot.bootHash)return null;
+  if(!before.ready)throw Error('Current game is unavailable. Restart with update to recover.');
+  if(liveOperation)throw Error('Wait for the current game operation to finish.');
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(build.hot.bundle));check();
+  if(liveOperation)throw Error('Wait for the current game operation to finish.');
+  if([...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('')!==build.hot.bundleHash)throw Error('Update code hash mismatch');
+  const id=crypto.randomUUID(),previousRevision=revision,expectedEpoch=before.epoch;
+  try{
+    const transaction=await liveHotUpdate({phase:'begin',id,sourceId,previousRevision,revision:build.revision,expectedEpoch});
+    if(transaction.state!=='prepared')throw Error('Update transaction is no longer pending');
+    hotUpdating=true;
+    try{check();}catch(error){await liveHotUpdate({phase:'abort',id});throw error;}
+    let result;
+    try{result=await gameRequest(target,'hot:apply',{...build.hot,id,previousRevision,revision:build.revision,expectedEpoch});}
+    catch(error){
+      if(error.definitive){await liveHotUpdate({phase:'abort',id});throw error;}
+      result=await gameRequest(target,'hot:result',{id});if(!result)throw Error('Update outcome uncertain; restart with update to recover.');
+    }
+    check();
+    if(result.status!=='rejected'){
+      revision=build.revision;liveEpoch++;
+      hotUnavailable=result.status!=='applied';
+      el('shown-build').textContent='Build '+revision.slice(0,10);
+    }
+    const {epoch,runtimeInstanceId,previousRecordingId,recordingId,frame:boundaryFrame,simulationTick}=result;
+    const committed=await liveHotUpdate({phase:'finish',id,result:result.status,epoch,runtimeInstanceId,previousRecordingId,recordingId,frame:boundaryFrame,simulationTick});
+    if(result.status==='rejected')throw Error(result.error||result.reason||'Candidate rejected');
+    if(committed.state!=='committed')throw Error('Update commit could not be confirmed; restart to recover.');
+    liveHello();
+    el('apply').hidden=true;el('restart').hidden=result.status==='applied';
+    lastSwapError=result.status==='applied'?'Code updated · gameplay continued':'Updated code failed to refresh. Restart with update to recover.';
+    el('notice').textContent=lastSwapError;
+    return result.status==='applied';
+  }finally{hotUpdating=false;}
+}
 async function swapBuild(build,force=false,automatic=false) {
   const epoch=++swapEpoch, previous=frame;let next;
   const current=()=>epoch===swapEpoch&&frame===previous;
   const check=()=>{if(!current())throw Error('Update superseded');};
+  if(revision&&!force&&build.hot){
+    try{const updated=await hotBuild(build,check);if(updated!==null)return updated;}
+    catch(error){if(!current())return false;if(/Wait for the current/.test(error.message)&&typeof lastAuto!=='undefined')lastAuto='';lastSwapError=error.message;el('notice').textContent=lastSwapError;el('restart').hidden=false;return false;}
+  }
+  if(typeof liveControlled!=='undefined'&&liveControlled){el('notice').textContent='Take back control before replacing this game instance.';return false;}
+  if(replacementBusy()){el('notice').textContent='Wait for the current game operation to finish.';return false;}
+  replacingFrame=true;
   try {
     let saved=null;
     if(revision&&!force) {
       const caps=await gameRequest(previous,'capabilities');check();
       if(!caps.state)throw Error('This game cannot preserve state. Use Restart with update.');
-      if(automatic&&(!caps.validate||!caps.safe))throw Error('Update ready. Apply manually at a safe moment.');
+      if(automatic&&(!caps.validate||!caps.safe)){
+        if(caps.validate&&typeof lastAuto!=='undefined')lastAuto='';
+        throw Error('Update ready. Apply manually at a safe moment.');
+      }
       posture(previous,'pause');
       saved=await gameRequest(previous,'snapshot');check();
       if(JSON.stringify(saved??null).length>1000000)throw Error('State exceeds 1 MB');
@@ -51,7 +100,10 @@ async function swapBuild(build,force=false,automatic=false) {
     posture(next,'resume');
     await new Promise(r=>setTimeout(r,150));
     check();
+    if(replacementBusy())throw Error('Game control changed while replacing the instance');
     previous.remove();next.style.cssText='';next.id='game';frame=next;
+    if(typeof liveRuntimeId!=='undefined')liveRuntimeId=crypto.randomUUID();
+    if(typeof hotUnavailable!=='undefined')hotUnavailable=false;
     revision=build.revision;el('shown-build').textContent='Build '+revision.slice(0,10);
     el('empty').hidden=true;el('apply').hidden=true;el('restart').hidden=true;
     lastSwapError='';el('notice').textContent=saved!==null?'Updated · game state restored':'Build loaded';
@@ -60,11 +112,11 @@ async function swapBuild(build,force=false,automatic=false) {
   } catch(error) {
     next?.remove();
     if(!current())return false;
-    posture(previous,'resume');
+    if(!replacementBusy())posture(previous,'resume');
     lastSwapError=error.message+' Current build kept.';el('notice').textContent=lastSwapError;
     if(revision)el('restart').hidden=false;
     return false;
-  }
+  }finally{if(epoch===swapEpoch)replacingFrame=false;}
 }
 let recording=false;
 async function baseCapture() {

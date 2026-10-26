@@ -28,10 +28,6 @@ function specMd(frontmatter: Record<string, string>): string {
   return ['---', ...lines, '---', '', '## Concept', 'A game.'].join('\n');
 }
 
-/**
- * Answers the catalog's Contents listing + GraphQL chunk pattern. `files` maps
- * repo-relative paths to text (or null for a missing blob).
- */
 function catalogFetchImpl(dirs: string[], files: Record<string, string | null>): typeof fetch {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -1580,6 +1576,35 @@ describe('getGameSources', () => {
     const sources = await client.getGameSources('main', 'sim-game');
     expect(sources?.gameJs).toContain('ok: true');
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
+  it('boots a hot game from its retained boot module and behavior entry', async () => {
+    const hot = { protocol: 1, id: 'hot-game', stateVersion: 1, observationVersion: 1, behavior: 'game/behavior.ts' };
+    const files = new Map<string, string>([
+      ['games/hot-game/index.html', '<canvas id="game"></canvas>'],
+      ['games/hot-game/game.ts', 'export default builder=>builder.input({}).audio().init(()=>({}));'],
+      ['games/hot-game/game/behavior.ts', 'export default {update(){},render(){},snapshot(){return {build:"hot"}}};'],
+      ['games/hot-game/style.css', '.game {}'],
+      ['games/hot-game/SPEC.md', specMd({ title: 'Hot Game' })],
+      ['games/hot-game/GAME.json', JSON.stringify({ engine: { modules: [] }, hot })],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit={};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname,
+        marker = '/contents/';
+      const value = files.get(decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length)));
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const sources = await client.getGameSources('main', 'hot-game');
+    expect(sources?.gameJs).toContain('bootBuilder');
+    const started = vi.fn();
+    const builder: Record<string, unknown> = { start: started };
+    for (const name of ['hot', 'update', 'render', 'snapshot', 'input', 'audio', 'init'])
+      builder[name] = vi.fn(() => builder);
+    new Function('GameKit', 'window', sources!.gameJs)({ defineGame: () => builder }, {});
+    expect(started).toHaveBeenCalledOnce();
   });
 
   it('bundles JSON files imported by game TypeScript', async () => {
