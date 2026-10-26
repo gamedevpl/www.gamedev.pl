@@ -10,6 +10,11 @@ import { liveGameFixture } from './play-live-game-fixture.js';
 
 const strategy = `
 import {pathToFileURL} from 'node:url';
+import net from 'node:net';
+if(process.platform!=='win32'){
+  net.connect=net.createConnection=()=>{throw Error('network disabled in heuristic')};
+  globalThis.fetch=()=>{throw Error('network disabled in heuristic')};
+}
 const {connect}=await import(pathToFileURL(process.argv[1]).href);
 const client=await connect();
 console.log(JSON.stringify(await client.run(async ({initial,act})=>{
@@ -50,12 +55,13 @@ it.skipIf(!findChromium())('a Node heuristic controls the same game through its 
     // The script and direct MCP calls must share one control owner.
     const before = await agent.call('game_take_control', { screenshot: false });
     const setup = (await agent.call('game_script_client')) as unknown as { modulePath: string };
-    const result = await promisify(execFile)(process.execPath, [
-      '--input-type=module',
-      '-e',
-      strategy,
-      setup.modulePath,
-    ]);
+    const nodeArgs = ['--input-type=module', '-e', strategy, setup.modulePath];
+    const executable = process.platform === 'darwin' ? '/usr/bin/sandbox-exec' : process.execPath;
+    const args =
+      process.platform === 'darwin'
+        ? ['-p', '(version 1) (allow default) (deny network*)', process.execPath, ...nodeArgs]
+        : nodeArgs;
+    const result = await promisify(execFile)(executable, args);
     const metrics = JSON.parse(result.stdout);
     expect(metrics.decisions).toBe(4);
     expect(metrics.start.frame).toBe(before.data.observation.frame);

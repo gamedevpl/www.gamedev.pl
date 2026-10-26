@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { findLiveGame, type LiveGame } from './live-game.js';
 import { LIVE_GAME_TOOLS, type LiveToolName } from './live-game-protocol.js';
 
-export function liveGameTools(preview: () => string | undefined) {
+export function liveGameTools(preview: () => string | undefined, scriptCwd?: string) {
   const task = randomUUID();
   const used = new Set<LiveGame>();
   let preparing = false;
@@ -41,6 +41,7 @@ export function liveGameTools(preview: () => string | undefined) {
             ...options,
             signal,
             release,
+            cwd: scriptCwd,
             call: (name, args, signal) => tools.call(name, args, signal, true),
           });
           clients.add(client);

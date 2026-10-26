@@ -1,5 +1,5 @@
 import { AsyncResource } from 'node:async_hooks';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -161,6 +161,24 @@ describe('play brain', () => {
     expect(t.lines).toContain('The snake moves one cell per tick.');
     expect(t.picks).toEqual([]);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'places the script channel inside the task workspace and removes it after the turn',
+    async () => {
+      let modulePath = '';
+      const t = setup([
+        async (task) => {
+          modulePath = JSON.parse(await callTool(task, 'game_script_client')).modulePath;
+          expect(modulePath.startsWith(join(t.ws.root, 'games', 'snake') + '/')).toBe(true);
+          expect(existsSync(modulePath)).toBe(true);
+          return 'Done';
+        },
+      ]);
+      const brain = await t.start();
+      await brain.turn('Play using a script');
+      expect(existsSync(modulePath)).toBe(false);
+    },
+  );
 
   it('sends red checks back to the agent, then offers the green edit for delivery', async () => {
     const t = setup([

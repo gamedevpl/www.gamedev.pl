@@ -113,7 +113,7 @@ export async function startLocalPreviewMcp(input: {
 }) {
   const controller = new AbortController();
   const signal = AbortSignal.any([input.abort, controller.signal]);
-  const live = liveGameTools(() => input.previewUrl);
+  const live = liveGameTools(() => input.previewUrl, input.sandbox?.cwd);
   const sandbox = resolvePermissions(input.sandbox?.permissions).sandbox;
   const approval = input.onApproval
     ? claudeLocalApproval(input.onApproval, sandbox ? { sandbox, cwd: input.sandbox!.cwd } : {}, input.write)

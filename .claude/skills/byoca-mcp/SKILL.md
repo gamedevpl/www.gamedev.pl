@@ -1604,3 +1604,7 @@ Claude's workspace-write policy can deny `/tmp` strategy edits even though
 `game_script_client` succeeds. Direct it to write an absolute `.mjs` path under
 its current working directory; that extension is not deliverable game source.
 The generated client module stays temporary and must not be copied or logged.
+Claude's shell sandbox may also deny loopback networking and writes outside the
+task directory. On macOS and Linux the script client therefore uses private pipes
+under that directory. Keep those files out of game delivery, anchor host-side
+operations to the created directory, and exercise OS-level network denial on macOS.

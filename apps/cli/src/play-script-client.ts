@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { createPlayFifoClient } from './play-script-fifo.js';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +37,7 @@ export async function connect() {
 export const PLAY_SCRIPT_TOOL = {
   name: 'game_script_client' as const,
   description:
-    'Prepare a task-scoped Node ESM client for heuristic scripts controlling the SAME running game. Prefer this for sustained play: inspect state, write a strategy, execute many observe/act decisions in code, then review compact metrics and refine the script. Returns modulePath; dynamically import it in your script and await connect(). The script makes local MCP requests without model turns. No game source or credentials need to be copied. Only live-game/journal tools are exposed. Existing creator consent, frame limits and reclaim apply. Ends on timeout, call budget, task end or cancellation; never retry uncertain actions automatically.',
+    'Prepare a task-scoped Node ESM client for heuristic scripts controlling the SAME running game. Prefer this for sustained play: inspect state, write a strategy, execute many observe/act decisions in code, then review compact metrics and refine the script. Returns modulePath; dynamically import it in your script and await connect(). The script makes local MCP requests without model turns; on macOS and Linux it uses private pipes without shell network access. No game source or credentials need to be copied. Only live-game/journal tools are exposed. Existing creator consent, frame limits and reclaim apply. Ends on timeout, call budget, task end or cancellation; never retry uncertain actions automatically.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -54,8 +55,10 @@ export async function createPlayScriptClient(input: {
   maxCalls: number;
   timeoutMs: number;
   release: () => void;
+  cwd?: string;
 }) {
   input.signal.throwIfAborted();
+  if (process.platform === 'darwin' || process.platform === 'linux') return createPlayFifoClient(input);
   const controller = new AbortController();
   const key = `Bearer ${randomBytes(32).toString('hex')}`;
   let calls = 0;
@@ -114,7 +117,11 @@ export async function createPlayScriptClient(input: {
     clearTimeout(timer);
     input.signal.removeEventListener('abort', close);
     controller.abort();
-    input.release();
+    try {
+      input.release();
+    } catch {
+      // A closed socket still needs the remaining cleanup.
+    }
     server.closeAllConnections();
     server.close();
     if (dir) rmSync(dir, { recursive: true, force: true });

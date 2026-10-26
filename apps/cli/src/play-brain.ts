@@ -182,7 +182,11 @@ export async function startPlayBrain(input: {
     ));
   // The running turn's signal; Ctrl+C stops the agent and tool.
   let turnAbort = new AbortController();
-  const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]));
+  const live = liveGameAppTools(
+    preview,
+    () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
+    gameSourceRoot(ws.root, ws.slug),
+  );
   // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
   const permission = () => taskPermissionMode(spec, ws.permissionMode);

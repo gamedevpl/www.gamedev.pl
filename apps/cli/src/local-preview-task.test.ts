@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -44,6 +44,7 @@ it.each(['codex', 'claude', 'copilot'])('connects host capture to a delegated %s
   const spec = loadAdapters().adapters.find((item) => item.name === name)!;
   const write = vi.fn();
   let connected: ReturnType<typeof endpoint> | undefined;
+  let modulePath: string | undefined;
   const ws: Workshop = {
     root,
     slug: 'current-game',
@@ -74,6 +75,10 @@ it.each(['codex', 'claude', 'copilot'])('connects host capture to a delegated %s
       };
       const tools = await rpc('tools/list');
       expect(tools.tools.map((item: { name: string }) => item.name)).toContain('capture_game');
+      const script = await rpc('tools/call', { name: 'game_script_client', arguments: {} });
+      modulePath = JSON.parse(script.content[0].text).modulePath;
+      if (process.platform !== 'win32') expect(modulePath!.startsWith(root + '/')).toBe(true);
+      expect(existsSync(modulePath!)).toBe(true);
       const started = await rpc('tools/call', { name: 'capture_game', arguments: {} });
       const { jobId } = JSON.parse(started.content[0].text);
       await vi.waitFor(async () => {
@@ -103,6 +108,7 @@ it.each(['codex', 'claude', 'copilot'])('connects host capture to a delegated %s
     expect(write).toHaveBeenCalledWith(expect.stringContaining('preview_status, capture_game, capture_status'));
     expect(ws.pick).not.toHaveBeenCalled();
     await expect(fetch(connected!.url)).rejects.toThrow();
+    expect(existsSync(modulePath!)).toBe(false);
   } finally {
     abort.abort();
     preview.closeAllConnections();

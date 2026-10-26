@@ -1,9 +1,9 @@
 import type { AppTool } from 'genaicode/app-agent';
 import { liveGameTools } from './live-game-tools.js';
 
-export function liveGameAppTools(preview: () => Promise<string | undefined>, abort: () => AbortSignal) {
+export function liveGameAppTools(preview: () => Promise<string | undefined>, abort: () => AbortSignal, cwd: string) {
   let url: string | undefined;
-  const live = liveGameTools(() => url);
+  const live = liveGameTools(() => url, cwd);
   const tools: AppTool[] = live.tools.map(({ name, description, inputSchema }) => ({
     name,
     description,
