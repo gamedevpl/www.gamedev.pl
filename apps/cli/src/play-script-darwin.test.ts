@@ -11,8 +11,19 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
 import { expect, it, vi } from 'vitest';
-import { startDarwinPipe } from './play-script-darwin.js';
+import { onDarwinExit, startDarwinPipe } from './play-script-darwin.js';
+
+it('waits for exit before cleanup when a disconnected helper is still exiting', () => {
+  const child = Object.assign(new EventEmitter(), { exitCode: null, signalCode: null });
+  const cleanup = vi.fn();
+  onDarwinExit(child, cleanup);
+  expect(cleanup).not.toHaveBeenCalled();
+  child.emit('exit');
+  child.emit('exit');
+  expect(cleanup).toHaveBeenCalledOnce();
+});
 
 it.skipIf(process.platform === 'win32')('relays bytes and cleans the inherited directory', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'play-darwin-helper-'));

@@ -117,6 +117,7 @@ export async function createPlayFifoClient(input: Input) {
   let anchoredDir: string | undefined;
   let darwinPipe: Awaited<ReturnType<typeof startDarwinPipe>> | undefined;
   let closed = false,
+    cleaned = false,
     active = false,
     received = false,
     calls = 0,
@@ -145,6 +146,8 @@ export async function createPlayFifoClient(input: Input) {
           // The descriptor may already be closed.
         }
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       if (anchoredDir && dirFd !== undefined) {
         for (const name of ['requests.fifo', 'responses.fifo', 'client.mjs', 'client.lock']) {
           try {

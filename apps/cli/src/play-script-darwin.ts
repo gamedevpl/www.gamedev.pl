@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 // macOS cannot traverse directories through /dev/fd; inherit cwd instead.
 const HELPER = String.raw`
@@ -49,6 +49,11 @@ type Input = {
   data: (bytes: Buffer) => void;
   failed: () => void;
 };
+
+export function onDarwinExit(child: Pick<ChildProcess, 'exitCode' | 'signalCode' | 'once'>, onExit: () => void) {
+  if (child.exitCode !== null || child.signalCode !== null) onExit();
+  else child.once('exit', onExit);
+}
 
 export async function startDarwinPipe(input: Input) {
   const child = spawn(process.execPath, ['--input-type=module', '-e', HELPER], {
@@ -101,9 +106,8 @@ export async function startDarwinPipe(input: Input) {
     },
     close(onExit: () => void) {
       closing = true;
-      child.once('exit', onExit);
+      onDarwinExit(child, onExit);
       if (child.connected) child.send({ type: 'close' });
-      else onExit();
     },
   };
 }
