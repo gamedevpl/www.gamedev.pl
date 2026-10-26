@@ -45,7 +45,7 @@ export const KIT_BATCH_MAX_FILES = 12;
 /** Aggregate raw-byte budget across a successful batch (not base64-expanded size). */
 export const KIT_BATCH_MAX_TOTAL_BYTES = 128 * 1024;
 /** Reject oversized kit tarballs. */
-export const KIT_TREE_MAX_BYTES = 16 * 1024 * 1024;
+export const KIT_TREE_MAX_BYTES = 32 * 1024 * 1024;
 /** Keep N and N−1 trees warm. */
 const KIT_TREE_CACHE_CAPACITY = 2;
 
