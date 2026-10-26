@@ -236,6 +236,7 @@ export async function startSessionBrowser(
           })),
           live: state.live.map(clean),
           queued: state.queued.map((line) => clean(shownPrompt(line))),
+          canSteer: state.canSteer,
           agent: options.agent?.()?.get(),
         });
         return;
@@ -381,7 +382,8 @@ export async function startSessionBrowser(
           reply(409, { error: 'Session changed' });
           return;
         }
-        reply(200, dispatch(parsed.data.command));
+        const result = dispatch(parsed.data.command);
+        reply(200, result.done ? await result.done : result);
         return;
       }
       reply(404, { error: 'Not found' });

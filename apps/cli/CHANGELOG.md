@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - Local Play journals retain the built code for each recorded revision; agents can inspect earlier code with `game_journal_code` after files change or a tab closes (#1981).
+- In browser Play, a message sent while the agent works goes straight to it ("Send to agent") instead of waiting in the queue, when the agent can take input mid-task; with genaicode 2.23.0 this includes Claude, which reads it between tool calls of the running turn (#1987).
 
 ### Fixed
 

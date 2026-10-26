@@ -60,6 +60,7 @@ export type SessionController = {
   sendDraft: () => Promise<void>;
   acceptInput: (text: string, promptId: number) => boolean;
   enqueueInput: (text: string, taskId: number) => boolean;
+  steerInput: (text: string, taskId: number) => Promise<boolean> | false;
   stopTask: (taskId: number) => boolean;
   restoreHistory: (saved: SessionHistory) => void;
   savedHistory: () => SessionHistory;
@@ -169,6 +170,41 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     return true;
   };
 
+  // `shown`: transcript form of `text`, attachments collapsed.
+  const sendToAgent = async (send: Steer, text: string, shown: string): Promise<boolean> => {
+    state = { ...state, sending: true, sendStatus: 'Sending to the active agent…' };
+    emit();
+    const typed = splitEvidence(text).text.trim();
+    try {
+      await send(text);
+      const line = `› [sent to active agent] ${shown}`;
+      savedLines = [...savedLines, line].slice(-200);
+      history.push(typed);
+      if (history.length > 50) history.shift();
+      if (followupDraft.trim() === text) followupDraft = '';
+      state = {
+        ...state,
+        lines: [...state.lines, line],
+        sendStatus: 'Accepted by the agent',
+        ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
+      };
+      if (!state.draft) undo = [];
+      return true;
+    } catch (error) {
+      const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
+      const line = `› [delivery not confirmed] ${shown}`;
+      savedLines = [...savedLines, line, status].slice(-200);
+      history.push(typed);
+      if (history.length > 50) history.shift();
+      histIndex = history.length;
+      state = { ...state, lines: [...state.lines, line, status], sendStatus: status };
+      return false;
+    } finally {
+      state = { ...state, sending: false };
+      emit();
+    }
+  };
+
   return {
     setSteering(send) {
       steer = send;
@@ -177,36 +213,8 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     async sendDraft() {
       const text = state.draft.trim();
-      const send = steer;
-      if (closed || stopping || !send || !text || state.sending || state.mode !== 'busy') return;
-      state = { ...state, sending: true, sendStatus: 'Sending to the active agent…' };
-      emit();
-      try {
-        await send(text);
-        const shown = `› [sent to active agent] ${text}`;
-        savedLines = [...savedLines, shown].slice(-200);
-        history.push(text);
-        if (history.length > 50) history.shift();
-        if (followupDraft.trim() === text) followupDraft = '';
-        state = {
-          ...state,
-          lines: [...state.lines, shown],
-          sendStatus: 'Accepted by the agent',
-          ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
-        };
-        if (!state.draft) undo = [];
-      } catch (error) {
-        const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
-        const shown = `› [delivery not confirmed] ${text}`;
-        savedLines = [...savedLines, shown, status].slice(-200);
-        history.push(text);
-        if (history.length > 50) history.shift();
-        histIndex = history.length;
-        state = { ...state, lines: [...state.lines, shown, status], sendStatus: status };
-      } finally {
-        state = { ...state, sending: false };
-        emit();
-      }
+      if (closed || stopping || !steer || !text || state.sending || state.mode !== 'busy') return;
+      await sendToAgent(steer, text, text);
     },
     acceptInput(text, promptId) {
       if (closed || !pending || promptId !== state.promptId) return false;
@@ -217,6 +225,12 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
         followupDraft = state.draft;
       }
       return submitLine(text);
+    },
+    steerInput(text, taskId) {
+      const send = steer;
+      if (closed || stopping || !send || !text.trim() || state.sending || state.mode !== 'busy') return false;
+      if (!state.localTask || taskId !== state.taskId) return false;
+      return sendToAgent(send, text.trim(), shownPrompt(text));
     },
     enqueueInput(text, taskId) {
       if (closed || stopping || !state.localTask || state.mode !== 'busy' || taskId !== state.taskId) return false;
