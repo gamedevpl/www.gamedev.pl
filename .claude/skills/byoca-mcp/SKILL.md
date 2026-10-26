@@ -1590,3 +1590,8 @@ copying after dispatch races the agent's first read. See `docs/studio-play-journ
 
 Recorder batch budgets include JSON brackets and separating commas. Exercise a large
 console burst through ACK draining: an oversized rejected batch otherwise retries forever.
+
+Local sustained play should prefer reusable heuristic scripts. `game_script_client`
+creates a bounded, temporary Node client sharing the task's control owner. Test a
+real Node subprocess through MCP and Chromium, including cancellation and cleanup;
+never expose the temporary credential module as a persistent game artifact.

@@ -154,6 +154,8 @@ describe('play brain', () => {
     const brain = await t.start();
     await brain.turn('how fast is the snake?');
     expect(t.tasks[0]!.prompt).toContain('You edit the gamedev.pl game "snake"');
+    expect(t.tasks[0]!.prompt).toContain('game_script_client');
+    expect(t.tasks[0]!.prompt).toContain('improve the strategy file');
     expect(t.tasks[0]!.prompt).toContain('how fast is the snake?');
     expect(t.lines).toContain('The snake moves one cell per tick.');
     expect(t.picks).toEqual([]);

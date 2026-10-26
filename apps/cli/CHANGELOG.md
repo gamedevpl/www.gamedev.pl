@@ -9,6 +9,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Play agents can run and refine reusable Node heuristics through a task-scoped script client, reducing model turns during sustained play.
+
+### Added
+
 - Local Play journals retain the built code for each recorded revision; agents can inspect earlier code with `game_journal_code` after files change or a tab closes (#1981).
 
 ### Fixed

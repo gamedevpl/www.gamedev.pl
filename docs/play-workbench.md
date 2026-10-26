@@ -555,3 +555,10 @@ all four focus views, restoring layouts, drafts and undo, chat focus, completion
 Escape and a running game's state at desktop, tablet and phone-keyboard sizes. CI builds the CLI UI and runs these local tests
 separately from the deployment browser gate. Provider adapters use mocked fetches; funded
 ghost text uses a mocked authenticated client.
+
+### Heuristic scripts
+
+For sustained local play, agents should write and refine reusable heuristic scripts
+rather than spending a model turn on each move. `game_script_client` supplies a
+task-scoped Node client to the same live-game tools and control owner. See
+[the script workflow and example](play-heuristic-scripts.md).
