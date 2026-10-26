@@ -41,6 +41,11 @@ sequence IDs or field projections; preserve the `through` watermark when paging.
 Treat coverage gaps and unsupported `snapshotState()` as unknown state, not empty
 state. The recorder must freeze values when collected, acknowledge after writing,
 and never let serialization failures break the game's frame or step callback.
+`game_journal_code` reads the retained assembled HTML for a recording, before host
+bridge injection. It binds source/revision pairs to content-addressed bytes served by
+the local workbench. It must never read current workspace files as historical code.
+Missing code or archive capacity is explicit; old artifacts survive until Play closes.
+This is not authored TypeScript, HMR epoch segmentation, replay or code execution.
 Journal instrumentation reports distinguish absent fields from unmatched predicates
 and empty ranges. Improve observations through normal source edits when needed;
 verify and reproduce in a new build. Never treat new instrumentation as evidence
