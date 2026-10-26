@@ -3,15 +3,23 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
 (() => {
   let recordingId=crypto.randomUUID(),startedAt=Date.now(),started=performance.now();
   const runtimeInstanceId=crypto.randomUUID(),sealed=new Map();
-  let segment={runtimeInstanceId,buildEpoch:0},revision,suspended=false,transition;
+  let segment={runtimeInstanceId,buildEpoch:0},revision,suspended=false,transition,pendingEvents=[],pendingBytes=0,pendingDropped=0;
   const stringify=JSON.stringify.bind(JSON),parse=JSON.parse.bind(JSON);
   let seq=0,queue=[],bytes=0,dropped=0,stopped=false,lastFrame=-1,lastHarness,slowUntil=0,agent=false,cleanup=false,command=null;
   const held=new Set(),wrapped=new WeakSet(),unwrappable=new WeakSet(),seenLogs=new WeakMap(),tails={};
   const harness=()=>window.__GAME_HARNESS__;
   const frame=()=>{const value=Number(harness()?.frame);return Number.isFinite(value)?Math.max(0,Math.floor(value)):0;};
-  function append(kind,data){
+  function append(kind,data,captured){
     if(stopped)return;
-    const entry={seq:++seq,timeMs:performance.now()-started,frame:frame(),kind,data};
+    if(suspended&&transition&&window.__GAME_HOT__?.controller?.status().epoch>transition.expectedEpoch){
+      try{
+        const json=stringify({kind,data,at:performance.now(),frame:frame()});
+        if(json.length>128000||pendingBytes+json.length>1000000||pendingEvents.length>=4096){pendingDropped++;return;}
+        pendingEvents.push(json);pendingBytes+=json.length;
+      }catch{pendingDropped++;}
+      return;
+    }
+    const entry={seq:++seq,timeMs:Math.max(0,(captured?.at??performance.now())-started),frame:captured?.frame??frame(),kind,data};
     let json;
     try{json=stringify(entry);}catch{dropped++;return;}
     if(json.length>128000||bytes+json.length>1000000||queue.length>=4096){dropped++;return;}
@@ -39,17 +47,21 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
     finish(result){
       if(!transition)throw Error('No journal transition is pending');
       const details=transition;transition=undefined;
+      const pending=pendingEvents.map(json=>parse(json)),lost=pendingDropped;
+      pendingEvents=[];pendingBytes=0;pendingDropped=0;
       const previousRecordingId=recordingId;
       if(result.status==='rejected'){
         suspended=false;append('lifecycle',{event:'hot-update-rejected',transitionId:details.id,reason:result.reason});
       }else{
         append('lifecycle',{event:'hot-segment-end',transitionId:details.id,nextRevision:details.revision,finalOldSequence:seq+1,frame:result.frame,simulationTick:result.simulationTick});
         sealed.set(recordingId,{recordingId,startedAt,queue,segment,revision,stopped});
-        recordingId=crypto.randomUUID();startedAt=Date.now();started=performance.now();seq=0;queue=[];bytes=0;dropped=0;stopped=false;lastFrame=-1;slowUntil=0;
+        recordingId=crypto.randomUUID();started=pending[0]?.at??performance.now();startedAt=Date.now()-Math.max(0,performance.now()-started);seq=0;queue=[];bytes=0;dropped=0;stopped=false;lastFrame=-1;slowUntil=0;
         revision=details.revision;
         segment={runtimeInstanceId,buildEpoch:result.epoch,previousRecordingId,transitionId:details.id,
           stateVersion:details.stateVersion,observationVersion:details.observationVersion,frame:result.frame,simulationTick:result.simulationTick};
-        append('lifecycle',{event:'recording-start',mode:'hmr',...segment,revision,ready:result.ready});
+        append('lifecycle',{event:'recording-start',mode:'hmr',...segment,revision,ready:result.ready},{at:started,frame:result.frame});
+        for(const event of pending)append(event.kind,event.data,event);
+        if(lost)gap('Update event buffer overflow',{count:lost});
         suspended=result.status!=='applied';
         if(suspended)gap('Committed code failed its initial refresh',{error:result.error});
         else sample('hot-ready');

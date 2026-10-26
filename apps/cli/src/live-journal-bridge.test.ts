@@ -27,6 +27,8 @@ it('seals old code queues and samples a paused replacement under a linked new re
     observationVersion: 1,
   });
   f.h.metadata.x = 99;
+  Object.assign(f.win, { __GAME_HOT__: { controller: { status: () => ({ epoch: 1 }) } } });
+  f.win.console.warn('new epoch log');
   const next = hook.finish({ status: 'applied', epoch: 1, ready: true, frame: 0, simulationTick: 0 });
   expect(next.previousRecordingId).toBe(initial.recordingId);
   expect(next.recordingId).not.toBe(initial.recordingId);
@@ -43,6 +45,8 @@ it('seals old code queues and samples a paused replacement under a linked new re
     revision: 'B',
     segment: { buildEpoch: 1, previousRecordingId: initial.recordingId },
   });
+  expect(JSON.parse(old.json).some((e: JournalEntry) => e.kind === 'console')).toBe(false);
+  expect(JSON.parse(current.json).some((e: JournalEntry) => e.kind === 'console')).toBe(true);
   f.send({ source: 'gdpl-journal-host', recordingId: initial.recordingId, through: JSON.parse(old.json).at(-1).seq });
   f.h.frame++;
   f.h.step();
