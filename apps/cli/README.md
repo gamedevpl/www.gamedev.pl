@@ -903,7 +903,9 @@ Control ends with the task or a disconnected tab. See
 for frame budgets, selection, cancellation and observation limits.
 
 `game_journal` lists recorded instances and coverage; `game_journal_read` searches
-history by time, frame, event kind or field value. Agents can sample and revisit
+history by time, frame, event kind or field value. `game_journal_code` reads the retained
+assembled HTML for a recording, with bounded paging and literal text search; it never
+substitutes the current workspace for unavailable historical code. Agents can sample and revisit
 saved states across tasks and build changes without taking control. Records include
 input attribution, console/errors and the game's serializable state when available.
 See [session journal](../../docs/play-workbench.md#query-the-recorded-session-journal)

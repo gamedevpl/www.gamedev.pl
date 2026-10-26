@@ -67,6 +67,7 @@ it('captures a fixed game snapshot and returns an image with the actual rendered
   expect((await f.rpc('tools/list')).data.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
     'report_progress',
     'game_journal',
+    'game_journal_code',
     'game_journal_read',
     'game_observe',
     'game_take_control',

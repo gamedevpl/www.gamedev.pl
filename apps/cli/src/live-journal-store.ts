@@ -72,7 +72,7 @@ function matches(data: unknown, where: JournalQuery['where']): boolean {
   }
 }
 
-export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
+export function createJournalStore(maxBytes = 512 * 1024 * 1024, codeFor?: (source: Source) => unknown) {
   const recordings = new Map<string, Recording>();
   let directory: string | undefined,
     fd: number | undefined,
@@ -90,6 +90,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
     instrumentationHelp: INSTRUMENTATION_HELP,
     recordings: [...recordings.values()].map(({ chunks, instrumentation, ...record }) => ({
       ...record,
+      ...(codeFor ? { code: codeFor(record) } : {}),
       instrumentation: instrumentationReport(instrumentation),
       chunks: chunks.length,
       tail: 'Only acknowledged batches are available; an abrupt close may lose buffered entries.',
@@ -107,6 +108,11 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
   };
   return {
     status,
+    source(recordingId: string): Source {
+      const record = recordings.get(recordingId);
+      if (!record) throw Error('Unknown recordingId; list game_journal first.');
+      return { tabId: record.tabId, sourceId: record.sourceId, revision: record.revision };
+    },
     reject(tabId: string, reason: string) {
       rejected.push({ tabId, reason });
       if (rejected.length > 32) rejected.shift();
@@ -285,6 +291,7 @@ export function createJournalStore(maxBytes = 512 * 1024 * 1024) {
       return {
         recordingId: record.recordingId,
         revision: record.revision,
+        ...(codeFor ? { code: codeFor(record) } : {}),
         through,
         nextAfter: more ? cursor : null,
         scanned,

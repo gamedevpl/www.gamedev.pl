@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { liveArguments, liveHello, liveResult, type LiveToolName } from './live-game-protocol.js';
 import { createJournalStore } from './live-journal-store.js';
+import { createLiveCodeStore } from './live-code-store.js';
 
 type Tab = { socket: WebSocket; tabId: string; sourceId: number; revision: string };
 type Pending = { tab: Tab; finish(error?: Error, data?: unknown): void };
@@ -13,7 +14,8 @@ export function findLiveGame(url: string | undefined) {
 }
 
 export function createLiveGame(currentSource: () => number) {
-  const journal = createJournalStore();
+  const code = createLiveCodeStore();
+  const journal = createJournalStore(undefined, code.describe);
   const tabs = new Map<WebSocket, Tab>();
   const pending = new Map<string, Pending>();
   let registered = '';
@@ -65,6 +67,9 @@ export function createLiveGame(currentSource: () => number) {
   heartbeat.unref();
 
   const api = {
+    retainBuild(sourceId: number, snapshot: { revision: string; html: string }) {
+      return code.retain({ sourceId, revision: snapshot.revision }, snapshot.html);
+    },
     connect(socket: WebSocket) {
       socket.on('message', (bytes) => {
         let raw: unknown;
@@ -158,9 +163,13 @@ export function createLiveGame(currentSource: () => number) {
       signal.throwIfAborted();
       if (name === 'game_journal') {
         liveArguments.game_journal.parse(raw);
-        return { data: journal.status() };
+        return { data: { ...journal.status(), codeArchive: code.status() } };
       }
       if (name === 'game_journal_read') return { data: journal.read(liveArguments.game_journal_read.parse(raw)) };
+      if (name === 'game_journal_code') {
+        const query = liveArguments.game_journal_code.parse(raw);
+        return { data: { recordingId: query.recordingId, ...code.read(journal.source(query.recordingId), query) } };
+      }
       const args = liveArguments[name].parse(raw);
       signal.throwIfAborted();
       if (name === 'game_release_control' && owner?.task !== task)
@@ -206,6 +215,7 @@ export function createLiveGame(currentSource: () => number) {
       tabs.clear();
       revoked.clear();
       journal.close();
+      code.close();
     },
   };
   return api;

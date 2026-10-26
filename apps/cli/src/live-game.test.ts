@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createLiveGame, findLiveGame } from './live-game.js';
@@ -108,6 +108,53 @@ it('rejects arbitrary execution, excess frames and extra fields before sending c
   ])
     await expect(game.call('task', 'game_act', args, signal.signal)).rejects.toThrow();
   expect(first.socket.send).not.toHaveBeenCalled();
+});
+
+it('binds history to retained code across builds, source switches and disconnected tabs', async () => {
+  const { game, tab, signal, changeSource } = fixture();
+  const first = tab();
+  const a = '<script>let score=1;</script>',
+    b = '<script>let score=2;</script>';
+  const revision = (html: string) => createHash('sha256').update(html).digest('hex');
+  game.retainBuild(1, { revision: revision(a), html: a });
+  first.hello(revision(a));
+  const recordingId = randomUUID();
+  first.message({
+    type: 'live:journal',
+    recordingId,
+    startedAt: 1,
+    entries: [{ seq: 1, timeMs: 1, frame: 1, kind: 'state', data: { score: 1 } }],
+  });
+  const take = game.call('owner', 'game_take_control', {}, signal.signal);
+  const pendingMessages = first.socket.send.mock.calls.length;
+  expect(await game.call('reader', 'game_journal_code', { recordingId }, signal.signal)).toMatchObject({
+    data: { content: a },
+  });
+  expect(first.socket.send).toHaveBeenCalledTimes(pendingMessages);
+  first.reply();
+  await take;
+  game.retainBuild(1, { revision: revision(b), html: b });
+  first.hello(revision(b));
+  first.socket.emit('close');
+  changeSource();
+  const result = await game.call('reader', 'game_journal_code', { recordingId }, signal.signal);
+  expect(result.data).toMatchObject({ available: true, revision: revision(a), content: a });
+  const history = await game.call('reader', 'game_journal_read', { recordingId }, signal.signal);
+  expect(history.data).toMatchObject({ revision: revision(a), code: { available: true, revision: revision(a) } });
+  const sent = first.socket.send.mock.calls.length;
+  expect(await game.call('reader', 'game_journal_code', { recordingId, find: 'score=1' }, signal.signal)).toMatchObject(
+    { data: { found: true } },
+  );
+  expect(first.socket.send).toHaveBeenCalledTimes(sent);
+  await expect(
+    game.call('reader', 'game_journal_code', { recordingId, path: '../../secret' }, signal.signal),
+  ).rejects.toThrow();
+  await expect(
+    game.call('reader', 'game_journal_code', { recordingId, limit: 32_001 }, signal.signal),
+  ).rejects.toThrow();
+  await expect(game.call('reader', 'game_journal_code', { recordingId: randomUUID() }, signal.signal)).rejects.toThrow(
+    'Unknown',
+  );
 });
 
 it.each(['abort', 'disconnect', 'build', 'source', 'timeout', 'lease'])(

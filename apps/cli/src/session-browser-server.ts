@@ -252,6 +252,7 @@ export async function startSessionBrowser(
           reply(409, { error: 'Preview changed' });
           return;
         }
+        if ('html' in data && current.url.startsWith('http://127.0.0.1:')) liveGame.retainBuild(currentId, data);
         reply(200, {
           ...data,
           ...('html' in data
