@@ -1,4 +1,21 @@
-import { existsSync, readFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { expect, it, vi } from 'vitest';
 import { createPlayScriptClient } from './play-script-client.js';
@@ -22,7 +39,7 @@ it('bounds script calls, keeps credentials out of results and releases on cancel
     await expect(client.call('submit_sources')).rejects.toThrow('Unsupported');
     expect(readFileSync(setup.modulePath, 'utf8')).toContain('Bearer');
     abort.abort();
-    expect(existsSync(setup.modulePath)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
     await expect(client.observe()).rejects.toThrow();
   } finally {
     setup.close();
@@ -78,12 +95,179 @@ it('serializes client replacement within the task', async () => {
     const result = await pending;
     const first = JSON.parse((result.content[0] as { text: string }).text).modulePath;
     const replacement = await tools.call('game_script_client', {}, new AbortController().signal);
-    expect(existsSync(first)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(first)).toBe(false));
     const last = JSON.parse((replacement.content[0] as { text: string }).text).modulePath;
     expect(existsSync(last)).toBe(true);
     tools.close();
-    expect(existsSync(last)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(last)).toBe(false));
   } finally {
     tools.close();
+  }
+});
+
+it.skipIf(process.platform === 'win32')(
+  'preserves large Unicode observations and serializes concurrent requests without network',
+  async () => {
+    const value = 'zażółć 🐉 '.repeat(16000);
+    const setup = await createPlayScriptClient({
+      call: vi.fn(async () => ({ content: [{ type: 'text', text: JSON.stringify({ data: { value } }) }] })),
+      signal: new AbortController().signal,
+      maxCalls: 10,
+      timeoutMs: 60000,
+      release: vi.fn(),
+    });
+    try {
+      const { connect } = await import(pathToFileURL(setup.modulePath).href);
+      const client = await connect();
+      await expect(connect()).rejects.toThrow('already in use');
+      const replies = await Promise.all([client.observe(), client.observe(), client.observe()]);
+      for (const reply of replies) expect(reply.data.value).toBe(value);
+      client.close();
+    } finally {
+      setup.close();
+    }
+  },
+);
+
+it('cancels an in-flight action and removes its client when the task stops', async () => {
+  const abort = new AbortController();
+  const release = vi.fn();
+  const call = vi.fn(
+    (_name: unknown, _args: unknown, signal: AbortSignal) =>
+      new Promise<never>((_, reject) => {
+        signal.addEventListener('abort', () => reject(Error('cancelled')), { once: true });
+      }),
+  );
+  const setup = await createPlayScriptClient({ call, signal: abort.signal, maxCalls: 10, timeoutMs: 60000, release });
+  try {
+    const { connect } = await import(pathToFileURL(setup.modulePath).href);
+    const client = await connect();
+    const running = client.act([{ kind: 'step', frames: 20 }]);
+    const failure = expect(running).rejects.toThrow();
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce());
+    abort.abort();
+    await failure;
+    expect(release).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
+  } finally {
+    setup.close();
+  }
+});
+
+it.skipIf(process.platform === 'win32')('cancels an in-flight action when the strategy process dies', async () => {
+  const release = vi.fn();
+  const aborted = vi.fn();
+  const call = vi.fn(
+    (_name: unknown, _args: unknown, signal: AbortSignal) =>
+      new Promise<never>((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            aborted();
+            reject(Error('cancelled'));
+          },
+          { once: true },
+        );
+      }),
+  );
+  const setup = await createPlayScriptClient({
+    call,
+    signal: new AbortController().signal,
+    maxCalls: 10,
+    timeoutMs: 60000,
+    release,
+  });
+  const program = `import {pathToFileURL} from 'node:url'; const {connect}=await import(pathToFileURL(process.argv[1])); const client=await connect(); await client.act([{kind:'step',frames:20}]);`;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', program, setup.modulePath], { stdio: 'ignore' });
+  try {
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce());
+    child.kill('SIGKILL');
+    await vi.waitFor(() => expect(aborted).toHaveBeenCalledOnce(), { timeout: 3000 });
+    expect(release).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
+  } finally {
+    child.kill('SIGKILL');
+    setup.close();
+  }
+});
+
+it('removes the client even if releasing control throws', async () => {
+  const setup = await createPlayScriptClient({
+    call: vi.fn(),
+    signal: new AbortController().signal,
+    maxCalls: 5,
+    timeoutMs: 60000,
+    release: () => {
+      throw Error('closed socket');
+    },
+  });
+  expect(() => setup.close()).not.toThrow();
+  await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
+});
+
+it.skipIf(process.platform === 'win32')('does not follow a replaced client directory during cleanup', async () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'play-fifo-path-'));
+  const outside = mkdtempSync(join(tmpdir(), 'play-fifo-outside-'));
+  const setup = await createPlayScriptClient({
+    cwd,
+    call: vi.fn(),
+    signal: new AbortController().signal,
+    maxCalls: 5,
+    timeoutMs: 60000,
+    release: vi.fn(),
+  });
+  try {
+    const directory = dirname(setup.modulePath);
+    renameSync(directory, `${directory}-moved`);
+    writeFileSync(join(outside, 'client.mjs'), 'keep');
+    symlinkSync(outside, directory);
+    setup.close();
+    expect(readFileSync(join(outside, 'client.mjs'), 'utf8')).toBe('keep');
+    await vi.waitFor(() => expect(existsSync(join(`${directory}-moved`, 'client.mjs'))).toBe(false));
+  } finally {
+    setup.close();
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+it.skipIf(process.platform === 'win32')('rejects unauthenticated pipe requests', async () => {
+  const call = vi.fn();
+  const setup = await createPlayScriptClient({
+    call,
+    signal: new AbortController().signal,
+    maxCalls: 5,
+    timeoutMs: 60000,
+    release: vi.fn(),
+  });
+  let request: number | undefined, response: number | undefined;
+  try {
+    expect(statSync(dirname(setup.modulePath)).mode & 0o077).toBe(0);
+    expect(statSync(setup.modulePath).mode & 0o077).toBe(0);
+    const source = readFileSync(setup.modulePath, 'utf8');
+    const config = JSON.parse(source.match(/const config=(\{[^\n]+\});/)![1]!);
+    request = openSync(config.request, constants.O_WRONLY | constants.O_NONBLOCK);
+    response = openSync(config.response, constants.O_RDONLY | constants.O_NONBLOCK);
+    writeSync(
+      request,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        authorization: 'Bearer wrong',
+        method: 'tools/call',
+        params: { name: 'game_take_control', arguments: {} },
+      }) + '\n',
+    );
+    await vi.waitFor(() => {
+      const bytes = Buffer.alloc(1024);
+      const count = readSync(response!, bytes, 0, bytes.length, null);
+      const reply = JSON.parse(bytes.toString('utf8', 0, count));
+      expect(reply.error.message).toContain('Invalid Play script request');
+    });
+    expect(call).not.toHaveBeenCalled();
+  } finally {
+    if (request !== undefined) closeSync(request);
+    if (response !== undefined) closeSync(response);
+    setup.close();
   }
 });

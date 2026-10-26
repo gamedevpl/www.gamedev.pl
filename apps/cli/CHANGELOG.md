@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Run Play heuristic scripts without shell network access on macOS and Linux, and guide agents to write strategies in their writable workspace (#1999).
+
 ## 0.60.1 — 2026-10-26
 
 ### Fixed

@@ -32,7 +32,7 @@ export const liveDescriptions: Record<LiveToolName, string> = {
   game_take_control:
     'Take over the current Play tab only when the creator asked you to control or play it. Pauses time; game_act advances bounded frames. The creator can reclaim control at any time. No restart or state transfer. Release when finished.',
   game_act:
-    'Act in the SAME running game after game_take_control. Up to 32 actions, 300 frames per action and 600 total frames. Wall-clock limits: 30 seconds per action, 120 seconds per call. Slow actions yield between frames for heartbeats and creator reclaim. Keys are browser keys (ArrowRight, space, etc.); pointers use normalized canvas coordinates. Returns state and optionally a screenshot. No JavaScript. Never retry an uncertain action automatically; observe first.',
+    'For sustained play or repeated decisions, use game_script_client and a reusable heuristic; direct game_act is for short probes or an explicitly specified sequence. Act in the SAME running game after game_take_control. Up to 32 actions, 300 frames per action and 600 total frames. Wall-clock limits: 30 seconds per action, 120 seconds per call. Slow actions yield between frames for heartbeats and creator reclaim. Keys are browser keys (ArrowRight, space, etc.); pointers use normalized canvas coordinates. Returns state and optionally a screenshot. No JavaScript. Never retry an uncertain action automatically; observe first.',
   game_release_control:
     'Release all agent-held input and return the running game to the creator. Task completion, cancellation and disconnection also release control.',
 };

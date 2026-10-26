@@ -8,11 +8,19 @@ and short reproductions can still use direct tool calls.
 
 `game_script_client` prepares a temporary Node ESM client. It shares the task and
 control owner of direct MCP calls in both the delegated CLI and the Play agent.
-The client makes local MCP requests without a model turn for every decision.
+The client makes local MCP requests without a model turn for every decision. On
+macOS and Linux, a private named-pipe channel does not require shell network access.
+Windows currently uses the local HTTP endpoint and can require local network access.
 It uses the same running game; `capture_game(plan)` starts a fresh instance.
 
-Call `game_script_client({maxCalls: 200, timeoutMs: 60000})`, then pass its returned
-`modulePath` as an argument: `node heuristic.mjs /temporary/path/client.mjs`.
+Call `game_script_client({maxCalls: 200, timeoutMs: 60000})`. Write the strategy
+as `./heuristic.mjs` in the current game working directory, where the agent can
+write under the normal workspace policy. For Claude Write, resolve the current
+directory with `pwd` and pass the full absolute path `<cwd>/heuristic.mjs`. Do not
+write it under `/tmp` or `$TMPDIR`;
+that location can be denied. If a temporary-directory write is denied, try the
+working directory before asking the creator or abandoning the script. The `.mjs`
+file is not deliverable game source and stays local. Pass the returned `modulePath` as an argument: `node heuristic.mjs /temporary/path/client.mjs`.
 The strategy below illustrates a fixture with an observed numeric `snapshot.x`;
 inspect each game's actual observations before choosing its state and controls.
 
@@ -52,7 +60,8 @@ task completion, replacement or expiry closes the endpoint, removes its temporar
 module and releases control. The module contains a task credential: do not print,
 copy or commit it, and do not commit temporary client paths in strategy files.
 
-The script runs under the coding agent's existing shell permissions. If its sandbox
-blocks local networking, use direct MCP tools and report the constraint; this feature
-does not change shell sandbox permissions. Model instructions encourage the workflow;
+The script runs under the coding agent's existing shell permissions. On Windows, if the shell sandbox blocks local networking,
+use direct MCP tools and report the constraint; this feature does not change shell
+sandbox permissions. A single client process can hold a channel at a time; after an
+abruptly killed process, request a new client to replace the old one. Model instructions encourage the workflow;
 the regression proves script execution, not a guaranteed choice by every model.

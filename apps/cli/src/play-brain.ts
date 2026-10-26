@@ -119,6 +119,7 @@ export async function startPlayBrain(input: {
   ready?: () => Promise<boolean>;
 }): Promise<PlayBrain | undefined> {
   const { ws, write } = input;
+  const gameRoot = gameSourceRoot(ws.root, ws.slug);
   const name = brainAgent(ws);
   if (!name) return undefined;
   const spec = ws.adapters.find((candidate) => candidate.name === name)!;
@@ -135,7 +136,7 @@ export async function startPlayBrain(input: {
       if (name === 'claude')
         await requireClaudeSubscription({
           command: spec.command,
-          cwd: gameSourceRoot(ws.root, ws.slug),
+          cwd: gameRoot,
           env,
           abort: setup.signal,
         });
@@ -179,7 +180,7 @@ export async function startPlayBrain(input: {
     ));
   // The running turn's signal; Ctrl+C stops the agent and tool.
   let turnAbort = new AbortController();
-  const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]));
+  const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]), gameRoot);
   // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
   const pushBridge = playPushBridge(env, ws.root, ws.slug, (remote, srcRef) => {
@@ -218,7 +219,7 @@ export async function startPlayBrain(input: {
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
     ],
-    dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: 'on-request', only: true },
+    dev: { cwd: gameRoot, commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
@@ -232,7 +233,6 @@ export async function startPlayBrain(input: {
     autoApprove: (request) => decideApproval(permission(), request),
   });
   bound.handle = createAppAgentHandler(agent, { basePath: '/agent' });
-
   const unmirror = mirror(agent, write, input.activity);
   const settled = (state: AppAgentState) =>
     state.session?.status !== 'running' &&
