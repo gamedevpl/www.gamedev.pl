@@ -8,6 +8,9 @@ export function liveGameTools(preview: () => string | undefined) {
   const task = randomUUID();
   const used = new Set<LiveGame>();
   let preparing = false;
+  let directActions = 0;
+  let advised = false;
+  let scriptReady = false;
   const clients = new Set<{ close(): void }>();
   const release = () => {
     for (const game of used) game.release(task, { taskEnded: false });
@@ -18,6 +21,7 @@ export function liveGameTools(preview: () => string | undefined) {
       name: LiveToolName | 'game_script_client',
       args: unknown,
       signal: AbortSignal,
+      fromScript = false,
     ): Promise<{ content: Array<{ type: 'text'; text: string } | { type: 'image'; mimeType: string; data: string }> }> {
       if (name === 'game_script_client') {
         const options = z
@@ -36,9 +40,10 @@ export function liveGameTools(preview: () => string | undefined) {
             ...options,
             signal,
             release,
-            call: (name, args, signal) => tools.call(name, args, signal),
+            call: (name, args, signal) => tools.call(name, args, signal, true),
           });
           clients.add(client);
+          scriptReady = true;
           return {
             content: [
               {
@@ -47,7 +52,7 @@ export function liveGameTools(preview: () => string | undefined) {
                   modulePath: client.modulePath,
                   ...options,
                   usage:
-                    'Pass modulePath as an argument to your Node ESM strategy. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
+                    'Write the strategy as ./play-heuristic.mjs in your current working directory, not /tmp or $TMPDIR. The .mjs file is not delivered as game source. Run node ./play-heuristic.mjs MODULE_PATH, passing this modulePath as the argument. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
                 }),
               },
             ],
@@ -60,13 +65,22 @@ export function liveGameTools(preview: () => string | undefined) {
       if (!game) throw Error('Open the local Play workbench for this checkout to inspect its running game.');
       used.add(game);
       const result = await game.call(task, name, args, signal);
+      const guidance =
+        name === 'game_act' && !fromScript && !scriptReady && !advised && ++directActions >= 2
+          ? ((advised = true),
+            'For sustained play, call game_script_client now. Write ./play-heuristic.mjs in the working directory (not /tmp) and refine a bounded heuristic that calls observe/act locally; return compact progress and failure metrics. Use direct game_act only for a short probe or when a script is impractical.')
+          : undefined;
       const data = result.data as { png?: unknown } | undefined;
       const encoded = typeof data?.png === 'string' ? data.png.replace(/^data:image\/png;base64,/, '') : '';
       const png = /^iVBORw0KGgo[A-Za-z0-9+/=]+$/.test(encoded) ? encoded : undefined;
       if (data) delete data.png;
       return {
         content: [
-          { type: 'text' as const, text: JSON.stringify({ ...result, untrusted: true }) },
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ ...result, untrusted: true }),
+          },
+          ...(guidance ? [{ type: 'text' as const, text: `Play guidance: ${guidance}` }] : []),
           ...(png ? [{ type: 'image' as const, mimeType: 'image/png', data: png }] : []),
         ],
       };
@@ -76,6 +90,9 @@ export function liveGameTools(preview: () => string | undefined) {
       clients.clear();
       for (const game of used) game.release(task);
       used.clear();
+      directActions = 0;
+      advised = false;
+      scriptReady = false;
     },
   };
   return tools;

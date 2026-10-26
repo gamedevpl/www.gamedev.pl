@@ -18,6 +18,7 @@
 import { build, type Message } from 'esbuild';
 import type { SeedFile } from './game-seed.js';
 import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
+import { resolveSeedSource } from './seed-source.js';
 import { MAX_SOURCE_GRAPH_MODULES, SOURCE_GRAPH_BUDGET_BYTES } from '../platform/games-repo-contract.js';
 
 /** Same ceilings as the play-path bundler, so agreement between the two is by value. */
@@ -76,16 +77,7 @@ export async function checkSeedBundles(slug: string, files: SeedFile[]): Promise
             }));
             builder.onLoad({ filter: /.*/, namespace: 'seed-draft' }, (args) => {
               // Directory imports fall back to index.ts, matching the play path.
-              let loadedPath = args.path;
-              let source = sources.get(loadedPath);
-              if (source === undefined && loadedPath.endsWith('.ts')) {
-                const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
-                const indexSource = sources.get(indexPath);
-                if (indexSource !== undefined) {
-                  loadedPath = indexPath;
-                  source = indexSource;
-                }
-              }
+              const { path: loadedPath, source } = resolveSeedSource(sources, args.path);
               if (source === undefined) {
                 return {
                   errors: [

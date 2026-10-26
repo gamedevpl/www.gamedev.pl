@@ -11,8 +11,11 @@ control owner of direct MCP calls in both the delegated CLI and the Play agent.
 The client makes local MCP requests without a model turn for every decision.
 It uses the same running game; `capture_game(plan)` starts a fresh instance.
 
-Call `game_script_client({maxCalls: 200, timeoutMs: 60000})`, then pass its returned
-`modulePath` as an argument: `node heuristic.mjs /temporary/path/client.mjs`.
+Call `game_script_client({maxCalls: 200, timeoutMs: 60000})`. Write the strategy
+as `./heuristic.mjs` in the current game working directory, where the agent can
+write under the normal workspace policy. Do not write it under `/tmp` or `$TMPDIR`;
+that location can be denied. The `.mjs` file is not deliverable game source and stays
+local. Pass the returned `modulePath` as an argument: `node heuristic.mjs /temporary/path/client.mjs`.
 The strategy below illustrates a fixture with an observed numeric `snapshot.x`;
 inspect each game's actual observations before choosing its state and controls.
 
