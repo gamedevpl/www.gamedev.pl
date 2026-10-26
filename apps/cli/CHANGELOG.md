@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Guide Play agents toward reusable heuristic scripts in their writable game workspace instead of repeated model-driven moves.
+- Guide Play agents toward reusable heuristic scripts in their writable game workspace instead of repeated model-driven moves (#1999).
 
 ## 0.60.0 — 2026-10-26
 
