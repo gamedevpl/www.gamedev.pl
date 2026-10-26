@@ -38,7 +38,7 @@ it('bounds script calls, keeps credentials out of results and releases on cancel
     await expect(client.call('submit_sources')).rejects.toThrow('Unsupported');
     expect(readFileSync(setup.modulePath, 'utf8')).toContain('Bearer');
     abort.abort();
-    expect(existsSync(setup.modulePath)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
     await expect(client.observe()).rejects.toThrow();
   } finally {
     setup.close();
@@ -94,11 +94,11 @@ it('serializes client replacement within the task', async () => {
     const result = await pending;
     const first = JSON.parse((result.content[0] as { text: string }).text).modulePath;
     const replacement = await tools.call('game_script_client', {}, new AbortController().signal);
-    expect(existsSync(first)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(first)).toBe(false));
     const last = JSON.parse((replacement.content[0] as { text: string }).text).modulePath;
     expect(existsSync(last)).toBe(true);
     tools.close();
-    expect(existsSync(last)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(last)).toBe(false));
   } finally {
     tools.close();
   }
@@ -147,7 +147,7 @@ it('cancels an in-flight action and removes its client when the task stops', asy
     abort.abort();
     await failure;
     expect(release).toHaveBeenCalledOnce();
-    expect(existsSync(setup.modulePath)).toBe(false);
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
   } finally {
     setup.close();
   }
@@ -164,7 +164,7 @@ it('removes the client even if releasing control throws', async () => {
     },
   });
   expect(() => setup.close()).not.toThrow();
-  expect(existsSync(setup.modulePath)).toBe(false);
+  await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
 });
 
 it.skipIf(process.platform === 'win32')('does not follow a replaced client directory during cleanup', async () => {
@@ -185,7 +185,7 @@ it.skipIf(process.platform === 'win32')('does not follow a replaced client direc
     symlinkSync(outside, directory);
     setup.close();
     expect(readFileSync(join(outside, 'client.mjs'), 'utf8')).toBe('keep');
-    expect(existsSync(join(`${directory}-moved`, 'client.mjs'))).toBe(false);
+    await vi.waitFor(() => expect(existsSync(join(`${directory}-moved`, 'client.mjs'))).toBe(false));
   } finally {
     setup.close();
     rmSync(cwd, { recursive: true, force: true });

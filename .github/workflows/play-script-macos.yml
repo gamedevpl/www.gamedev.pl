@@ -33,4 +33,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:packages
-      - run: npm run test -w @gamedevpl/cli -- src/play-script-fifo-macos.test.ts src/play-script-client.test.ts
+      - run: npm run test -w @gamedevpl/cli -- src/play-script-fifo-macos.test.ts src/play-script-client.test.ts src/play-script-darwin.test.ts

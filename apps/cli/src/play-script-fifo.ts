@@ -17,6 +17,7 @@ import {
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { LIVE_GAME_TOOLS, type LiveToolName } from './live-game-protocol.js';
+import { startDarwinPipe } from './play-script-darwin.js';
 
 const CLIENT = String.raw`
 import {constants, openSync, closeSync, readSync, writeSync, unlinkSync, existsSync} from 'node:fs';
@@ -114,6 +115,7 @@ export async function createPlayFifoClient(input: Input) {
   const controller = new AbortController();
   let requestFd: number | undefined, responseFd: number | undefined, dirFd: number | undefined;
   let anchoredDir: string | undefined;
+  let darwinPipe: Awaited<ReturnType<typeof startDarwinPipe>> | undefined;
   let closed = false,
     active = false,
     calls = 0,
@@ -141,29 +143,42 @@ export async function createPlayFifoClient(input: Input) {
         } catch {
           // The descriptor may already be closed.
         }
-    if (anchoredDir && dirFd !== undefined) {
-      for (const name of ['requests.fifo', 'responses.fifo', 'client.mjs', 'client.lock']) {
+    const cleanup = () => {
+      if (anchoredDir && dirFd !== undefined) {
+        for (const name of ['requests.fifo', 'responses.fifo', 'client.mjs', 'client.lock']) {
+          try {
+            unlinkSync(join(anchoredDir, name));
+          } catch {
+            // The file may have been removed already.
+          }
+        }
         try {
-          unlinkSync(join(anchoredDir, name));
+          const expected = fstatSync(dirFd);
+          const actual = lstatSync(dir);
+          if (expected.dev === actual.dev && expected.ino === actual.ino) rmdirSync(dir);
         } catch {
-          // The file may have been removed already.
+          // A renamed or nonempty directory is left for its owner to remove.
+        }
+        closeSync(dirFd);
+      } else if (dirFd !== undefined) {
+        try {
+          const expected = fstatSync(dirFd);
+          const actual = lstatSync(dir);
+          if (expected.dev === actual.dev && expected.ino === actual.ino) rmdirSync(dir);
+        } catch {
+          // A renamed or nonempty directory is left for its owner to remove.
+        }
+        closeSync(dirFd);
+      } else {
+        try {
+          rmdirSync(dir);
+        } catch {
+          // The directory may no longer be empty or may have been renamed.
         }
       }
-      try {
-        const expected = fstatSync(dirFd);
-        const actual = lstatSync(dir);
-        if (expected.dev === actual.dev && expected.ino === actual.ino) rmdirSync(dir);
-      } catch {
-        // A renamed or nonempty directory is left for its owner to remove.
-      }
-      closeSync(dirFd);
-    } else {
-      try {
-        rmdirSync(dir);
-      } catch {
-        // The directory may no longer be empty or may have been renamed.
-      }
-    }
+    };
+    if (darwinPipe) darwinPipe.close(cleanup);
+    else cleanup();
   };
   async function reply(value: unknown) {
     let serialized = JSON.stringify(value);
@@ -176,6 +191,7 @@ export async function createPlayFifoClient(input: Input) {
       });
     }
     const data = Buffer.from(serialized + '\n');
+    if (darwinPipe) return darwinPipe.reply(data);
     let offset = 0;
     while (offset < data.length && !closed) {
       try {
@@ -215,11 +231,22 @@ export async function createPlayFifoClient(input: Input) {
         });
     }
   }
+  function ingest(chunk: Buffer) {
+    inputBuffer += decoder.write(chunk);
+    if (Buffer.byteLength(inputBuffer) > 512000) throw Error('Play script request queue too large');
+    for (;;) {
+      const end = inputBuffer.indexOf('\n');
+      if (end < 0) break;
+      messages.push(inputBuffer.slice(0, end));
+      inputBuffer = inputBuffer.slice(end + 1);
+      if (messages.length > 32) throw Error('Play script request queue too large');
+    }
+  }
   function pump() {
     if (closed) return;
     try {
       const chunk = Buffer.allocUnsafe(65536);
-      for (;;) {
+      while (!darwinPipe) {
         let count: number;
         try {
           count = readSync(requestFd!, chunk, 0, chunk.length, null);
@@ -228,15 +255,7 @@ export async function createPlayFifoClient(input: Input) {
           throw error;
         }
         if (!count) break;
-        inputBuffer += decoder.write(chunk.subarray(0, count));
-        if (Buffer.byteLength(inputBuffer) > 512000) throw Error('Play script request queue too large');
-        for (;;) {
-          const end = inputBuffer.indexOf('\n');
-          if (end < 0) break;
-          messages.push(inputBuffer.slice(0, end));
-          inputBuffer = inputBuffer.slice(end + 1);
-          if (messages.length > 32) throw Error('Play script request queue too large');
-        }
+        ingest(chunk.subarray(0, count));
       }
       if (!active && messages.length) {
         active = true;
@@ -253,21 +272,36 @@ export async function createPlayFifoClient(input: Input) {
   try {
     dirFd = openSync(dir, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0));
     if (!fstatSync(dirFd).isDirectory()) throw Error('Invalid Play script directory');
-    anchoredDir = `${process.platform === 'darwin' ? '/dev/fd' : '/proc/self/fd'}/${dirFd}`;
-    const mkfifo = existsSync('/usr/bin/mkfifo') ? '/usr/bin/mkfifo' : '/bin/mkfifo';
-    execFileSync(mkfifo, ['-m', '600', 'requests.fifo', 'responses.fifo'], { cwd: anchoredDir, timeout: 5000 });
-    const flags = constants.O_RDWR | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
-    requestFd = openSync(join(anchoredDir, 'requests.fifo'), flags);
-    responseFd = openSync(join(anchoredDir, 'responses.fifo'), flags);
-    if (!fstatSync(requestFd).isFIFO() || !fstatSync(responseFd).isFIFO()) throw Error('Invalid Play script channel');
-    writeFileSync(
-      join(anchoredDir, 'client.mjs'),
-      CLIENT.replace(
-        'CONFIG',
-        JSON.stringify({ request, response, lock, authorization, expiresAt: Date.now() + input.timeoutMs }),
-      ),
-      { mode: 0o600, flag: 'wx' },
+    const source = CLIENT.replace(
+      'CONFIG',
+      JSON.stringify({ request, response, lock, authorization, expiresAt: Date.now() + input.timeoutMs }),
     );
+    if (process.platform === 'darwin') {
+      const stat = fstatSync(dirFd);
+      darwinPipe = await startDarwinPipe({
+        cwd: dir,
+        dev: stat.dev,
+        ino: stat.ino,
+        source,
+        data: (bytes) => {
+          try {
+            ingest(bytes);
+          } catch {
+            close();
+          }
+        },
+        failed: close,
+      });
+    } else {
+      anchoredDir = `/proc/self/fd/${dirFd}`;
+      const mkfifo = existsSync('/usr/bin/mkfifo') ? '/usr/bin/mkfifo' : '/bin/mkfifo';
+      execFileSync(mkfifo, ['-m', '600', 'requests.fifo', 'responses.fifo'], { cwd: anchoredDir, timeout: 5000 });
+      const flags = constants.O_RDWR | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
+      requestFd = openSync(join(anchoredDir, 'requests.fifo'), flags);
+      responseFd = openSync(join(anchoredDir, 'responses.fifo'), flags);
+      if (!fstatSync(requestFd).isFIFO() || !fstatSync(responseFd).isFIFO()) throw Error('Invalid Play script channel');
+      writeFileSync(join(anchoredDir, 'client.mjs'), source, { mode: 0o600, flag: 'wx' });
+    }
     timer = setInterval(pump, 15);
     timer.unref();
     deadline = setTimeout(close, input.timeoutMs);
