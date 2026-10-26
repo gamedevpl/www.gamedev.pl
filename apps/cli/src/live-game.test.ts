@@ -115,6 +115,89 @@ afterEach(() => {
   games.splice(0).forEach((game) => game.close());
   vi.useRealTimers();
 });
+it('releases an idle lease during a prepared update without reacquiring it on commit', async () => {
+  const { game, tab, signal } = fixture();
+  const html = '<html>release</html>',
+    revision = createHash('sha256').update(html).digest('hex');
+  const previousRevision = 'a'.repeat(64);
+  game.retainBuild(1, { html, revision });
+  const first = tab();
+  first.hello(previousRevision);
+  const take = game.call('owner', 'game_take_control', {}, signal.signal);
+  first.reply();
+  await take;
+  const id = randomUUID();
+  first.message({ type: 'live:hot', phase: 'begin', id, sourceId: 1, previousRevision, revision, expectedEpoch: 0 });
+  await expect(game.call('owner', 'game_release_control', {}, signal.signal)).resolves.toMatchObject({
+    data: { released: true },
+  });
+  first.message({
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId: randomUUID(),
+    previousRecordingId: randomUUID(),
+    recordingId: randomUUID(),
+    frame: 5,
+    simulationTick: 3,
+  });
+  const next = game.call('other', 'game_take_control', {}, signal.signal);
+  first.reply();
+  await next;
+});
+it('retains committed epochs and receipts when the same iframe reconnects', async () => {
+  const { game, tab } = fixture();
+  const a = 'a'.repeat(64),
+    html = '<html>B</html>',
+    b = createHash('sha256').update(html).digest('hex');
+  game.retainBuild(1, { html, revision: b });
+  const first = tab(),
+    instanceId = randomUUID();
+  first.message({ type: 'live:hello', tabId: first.id, instanceId, sourceId: 1, revision: a });
+  const id = randomUUID();
+  first.message({
+    type: 'live:hot',
+    phase: 'begin',
+    id,
+    sourceId: 1,
+    previousRevision: a,
+    revision: b,
+    expectedEpoch: 0,
+  });
+  first.message({
+    type: 'live:hot',
+    phase: 'finish',
+    id,
+    result: 'applied',
+    epoch: 1,
+    runtimeInstanceId: randomUUID(),
+    previousRecordingId: randomUUID(),
+    recordingId: randomUUID(),
+    frame: 4,
+    simulationTick: 3,
+  });
+  first.socket.emit('close');
+  const second = tab();
+  second.message({ type: 'live:hello', tabId: first.id, instanceId, sourceId: 1, revision: b });
+  second.message({ type: 'live:hot', phase: 'status', id });
+  expect(JSON.parse(second.socket.send.mock.calls.at(-1)![0]).transaction).toMatchObject({
+    state: 'committed',
+    result: { epoch: 1 },
+  });
+  second.message({
+    type: 'live:hot',
+    phase: 'begin',
+    id: randomUUID(),
+    sourceId: 1,
+    previousRevision: b,
+    revision: b,
+    expectedEpoch: 1,
+  });
+  expect(JSON.parse(second.socket.send.mock.calls.at(-1)![0]).transaction.state).toBe('prepared');
+});
+
 function fixture() {
   let source = 1;
   const game = createLiveGame(() => source);

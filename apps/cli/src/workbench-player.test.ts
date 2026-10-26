@@ -223,3 +223,18 @@ it('source invalidation while waiting for readiness leaves the new source UI unt
   expect(document.getElementById('notice')!.textContent).toBe('Loading another game');
   expect(document.getElementById('restart')!.hidden).toBe(true);
 });
+
+it('keeps the previous instance if control changes while a fallback candidate loads', async () => {
+  const { runtime, previous, build, events } = player();
+  const flags = runtime as typeof runtime & { liveControlled: boolean; liveOperation: boolean };
+  flags.liveControlled = false;
+  flags.liveOperation = false;
+  const swap = runtime.swapBuild(build);
+  await vi.advanceTimersByTimeAsync(10);
+  flags.liveControlled = true;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await swap).toBe(false);
+  expect(runtime.frame).toBe(previous);
+  expect(events.some((event) => event.frame === previous && event.type === 'resume')).toBe(false);
+  expect(document.getElementById('notice')!.textContent).toContain('control changed');
+});

@@ -13,6 +13,7 @@ function liveHotMessage(message){
 async function liveHotUpdate(message){
   try{return await liveHotMessage(message);}
   catch(error){
+    if(error.definitive)throw error;
     const transaction=await liveHotMessage({phase:'status',id:message.id});
     if(message.phase==='finish'&&transaction.state==='prepared')return liveHotMessage(message);
     return transaction;
@@ -61,7 +62,7 @@ async function liveRun(message){
   const target=frame,shown=revision,epoch=liveEpoch,args=message.args||{};
   const check=()=>{if(epoch!==liveEpoch||frame!==target||shown!==revision||message.sourceId!==sourceId)throw Error('Game or control changed; observe again');};
   try{
-    if(!revision||hotUpdating||message.revision!==revision)throw Error('Displayed build changed or is loading');
+    if(!revision||hotUpdating||replacingFrame||message.revision!==revision)throw Error('Displayed build changed or is loading');
     if(hotUnavailable&&message.operation!=='game_release_control')throw Error('Committed code is unavailable; restart with update or inspect the journal.');
     check();let observation;
     if(message.operation==='game_take_control'){
@@ -97,7 +98,7 @@ addEventListener('play-presence-connected',event=>{
   socket.addEventListener('message',event=>{
     let message;try{message=JSON.parse(event.data);}catch{return;}
     if(message.type==='live:hot-result'){
-      const pending=hotWaiters.get(message.id);if(pending){clearTimeout(pending.timer);hotWaiters.delete(message.id);message.error?pending.reject(Error(message.error)):pending.resolve(message.transaction);}
+      const pending=hotWaiters.get(message.id);if(pending){clearTimeout(pending.timer);hotWaiters.delete(message.id);message.error?pending.reject(Object.assign(Error(message.error),{definitive:true})):pending.resolve(message.transaction);}
     }
     if(message.type==='live:request')void liveRun(message);
     if(message.type==='live:release')liveRelease();

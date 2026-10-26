@@ -25,6 +25,7 @@ export function createLiveGame(currentSource: () => number) {
   const code = createLiveCodeStore();
   const journal = createJournalStore(undefined, code.describe);
   const tabs = new Map<WebSocket, Tab>();
+  const instances = new Map<string, Tab>();
   const pending = new Map<string, Pending>();
   let registered = '';
   let selected: WebSocket | undefined;
@@ -115,7 +116,29 @@ export function createLiveGame(currentSource: () => number) {
             journal.disconnect(old.tabId);
             tabs.delete(socket);
           }
-          if (!tabs.has(socket)) tabs.set(socket, { socket, ...next });
+          if (!tabs.has(socket)) {
+            const retained = next.instanceId ? instances.get(next.instanceId) : undefined;
+            const prepared = retained ? transitions.get(retained)?.pending() : undefined;
+            if (
+              retained &&
+              retained.tabId === next.tabId &&
+              retained.sourceId === next.sourceId &&
+              [retained.revision, previousHello.get(retained), prepared?.revision].includes(next.revision)
+            ) {
+              if (retained.socket !== socket && tabs.has(retained.socket)) {
+                invalidate(retained, 'Play connection replaced.');
+                tabs.delete(retained.socket);
+              }
+              retained.socket = socket;
+              tabs.set(socket, retained);
+              if (prepared) updates.set(retained, prepared.id);
+            } else {
+              const tab = { socket, ...next };
+              tabs.set(socket, tab);
+              if (next.instanceId && (instances.has(next.instanceId) || instances.size < 256))
+                instances.set(next.instanceId, tab);
+            }
+          }
           return;
         }
         const tab = tabs.get(socket);
@@ -134,6 +157,8 @@ export function createLiveGame(currentSource: () => number) {
             let transaction = history.get(m.id);
             if (m.phase === 'begin') {
               if (!transaction) {
+                if (tab.instanceId && instances.get(tab.instanceId) !== tab)
+                  throw Error('HMR runtime history capacity reached; restart Play.');
                 if (busy || updates.size) throw Error('Wait for the current live operation or update to finish.');
                 if (
                   tab.sourceId !== currentSource() ||
@@ -221,12 +246,11 @@ export function createLiveGame(currentSource: () => number) {
         const tab = tabs.get(socket);
         if (tab) {
           updates.delete(tab);
-          previousHello.delete(tab);
           invalidate(tab, 'Play tab disconnected.');
           journal.disconnect(tab.tabId);
         }
         tabs.delete(socket);
-        if (tab) {
+        if (tab && !tab.instanceId) {
           transitions.get(tab)?.clear();
           transitions.delete(tab);
         }
@@ -271,6 +295,12 @@ export function createLiveGame(currentSource: () => number) {
       signal.throwIfAborted();
       if (name === 'game_release_control' && owner?.task !== task)
         return { data: { released: true, alreadyReleased: true } };
+      if (name === 'game_release_control' && owner?.task === task && updates.has(owner.tab)) {
+        const tab = owner.tab;
+        owner = undefined;
+        send(tab.socket, { type: 'live:release' });
+        return { tabId: tab.tabId, revision: tab.revision, data: { released: true } };
+      }
       if (busy || updates.size) throw Error('Another live game operation or update is running.');
       if (name === 'game_act') {
         const { actions } = liveArguments.game_act.parse(raw);
@@ -312,6 +342,7 @@ export function createLiveGame(currentSource: () => number) {
       for (const item of pending.values()) item.finish(Error('Play ended.'));
       clearInterval(heartbeat);
       tabs.clear();
+      instances.clear();
       revoked.clear();
       updates.clear();
       transitions.clear();

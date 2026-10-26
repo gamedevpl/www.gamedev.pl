@@ -23,7 +23,8 @@ async function ready(target) {
   }
   throw Error('Candidate did not become ready');
 }
-let swapEpoch=0,lastSwapError='';
+let swapEpoch=0,lastSwapError='',replacingFrame=false;
+function replacementBusy(){return typeof liveControlled!=='undefined'&&(liveControlled||liveOperation);}
 async function hotBuild(build,check){
   const target=frame;
   const before=await gameRequest(target,'hot:status');check();
@@ -67,6 +68,8 @@ async function swapBuild(build,force=false,automatic=false) {
     catch(error){if(!current())return false;if(/Wait for the current/.test(error.message)&&typeof lastAuto!=='undefined')lastAuto='';lastSwapError=error.message;el('notice').textContent=lastSwapError;el('restart').hidden=false;return false;}
   }
   if(typeof liveControlled!=='undefined'&&liveControlled){el('notice').textContent='Take back control before replacing this game instance.';return false;}
+  if(replacementBusy()){el('notice').textContent='Wait for the current game operation to finish.';return false;}
+  replacingFrame=true;
   try {
     let saved=null;
     if(revision&&!force) {
@@ -90,6 +93,7 @@ async function swapBuild(build,force=false,automatic=false) {
     posture(next,'resume');
     await new Promise(r=>setTimeout(r,150));
     check();
+    if(replacementBusy())throw Error('Game control changed while replacing the instance');
     previous.remove();next.style.cssText='';next.id='game';frame=next;
     if(typeof liveRuntimeId!=='undefined')liveRuntimeId=crypto.randomUUID();
     if(typeof hotUnavailable!=='undefined')hotUnavailable=false;
@@ -101,11 +105,11 @@ async function swapBuild(build,force=false,automatic=false) {
   } catch(error) {
     next?.remove();
     if(!current())return false;
-    posture(previous,'resume');
+    if(!replacementBusy())posture(previous,'resume');
     lastSwapError=error.message+' Current build kept.';el('notice').textContent=lastSwapError;
     if(revision)el('restart').hidden=false;
     return false;
-  }
+  }finally{if(epoch===swapEpoch)replacingFrame=false;}
 }
 let recording=false;
 async function baseCapture() {

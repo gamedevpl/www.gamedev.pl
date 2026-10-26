@@ -71,7 +71,7 @@ function render(next) {
   }
   if (sourceId !== state.sourceId) {
     liveRelease();
-    sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';
+    sourceId = state.sourceId; revision = ''; candidate = '';lastSwapError='';replacingFrame=false;
     swapEpoch++;frame.removeAttribute('srcdoc'); el('empty').hidden = false; el('apply').hidden = true;
     failedBuild=undefined;el('notice').textContent='';updateBuildError();
   }

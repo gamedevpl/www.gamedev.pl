@@ -38,6 +38,7 @@ export function hotTransitions() {
   const transactions = new Map<string, Transaction>();
   return {
     get: (id: string) => transactions.get(id),
+    pending: () => [...transactions.values()].find((transaction) => transaction.state === 'prepared'),
     begin(message: Begin) {
       const existing = transactions.get(message.id);
       if (existing) {
