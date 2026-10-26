@@ -150,14 +150,16 @@ export function createLiveGame(currentSource: () => number) {
       registered = url;
       if (url) registry.set(url, api);
     },
-    release(task: string) {
+    release(task: string, { taskEnded = true }: { taskEnded?: boolean } = {}) {
       if (owner?.task === task) {
         const tab = owner.tab;
         owner = undefined;
         send(tab.socket, { type: 'live:release' });
-        for (const item of pending.values()) if (item.tab === tab) item.finish(Error('Agent task ended.'));
+        for (const item of pending.values())
+          if (item.tab === tab)
+            item.finish(Error(taskEnded ? 'Agent task ended.' : 'Script control released; observe before retrying.'));
       }
-      revoked.delete(task);
+      if (taskEnded) revoked.delete(task);
     },
     async call(task: string, name: LiveToolName, raw: unknown, signal: AbortSignal) {
       signal.throwIfAborted();

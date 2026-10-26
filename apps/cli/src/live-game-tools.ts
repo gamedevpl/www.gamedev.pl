@@ -10,8 +10,7 @@ export function liveGameTools(preview: () => string | undefined) {
   let preparing = false;
   const clients = new Set<{ close(): void }>();
   const release = () => {
-    for (const game of used) game.release(task);
-    used.clear();
+    for (const game of used) game.release(task, { taskEnded: false });
   };
   const tools = {
     tools: [...LIVE_GAME_TOOLS, PLAY_SCRIPT_TOOL],
@@ -75,7 +74,8 @@ export function liveGameTools(preview: () => string | undefined) {
     close() {
       for (const client of clients) client.close();
       clients.clear();
-      release();
+      for (const game of used) game.release(task);
+      used.clear();
     },
   };
   return tools;

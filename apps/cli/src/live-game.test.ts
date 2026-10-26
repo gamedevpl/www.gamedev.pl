@@ -83,6 +83,8 @@ it('pins control to one task and tab, and refuses reacquisition after the creato
   await expect(game.call('task', 'game_release_control', {}, signal.signal)).resolves.toMatchObject({
     data: { alreadyReleased: true },
   });
+  game.release('task', { taskEnded: false });
+  await expect(game.call('task', 'game_take_control', {}, signal.signal)).rejects.toThrow('revoked');
   game.release('task');
   const next = game.call('next-task', 'game_take_control', {}, signal.signal);
   first.reply();

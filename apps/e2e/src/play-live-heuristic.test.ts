@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import { expect, it } from 'vitest';
 import { findChromium } from './browser.js';
@@ -73,3 +75,47 @@ it.skipIf(!findChromium())('a Node heuristic controls the same game through its 
     await fixture.close();
   }
 });
+
+it.skipIf(!findChromium()).each(['expiry', 'replacement', 'budget'])(
+  'script client %s preserves creator reclaim for the current task',
+  async (reason) => {
+    const fixture = await liveGameFixture();
+    const browser = await chromium.launch({
+      executablePath: findChromium()!,
+      chromiumSandbox: chromiumSandbox().enabled,
+    });
+    try {
+      const page = await browser.newPage();
+      await page.goto(fixture.url);
+      await page.frameLocator('#game').locator('canvas').waitFor();
+      const agent = await fixture.agent();
+      await expect
+        .poll(
+          () =>
+            agent
+              .call('game_observe', { screenshot: false })
+              .then((r) => r.tabId)
+              .catch(() => ''),
+          { timeout: 10000 },
+        )
+        .toBeTruthy();
+      await agent.call('game_take_control', { screenshot: false });
+      const setup = (await agent.call('game_script_client', {
+        timeoutMs: reason === 'expiry' ? 2500 : 60000,
+        maxCalls: reason === 'budget' ? 1 : 200,
+      })) as unknown as { modulePath: string };
+      const { connect } = await import(pathToFileURL(setup.modulePath).href);
+      const client = await connect();
+      if (reason === 'budget') await client.observe();
+      await page.click('#agent-reclaim');
+      if (reason === 'expiry') await expect.poll(() => existsSync(setup.modulePath), { timeout: 5000 }).toBe(false);
+      if (reason === 'replacement') await agent.call('game_script_client');
+      if (reason === 'budget') await expect(client.observe()).rejects.toThrow('budget exhausted');
+      await expect(agent.call('game_take_control', { screenshot: false })).rejects.toThrow('revoked');
+      await expect(agent.call('game_observe', { screenshot: false })).resolves.toHaveProperty('tabId');
+    } finally {
+      await browser.close();
+      await fixture.close();
+    }
+  },
+);
