@@ -4,7 +4,7 @@ addEventListener('message', event => {
   const m=event.data;
   if(!m||m.source!=='gdpl-workbench-game'||typeof m.id!=='string')return;
   const p=requests.get(m.id);if(!p||event.source!==p.frame.contentWindow)return;
-  clearTimeout(p.timer);requests.delete(m.id);m.error?p.reject(Error(m.error)):p.resolve(m.data);
+  clearTimeout(p.timer);requests.delete(m.id);m.error?p.reject(Object.assign(Error(m.error),{definitive:m.definitive===true})):p.resolve(m.data);
 });
 function gameRequest(target,type,data,timeout=3000) {
   return new Promise((resolve,reject)=>{
@@ -29,6 +29,7 @@ async function hotBuild(build,check){
   const target=frame;
   const before=await gameRequest(target,'hot:status');check();
   if(!before||before.bootHash!==build.hot.bootHash)return null;
+  if(!before.ready)throw Error('Current game is unavailable. Restart with update to recover.');
   if(liveOperation)throw Error('Wait for the current game operation to finish.');
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(build.hot.bundle));check();
   if(liveOperation)throw Error('Wait for the current game operation to finish.');
@@ -41,7 +42,10 @@ async function hotBuild(build,check){
     try{check();}catch(error){await liveHotUpdate({phase:'abort',id});throw error;}
     let result;
     try{result=await gameRequest(target,'hot:apply',{...build.hot,id,previousRevision,revision:build.revision,expectedEpoch});}
-    catch(error){result=await gameRequest(target,'hot:result',{id});if(!result)throw Error('Update outcome uncertain; restart with update to recover.');}
+    catch(error){
+      if(error.definitive){await liveHotUpdate({phase:'abort',id});throw error;}
+      result=await gameRequest(target,'hot:result',{id});if(!result)throw Error('Update outcome uncertain; restart with update to recover.');
+    }
     check();
     if(result.status!=='rejected'){
       revision=build.revision;liveEpoch++;
@@ -75,7 +79,10 @@ async function swapBuild(build,force=false,automatic=false) {
     if(revision&&!force) {
       const caps=await gameRequest(previous,'capabilities');check();
       if(!caps.state)throw Error('This game cannot preserve state. Use Restart with update.');
-      if(automatic&&(!caps.validate||!caps.safe))throw Error('Update ready. Apply manually at a safe moment.');
+      if(automatic&&(!caps.validate||!caps.safe)){
+        if(caps.validate&&typeof lastAuto!=='undefined')lastAuto='';
+        throw Error('Update ready. Apply manually at a safe moment.');
+      }
       posture(previous,'pause');
       saved=await gameRequest(previous,'snapshot');check();
       if(JSON.stringify(saved??null).length>1000000)throw Error('State exceeds 1 MB');

@@ -59,3 +59,16 @@ it('queries a lost commit acknowledgement before considering another commit', as
   await expect(pending).resolves.toEqual({ state: 'committed' });
   expect(f.messages.filter((m) => m.type === 'live:hot').map((m) => m.phase)).toEqual(['finish', 'status']);
 });
+
+it('retries a lost abort request after confirming that the fence is still prepared', async () => {
+  let attempts = 0;
+  const f = fixture((m) => {
+    if (m.type !== 'live:hot') return;
+    if (m.phase === 'status') return { transaction: { state: 'prepared' } };
+    if (m.phase === 'abort' && ++attempts === 2) return { transaction: { state: 'aborted' } };
+  });
+  const pending = f.update('abort');
+  await vi.advanceTimersByTimeAsync(3001);
+  await expect(pending).resolves.toEqual({ state: 'aborted' });
+  expect(f.messages.filter((m) => m.type === 'live:hot').map((m) => m.phase)).toEqual(['abort', 'status', 'abort']);
+});

@@ -2,6 +2,7 @@ export const PLAY_HOT_BRIDGE = String.raw`
 (() => {
   const results=new Map();
   let preparing=false,unavailable=false;
+  function reject(message){throw Object.assign(Error(message),{definitive:true});}
   function runtime(){return window.__GAME_HOT__;}
   function status(){const hot=runtime();return hot?.protocol===1&&hot.controller?{protocol:1,bootHash:hot.bootHash,...hot.controller.status(),...(unavailable?{ready:false}:{})}:null;}
   function receipt(id){
@@ -19,16 +20,16 @@ export const PLAY_HOT_BRIDGE = String.raw`
   addEventListener('error',failed);addEventListener('unhandledrejection',failed);
   function apply(input){
     if(!input||typeof input.id!=='string'||input.id.length>80||typeof input.bundle!=='string'||input.bundle.length>1000000)
-      throw Error('Invalid hot candidate');
+      reject('Invalid hot candidate');
     if(results.has(input.id)){
       const previous=results.get(input.id);
-      if(previous.revision!==input.revision||previous.bundleHash!==input.bundleHash)throw Error('Update ID reused');
+      if(previous.revision!==input.revision||previous.bundleHash!==input.bundleHash)reject('Update ID reused');
       return receipt(input.id);
     }
-    if(results.size>=256)throw Error('Update history capacity reached; restart Play');
+    if(results.size>=256)reject('Update history capacity reached; restart Play');
     const hot=runtime(),before=status(),journal=window.__GAME_JOURNAL_HOT__;
     if(!before||!before.ready||!journal||input.bootHash!==before.bootHash||input.expectedEpoch!==before.epoch)
-      throw Error('Hot runtime, boot fingerprint or epoch changed');
+      reject('Hot runtime, boot fingerprint or epoch changed');
     let token,result;
     const {id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion,bootHash,bundleHash,sourceTreeHash,protocol}=input;
     journal.begin({id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion,bootHash,bundleHash,sourceTreeHash,protocol});
@@ -53,9 +54,9 @@ export const PLAY_HOT_BRIDGE = String.raw`
   addEventListener('message',event=>{
     const m=event.data;
     if(event.source!==parent||m?.source!=='gdpl-workbench'||typeof m.id!=='string'||!['hot:status','hot:apply','hot:result'].includes(m.type))return;
-    let data,error;
+    let data,error,definitive=false;
     try{data=m.type==='hot:status'?status():m.type==='hot:result'?receipt(m.data?.id):apply(m.data);}
-    catch(e){error=String(e.message||e).slice(0,1000);}
-    parent.postMessage({source:'gdpl-workbench-game',id:m.id,data,error},'*');
+    catch(e){error=String(e.message||e).slice(0,1000);definitive=e.definitive===true;}
+    parent.postMessage({source:'gdpl-workbench-game',id:m.id,data,error,definitive},'*');
   });
 })();`;

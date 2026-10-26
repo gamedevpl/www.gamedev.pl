@@ -9,8 +9,14 @@ function fixture() {
   const dom = new JSDOM('<html><head></head><body></body></html>', { runScripts: 'dangerously' });
   windows.push(dom);
   const win = dom.window,
-    messages: { id?: string; recordingId?: string; json?: string; error?: string; data?: Record<string, unknown> }[] =
-      [];
+    messages: {
+      id?: string;
+      recordingId?: string;
+      json?: string;
+      error?: string;
+      definitive?: boolean;
+      data?: Record<string, unknown>;
+    }[] = [];
   win.postMessage = (value: unknown) => {
     messages.push(value as (typeof messages)[number]);
   };
@@ -56,9 +62,22 @@ function fixture() {
 it('requires the parent and checks compatibility before evaluating candidate code', () => {
   const f = fixture();
   expect(f.send(f.input, null)).toBeUndefined();
-  expect(f.send({ ...f.input, bootHash: 'other', bundle: 'window.sideEffect=true' }).error).toContain('fingerprint');
+  expect(f.send({ ...f.input, bootHash: 'other', bundle: 'window.sideEffect=true' })).toMatchObject({
+    error: expect.stringContaining('fingerprint'),
+    definitive: true,
+  });
   expect((f.win as unknown as { sideEffect?: boolean }).sideEffect).toBeUndefined();
   expect(f.replace).not.toHaveBeenCalled();
+});
+
+it('marks an unavailable runtime rejection as definitive before creating any receipt', () => {
+  const f = fixture();
+  f.send({ ...f.input, bundle: "window.__GAME_HOT__.register({build:'failed',fail:true});" });
+  expect(f.send({ ...f.input, id: 'retry', expectedEpoch: 1 })).toMatchObject({
+    error: expect.stringContaining('runtime'),
+    definitive: true,
+  });
+  expect(f.replace).toHaveBeenCalledTimes(1);
 });
 it('registers once and reports the committed outcome on an idempotent retry', () => {
   const f = fixture();

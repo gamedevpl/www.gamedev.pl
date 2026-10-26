@@ -238,3 +238,22 @@ it('keeps the previous instance if control changes while a fallback candidate lo
   expect(events.some((event) => event.frame === previous && event.type === 'resume')).toBe(false);
   expect(document.getElementById('notice')!.textContent).toContain('control changed');
 });
+
+it('retries an incompatible automatic update once the game reaches a safe point', async () => {
+  const options = { safe: false };
+  const { runtime, previous, build } = player(options);
+  const state = runtime as typeof runtime & { lastAuto: string };
+  const request = runtime.gameRequest;
+  runtime.gameRequest = (frame, type, data) =>
+    type === 'hot:status' ? Promise.resolve({ bootHash: 'old-boot', ready: true }) : request(frame, type, data);
+  state.lastAuto = build.revision;
+  const candidate = { ...build, hot: { bootHash: 'new-boot' } };
+  expect(await runtime.swapBuild(candidate, false, true)).toBe(false);
+  expect(previous.isConnected).toBe(true);
+  expect(state.lastAuto).toBe('');
+  options.safe = true;
+  const retry = runtime.swapBuild(candidate, false, true);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await retry).toBe(true);
+  expect(runtime.revision).toBe(build.revision);
+});

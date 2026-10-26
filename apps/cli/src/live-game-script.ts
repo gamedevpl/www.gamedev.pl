@@ -15,7 +15,7 @@ async function liveHotUpdate(message){
   catch(error){
     if(error.definitive)throw error;
     const transaction=await liveHotMessage({phase:'status',id:message.id});
-    if(message.phase==='finish'&&transaction.state==='prepared')return liveHotMessage(message);
+    if(['finish','abort'].includes(message.phase)&&transaction.state==='prepared')return liveHotMessage(message);
     return transaction;
   }
 }
