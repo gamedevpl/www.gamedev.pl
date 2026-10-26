@@ -4,12 +4,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent, AgentResult, AgentTask, CodingAgent } from 'genaicode/agents';
+import * as agentDrivers from 'genaicode/agents';
 import type { AdapterSpec } from './adapters.js';
 import type { ApiClient } from './api.js';
 import { saveAgentSelection } from './agent-settings.js';
 import { writeGameFiles } from './checkout.js';
 import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
 import type { Workshop } from './workshop.js';
+
+vi.mock('genaicode/agents', async (original) => {
+  const actual = await original<typeof import('genaicode/agents')>();
+  return {
+    ...actual,
+    claude: vi.fn(actual.claude),
+    codex: vi.fn(actual.codex),
+    copilot: vi.fn(actual.copilot),
+  };
+});
 
 // Setup waits for cancel; only local (non-runAdapter) workshops reach it.
 vi.mock('./prepare-workspace.js', () => ({
@@ -70,6 +81,7 @@ const brains: PlayBrain[] = [];
 afterEach(async () => {
   for (const brain of brains.splice(0)) await brain.close();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  vi.clearAllMocks();
 });
 
 function setup(steps: Step[], answers: string[] = []) {
@@ -128,7 +140,7 @@ function setup(steps: Step[], answers: string[] = []) {
     return brain!;
   };
   const edit = (content: string) => writeGameFiles(root, 'snake', [{ path: 'game.ts', content }]);
-  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, recorded, ready };
+  return { start, lines, prompts, picks, tasks: fake.tasks, edit, ws, api, recorded, ready };
 }
 
 describe('play brain', () => {
@@ -149,6 +161,31 @@ describe('play brain', () => {
     expect(decideApproval('yolo', { id: '1', kind: 'command' })).toBe('approve');
   });
 
+  it('allows requested git commands while retaining the other agent restrictions', async () => {
+    const claude = vi.mocked(agentDrivers.claude);
+    const copilot = vi.mocked(agentDrivers.copilot);
+    const codex = vi.mocked(agentDrivers.codex);
+    const t = setup([]);
+    const brain = await startPlayBrain({
+      api: t.api,
+      ws: t.ws,
+      prompt: async () => 'Deny',
+      write: () => {},
+      activity: () => {},
+    });
+    brains.push(brain!);
+    expect(claude.mock.calls.at(-1)?.[0]?.disallowedTools).toEqual(['WebFetch', 'WebSearch', 'Task', 'Agent']);
+    expect(copilot.mock.calls.at(-1)?.[0]?.denyTools).toBeUndefined();
+    expect(copilot.mock.calls.at(-1)?.[0]?.allowTools).toEqual([
+      'write',
+      'shell(git commit)',
+      'shell(git commit:*)',
+      'shell(git push)',
+      'shell(git push:*)',
+    ]);
+    expect(codex.mock.calls.at(-1)?.[0]?.config?.['sandbox_workspace_write.network_access']).toBe(false);
+  });
+
   it('answers a question without checks or a delivery offer', async () => {
     const t = setup([async () => 'The snake moves one cell per tick.']);
     const brain = await t.start();
@@ -157,6 +194,8 @@ describe('play brain', () => {
     expect(t.tasks[0]!.prompt).toContain('game_script_client');
     expect(t.tasks[0]!.prompt).toContain('improve the strategy file');
     expect(t.tasks[0]!.prompt).toContain('how fast is the snake?');
+    expect(t.tasks[0]!.prompt).toContain('Commit or push only when the user asks you to.');
+    expect(t.tasks[0]!.prompt).not.toContain('Do not commit or push.');
     expect(t.lines).toContain('The snake moves one cell per tick.');
     expect(t.picks).toEqual([]);
   });
@@ -317,6 +356,39 @@ describe('play brain', () => {
     expect(t.lines).toContain('Not published.');
     // The agent proposed a delivery itself: no second offer from the workshop.
     expect(t.picks).toEqual([]);
+  });
+
+  it.each([
+    ['ask', 'Allow', 'approve'],
+    ['ask', 'Deny', 'deny'],
+    ['auto', 'Allow', 'approve'],
+    ['auto', 'Deny', 'deny'],
+    ['yolo', 'Deny', 'approve'],
+  ] as const)('handles git approvals in %s mode with %s', async (mode, answer, decision) => {
+    const t = setup(
+      [
+        async (task) => {
+          for (const command of ['git commit -m "Update game"', 'git push']) {
+            expect(
+              await task.onApproval!(
+                { id: command, kind: 'command', detail: { input: { command } } },
+                new AbortController().signal,
+              ),
+            ).toBe(decision);
+          }
+          return 'Handled git requests.';
+        },
+      ],
+      [answer, answer],
+    );
+    t.ws.permissionMode = mode;
+    const brain = await t.start();
+    await brain.turn('commit and push the changes');
+    expect(t.prompts).toHaveLength(mode === 'yolo' ? 0 : 2);
+    if (mode !== 'yolo') {
+      expect(t.prompts[0]!.question).toContain('Command: git commit -m "Update game"');
+      expect(t.prompts[1]!.question).toContain('Command: git push');
+    }
   });
 
   it('shows the full permission request before the creator allows it', async () => {

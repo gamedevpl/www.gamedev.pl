@@ -88,7 +88,7 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
     claude({
       ...(permissions ? {} : { permissionMode: 'acceptEdits' as const }),
       strictMcpConfig: true,
-      disallowedTools: ['Bash(git commit:*)', 'Bash(git push:*)', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
+      disallowedTools: ['WebFetch', 'WebSearch', 'Task', 'Agent'],
       settings: { disableAllHooks: true, permissions: { allow: [readRoot] } },
     }),
     codex({
@@ -104,8 +104,7 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
     }),
     copilot({
       ...(permissions ? {} : { allowAllTools: false }),
-      allowTools: ['write'],
-      denyTools: ['shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
+      allowTools: ['write', 'shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
       onlyTaskMcpServers: true,
     }),
   ];
@@ -216,7 +215,7 @@ export async function startPlayBrain(input: {
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
     ],
-    dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: false, only: true },
+    dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
