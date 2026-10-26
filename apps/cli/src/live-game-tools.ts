@@ -52,7 +52,7 @@ export function liveGameTools(preview: () => string | undefined) {
                   modulePath: client.modulePath,
                   ...options,
                   usage:
-                    'Write the strategy as ./play-heuristic.mjs in your current working directory, not /tmp or $TMPDIR. The .mjs file is not delivered as game source. Run node ./play-heuristic.mjs MODULE_PATH, passing this modulePath as the argument. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
+                    'Write the strategy as ./play-heuristic.mjs in your current working directory, not /tmp or $TMPDIR. The .mjs file is not delivered as game source. If a temporary-directory write is denied, try the working directory before asking the creator or falling back to direct actions. Run node ./play-heuristic.mjs MODULE_PATH, passing this modulePath as the argument. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
                 }),
               },
             ],

@@ -57,6 +57,7 @@ it.each(['codex', 'claude', 'copilot'])('connects host capture to a delegated %s
       connected = endpoint(run.spec);
       expect(run.prompt).toContain('capture_game');
       expect(run.prompt).toContain('game_script_client');
+      expect(run.prompt).toContain('working directory, not /tmp or $TMPDIR');
       expect(run.prompt).toContain('improve the strategy file');
       expect(run.prompt).toContain('listen EPERM');
       expect(run.permissions).toEqual(
