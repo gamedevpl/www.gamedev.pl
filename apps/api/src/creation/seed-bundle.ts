@@ -67,7 +67,7 @@ export async function checkSeedBundles(slug: string, files: SeedFile[]): Promise
             builder.onResolve({ filter: /^\./ }, (args) => {
               const sourcePath = resolveGameTypeScriptPath(args.resolveDir, args.path);
               if (!sourcePath || !sourcePath.startsWith(`${gameRoot}/`)) {
-                return { errors: [{ text: `game imports must be TypeScript files inside games/${slug}` }] };
+                return { errors: [{ text: `game imports must be TypeScript or JSON files inside games/${slug}` }] };
               }
               return { path: sourcePath, namespace: 'seed-draft' };
             });
@@ -105,7 +105,11 @@ export async function checkSeedBundles(slug: string, files: SeedFile[]): Promise
                   return { errors: [{ text: `game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes` }] };
                 }
               }
-              return { contents: source, loader: 'ts', resolveDir: loadedPath.slice(0, loadedPath.lastIndexOf('/')) };
+              return {
+                contents: source,
+                loader: loadedPath.endsWith('.json') ? 'json' : 'ts',
+                resolveDir: loadedPath.slice(0, loadedPath.lastIndexOf('/')),
+              };
             });
           },
         },

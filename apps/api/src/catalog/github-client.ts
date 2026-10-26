@@ -744,7 +744,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                   (sourceKind === 'game' && sourcePath.startsWith(`${SHARED_SIM_ROOT}/`)));
               if (!isAllowed) {
                 return {
-                  errors: [{ text: `${sourceKind} imports must be TypeScript files inside ${sourceRoot}` }],
+                  errors: [{ text: `${sourceKind} imports must be TypeScript or JSON files inside ${sourceRoot}` }],
                 };
               }
               return { path: sourcePath, namespace: 'github-typescript-source' };
@@ -803,7 +803,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               }
               return {
                 contents: source,
-                loader: 'ts',
+                loader: loadedPath.endsWith('.json') ? 'json' : 'ts',
                 resolveDir: path.posix.dirname(loadedPath),
               };
             });

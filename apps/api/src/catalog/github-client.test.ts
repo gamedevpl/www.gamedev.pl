@@ -9,6 +9,7 @@ describe('resolveGameTypeScriptPath', () => {
     ['./runtime.ts', '/games/foo/game/runtime.ts'],
     ['./runtime.js', '/games/foo/game/runtime.ts'],
     ['./runtime', '/games/foo/game/runtime.ts'],
+    ['./levels.json', '/games/foo/game/levels.json'],
     ['../util.js', '/games/foo/util.ts'],
   ])('maps %s under the game directory', (specifier, expected) => {
     expect(resolveGameTypeScriptPath('/games/foo/game', specifier)).toBe(expected);
@@ -16,7 +17,6 @@ describe('resolveGameTypeScriptPath', () => {
 
   it('rejects bare package imports and non-TS assets', () => {
     expect(resolveGameTypeScriptPath('/games/foo', 'lodash')).toBeNull();
-    expect(resolveGameTypeScriptPath('/games/foo', './levels.json')).toBeNull();
     expect(resolveGameTypeScriptPath('/games/foo', './sprite.png')).toBeNull();
   });
 });
@@ -1582,10 +1582,35 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('bundles JSON files imported by game TypeScript', async () => {
+    const files = new Map<string, string>([
+      ['games/json-game/index.html', '<canvas id="game"></canvas>'],
+      ['games/json-game/game.ts', 'import data from "./data.json"; console.log(data.hero);'],
+      ['games/json-game/data.json', '{"hero":"Alchemist","hp":100}'],
+      ['games/json-game/style.css', '.game {}'],
+      ['games/json-game/SPEC.md', specMd({ title: 'JSON Game' })],
+      ['games/json-game/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'json-game');
+    expect(sources?.gameJs).toContain('Alchemist');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+  });
+
   it.each([
-    ["import '../other-game/runtime.ts';", 'game imports must be TypeScript files inside'],
+    ["import '../other-game/runtime.ts';", 'game imports must be TypeScript or JSON files inside'],
     ["import 'some-package';", 'game runtime dependency is forbidden'],
-    ["import './levels.json';", 'game imports must be TypeScript files inside'],
+    ["import './sprite.png';", 'game imports must be TypeScript or JSON files inside'],
   ])('rejects an unsafe game import: %s', async (entrySource, expectedError) => {
     const files = new Map<string, string>([
       ['games/unsafe/index.html', '<canvas id="game"></canvas>'],

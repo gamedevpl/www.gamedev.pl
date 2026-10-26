@@ -15,7 +15,10 @@ export function resolveGameTypeScriptPath(resolveDir: string, specifier: string)
   if (resolvedPath.endsWith('.js')) {
     return `${resolvedPath.slice(0, -'.js'.length)}.ts`;
   }
-  // Extensionless — only accept bare paths (no other extension). `./foo.json` stays rejected.
+  if (resolvedPath.endsWith('.json')) {
+    return resolvedPath;
+  }
+  // Extensionless — only accept bare paths (no other extension). `./foo.png` stays rejected.
   if (path.posix.extname(resolvedPath) !== '') {
     return null;
   }
