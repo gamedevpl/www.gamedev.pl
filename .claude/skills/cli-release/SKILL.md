@@ -49,6 +49,8 @@ open a PR — the publish step is the same.
 
 To make it **fully automatic**, set the repository variable `CLI_RELEASE_AUTOMERGE=true`:
 the release PR arms `gh pr merge --auto` and merges itself once checks pass.
+GitHub repository settings must also allow auto-merge. If that option is disabled,
+merge the reviewed release PR after its checks pass; setting the variable alone is insufficient.
 
 ## Keep Creator Kit installations current
 

@@ -123,6 +123,12 @@ renderer context's canvas when testing pixel scale. Match geometry assertions to
 current renderer while retaining the observation, purity and replay checks. Reproduce
 these failures on the unchanged base before attributing them to another PR.
 
+When a game entry changes from executing at import to exporting a boot function,
+exercise every execution path: browser assembly, smoke, capture search and the
+installed compiled Kit. Bundling the export directly can succeed without starting
+the game. Check declarations through Play's Code index after a real npm installation;
+a symlinked Kit can render while its editor correctly rejects linked declaration paths.
+
 Non-root cloud containers may still require the games kit's documented `CI=1`
 browser mode. Preflight `check:webgl` with the final environment before a long
 catalog gate: changing environment variables invalidates its resume checkpoint.
