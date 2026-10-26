@@ -60,7 +60,7 @@ async function liveRun(message){
   if(liveOperation){liveSend({type:'live:result',id:message.id,error:'Another game operation is running'});return;}
   liveOperation=true;
   const target=frame,shown=revision,epoch=liveEpoch,args=message.args||{};
-  const check=()=>{if(epoch!==liveEpoch||frame!==target||shown!==revision||message.sourceId!==sourceId)throw Error('Game or control changed; observe again');};
+  const check=()=>{if(epoch!==liveEpoch||frame!==target||shown!==revision||message.sourceId!==sourceId||hotUnavailable&&message.operation!=='game_release_control')throw Error('Game or control changed; observe again');};
   try{
     if(!revision||hotUpdating||replacingFrame||message.revision!==revision)throw Error('Displayed build changed or is loading');
     if(hotUnavailable&&message.operation!=='game_release_control')throw Error('Committed code is unavailable; restart with update or inspect the journal.');
