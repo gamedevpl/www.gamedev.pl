@@ -4,6 +4,7 @@
 
 import { AGENT_PLAY_BRIDGE_SURFACE } from './agent-play-bridge-surface.js';
 import { AGENT_PLAY_LEASE } from './agent-play-lease.js';
+import { AGENT_PLAY_COOPERATIVE } from './agent-play-cooperative.js';
 
 export const AGENT_PLAY_BRIDGE =
   `(function(){
@@ -36,6 +37,7 @@ export const AGENT_PLAY_BRIDGE =
 ` +
   AGENT_PLAY_BRIDGE_SURFACE +
   AGENT_PLAY_LEASE +
+  AGENT_PLAY_COOPERATIVE +
   `
   // Set at assemble time once the games repo carries AGENT.json's hiddenFields into the
   // document; null until then, and the host renders that as a warning.
@@ -218,13 +220,6 @@ export const AGENT_PLAY_BRIDGE =
       hiddenFields:agentHidden()
     });
     agentState('hello');
-  }
-  function agentDisable(){
-    agentLeaseEnd();
-    if(!agentOn)return;
-    agentOn=false;
-    agentReleaseInput();agentLeaseReleased();
-    agentSetStepped(false);
   }
   function agentRun(command,id){
     var kind=command&&command.kind;
@@ -485,8 +480,8 @@ export const AGENT_PLAY_BRIDGE =
     if(m.type==='agent:policy'){if(!agentOn)agentEnable();agentRunPolicy(AGENT_STR(m.code||''),m.budget);return;}
     if(m.type==='agent:disable'){agentDisable();if(m.id)agentState('released',m.id);return;}
     if(m.type!=='agent:command')return;
-    if(!agentOn){agentEnable();return;}
-    try{agentRun(m.command||{},m.id);}
+    if(!m.leaseRequired&&!agentOn){agentEnable();return;}
+    try{if(m.leaseRequired)agentRunLeased(m.command||{},m.id);else agentRun(m.command||{},m.id);}
     catch(err){
       agentNote('error',AGENT_STR((err&&err.message)||err));
       agentState('error',m.id);

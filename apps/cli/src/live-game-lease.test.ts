@@ -147,3 +147,37 @@ it('holds already scheduled rendering until release and preserves cancellation',
   expect(paint).toHaveBeenCalledTimes(1);
   expect(cancelled).not.toHaveBeenCalled();
 });
+
+it.each(['disable', 'expiry'])(
+  'cancels remaining cooperative frames on %s, and refuses late leased commands',
+  async (stop) => {
+    const f = fixture();
+    let clock = 0;
+    vi.spyOn(f.win.performance, 'now').mockImplementation(() => (clock += 20));
+    f.send('agent:enable', { lease: true });
+    f.send('agent:command', {
+      id: 'slow',
+      leaseRequired: true,
+      command: { kind: 'press', key: 'ArrowRight', frames: 300 },
+    });
+    expect(f.held.has('ArrowRight')).toBe(true);
+    expect(f.h.frame).toBe(38);
+    if (stop === 'disable') f.send('agent:disable');
+    else {
+      // Simulate a throttled tab: its heartbeat watchdog runs before its next chunk.
+      const pending = [...f.replies];
+      f.win.setTimeout = (() => 0) as unknown as typeof f.win.setTimeout;
+      await vi.advanceTimersByTimeAsync(5001);
+      expect(f.replies.length).toBeGreaterThan(pending.length);
+    }
+    const stoppedAt = f.h.frame;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.h.frame).toBe(stoppedAt);
+    expect(f.held.size).toBe(0);
+    expect(f.paused()).toBe(false);
+    f.send('agent:command', { id: 'late', leaseRequired: true, command: { kind: 'step', frames: 20 } });
+    expect(f.replies.at(-1)).toMatchObject({ id: 'late', reason: 'control unavailable' });
+    expect(f.paused()).toBe(false);
+    expect(f.h.frame).toBe(stoppedAt);
+  },
+);

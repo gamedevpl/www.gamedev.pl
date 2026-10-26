@@ -9,22 +9,23 @@ if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{
 function liveSend(message){if(liveSocket?.readyState===1)liveSocket.send(JSON.stringify(message));}
 function liveHello(){liveSend({type:'live:hello',tabId:liveTabId,sourceId,revision});}
 function livePost(type,extra={}){frame.contentWindow?.postMessage({source:'gdpl-host',type,...extra},'*');}
-function liveRelease(notify=false){
+function liveRelease(notify=false,reason='Control released'){
   liveEpoch++;clearTimeout(liveLeaseTimer);liveControlled=false;
   livePost('agent:disable');
-  for(const p of liveReplies.values()){clearTimeout(p.timer);p.reject(Error('Control released'));}liveReplies.clear();
+  for(const p of liveReplies.values()){clearTimeout(p.timer);p.reject(Error(reason));}liveReplies.clear();
   el('agent-control').hidden=true;
-  if(notify)liveSend({type:'live:reclaim'});
+  if(notify)liveSend({type:reason==='Control released'?'live:reclaim':'live:expired'});
 }
 function liveLease(){
   if(!liveControlled)return;
   livePost('agent:heartbeat');clearTimeout(liveLeaseTimer);
-  liveLeaseTimer=setTimeout(()=>liveRelease(true),4000);
+  liveLeaseTimer=setTimeout(()=>liveRelease(true,'Game control heartbeat timed out; observe before retrying.'),4000);
 }
 function liveAsk(type,extra={}){
   return new Promise((resolve,reject)=>{
     const id=crypto.randomUUID(),target=frame.contentWindow;
-    const timer=setTimeout(()=>{liveReplies.delete(id);reject(Error('Game control unavailable'));},3000);
+    const timeout=type==='agent:command'?30000:3000;
+    const timer=setTimeout(()=>{liveReplies.delete(id);reject(Error('Game '+type+' response timed out after '+timeout+' ms; action outcome uncertain. Control released; observe or read the journal before retrying.'));},timeout);
     liveReplies.set(id,{resolve,reject,timer,target});livePost(type,{...extra,id});
   });
 }
@@ -32,7 +33,7 @@ addEventListener('message',e=>{
   const m=e.data;if(!m||m.source!=='gdpl-player'||m.type!=='agent:state')return;
   const p=liveReplies.get(m.id);
   if(p&&e.source===p.target){clearTimeout(p.timer);liveReplies.delete(m.id);p.resolve(m);}
-  if(e.source===frame.contentWindow&&m.reason==='lease expired')liveRelease(true);
+  if(e.source===frame.contentWindow&&m.reason==='lease expired')liveRelease(true,'Game control lease expired; observe before retrying.');
 });
 async function liveRun(message){
   if(liveOperation){liveSend({type:'live:result',id:message.id,error:'Another game operation is running'});return;}
@@ -55,8 +56,8 @@ async function liveRun(message){
     }else if(message.operation==='game_act'){
       if(!liveControlled)throw Error('The agent does not control this game');
       for(const action of args.actions){
-        check();observation=await liveAsk('agent:command',{command:action});
-        if(observation.reason==='error')throw Error('Game action failed; inspect diagnostics');
+        check();observation=await liveAsk('agent:command',{command:action,leaseRequired:true});
+        if(['error','control unavailable','command busy'].includes(observation.reason))throw Error('Game action failed ('+observation.reason+'); inspect diagnostics');
       }
     }else throw Error('Unknown game operation');
     check();

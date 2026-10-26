@@ -46,8 +46,13 @@ export function createLiveGame(currentSource: () => number) {
       };
       const abort = () => finish(Error('Game request cancelled; observe before retrying.'));
       const timer = setTimeout(
-        () => finish(Error('Game response timed out; outcome uncertain. Observe before retrying.')),
-        10_000,
+        () =>
+          finish(
+            Error(
+              'Game response timed out; outcome uncertain. Control released. Observe or read the journal before retrying.',
+            ),
+          ),
+        operation === 'game_act' ? 120_000 : 10_000,
       );
       pending.set(id, { tab, finish });
       signal.addEventListener('abort', abort, { once: true });
@@ -108,6 +113,10 @@ export function createLiveGame(currentSource: () => number) {
         }
         if (message.type === 'live:reclaim') {
           invalidate(tab, 'The creator reclaimed control.');
+          return;
+        }
+        if (message.type === 'live:expired') {
+          invalidate(tab, 'Game control heartbeat/lease expired; action outcome uncertain. Observe before retrying.');
           return;
         }
         const result = liveResult.safeParse(raw);

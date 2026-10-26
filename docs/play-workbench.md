@@ -270,7 +270,11 @@ invalidates it. A paired phone and a raw `--preview` window are not controllable
 
 Taking control pauses real-time play and blocks keyboard and pointer input in the game frame.
 `game_act` supports step, press, tap, click, move and drag, up to 32 actions and 600
-frames per call (300 per action). It accepts no JavaScript, URLs or paths. Existing
+frames per call (300 per action). Actions yield between frames so slow scenes do
+not block heartbeats or creator reclaim. Response deadlines are 30 seconds per
+action and 120 seconds per call; a timeout releases control and leaves the outcome
+uncertain. Inspect the journal or observe before retrying. It accepts no JavaScript,
+URLs or paths. Existing
 `capture_game` plans still start a separate fresh game; they never take over this tab.
 GameKit frame stepping is required for control; `.persist()` is not required.
 

@@ -110,7 +110,7 @@ it('rejects arbitrary execution, excess frames and extra fields before sending c
   expect(first.socket.send).not.toHaveBeenCalled();
 });
 
-it.each(['abort', 'disconnect', 'build', 'source', 'timeout'])(
+it.each(['abort', 'disconnect', 'build', 'source', 'timeout', 'lease'])(
   'releases control and refuses late action replies on %s',
   async (reason) => {
     vi.useFakeTimers();
@@ -120,12 +120,13 @@ it.each(['abort', 'disconnect', 'build', 'source', 'timeout'])(
     first.reply();
     await take;
     const act = game.call('task', 'game_act', { actions: [{ kind: 'step', frames: 30 }] }, signal.signal);
-    const failure = expect(act).rejects.toThrow();
+    const failure = expect(act).rejects.toThrow(reason === 'lease' ? 'heartbeat/lease expired' : undefined);
+    if (reason === 'lease') first.message({ type: 'live:expired' });
     if (reason === 'abort') signal.abort();
     if (reason === 'disconnect') first.socket.emit('close');
     if (reason === 'build') first.hello('new-build');
     if (reason === 'source') changeSource();
-    if (reason === 'timeout') await vi.advanceTimersByTimeAsync(10_001);
+    if (reason === 'timeout') await vi.advanceTimersByTimeAsync(120_001);
     await failure;
     expect(first.socket.send.mock.calls.some(([data]) => JSON.parse(data).type === 'live:release')).toBe(true);
     expect(findLiveGame('http://127.0.0.1:12345/')).toBe(reason === 'source' ? undefined : game);
