@@ -10,6 +10,7 @@ export default defineConfig({
       'src/play-drafts-code.test.ts',
       'src/play-resize-code.test.ts',
       'src/play-live-game.test.ts',
+      'src/play-live-heuristic.test.ts',
       'src/play-live-slow-actions.test.ts',
       'src/play-live-journal.test.ts',
     ],

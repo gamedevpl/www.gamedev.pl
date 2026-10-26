@@ -56,6 +56,8 @@ it.each(['codex', 'claude', 'copilot'])('connects host capture to a delegated %s
     runAdapter: async (run) => {
       connected = endpoint(run.spec);
       expect(run.prompt).toContain('capture_game');
+      expect(run.prompt).toContain('game_script_client');
+      expect(run.prompt).toContain('improve the strategy file');
       expect(run.prompt).toContain('listen EPERM');
       expect(run.permissions).toEqual(
         name === 'copilot' ? undefined : { approval: 'auto-approve', sandbox: 'workspace-write' },

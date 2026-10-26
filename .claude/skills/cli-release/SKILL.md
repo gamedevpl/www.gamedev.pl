@@ -203,3 +203,8 @@ repo in the same session.
 | Release PR proposer                  | `.github/workflows/cli-release-pr.yml`               |
 | Publisher                            | `.github/workflows/cli-release.yml`                  |
 | Installer default version + fallback | `apps/api/src/platform/cli-installers.ts`            |
+
+A named `{ z }` import from `zod` can retain the whole namespace in the CLI
+bundle. Match the existing `import * as z` style and check the bundled size;
+compare a clean base before loosening the bundle budget. The heuristic-client
+change initially added about 450 KB through this import alone.

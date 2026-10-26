@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Play agents can run and refine reusable Node heuristics through a task-scoped script client, reducing model turns during sustained play (#1988).
+
 ## 0.59.0 — 2026-10-26
 
 ### Added
