@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.59.0 — 2026-10-26
+
 ### Added
 
 - Local Play journals retain the built code for each recorded revision; agents can inspect earlier code with `game_journal_code` after files change or a tab closes (#1981).
