@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 
-// The helper inherits its working directory as an open directory reference. macOS
-// cannot traverse /dev/fd/<directory-fd>, unlike Linux's /proc/self/fd.
+// macOS cannot traverse directories through /dev/fd; inherit cwd instead.
 const HELPER = String.raw`
 import {execFileSync} from 'node:child_process';
 import {constants,statSync,openSync,closeSync,readSync,writeSync,writeFileSync,unlinkSync} from 'node:fs';
