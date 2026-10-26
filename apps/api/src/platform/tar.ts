@@ -36,7 +36,7 @@ export interface ReadTarOptions {
   maxEntryBytes?: number;
 }
 
-const DEFAULT_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
+const DEFAULT_MAX_TOTAL_BYTES = 4 * 1024 * 1024 * 1024;
 
 export class ArchiveLimitError extends Error {}
 

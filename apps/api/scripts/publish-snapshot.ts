@@ -106,7 +106,12 @@ async function main(): Promise<void> {
   // old way: slower and expensive, but a stale snapshot is worse.
   let files: RepoFileSource | undefined;
   try {
-    const archive = await fetchGamesRepoArchive({ repo, ref, token });
+    const archive = await fetchGamesRepoArchive({
+      repo,
+      ref,
+      token,
+      maxTotalBytes: 4 * 1024 * 1024 * 1024,
+    });
     files = await withArchiveCommitCounts(archive, { repo, ref, token });
     console.log(
       `snapshot publish: archive ${repo}@${ref} — ${archive.fileCount} files, ` +
@@ -147,9 +152,9 @@ async function main(): Promise<void> {
     // advancing it on a partial bake would half-publish failed games. The site
     // keeps serving the previous good snapshot until a clean bake succeeds.
     console.error('');
-    console.error('games that could not be baked (pointer not advanced; previous snapshot still live):');
+    console.error('FAIL games that could not be baked (pointer not advanced; previous snapshot still live):');
     for (const failure of result.failures) {
-      console.error(`  - ${failure.slug}: ${failure.reason}`);
+      console.error(`FAIL ${failure.slug}: ${failure.reason}`);
     }
     process.exit(1);
   }
