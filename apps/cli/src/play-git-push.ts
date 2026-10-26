@@ -37,14 +37,14 @@ export function playPushBridge(
     res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(result));
   };
   const receive = async (req: IncomingMessage, res: ServerResponse, owner: NonNullable<typeof turn>) => {
-    req.setTimeout(10_000, () => req.destroy());
+    const deadline = setTimeout(() => req.destroy(), 10_000);
     try {
       let body = '';
       for await (const chunk of req) {
         body += String(chunk);
         if (Buffer.byteLength(body) > 4096) throw Error('Git push request is too large.');
       }
-      req.setTimeout(0);
+      clearTimeout(deadline);
       if (turn !== owner) throw Error('The Play turn has ended.');
       const { remote, srcRef, game, cwd } = JSON.parse(body) as Record<string, unknown>;
       if (
@@ -61,6 +61,7 @@ export function playPushBridge(
     } catch (error) {
       reply(res, 400, { ok: false, message: error instanceof Error ? error.message : 'Git push failed.' });
     } finally {
+      clearTimeout(deadline);
       busy = false;
     }
   };
