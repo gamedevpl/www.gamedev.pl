@@ -5,7 +5,7 @@ const HELPER = String.raw`
 import {execFileSync} from 'node:child_process';
 import {constants,statSync,openSync,closeSync,readSync,writeSync,writeFileSync,unlinkSync} from 'node:fs';
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-let req,resp,closed=false,timer;
+let req,resp,closed=false,received=false,timer;
 function close(){
   if(closed)return;closed=true;clearInterval(timer);
   for(const fd of [req,resp])if(fd!==undefined)try{closeSync(fd)}catch{}
@@ -19,13 +19,14 @@ process.on('message',async message=>{
       const dir=statSync('.');
       if(String(dir.dev)!==message.dev||String(dir.ino)!==message.ino)throw Error('Play script directory changed');
       execFileSync('/usr/bin/mkfifo',['-m','600','requests.fifo','responses.fifo'],{timeout:5000});
-      const flags=constants.O_RDWR|constants.O_NONBLOCK|constants.O_NOFOLLOW;
-      req=openSync('requests.fifo',flags);resp=openSync('responses.fifo',flags);
+      const flags=constants.O_NONBLOCK|constants.O_NOFOLLOW;
+      req=openSync('requests.fifo',constants.O_RDONLY|flags);resp=openSync('responses.fifo',constants.O_RDWR|flags);
       writeFileSync('client.mjs',message.source,{mode:0o600,flag:'wx'});
       timer=setInterval(()=>{
         try{const b=Buffer.allocUnsafe(65536);for(;;){let n;
           try{n=readSync(req,b,0,b.length,null)}catch(e){if(e.code==='EAGAIN'||e.code==='EWOULDBLOCK')break;throw e}
-          if(!n)break;process.send({type:'data',data:b.subarray(0,n).toString('base64')});
+          if(!n){if(received)close();break}received=true;
+          process.send({type:'data',data:b.subarray(0,n).toString('base64')});
         }}catch{close()}
       },15);
       process.send({type:'ready'});

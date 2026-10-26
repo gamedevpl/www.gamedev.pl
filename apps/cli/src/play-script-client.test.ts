@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { expect, it, vi } from 'vitest';
 import { createPlayScriptClient } from './play-script-client.js';
@@ -149,6 +150,43 @@ it('cancels an in-flight action and removes its client when the task stops', asy
     expect(release).toHaveBeenCalledOnce();
     await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
   } finally {
+    setup.close();
+  }
+});
+
+it.skipIf(process.platform === 'win32')('cancels an in-flight action when the strategy process dies', async () => {
+  const release = vi.fn();
+  const aborted = vi.fn();
+  const call = vi.fn(
+    (_name: unknown, _args: unknown, signal: AbortSignal) =>
+      new Promise<never>((_, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => {
+            aborted();
+            reject(Error('cancelled'));
+          },
+          { once: true },
+        );
+      }),
+  );
+  const setup = await createPlayScriptClient({
+    call,
+    signal: new AbortController().signal,
+    maxCalls: 10,
+    timeoutMs: 60000,
+    release,
+  });
+  const program = `import {pathToFileURL} from 'node:url'; const {connect}=await import(pathToFileURL(process.argv[1])); const client=await connect(); await client.act([{kind:'step',frames:20}]);`;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', program, setup.modulePath], { stdio: 'ignore' });
+  try {
+    await vi.waitFor(() => expect(call).toHaveBeenCalledOnce());
+    child.kill('SIGKILL');
+    await vi.waitFor(() => expect(aborted).toHaveBeenCalledOnce(), { timeout: 3000 });
+    expect(release).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
+  } finally {
+    child.kill('SIGKILL');
     setup.close();
   }
 });

@@ -118,6 +118,7 @@ export async function createPlayFifoClient(input: Input) {
   let darwinPipe: Awaited<ReturnType<typeof startDarwinPipe>> | undefined;
   let closed = false,
     active = false,
+    received = false,
     calls = 0,
     inputBuffer = '';
   const decoder = new StringDecoder('utf8');
@@ -254,10 +255,14 @@ export async function createPlayFifoClient(input: Input) {
           if (wouldBlock(error)) break;
           throw error;
         }
-        if (!count) break;
+        if (!count) {
+          if (received) close();
+          break;
+        }
+        received = true;
         ingest(chunk.subarray(0, count));
       }
-      if (!active && messages.length) {
+      if (!closed && !active && messages.length) {
         active = true;
         void processMessage(messages.shift()!)
           .catch(close)
@@ -296,9 +301,9 @@ export async function createPlayFifoClient(input: Input) {
       anchoredDir = `/proc/self/fd/${dirFd}`;
       const mkfifo = existsSync('/usr/bin/mkfifo') ? '/usr/bin/mkfifo' : '/bin/mkfifo';
       execFileSync(mkfifo, ['-m', '600', 'requests.fifo', 'responses.fifo'], { cwd: anchoredDir, timeout: 5000 });
-      const flags = constants.O_RDWR | constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
-      requestFd = openSync(join(anchoredDir, 'requests.fifo'), flags);
-      responseFd = openSync(join(anchoredDir, 'responses.fifo'), flags);
+      const flags = constants.O_NONBLOCK | (constants.O_NOFOLLOW ?? 0);
+      requestFd = openSync(join(anchoredDir, 'requests.fifo'), constants.O_RDONLY | flags);
+      responseFd = openSync(join(anchoredDir, 'responses.fifo'), constants.O_RDWR | flags);
       if (!fstatSync(requestFd).isFIFO() || !fstatSync(responseFd).isFIFO()) throw Error('Invalid Play script channel');
       writeFileSync(join(anchoredDir, 'client.mjs'), source, { mode: 0o600, flag: 'wx' });
     }
