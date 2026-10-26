@@ -22,7 +22,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- In Play, the agent can commit and push game changes when you ask; Claude uses the selected approval mode.
+- In Play, the agent can commit and push game changes when you ask; Claude uses the selected approval mode (#1996).
 - Keep journal batches within the host limit during large log bursts so recording continues (#1982).
 
 ### Internal
