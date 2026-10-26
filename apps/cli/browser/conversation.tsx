@@ -47,7 +47,13 @@ export function Conversation() {
     return () => window.removeEventListener('play-session', update);
   }, []);
   const messages = sessionMessages(lines, diffs);
-  if (agent)
+  // Keep the transcript visible until the agent receives its first turn.
+  const awaitingFirstTurn =
+    agent &&
+    !agent.history.length &&
+    !agent.session?.turns.length &&
+    messages.some((message) => message.kind === 'user');
+  if (agent && !awaitingFirstTurn)
     return (
       <>
         <AgentConversation

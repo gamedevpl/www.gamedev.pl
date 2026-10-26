@@ -144,7 +144,7 @@
     "apps/api/src/creation/scorecard.test.ts": 345,
     "apps/api/src/creation/scorecard.ts": 974,
     "apps/api/src/creation/seed-bundle.test.ts": 105,
-    "apps/api/src/creation/seed-bundle.ts": 302,
+    "apps/api/src/creation/seed-bundle.ts": 106,
     "apps/api/src/creation/seed-context.test.ts": 116,
     "apps/api/src/creation/seed-context.ts": 93,
     "apps/api/src/creation/seed-provider-env.ts": 123,

@@ -151,6 +151,54 @@ it('keeps tool output collapsed and labels the actual agent reply', async () => 
   expect(doc.querySelector('.session-output')?.hasAttribute('open')).toBe(false);
 });
 
+it('keeps the first prompt visible while the agent conversation starts', async () => {
+  const { doc, dom, state } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('conversation')!.textContent).toContain('Turn the car red'));
+  dom.window.dispatchEvent(
+    new dom.window.CustomEvent('play-session', {
+      detail: {
+        lines: [...state.lines, '› Add a blue track'],
+        workspace: { mode: 'game' },
+        agent: { history: [], session: null },
+      },
+    }),
+  );
+  await vi.waitFor(() => expect(doc.getElementById('conversation')!.textContent).toContain('Add a blue track'));
+  expect(doc.querySelector('.conversation-welcome')).toBeNull();
+  dom.window.dispatchEvent(
+    new dom.window.CustomEvent('play-session', {
+      detail: {
+        lines: [...state.lines, '› Add a blue track'],
+        workspace: { mode: 'game' },
+        agent: {
+          name: 'Play',
+          mode: 'use',
+          modes: ['use'],
+          agent: 'claude',
+          agents: [],
+          actions: [],
+          links: [],
+          view: null,
+          navigation: null,
+          history: [],
+          session: {
+            agent: 'claude',
+            cwd: '/game',
+            status: 'running',
+            queued: [],
+            approvals: [],
+            usage: {},
+            canSteer: false,
+            turns: [{ id: 1, agent: 'claude', prompt: 'Add a blue track', entries: [], startedAt: Date.now() }],
+          },
+        },
+      },
+    }),
+  );
+  await vi.waitFor(() => expect(doc.querySelector('.gc-prompt')?.textContent).toBe('Add a blue track'));
+  expect(doc.querySelector('.conversation-welcome')).toBeNull();
+});
+
 it('embeds only the two WOFF2 font weights used by Play', () => {
   expect(PLAY_STYLE.match(/@font-face/g)).toHaveLength(2);
   expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);

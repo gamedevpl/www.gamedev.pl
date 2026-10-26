@@ -11,6 +11,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Run Play heuristic scripts without shell network access on macOS and Linux, and guide agents to write strategies in their writable workspace (#1999).
 
+## 0.60.1 — 2026-10-26
+
+### Fixed
+
+- Play keeps your message visible while the agent starts, without flashing the empty conversation (#2001).
+- In Play, the agent can commit and push game changes when you ask; Claude uses the selected approval mode (#1996).
+
 ## 0.60.0 — 2026-10-26
 
 ### Added
