@@ -280,8 +280,7 @@ jobs:
             if [ "$file_count" -ge 300 ]; then
               echo "Compare listed ${file_count} files (GitHub cap) — fetching baseline to classify via git diff"
               if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
-                git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
-                  fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                git fetch --depth=1 "https://x-access-token:${GAMES_REPO_TOKEN}@github.com/${GAMES_REPO}.git" "$parent" \
                   || { echo "Baseline fetch failed — full catalog gate"; rm -f "$compare"; return 1; }
               fi
               files=$(git diff --no-renames --name-only "$parent" "$SHA")
@@ -297,8 +296,7 @@ jobs:
               # git-diff when GitHub omitted a patch (binary / too large). Compare
               # patches are the primary input and work without this object.
               if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
-                git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
-                  fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                git fetch --depth=1 "https://x-access-token:${GAMES_REPO_TOKEN}@github.com/${GAMES_REPO}.git" "$parent" \
                   || echo "Baseline fetch failed — classify from compare patches only"
               fi
             fi
