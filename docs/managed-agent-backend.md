@@ -466,3 +466,10 @@ agent we happen to run.
 
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.
+
+## Attached Studio play recordings
+
+Creators can explicitly attach a frozen journal from Studio gameplay to a managed
+request. The builder reads selected ranges through `read_play_journal`; it receives
+no access to the live browser. See [Studio play journals](studio-play-journals.md)
+for recording limits, task binding and the required retention setup.

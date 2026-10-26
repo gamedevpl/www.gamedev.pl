@@ -1,3 +1,4 @@
+import { PlayJournalSchema } from '../platform/play-journal.js';
 import { BUILDERS, MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { z } from 'zod';
 import { MAX_REFERENCE_IMAGES } from '../platform/creator-media-store.js';
@@ -8,7 +9,7 @@ export const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;
 const referenceImageSchema = z.string().max(MAX_SHOT_BASE64_CHARS, 'reference image is too large');
 
 // Four images at that cap exceed Fastify's default body limit.
-export const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 64 * 1024;
+export const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 2_100_000;
 
 export const ReferenceImagesSchema = z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES);
 
@@ -29,6 +30,7 @@ export const FeedbackRequestSchema = z.object({
   // Data, never instructions — same fencing as the free-text feedback.
   context: z
     .object({
+      playJournal: PlayJournalSchema.optional(),
       screenshotPng: z.string().max(MAX_SHOT_BASE64_CHARS, 'screenshot is too large').optional(),
       instrumentation: z
         .object({

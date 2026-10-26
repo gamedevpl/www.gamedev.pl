@@ -23,6 +23,7 @@ interface CompactFeedbackComposerProps {
   titleKey: string;
   attachmentsApi: ComposerAttachmentsApi;
   builderControls: ReactNode;
+  journalControl?: ReactNode;
   showStop: boolean;
   stopRequested: boolean;
   onStopAndSwitchToSelf: () => void;
@@ -48,6 +49,7 @@ export function CompactFeedbackComposer({
   titleKey,
   attachmentsApi,
   builderControls,
+  journalControl,
   showStop,
   stopRequested,
   onStopAndSwitchToSelf,
@@ -207,6 +209,7 @@ export function CompactFeedbackComposer({
               }}
             />
           </div>
+          {journalControl}
           {builderControls}
         </div>
         <div className="status-composer-toolbar-right">

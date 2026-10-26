@@ -1,3 +1,6 @@
+import { useStageFeedback } from './useStageFeedback.js';
+import { useStudioJournalRecorder, useJournalAttachment } from './studioPlayJournalHooks.js';
+import { JournalAttachmentControl } from './StudioPlayJournal.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from '../../GameFrame.js';
@@ -11,15 +14,12 @@ import {
 } from '../../gamePlayer.js';
 import { useEditorDraftBridge, type EditorContentPush, type EditorControllerState } from '../../editorBridge.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { submitFeedback, type SubmissionApiError } from '../../submissionApi.js';
-import { submitImprovement } from '../../studioApi.js';
 import type { StageOrigin, StageSource } from '../../useStageSource.js';
 import './status-feedback.css';
 import './studio-stage.css';
 import type { StageCheck } from '../../stageCheckVerdict.js';
 import { StudioStageStatusbar } from './StudioStageStatusbar.js';
 import { noteStudioInteraction } from './studioStatusStore.js';
-import { toFeedbackContext } from './studioFeedbackContext.js';
 import { watchSwap } from './swapWatch.js';
 
 /**
@@ -53,6 +53,7 @@ export type StudioStageProps = {
   title: string;
   slug?: string;
   editable?: boolean;
+  journalEnabled?: boolean;
   /** This job is a published catalog game — routes notes as an improvement, not feedback. */
   published: boolean;
   source: StageSource;
@@ -86,6 +87,7 @@ export function StudioStage({
   title,
   slug,
   editable,
+  journalEnabled = false,
   published,
   source,
   posture,
@@ -113,6 +115,12 @@ export function StudioStage({
   // Attribution follows the displayed build while a swap is pending.
   const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
   const shownVersion = shownOrigin.version ?? null;
+  const journalBridge = useStudioJournalRecorder(
+    frameRef,
+    shownHtml,
+    shownOrigin.artifactVersion ?? shownVersion ?? 'unknown',
+  );
+  const journalAttachment = useJournalAttachment();
   const shownCheck = checkVerdict ? checkVerdict(shownVersion) : null;
   // The gate checking the played build is the fast path.
   const gateIsNews = Boolean(deliveryInGate) && shownCheck !== 'checking';
@@ -412,43 +420,20 @@ export function StudioStage({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [posture, covered, requestWatch]);
 
-  const [noteText, setNoteText] = useState('');
-  const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
-  const [sendError, setSendError] = useState<string | null>(null);
-  const promptOpen = posture === 'play' && Boolean(paused || snapshot);
-  const attachedPng = snapshot?.pngBase64 ?? null;
-  const trimmedNote = noteText.trim();
-
-  async function sendNote() {
-    if (trimmedNote.length < 10) return;
-    setSendState('sending');
-    setSendError(null);
-    const context = toFeedbackContext(attachedPng, snapshot?.instrumentation ?? instrumentation);
-    try {
-      if (published) {
-        const result = await submitImprovement(token, trimmedNote, context);
-        // No token means the agent replied instead of opening a round.
-        if (result.token) onImproved?.(result.token);
-      } else {
-        await submitFeedback(token, trimmedNote, context);
-      }
-      setSendState('sent');
-      setNoteText('');
-      clearSnapshot();
-      if (paused) resume();
-    } catch (err) {
-      const apiErr = err as SubmissionApiError;
-      const message = err instanceof Error ? err.message : '';
-      setSendError(
-        message === 'content_rejected'
-          ? t('errors.contentRejected.other')
-          : apiErr.status === 429 || message.includes('too many')
-            ? t('studioPanel.improve.rateLimit')
-            : t('studioPanel.improve.error'),
-      );
-      setSendState('idle');
-    }
-  }
+  const { noteText, setNoteText, sendState, setSendState, sendError, promptOpen, attachedPng, trimmedNote, sendNote } =
+    useStageFeedback({
+      token,
+      published,
+      posture,
+      paused,
+      snapshot,
+      instrumentation,
+      clearSnapshot,
+      resume,
+      onImproved,
+      journalAttachment,
+      journalEnabled,
+    });
 
   const stageClasses = [
     'studio-stage',
@@ -465,7 +450,14 @@ export function StudioStage({
     <div className={stageClasses}>
       {shownHtml ? (
         <div className="studio-stage-frame">
-          <GameFrame frameRef={frameRef} title={title} html={shownHtml} embed autoFocus={posture === 'play'} />
+          <GameFrame
+            frameRef={frameRef}
+            title={title}
+            html={shownHtml}
+            agentBridge={journalBridge}
+            embed
+            autoFocus={posture === 'play'}
+          />
         </div>
       ) : (
         <div className="studio-stage-void" aria-hidden="true" />
@@ -523,6 +515,9 @@ export function StudioStage({
             rows={3}
             maxLength={2000}
           />
+          {journalEnabled ? (
+            <JournalAttachmentControl attachment={journalAttachment} disabled={sendState === 'sending'} />
+          ) : null}
           <div className="status-feedback-actions">
             <button
               type="button"

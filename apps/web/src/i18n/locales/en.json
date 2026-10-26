@@ -2360,5 +2360,14 @@
     "method": "Measurement details & freshness",
     "sessions_one": "{{count}} session",
     "sessions_other": "{{count}} sessions"
+  },
+  "studioJournal": {
+    "attachShort": "Attach play log",
+    "attachedShort": "Log: {{seconds}} s",
+    "attach": "Attach play recording",
+    "remove": "Remove play recording",
+    "attached": "Attached: {{seconds}} s. Sent with this message to the managed agent.",
+    "local": "{{seconds}} s kept in this tab (up to 2 minutes). Sent only when attached.",
+    "empty": "Play the game to collect a recording."
   }
 }

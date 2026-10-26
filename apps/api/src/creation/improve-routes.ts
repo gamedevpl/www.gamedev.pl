@@ -1,11 +1,11 @@
+import { prepareCreatorPlaytestAttachment } from '../platform/creator-playtest-attachment.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
+import { storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { dropCreatorReferenceImages } from '../platform/creator-media-store.js';
-import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { reserveActorAndGameQuota } from '../platform/game-quota.js';
@@ -15,7 +15,6 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from '../platform/submission-token.js';
 import { isBuilderKind, type BuilderKind } from './builder.js';
-import type { ChatAgentImage } from './chat-agent.js';
 import type { ChatOrchestration } from './chat-orchestration.js';
 import { FeedbackRequestSchema, REFERENCE_IMAGES_BODY_LIMIT_BYTES } from './feedback-request.js';
 
@@ -47,7 +46,7 @@ export interface ImproveRoutesOptions {
     builder?: BuilderKind;
     requestedBy?: 'creator' | 'agent';
     ownerUid?: string;
-    beforeDispatch?: () => Promise<boolean>;
+    beforeDispatch?: (jobId: number) => Promise<boolean>;
   }) => Promise<ImprovementRoundOutcome>;
 }
 
@@ -147,31 +146,20 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const moderationPromise = contentChecker.checkFields([parsed.data.feedback]);
+      if (parsed.data.context?.playJournal && (parsed.data.builder ?? builderOf(record)) !== 'platform')
+        return reply.status(400).send({ error: 'Play journals can only be attached to managed-agent requests.' });
       const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
       const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
-      let shotId: string | undefined;
-      let referenceImageShotIds: string[] = [];
-      let referenceImages: ChatAgentImage[] = [];
-      if (parsed.data.context?.screenshotPng) {
-        try {
-          shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
-          invalidateMedia(jobId);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-        }
-      }
-      if (parsed.data.context?.referenceImages?.length) {
-        try {
-          const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
-          referenceImageShotIds = stored.ids;
-          referenceImages = stored.images;
-          invalidateMedia(jobId);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator reference images');
-        }
-      }
+      const { shotId, referenceImageShotIds, referenceImages, playJournal, contextBlock } =
+        await prepareCreatorPlaytestAttachment({
+          store,
+          jobId,
+          uid: request.user!.uid,
+          context: parsed.data.context,
+          invalidateMedia,
+          log: request.log,
+        });
       const dropReferences = () => dropCreatorReferenceImages(store, jobId, referenceImageShotIds);
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       const requestedBuilder = parsed.data.builder;
 
@@ -192,16 +180,18 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       let studioAckText: string | undefined;
       // A pending copy left here by a failed reply attempt.
       let orphanedChatMessageId: string | undefined;
-      const chatOutcome = await runChatAgent({
-        jobId,
-        message: sanitizedFeedback,
-        scope: 'improve',
-        record,
-        locale: record.locale ?? 'en',
-        ip: request.clientIp,
-        uid: request.user!.uid,
-        images: referenceImages,
-      });
+      const chatOutcome = playJournal
+        ? null
+        : await runChatAgent({
+            jobId,
+            message: sanitizedFeedback,
+            scope: 'improve',
+            record,
+            locale: record.locale ?? 'en',
+            ip: request.clientIp,
+            uid: request.user!.uid,
+            images: referenceImages,
+          });
       if (chatOutcome?.kind === 'replied') {
         try {
           // Avoids an orphaned "delivered" copy if the reply write below fails.
@@ -232,7 +222,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
 
       const started = await startImprovementRound({
         jobId,
-        beforeDispatch: async () => {
+        beforeDispatch: async (newJobId) => {
           const quota = record.slug
             ? await reserveActorAndGameQuota(store, {
                 actorUid: request.user!.uid,
@@ -243,7 +233,10 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
                 action: 'improvements',
               })
             : await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyImprovementQuota, 'improvements');
-          if (quota.allowed) return true;
+          if (quota.allowed) {
+            if (playJournal) await store.putPlayJournal({ ...playJournal, jobId: newJobId });
+            return true;
+          }
           const exhausted =
             'reason' in quota && quota.reason === 'game'
               ? 'daily game improvement quota exceeded'

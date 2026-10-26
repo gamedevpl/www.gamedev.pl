@@ -124,7 +124,7 @@ TELEMETRY_GROUPS="playEvents visitEvents"
 OAUTH_DEVICE_GROUPS="oauthDeviceAuthorizations oauthDeviceCodes"
 echo "==> 6/10 Ensuring TTL policies for telemetry and OAuth device sessions"
 EXISTING_TTLS="$(gcloud firestore fields ttls list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null || true)"
-for GROUP in $TELEMETRY_GROUPS $OAUTH_DEVICE_GROUPS; do
+for GROUP in playJournals $TELEMETRY_GROUPS $OAUTH_DEVICE_GROUPS; do
   if printf '%s\n' "$EXISTING_TTLS" | grep -q "collectionGroups/${GROUP}/fields/expiresAt"; then
     echo "    ${GROUP}.expiresAt: already present."
   else

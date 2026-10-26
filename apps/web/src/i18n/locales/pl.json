@@ -2376,5 +2376,14 @@
     "sessions_few": "{{count}} sesje",
     "sessions_many": "{{count}} sesji",
     "sessions_other": "{{count}} sesji"
+  },
+  "studioJournal": {
+    "attachShort": "Dołącz zapis",
+    "attachedShort": "Zapis: {{seconds}} s",
+    "attach": "Dołącz zapis rozgrywki",
+    "remove": "Usuń zapis rozgrywki",
+    "attached": "Dołączono: {{seconds}} s. Trafi z tą wiadomością do managed agenta.",
+    "local": "{{seconds}} s w tej karcie (do 2 minut). Wysyłane tylko po dołączeniu.",
+    "empty": "Zagraj, aby zebrać zapis rozgrywki."
   }
 }

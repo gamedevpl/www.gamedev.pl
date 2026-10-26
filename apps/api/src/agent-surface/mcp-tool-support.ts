@@ -88,13 +88,18 @@ export const KIT_ENGINE_REF_PROP = {
 };
 
 // Listed and callable only under a managed-session opener bearer.
-export const MCP_MANAGED_ONLY_TOOLS: ReadonlySet<string> = new Set(['visual_target', 'creator_notes']);
+export const MCP_MANAGED_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'visual_target',
+  'creator_notes',
+  'read_play_journal',
+]);
 // Managed-only tools whose result is a URL: shell sessions only.
 export const MCP_SHELL_ONLY_TOOLS: ReadonlySet<string> = new Set(['visual_target']);
 
 export const MCP_VISIBLE_TOOLS = new Set([
   'visual_target',
   'creator_notes',
+  'read_play_journal',
   'create_game',
   'list_account_games',
   'get_game_performance',

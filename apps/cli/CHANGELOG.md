@@ -11,6 +11,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Local Play journals retain the built code for each recorded revision; agents can inspect earlier code with `game_journal_code` after files change or a tab closes (#1981).
 
+### Fixed
+
+- Keep journal batches within the host limit during large log bursts so recording continues (#1982).
+
+### Internal
+
+- Extract the browser journal recorder for explicit Studio attachments (#1982).
+
 ## 0.58.1 — 2026-10-26
 
 ### Fixed

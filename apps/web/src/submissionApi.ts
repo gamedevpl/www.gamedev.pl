@@ -1,3 +1,5 @@
+import type { FeedbackContext } from '@gamedevpl/contract';
+export type { FeedbackContext } from '@gamedevpl/contract';
 import type {
   BuildEventKind,
   BuilderKind,
@@ -321,17 +323,6 @@ export async function getQuota(): Promise<{
  * Optional playtest context (paused-frame PNG + instrumentation) rides along as
  * fenced data — see Creator Studio's Playtest tab.
  */
-export type FeedbackContext = {
-  screenshotPng?: string;
-  instrumentation?: {
-    playSeconds?: number;
-    lastAliveFrames?: number | null;
-    errors?: string[];
-    progress?: string[];
-  };
-  // Base64 PNGs, no data: prefix. Max 4.
-  referenceImages?: string[];
-};
 
 /**
  * The message was kept, but no build round started behind it.

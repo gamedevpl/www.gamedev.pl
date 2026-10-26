@@ -1,3 +1,4 @@
+import type { PlayJournalsStore } from '../store/slices/play-journals.js';
 import type { PublicationStore } from '../store/slices/publication.js';
 export type { PublicationStore };
 import type { RoundsStore } from '../store/slices/rounds.js';
@@ -268,6 +269,7 @@ export interface Store
     ShelfStoreSlice,
     BuildLogStore,
     BuildMediaStore,
+    PlayJournalsStore,
     PublicationStore,
     GameSlugsStore,
     TelemetryStore,
