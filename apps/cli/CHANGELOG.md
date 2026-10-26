@@ -9,6 +9,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Play keeps your message visible while the agent starts, without flashing the empty conversation.
+
 - In Play, the agent can commit and push game changes when you ask; Claude uses the selected approval mode (#1996).
 
 ## 0.60.0 — 2026-10-26
