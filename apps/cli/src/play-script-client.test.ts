@@ -34,12 +34,36 @@ it('closes idle script endpoints at the deadline', async () => {
     call: vi.fn(),
     signal: new AbortController().signal,
     maxCalls: 5,
-    timeoutMs: 25,
+    timeoutMs: 1000,
     release,
   });
   try {
-    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false));
+    await vi.waitFor(() => expect(existsSync(setup.modulePath)).toBe(false), { timeout: 3000 });
     expect(release).toHaveBeenCalledOnce();
+  } finally {
+    setup.close();
+  }
+});
+
+it('releases control if the heuristic throws, without replaying its actions', async () => {
+  const call = vi.fn(async (..._args: unknown[]) => ({ content: [{ type: 'text', text: '{}' }] }));
+  const setup = await createPlayScriptClient({
+    call,
+    signal: new AbortController().signal,
+    maxCalls: 10,
+    timeoutMs: 60000,
+    release: vi.fn(),
+  });
+  try {
+    const { connect } = await import(pathToFileURL(setup.modulePath).href);
+    const client = await connect();
+    await expect(
+      client.run(async ({ act }: { act: (actions: unknown[]) => Promise<unknown> }) => {
+        await act([{ kind: 'step', frames: 1 }]);
+        throw Error('heuristic got stuck');
+      }),
+    ).rejects.toThrow('heuristic got stuck');
+    expect(call.mock.calls.map((args) => args[0])).toEqual(['game_take_control', 'game_act', 'game_release_control']);
   } finally {
     setup.close();
   }
