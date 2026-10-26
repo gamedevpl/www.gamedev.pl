@@ -106,12 +106,7 @@ async function main(): Promise<void> {
   // old way: slower and expensive, but a stale snapshot is worse.
   let files: RepoFileSource | undefined;
   try {
-    const archive = await fetchGamesRepoArchive({
-      repo,
-      ref,
-      token,
-      maxTotalBytes: 4 * 1024 * 1024 * 1024,
-    });
+    const archive = await fetchGamesRepoArchive({ repo, ref, token, maxTotalBytes: 4 * 1024 ** 3 });
     files = await withArchiveCommitCounts(archive, { repo, ref, token });
     console.log(
       `snapshot publish: archive ${repo}@${ref} — ${archive.fileCount} files, ` +
