@@ -87,3 +87,11 @@ it('keeps the old epoch on preparation failure and records post-commit failure u
   expect(states.some((e) => e.kind === 'gap' && e.data.reason.includes('Committed code failed'))).toBe(true);
   expect(states.some((e) => e.kind === 'state')).toBe(false);
 });
+
+it('reports current unavailability when a historical success is queried after a later error', () => {
+  const f = fixture();
+  expect(f.send(f.input)?.data).toMatchObject({ status: 'applied', epoch: 1 });
+  f.win.dispatchEvent(new f.win.ErrorEvent('error', { message: 'later callback failed' }));
+  expect(f.send(f.input)?.data).toMatchObject({ status: 'failed', epoch: 1, ready: false });
+  expect(f.replace).toHaveBeenCalledTimes(1);
+});

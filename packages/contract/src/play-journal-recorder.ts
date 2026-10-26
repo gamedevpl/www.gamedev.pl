@@ -58,7 +58,8 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
         recordingId=crypto.randomUUID();started=pending[0]?.at??performance.now();startedAt=Date.now()-Math.max(0,performance.now()-started);seq=0;queue=[];bytes=0;dropped=0;stopped=false;lastFrame=-1;slowUntil=0;
         revision=details.revision;
         segment={runtimeInstanceId,buildEpoch:result.epoch,previousRecordingId,transitionId:details.id,
-          stateVersion:details.stateVersion,observationVersion:details.observationVersion,frame:result.frame,simulationTick:result.simulationTick};
+          stateVersion:details.stateVersion,observationVersion:details.observationVersion,frame:result.frame,simulationTick:result.simulationTick,
+          protocol:details.protocol,bootHash:details.bootHash,bundleHash:details.bundleHash,sourceTreeHash:details.sourceTreeHash};
         append('lifecycle',{event:'recording-start',mode:'hmr',...segment,revision,ready:result.ready},{at:started,frame:result.frame});
         for(const event of pending)append(event.kind,event.data,event);
         if(lost)gap('Update event buffer overflow',{count:lost});

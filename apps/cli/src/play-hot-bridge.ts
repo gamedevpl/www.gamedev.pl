@@ -4,6 +4,12 @@ export const PLAY_HOT_BRIDGE = String.raw`
   let preparing=false,unavailable=false;
   function runtime(){return window.__GAME_HOT__;}
   function status(){const hot=runtime();return hot?.protocol===1&&hot.controller?{protocol:1,bootHash:hot.bootHash,...hot.controller.status(),...(unavailable?{ready:false}:{})}:null;}
+  function receipt(id){
+    const result=results.get(id)?.result,current=status();
+    if(result&&result.status!=='rejected'&&current?.epoch===result.epoch&&!current.ready)
+      return {...result,status:'failed',ready:false,error:result.error||'Committed code is no longer available'};
+    return result;
+  }
   function failed(){
     if(unavailable||preparing||!runtime()?.controller?.status().epoch)return;
     unavailable=true;
@@ -17,15 +23,15 @@ export const PLAY_HOT_BRIDGE = String.raw`
     if(results.has(input.id)){
       const previous=results.get(input.id);
       if(previous.revision!==input.revision||previous.bundleHash!==input.bundleHash)throw Error('Update ID reused');
-      return previous.result;
+      return receipt(input.id);
     }
     if(results.size>=256)throw Error('Update history capacity reached; restart Play');
     const hot=runtime(),before=status(),journal=window.__GAME_JOURNAL_HOT__;
     if(!before||!before.ready||!journal||input.bootHash!==before.bootHash||input.expectedEpoch!==before.epoch)
       throw Error('Hot runtime, boot fingerprint or epoch changed');
     let token,result;
-    const {id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion}=input;
-    journal.begin({id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion});
+    const {id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion,bootHash,bundleHash,sourceTreeHash,protocol}=input;
+    journal.begin({id,previousRevision,revision,expectedEpoch,stateVersion,observationVersion,bootHash,bundleHash,sourceTreeHash,protocol});
     preparing=true;
     try{
       hot.register=value=>{if(token)throw Error('Candidate registered more than once');token=value;};
@@ -48,7 +54,7 @@ export const PLAY_HOT_BRIDGE = String.raw`
     const m=event.data;
     if(event.source!==parent||m?.source!=='gdpl-workbench'||typeof m.id!=='string'||!['hot:status','hot:apply','hot:result'].includes(m.type))return;
     let data,error;
-    try{data=m.type==='hot:status'?status():m.type==='hot:result'?results.get(m.data?.id)?.result:apply(m.data);}
+    try{data=m.type==='hot:status'?status():m.type==='hot:result'?receipt(m.data?.id):apply(m.data);}
     catch(e){error=String(e.message||e).slice(0,1000);}
     parent.postMessage({source:'gdpl-workbench-game',id:m.id,data,error},'*');
   });

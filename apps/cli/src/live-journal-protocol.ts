@@ -27,6 +27,19 @@ export const journalBatch = z
         observationVersion: integer.optional(),
         frame: integer.optional(),
         simulationTick: integer.optional(),
+        protocol: z.literal(1).optional(),
+        bootHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+        bundleHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+        sourceTreeHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
       })
       .strict()
       .optional(),
