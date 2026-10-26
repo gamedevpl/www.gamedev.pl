@@ -404,6 +404,7 @@ const FILE_BUCKET = {
   'scorecard-aggregate-log': 'creation',
   'knowledge-search': 'creation',
   'knowledge-corpus-policy': 'creation',
+  'knowledge-chunk-merge': 'creation',
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',

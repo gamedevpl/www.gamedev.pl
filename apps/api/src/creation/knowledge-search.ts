@@ -2,6 +2,7 @@
 
 import { GoogleAuth } from 'google-auth-library';
 import { rememberBounded } from '../platform/bounded-map.js';
+import { CHUNKS_FETCH_SIZE, mergeSameFileChunks } from './knowledge-chunk-merge.js';
 import { isCreatorSpec, scopeToBoostSpec, scopeToFilter } from './knowledge-corpus-policy.js';
 export { scopeToBoostSpec, scopeToFilter } from './knowledge-corpus-policy.js';
 
@@ -381,7 +382,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
       'search',
       {
         query,
-        pageSize: CHUNKS_PAGE_SIZE,
+        pageSize: CHUNKS_FETCH_SIZE,
         contentSearchSpec: { searchResultMode: 'CHUNKS' },
         // The default threshold (like LOW) dropped every "best lap" chunk.
         relevanceThreshold: 'LOWEST',
@@ -392,10 +393,11 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
     );
     const extracted = extractChunksFromSearchResponse(json);
     noteIndexedCommit(extracted.indexedCommit);
+    const chunks = mergeSameFileChunks(extracted.chunks, CHUNKS_PAGE_SIZE);
     return {
       ...baseGuidanceResult('chunks'),
-      chunks: extracted.chunks,
-      repoPaths: extracted.repoPaths,
+      chunks,
+      repoPaths: chunks.map((chunk) => chunk.repoPath),
       ...(extracted.indexedCommit ? { indexedCommit: extracted.indexedCommit } : {}),
     };
   }
