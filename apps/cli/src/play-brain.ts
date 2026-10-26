@@ -1,4 +1,3 @@
-import { AsyncResource } from 'node:async_hooks';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { realpathSync } from 'node:fs';
@@ -35,6 +34,8 @@ import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { liveGameAppTools } from './live-game-app-tools.js';
 import { LIVE_GAME_INSTRUCTIONS } from './live-game-protocol.js';
+import { playPushBridge, playTurnWriter } from './play-git-push.js';
+import { reconcileRemotePush } from './git-remote-main.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
@@ -49,19 +50,16 @@ export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): st
 }
 
 type Prompt = (choices: string[], question: string, signal?: AbortSignal) => Promise<string>;
-
 export type PlayBrain = {
   agent: AppAgent;
   // One creator message, until the agent idles and nothing awaits the creator.
   turn(text: string): Promise<void>;
   close(): Promise<void>;
 };
-
 const APPROVE = 'Approve';
 const REJECT = 'Reject';
 const ALLOW = 'Allow';
 const DENY = 'Deny';
-
 function instructions(ws: Workshop): string {
   return [
     `You edit the gamedev.pl game "${ws.slug}". Your cwd is its source tree (${gameSourcePath(ws.root, ws.slug)} in the checkout).`,
@@ -88,7 +86,7 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
     claude({
       ...(permissions ? {} : { permissionMode: 'acceptEdits' as const }),
       strictMcpConfig: true,
-      disallowedTools: ['Bash(git commit:*)', 'Bash(git push:*)', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
+      disallowedTools: ['WebFetch', 'WebSearch', 'Task', 'Agent'],
       settings: { disableAllHooks: true, permissions: { allow: [readRoot] } },
     }),
     codex({
@@ -104,8 +102,7 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
     }),
     copilot({
       ...(permissions ? {} : { allowAllTools: false }),
-      allowTools: ['write'],
-      denyTools: ['shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
+      allowTools: ['write', 'shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
       onlyTaskMcpServers: true,
     }),
   ];
@@ -185,10 +182,15 @@ export async function startPlayBrain(input: {
   const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]));
   // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
+  const pushBridge = playPushBridge(env, ws.root, ws.slug, (remote, srcRef) => {
+    if (!inTurn) throw Error('The Play turn has ended.');
+    return inTurn(() => reconcileRemotePush({ api: input.api, cwd: ws.root, slug: ws.slug, remote, srcRef }));
+  });
   const permission = () => taskPermissionMode(spec, ws.permissionMode);
   // Play's tools for the agent; bound once the agent exists.
   const bound: { handle?: ReturnType<typeof createAppAgentHandler> } = {};
   const server = createServer((req, res) => {
+    if (pushBridge.handle(req, res)) return;
     void (bound.handle?.(req, res) ?? Promise.resolve(false)).then((handled) => {
       if (!handled) res.writeHead(404).end();
     });
@@ -216,7 +218,7 @@ export async function startPlayBrain(input: {
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
     ],
-    dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: false, only: true },
+    dev: { cwd: gameSourceRoot(ws.root, ws.slug), commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
@@ -419,11 +421,14 @@ export async function startPlayBrain(input: {
       if (!(await (input.ready ?? (() => readyToEdit({ api: input.api, ws, write })))())) return;
       // One checkout writer at a time, as in the workshop.
       await withCheckoutWriter(ws.root, async () => {
-        const reenter = AsyncResource.bind((run: () => Promise<unknown>) => run());
-        inTurn = <T>(run: () => Promise<T>) => reenter(run) as Promise<T>;
+        const writer = playTurnWriter();
+        inTurn = writer.run;
+        pushBridge.start(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
         try {
           await unlockedTurn(text);
         } finally {
+          await pushBridge.finish();
+          await writer.finish();
           inTurn = undefined;
         }
       });

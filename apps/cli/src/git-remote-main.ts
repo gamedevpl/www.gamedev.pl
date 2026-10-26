@@ -29,6 +29,7 @@ import { withCheckoutWriter } from './workbench-lock.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { readHistory, readHistoryTree, historySlug } from './history-api.js';
 import { knownHistoryCommits } from './git-history-cache.js';
+import { forwardPlayPush } from './play-git-push.js';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -128,6 +129,27 @@ export async function reconcilePush(input: Parameters<typeof reconcilePushUnlock
   }
 }
 
+export async function reconcileRemotePush(input: {
+  api: ApiClient;
+  cwd: string;
+  slug: string;
+  remote: string;
+  srcRef: string;
+}): Promise<PushResult> {
+  const git = checkoutGit(input.cwd);
+  const url = gitConfig(git, `remote.${input.remote}.pushurl`) ?? gitConfig(git, `remote.${input.remote}.url`);
+  if (url?.replace(/\/$/, '') !== `${GIT_REMOTE_SCHEME}://${input.slug}`)
+    throw Error('This Git remote belongs to another game.');
+  const layout = remoteLayout(git, input.slug, input.remote);
+  const pinned = gitConfig(git, `remote.${input.remote}.gamedevpl-origin`);
+  if (pinned && pinned !== input.api.origin) throw Error('This Git remote belongs to another platform origin.');
+  return reconcilePush({
+    ...input,
+    layout,
+    ...(pinned ? { scope: historyScope(input.api.origin, input.slug, layout) } : {}),
+  });
+}
+
 export async function runGitRemoteHelper(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
@@ -167,6 +189,7 @@ export async function runGitRemoteHelper(
       sourceRoot: layout.root,
       preserveOutsideSources: Boolean(pinned),
       pushReconcile: async (src) =>
+        (await forwardPlayPush(env, remote, src, slug)) ??
         reconcilePush({
           api,
           slug,

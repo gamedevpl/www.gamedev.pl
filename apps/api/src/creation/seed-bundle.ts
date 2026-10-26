@@ -1,19 +1,4 @@
 // Answers one question about a generated draft: does its TypeScript bundle?
-//
-// The seed's draft has never been run, and "does it compile" decides two different
-// things downstream. For the agent it barely matters — a one-line type error is exactly
-// the kind of thing it fixes in its first minute. For the *creator* it decides
-// everything: a draft that bundles can be assembled into a playable round-0 preview on
-// the status page, and one that does not cannot. So the seeder checks here, in-process,
-// and buys one cheap repair round from the model when the answer is no.
-//
-// The check mirrors the play path's bundler (`bundleGameTypeScript` in
-// `github-client.ts`) deliberately: same esbuild settings, same relative-imports-only
-// rule, same module and byte ceilings — so "this seed bundles" here means the serve path
-// will agree later, instead of the two quietly diverging. It reads from the in-memory
-// draft rather than a ref because at check time the files exist nowhere else; esbuild
-// transpiles without typechecking, which is also exactly the bar a preview needs (a type
-// error does not stop a game from playing; a syntax error or missing module does).
 
 import { build, type Message } from 'esbuild';
 import type { SeedFile } from './game-seed.js';
