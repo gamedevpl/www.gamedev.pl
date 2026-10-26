@@ -1599,3 +1599,8 @@ Script-client cleanup must preserve creator revocation. Release control with
 `taskEnded: false`, retain the used-game references, and clear revocation only at
 actual task completion. Probe reclaim followed by expiry, replacement and budget
 exhaustion: none may let the same task take control again.
+
+Claude's workspace-write policy can deny `/tmp` strategy edits even though
+`game_script_client` succeeds. Direct it to write an absolute `.mjs` path under
+its current working directory; that extension is not deliverable game source.
+The generated client module stays temporary and must not be copied or logged.
