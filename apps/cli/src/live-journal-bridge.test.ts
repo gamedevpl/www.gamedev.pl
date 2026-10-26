@@ -5,6 +5,50 @@ import type { JournalEntry } from './live-journal-protocol.js';
 import { AGENT_PLAY_BRIDGE } from '@gamedevpl/contract';
 
 const windows: JSDOM[] = [];
+
+it('seals old code queues and samples a paused replacement under a linked new recording', async () => {
+  const f = fixture();
+  await vi.advanceTimersByTimeAsync(250);
+  const initial = f.messages.at(-1)!;
+  const hook = (
+    f.win as unknown as {
+      __GAME_JOURNAL_HOT__: {
+        begin(input: object): void;
+        finish(result: object): { recordingId: string; previousRecordingId: string };
+      };
+    }
+  ).__GAME_JOURNAL_HOT__;
+  hook.begin({
+    id: 'transition',
+    previousRevision: 'A',
+    revision: 'B',
+    expectedEpoch: 0,
+    stateVersion: 1,
+    observationVersion: 1,
+  });
+  f.h.metadata.x = 99;
+  const next = hook.finish({ status: 'applied', epoch: 1, ready: true, frame: 0, simulationTick: 0 });
+  expect(next.previousRecordingId).toBe(initial.recordingId);
+  expect(next.recordingId).not.toBe(initial.recordingId);
+  await vi.advanceTimersByTimeAsync(250);
+  const old = f.messages.filter((m) => m.recordingId === initial.recordingId).at(-1)!;
+  const current = f.messages.filter((m) => m.recordingId === next.recordingId).at(-1)!;
+  expect(
+    JSON.parse(old.json).some(
+      (e: JournalEntry) => e.kind === 'state' && (e.data as { metadata: { x: number } }).metadata.x === 99,
+    ),
+  ).toBe(false);
+  expect(JSON.parse(current.json).find((e: JournalEntry) => e.kind === 'state').data.metadata.x).toBe(99);
+  expect(current).toMatchObject({
+    revision: 'B',
+    segment: { buildEpoch: 1, previousRecordingId: initial.recordingId },
+  });
+  f.send({ source: 'gdpl-journal-host', recordingId: initial.recordingId, through: JSON.parse(old.json).at(-1).seq });
+  f.h.frame++;
+  f.h.step();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(f.messages.at(-1)!.recordingId).toBe(next.recordingId);
+});
 afterEach(() => {
   windows.splice(0).forEach((dom) => dom.window.close());
   vi.useRealTimers();

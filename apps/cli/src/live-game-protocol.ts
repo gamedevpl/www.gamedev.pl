@@ -54,6 +54,7 @@ export const liveHello = z
     tabId: z.string().uuid(),
     sourceId: z.number().int(),
     revision: z.string().max(128),
+    instanceId: z.string().uuid().optional(),
   })
   .strict();
 export const liveResult = z

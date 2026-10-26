@@ -5,9 +5,17 @@ import { CAPTURE_READY_BRIDGE } from './capture-readiness.js';
 import { CAPTURE_SCENARIO_SCRIPT } from './generated/capture-scenario.js';
 import type { CaptureScenario } from './capture-scenario.js';
 import { parse } from 'parse5';
+import { playHotArtifact, type PlayHotArtifact } from './play-hot-protocol.js';
 
-export type PreviewStatus = { revision: string; busy: boolean; error: string; stale: boolean; canRetry?: boolean };
-export type PreviewSnapshot = { html: string; revision: string };
+export type PreviewStatus = {
+  revision: string;
+  busy: boolean;
+  error: string;
+  stale: boolean;
+  canRetry?: boolean;
+  hot?: boolean;
+};
+export type PreviewSnapshot = { html: string; revision: string; hot?: PlayHotArtifact };
 export type PreviewSource = {
   status(): Promise<PreviewStatus>;
   snapshot(): Promise<PreviewSnapshot>;
@@ -60,6 +68,7 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
       error: value.error.slice(0, 4000),
       stale: value.stale,
       canRetry: value.canRetry === true,
+      ...(value.hot === true ? { hot: true } : {}),
     };
   }
   async function retry(): Promise<void> {
@@ -89,7 +98,17 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
           before.revision === after.revision &&
           createHash('sha256').update(html).digest('hex') === after.revision
         ) {
-          return { html, revision: after.revision };
+          let hot: PlayHotArtifact | undefined;
+          if (after.hot) {
+            const value = JSON.parse(await read('hot', 3_000_000)) as { revision?: string; hot?: unknown };
+            if (value.revision !== after.revision) continue;
+            if (value.hot) {
+              hot = playHotArtifact.parse(value.hot);
+              if (createHash('sha256').update(hot.bundle).digest('hex') !== hot.bundleHash)
+                throw Error('Hot candidate hash mismatch.');
+            }
+          }
+          return { html, revision: after.revision, ...(hot ? { hot } : {}) };
         }
       }
       await delay(250, undefined, { signal });

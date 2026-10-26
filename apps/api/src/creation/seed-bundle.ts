@@ -1,6 +1,6 @@
-// Answers one question about a generated draft: does its TypeScript bundle?
-
+// Check draft imports against the same limits as published games.
 import { build, type Message } from 'esbuild';
+import { gameTypeScriptEntry } from '@gamedevpl/contract';
 import type { SeedFile } from './game-seed.js';
 import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 import { MAX_SOURCE_GRAPH_MODULES, SOURCE_GRAPH_BUDGET_BYTES } from '../platform/games-repo-contract.js';
@@ -30,15 +30,26 @@ export async function checkSeedBundles(slug: string, files: SeedFile[]): Promise
   const entry = sources.get(`${gameRoot}/game.ts`);
   if (!entry) return { ok: false, errors: ['game.ts is missing'] };
 
-  const loadedPaths = new Set([`${gameRoot}/game.ts`]);
-  let sourceBytes = Buffer.byteLength(entry, 'utf8');
+  let generated: ReturnType<typeof gameTypeScriptEntry>;
+  try {
+    generated = gameTypeScriptEntry(entry, sources.get(`${gameRoot}/GAME.json`));
+  } catch (error) {
+    return { ok: false, errors: [String(error)] };
+  }
+  const loadedPaths = new Set([`${gameRoot}/${generated.entryFile}`]);
+  let sourceBytes = Buffer.byteLength(generated.source, 'utf8');
   if (sourceBytes > MAX_GAME_SOURCE_BYTES) {
     return { ok: false, errors: [`game TypeScript exceeds ${MAX_GAME_SOURCE_BYTES} bytes`] };
   }
 
   try {
     await build({
-      stdin: { contents: entry, loader: 'ts', resolveDir: gameRoot, sourcefile: `${gameRoot}/game.ts` },
+      stdin: {
+        contents: generated.source,
+        loader: 'ts',
+        resolveDir: gameRoot,
+        sourcefile: `${gameRoot}/${generated.entryFile}`,
+      },
       bundle: true,
       write: false,
       platform: 'browser',

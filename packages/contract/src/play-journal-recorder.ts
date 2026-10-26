@@ -1,7 +1,9 @@
 // Hosts explicitly inject this recorder before game code schedules frames.
 export const PLAY_JOURNAL_RECORDER = String.raw`
 (() => {
-  const recordingId=crypto.randomUUID(),startedAt=Date.now(),started=performance.now();
+  let recordingId=crypto.randomUUID(),startedAt=Date.now(),started=performance.now();
+  const runtimeInstanceId=crypto.randomUUID(),sealed=new Map();
+  let segment={runtimeInstanceId,buildEpoch:0},revision,suspended=false,transition;
   const stringify=JSON.stringify.bind(JSON),parse=JSON.parse.bind(JSON);
   let seq=0,queue=[],bytes=0,dropped=0,stopped=false,lastFrame=-1,lastHarness,slowUntil=0,agent=false,cleanup=false,command=null;
   const held=new Set(),wrapped=new WeakSet(),unwrappable=new WeakSet(),seenLogs=new WeakMap(),tails={};
@@ -16,13 +18,46 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
     queue.push({seq:entry.seq,json});bytes+=json.length;
   }
   function gap(reason,detail={}){append('gap',{reason,...detail});}
-  function sample(reason){if(stopped)return;try{capture(reason);}catch(error){gap('Recorder hook failed',{message:String(error).slice(0,500)});}}
+  function sample(reason){if(stopped||suspended)return;try{capture(reason);}catch(error){gap('Recorder hook failed',{message:String(error).slice(0,500)});}}
   function flush(){
-    if(stopped||!queue.length)return;
-    const batch=[];let size=2;
-    for(const item of queue){const added=item.json.length+(batch.length?1:0);if(batch.length>=256||size+added>256000)break;batch.push(item.json);size+=added;}
-    parent.postMessage({source:'gdpl-journal',context:typeof gdplJournalContext==='undefined'?null:gdplJournalContext,recordingId,startedAt,json:'['+batch.join(',')+']'},'*');
+    for(const record of [...sealed.values(),{recordingId,startedAt,queue,segment,revision,stopped}]){
+      if(record.stopped||!record.queue.length)continue;
+      const batch=[];let size=2;
+      for(const item of record.queue){const added=item.json.length+(batch.length?1:0);if(batch.length>=256||size+added>256000)break;batch.push(item.json);size+=added;}
+      parent.postMessage({source:'gdpl-journal',context:typeof gdplJournalContext==='undefined'?null:gdplJournalContext,recordingId:record.recordingId,startedAt:record.startedAt,segment:record.segment,revision:record.revision,json:'['+batch.join(',')+']'},'*');
+    }
   }
+  window.__GAME_JOURNAL_HOT__={
+    begin(details){
+      if(transition)throw Error('A journal transition is already pending');
+      if(sealed.size>=255)throw Error('Too many unacknowledged journal segments');
+      revision=details.previousRevision;segment={...segment,buildEpoch:details.expectedEpoch};
+      lastFrame=-1;sample('hot-boundary');
+      append('lifecycle',{event:'hot-update-begin',...details});
+      transition=details;suspended=true;flush();
+    },
+    finish(result){
+      if(!transition)throw Error('No journal transition is pending');
+      const details=transition;transition=undefined;
+      const previousRecordingId=recordingId;
+      if(result.status==='rejected'){
+        suspended=false;append('lifecycle',{event:'hot-update-rejected',transitionId:details.id,reason:result.reason});
+      }else{
+        append('lifecycle',{event:'hot-segment-end',transitionId:details.id,nextRevision:details.revision,finalOldSequence:seq+1,frame:result.frame,simulationTick:result.simulationTick});
+        sealed.set(recordingId,{recordingId,startedAt,queue,segment,revision,stopped});
+        recordingId=crypto.randomUUID();startedAt=Date.now();started=performance.now();seq=0;queue=[];bytes=0;dropped=0;stopped=false;lastFrame=-1;slowUntil=0;
+        revision=details.revision;
+        segment={runtimeInstanceId,buildEpoch:result.epoch,previousRecordingId,transitionId:details.id,
+          stateVersion:details.stateVersion,observationVersion:details.observationVersion,frame:result.frame,simulationTick:result.simulationTick};
+        append('lifecycle',{event:'recording-start',mode:'hmr',...segment,revision,ready:result.ready});
+        suspended=result.status!=='applied';
+        if(suspended)gap('Committed code failed its initial refresh',{error:result.error});
+        else sample('hot-ready');
+      }
+      flush();
+      return {runtimeInstanceId,previousRecordingId,recordingId};
+    }
+  };
   function drain(kind,list){
     if(!Array.isArray(list))return;
     if(tails[kind]&&list.length>=400&&!list.includes(tails[kind]))gap(kind+' log rotated before collection');
@@ -104,6 +139,12 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
     if(m.source==='gdpl-host'){
       if(m.type==='agent:enable')sample('take-control');
       if(m.type==='agent:command'){command=m.id;append('lifecycle',{event:'action',command,action:m.command});}
+    }
+    if(m.source==='gdpl-journal-host'&&sealed.has(m.recordingId)){
+      const record=sealed.get(m.recordingId);
+      record.queue=record.queue.filter(item=>item.seq>m.through);
+      if(m.stopped||!record.queue.length)sealed.delete(m.recordingId);
+      flush();return;
     }
     if(m.source==='gdpl-journal-host'&&m.recordingId===recordingId){
       if(m.stopped){stopped=true;queue=[];bytes=0;return;}

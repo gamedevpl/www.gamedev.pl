@@ -3,14 +3,15 @@ const journalFrames=new Map();
 addEventListener('message',event=>{
   const message=event.data;
   if(!message||message.source!=='gdpl-journal'||event.source!==frame.contentWindow||!revision)return;
+  if(typeof hotUpdating!=='undefined'&&hotUpdating)return;
   if(typeof message.json!=='string'||message.json.length>256000)return;
   if(!liveSocket||liveSocket.readyState!==1||liveSocket.bufferedAmount>1000000)return;
   let entries;try{entries=JSON.parse(message.json);}catch{return;}
   if(!Array.isArray(entries)||!entries.length||entries.length>256)return;
-  journalFrames.clear();
+  if(journalFrames.size>=256&&!journalFrames.has(message.recordingId))return;
   journalFrames.set(message.recordingId,event.source);
   liveHello();
-  liveSend({type:'live:journal',recordingId:message.recordingId,startedAt:message.startedAt,entries});
+  liveSend({type:'live:journal',recordingId:message.recordingId,startedAt:message.startedAt,entries,...(message.segment?{segment:message.segment}:{})});
 });
 addEventListener('play-presence-connected',event=>{
   event.detail.addEventListener('message',event=>{
