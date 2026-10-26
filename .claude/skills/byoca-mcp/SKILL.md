@@ -31,6 +31,10 @@ See `docs/play-workbench.md` for selection, frame limits and creator revocation.
 Test takeover with a real GameKit game: pausing updates alone leaves an already
 scheduled render callback able to increment the frame counter. Local control must
 hold that callback too, preserve RAF cancellation, and resume it on release.
+Frame-counted leased actions must yield between frames: a legal 300-frame command
+can take longer than heartbeat and response deadlines in a heavy scene. Exercise
+a slow 600-frame batch through real MCP plus reclaim during a held-key action;
+increasing the response timeout alone does not keep the lease alive.
 `game_journal` and `game_journal_read` query retained local session history without
 requiring a connected tab or control ownership. Query broadly, then inspect exact
 sequence IDs or field projections; preserve the `through` watermark when paging.
