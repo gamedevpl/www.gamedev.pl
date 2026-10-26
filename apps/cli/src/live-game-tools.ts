@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod';
 import { createPlayScriptClient, PLAY_SCRIPT_TOOL } from './play-script-client.js';
 import { randomUUID } from 'node:crypto';
 import { findLiveGame, type LiveGame } from './live-game.js';
@@ -7,6 +7,7 @@ import { LIVE_GAME_TOOLS, type LiveToolName } from './live-game-protocol.js';
 export function liveGameTools(preview: () => string | undefined) {
   const task = randomUUID();
   const used = new Set<LiveGame>();
+  let preparing = false;
   const clients = new Set<{ close(): void }>();
   const release = () => {
     for (const game of used) game.release(task);
@@ -27,28 +28,34 @@ export function liveGameTools(preview: () => string | undefined) {
           })
           .strict()
           .parse(args);
-        for (const client of clients) client.close();
-        clients.clear();
-        const client = await createPlayScriptClient({
-          ...options,
-          signal,
-          release,
-          call: (name, args, signal) => tools.call(name, args, signal),
-        });
-        clients.add(client);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                modulePath: client.modulePath,
-                ...options,
-                usage:
-                  'Pass modulePath as an argument to your Node ESM strategy. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
-              }),
-            },
-          ],
-        };
+        if (preparing) throw Error('Play script client setup is already running.');
+        preparing = true;
+        try {
+          for (const client of clients) client.close();
+          clients.clear();
+          const client = await createPlayScriptClient({
+            ...options,
+            signal,
+            release,
+            call: (name, args, signal) => tools.call(name, args, signal),
+          });
+          clients.add(client);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  modulePath: client.modulePath,
+                  ...options,
+                  usage:
+                    'Pass modulePath as an argument to your Node ESM strategy. Import it with pathToFileURL, await connect(), then use run(async ({initial, observe, act, call}) => { /* bounded heuristic */ }). act takes an action array and returns the usual observation. run takes control and releases it in finally. Consent is still required. Stop on errors or reclaim; never retry uncertain actions. Do not copy or print this temporary module: it holds task-scoped credentials. Return concise metrics, then refine the strategy code.',
+                }),
+              },
+            ],
+          };
+        } finally {
+          preparing = false;
+        }
       }
       const game = findLiveGame(preview());
       if (!game) throw Error('Open the local Play workbench for this checkout to inspect its running game.');

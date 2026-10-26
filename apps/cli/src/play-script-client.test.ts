@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { expect, it, vi } from 'vitest';
 import { createPlayScriptClient } from './play-script-client.js';
+import { liveGameTools } from './live-game-tools.js';
 
 it('bounds script calls, keeps credentials out of results and releases on cancellation', async () => {
   const abort = new AbortController();
@@ -66,5 +67,23 @@ it('releases control if the heuristic throws, without replaying its actions', as
     expect(call.mock.calls.map((args) => args[0])).toEqual(['game_take_control', 'game_act', 'game_release_control']);
   } finally {
     setup.close();
+  }
+});
+
+it('serializes client replacement within the task', async () => {
+  const tools = liveGameTools(() => undefined);
+  try {
+    const pending = tools.call('game_script_client', {}, new AbortController().signal);
+    await expect(tools.call('game_script_client', {}, new AbortController().signal)).rejects.toThrow('already running');
+    const result = await pending;
+    const first = JSON.parse((result.content[0] as { text: string }).text).modulePath;
+    const replacement = await tools.call('game_script_client', {}, new AbortController().signal);
+    expect(existsSync(first)).toBe(false);
+    const last = JSON.parse((replacement.content[0] as { text: string }).text).modulePath;
+    expect(existsSync(last)).toBe(true);
+    tools.close();
+    expect(existsSync(last)).toBe(false);
+  } finally {
+    tools.close();
   }
 });
