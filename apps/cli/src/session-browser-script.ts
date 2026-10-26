@@ -30,7 +30,7 @@ function controls() {
   el('run-operation').disabled = !online || state?.mode !== 'prompt' || !!state?.question || !!pending || sending;
   const ready = online && state && !pending && !sending;
   el('send').disabled = !ready || state.mode === 'pick' || (state.mode === 'busy' && !state.localTask);
-  el('send').textContent = state?.mode === 'busy' ? 'Queue request' : 'Send';
+  el('send').textContent = state?.mode === 'busy' ? (state.canSteer ? 'Send to agent' : 'Queue request') : 'Send';
   el('stop').disabled = !online || !state?.localTask || (state.mode !== 'busy' && !state.approvalPending) || stopping === state.taskId || Boolean(pending);
   draft.disabled = state?.mode === 'pick';
   for (const button of el('choices').children) button.disabled = !ready;
@@ -88,7 +88,7 @@ async function deliver() {
     if(pending!==attempt)return;
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? 'Queued after the current task' + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
+      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? (pending.steer ? 'Sent to the working agent' : 'Queued after the current task') + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {
@@ -100,7 +100,7 @@ async function deliver() {
 function send(command, clearActionDraft=false) {
   if (!online || !state || pending || sending) return;
   liveHello();liveSend({type:'live:select'});
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&staged().length?{attachments:staged().map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:staged().map(a=>a.id), clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
+  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&staged().length?{attachments:staged().map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:staged().map(a=>a.id), steer:command.kind==='queue'&&!!state.canSteer, clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {

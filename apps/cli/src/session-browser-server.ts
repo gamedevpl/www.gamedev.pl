@@ -236,6 +236,7 @@ export async function startSessionBrowser(
           })),
           live: state.live.map(clean),
           queued: state.queued.map((line) => clean(shownPrompt(line))),
+          canSteer: state.canSteer,
           agent: options.agent?.()?.get(),
         });
         return;

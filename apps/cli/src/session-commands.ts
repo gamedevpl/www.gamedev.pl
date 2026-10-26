@@ -74,7 +74,9 @@ export function createSessionCommands(
         : command.kind === 'input'
           ? session.acceptInput(text, command.promptId)
           : command.kind === 'queue'
-            ? session.enqueueInput(text, command.taskId)
+            ? state.canSteer
+              ? session.steerInput(text, command.taskId)
+              : session.enqueueInput(text, command.taskId)
             : session.stopTask(command.taskId);
     result.status = accepted ? 'accepted' : 'stale';
     return { ...result };

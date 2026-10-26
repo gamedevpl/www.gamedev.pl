@@ -68,6 +68,27 @@ describe('shared session commands', () => {
     session.close();
   });
 
+  it('hands a browser message to the working agent when it can steer, and queues it otherwise', async () => {
+    const session = createSessionController('');
+    const dispatch = createSessionCommands(session);
+    session.setLocalTask('claude');
+    const steered: string[] = [];
+    session.setSteering(async (text) => {
+      steered.push(text);
+    });
+    const taskId = session.get().taskId;
+    expect(dispatch({ id: 'now', kind: 'queue', taskId, text: 'also add sound' }).status).toBe('accepted');
+    await vi.waitFor(() => expect(session.get().sending).toBe(false));
+    expect(steered).toEqual(['also add sound']);
+    expect(session.get().queued).toEqual([]);
+    expect(session.get().lines.at(-1)).toBe('› [sent to active agent] also add sound');
+    session.setSteering(undefined);
+    expect(dispatch({ id: 'later', kind: 'queue', taskId, text: 'then publish' }).status).toBe('accepted');
+    expect(steered).toEqual(['also add sound']);
+    expect(session.get().queued).toEqual(['then publish']);
+    session.close();
+  });
+
   it('stops only the observed task and never invokes terminal quit while idle', async () => {
     const cancel = vi.fn();
     const session = createSessionController('', cancel);
