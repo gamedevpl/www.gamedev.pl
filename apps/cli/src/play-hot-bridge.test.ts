@@ -9,9 +9,10 @@ function fixture() {
   const dom = new JSDOM('<html><head></head><body></body></html>', { runScripts: 'dangerously' });
   windows.push(dom);
   const win = dom.window,
-    messages: any[] = [];
+    messages: { id?: string; recordingId?: string; json?: string; error?: string; data?: Record<string, unknown> }[] =
+      [];
   win.postMessage = (value: unknown) => {
-    messages.push(value);
+    messages.push(value as (typeof messages)[number]);
   };
   win.requestAnimationFrame = () => 1;
   let epoch = 0;
