@@ -19,8 +19,8 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
   function sample(reason){if(stopped)return;try{capture(reason);}catch(error){gap('Recorder hook failed',{message:String(error).slice(0,500)});}}
   function flush(){
     if(stopped||!queue.length)return;
-    const batch=[];let size=0;
-    for(const item of queue){if(batch.length>=256||size+item.json.length>256000)break;batch.push(item.json);size+=item.json.length;}
+    const batch=[];let size=2;
+    for(const item of queue){const added=item.json.length+(batch.length?1:0);if(batch.length>=256||size+added>256000)break;batch.push(item.json);size+=added;}
     parent.postMessage({source:'gdpl-journal',context:typeof gdplJournalContext==='undefined'?null:gdplJournalContext,recordingId,startedAt,json:'['+batch.join(',')+']'},'*');
   }
   function drain(kind,list){

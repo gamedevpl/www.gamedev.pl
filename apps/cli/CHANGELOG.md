@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Keep journal batches within the host limit during large log bursts so recording continues (#1982).
 - Live Play keeps control during slow frame-counted actions, lets you interrupt them between frames, and explains response timeouts (#1979).
 
 ### Internal

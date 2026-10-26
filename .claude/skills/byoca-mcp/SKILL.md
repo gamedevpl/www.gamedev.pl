@@ -1582,3 +1582,6 @@ creator feedback uploads it. Managed builders read the immutable artifact throug
 tools or silently upload the live buffer. Preserve the selected build identity when
 the game updates before sending. Improvement jobs need their copy before dispatch;
 copying after dispatch races the agent's first read. See `docs/studio-play-journals.md`.
+
+Recorder batch budgets include JSON brackets and separating commas. Exercise a large
+console burst through ACK draining: an oversized rejected batch otherwise retries forever.
