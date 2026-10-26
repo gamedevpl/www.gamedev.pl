@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyResultSizeBudget,
+  CHUNKS_FETCH_SIZE,
   createQueryKnowledge,
   DEFAULT_RESULT_TARGET_BYTES,
   looksLikeEmptyAnswer,
@@ -186,6 +187,39 @@ describe('queryKnowledge — mode=chunks', () => {
     const result = await queryKnowledge({ query: 'party module', mode: 'chunks' });
 
     expect(result.chunks).toHaveLength(1);
+  });
+
+  it('merges chunks of one file into a single entry at its best rank', async () => {
+    const body = searchBody(7);
+    const sameFile = (content: string) => ({
+      chunk: { ...body.results[0]!.chunk, content },
+    });
+    body.results.splice(2, 0, sameFile('second chunk'));
+    body.results.push(sameFile('third chunk'));
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'party module', mode: 'chunks' });
+
+    expect(result.chunks.map((chunk) => chunk.repoPath)).toEqual(
+      [0, 1, 2, 3, 4].map((i) => `kits/current/shared/modules/module-${i}.d.ts`),
+    );
+    expect(result.chunks[0]!.snippet).toContain('second chunk');
+    expect(result.chunks[0]!.snippet).toContain('third chunk');
+    expect(result.repoPaths).toEqual(result.chunks.map((chunk) => chunk.repoPath));
+  });
+
+  it('over-fetches so merged results can still fill the page', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(init!.body as string);
+      return jsonResponse(searchBody(1));
+    });
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    await queryKnowledge({ query: 'q', mode: 'chunks' });
+
+    expect(capturedBody?.pageSize).toBe(CHUNKS_FETCH_SIZE);
   });
 
   it('applies the scope filter to the search request body', async () => {

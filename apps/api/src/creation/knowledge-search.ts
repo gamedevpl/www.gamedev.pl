@@ -53,6 +53,9 @@ export const DEFAULT_KNOWLEDGE_MODE: KnowledgeMode = 'answer';
 export const DEFAULT_ANSWER_TIMEOUT_MS = 15_000;
 export const DEFAULT_CHUNKS_TIMEOUT_MS = 10_000;
 export const CHUNKS_PAGE_SIZE = 5;
+// Over-fetch so merging same-file chunks still leaves CHUNKS_PAGE_SIZE distinct files.
+export const CHUNKS_FETCH_SIZE = 10;
+const SAME_FILE_SEPARATOR = '\n\n[…]\n\n';
 
 // Target ~24 KiB; hard cap stays under the 50 KiB MCP ceiling.
 export const DEFAULT_RESULT_TARGET_BYTES = 24 * 1024;
@@ -174,6 +177,20 @@ function extractChunksFromSearchResponse(json: unknown): ExtractedSource {
   }
 
   return { chunks, repoPaths: [...repoPaths], indexedCommit };
+}
+
+// One entry per file at its best rank; later chunks of that file join its snippet.
+export function mergeSameFileChunks(chunks: KnowledgeChunk[], maxFiles: number): KnowledgeChunk[] {
+  const byPath = new Map<string, KnowledgeChunk>();
+  for (const chunk of chunks) {
+    const existing = byPath.get(chunk.repoPath);
+    if (existing) {
+      existing.snippet += SAME_FILE_SEPARATOR + chunk.snippet;
+    } else if (byPath.size < maxFiles) {
+      byPath.set(chunk.repoPath, { ...chunk });
+    }
+  }
+  return [...byPath.values()];
 }
 
 // Verified against the live Discovery Engine API — matches this shape exactly.
@@ -381,7 +398,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
       'search',
       {
         query,
-        pageSize: CHUNKS_PAGE_SIZE,
+        pageSize: CHUNKS_FETCH_SIZE,
         contentSearchSpec: { searchResultMode: 'CHUNKS' },
         // The default threshold (like LOW) dropped every "best lap" chunk.
         relevanceThreshold: 'LOWEST',
@@ -392,10 +409,11 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
     );
     const extracted = extractChunksFromSearchResponse(json);
     noteIndexedCommit(extracted.indexedCommit);
+    const chunks = mergeSameFileChunks(extracted.chunks, CHUNKS_PAGE_SIZE);
     return {
       ...baseGuidanceResult('chunks'),
-      chunks: extracted.chunks,
-      repoPaths: extracted.repoPaths,
+      chunks,
+      repoPaths: chunks.map((chunk) => chunk.repoPath),
       ...(extracted.indexedCommit ? { indexedCommit: extracted.indexedCommit } : {}),
     };
   }
