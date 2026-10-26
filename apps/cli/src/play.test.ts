@@ -96,6 +96,13 @@ describe('play', () => {
       expect(changed.stale).toBe(true);
       await eventually(first!.url, (state) => !state.error && state.revision !== b.revision);
       const recovered = await eventually(first!.url, (state) => !state.error);
+      const manifest = join(root, 'games/robot/GAME.json');
+      writeFileSync(manifest, JSON.stringify({ hot: { protocol: 1 } }));
+      const unsupported = await eventually(first!.url, (state) => state.error.includes('newer Creator Kit'));
+      expect(unsupported.revision).toBe(recovered.revision);
+      expect(await fetch(first!.url + 'game').then((r) => r.text())).toContain('Recovered');
+      rmSync(manifest);
+      await eventually(first!.url, (state) => !state.error && !state.stale);
       writeFileSync(join(root, 'templates/title.txt'), 'template changed');
       await eventually(first!.url, (state) => state.revision !== recovered.revision && !state.error);
       writeFileSync(source, '<html>' + 'x'.repeat(26_534_288) + '</html>');

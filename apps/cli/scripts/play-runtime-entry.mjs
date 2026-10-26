@@ -75,9 +75,11 @@ function assemble() {
         ),
       ).href,
     ) +
+    '; import {existsSync,readFileSync} from "node:fs"; const manifestPath=' +
+    JSON.stringify(join(workspaceRoot, 'games', slug, 'GAME.json')) +
     '; const result=assembleGame(' +
     JSON.stringify(slug) +
-    '); process.stdout.write(JSON.stringify({html:result.html,hot:result.hot}));';
+    '); if(existsSync(manifestPath)&&JSON.parse(readFileSync(manifestPath,"utf8")).hot?.protocol===1&&result.hot?.protocol!==1)throw Error("This game needs a newer Creator Kit for HMR. Run gamedevpl kit update, then retry the build."); process.stdout.write(JSON.stringify({html:result.html,hot:result.hot}));';
   currentBuild = execFile(
     process.execPath,
     [
