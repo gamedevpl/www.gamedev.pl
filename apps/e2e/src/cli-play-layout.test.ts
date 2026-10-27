@@ -23,7 +23,7 @@ addEventListener('message',event=>{
   parent.postMessage({source:'gdpl-workbench-game',id:m.id,data},'*');
 });</script>`;
 
-async function fixture(width: number, height: number) {
+async function fixture(width: number, height: number, agent = false) {
   const page = await browser.newPage({ viewport: { width, height } });
   let updateReady = false;
   page.on('pageerror', (error) => console.error(error));
@@ -51,6 +51,55 @@ async function fixture(width: number, height: number) {
       actionCommands: { status: '/status' },
       addresses: [],
       workspace: { mode: 'game', slug: 'layout' },
+      ...(agent
+        ? {
+            agent: {
+              name: 'Play',
+              mode: 'use',
+              modes: ['use'],
+              agent: 'claude',
+              agents: [],
+              actions: [],
+              links: [],
+              view: null,
+              navigation: null,
+              history: [],
+              session: {
+                agent: 'claude',
+                cwd: '/game',
+                status: 'running',
+                queued: [],
+                approvals: [],
+                usage: {},
+                canSteer: true,
+                turns: [
+                  {
+                    id: 1,
+                    agent: 'claude',
+                    prompt: 'Popraw sterowanie.',
+                    startedAt: Date.now(),
+                    entries: [
+                      {
+                        kind: 'tool',
+                        name: 'AskUserQuestion',
+                        input: {
+                          questions: [
+                            {
+                              question: 'Które sterowanie wybrać?',
+                              options: [{ label: 'Klawiatura', description: 'Sterowanie klawiszami' }],
+                            },
+                          ],
+                        },
+                        output: 'The user did not answer the questions.',
+                        done: true,
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          }
+        : {}),
     };
     const data =
       path === '/state'
@@ -249,6 +298,61 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
       await page.locator('#commands-open').click();
       const drawer = await visibleInside(page, '#workbench-tools', 390, 360);
       expect(drawer.y + drawer.height).toBeLessThanOrEqual(notice.y);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it('reserves space for a build error only when it overlaps the conversation', async () => {
+    const page = await fixture(1280, 720);
+    try {
+      await page.locator('#edit').click();
+      await page.route('http://localhost/preview/status', async (route) => {
+        await route.fulfill({ json: { sourceId: 1, revision: 'one', error: 'Build error\n'.repeat(40) } });
+      });
+      await page.locator('#build-error').waitFor({ state: 'visible' });
+      await page.waitForFunction(
+        () => parseFloat(getComputedStyle(document.body).getPropertyValue('--notice-space')) > 0,
+      );
+      const before = await box(page, '#panel');
+      await page.locator('#build-error-details summary').click();
+      await expect.poll(async () => (await box(page, '#preview-feedback')).height).toBeGreaterThan(200);
+      if (process.env.CLI_PLAY_LAYOUT_SCREENSHOTS)
+        await page.screenshot({ path: `${process.env.CLI_PLAY_LAYOUT_SCREENSHOTS}/play-build-error.png` });
+      expect((await box(page, '#panel')).height).toBeCloseTo(before.height, 1);
+      expect((await box(page, '#panel-resize')).height).toBeCloseTo(before.height, 1);
+
+      await page.locator('#dock').click();
+      await expect.poll(async () => (await box(page, '#panel')).height).toBeLessThan(before.height);
+      expect((await box(page, '#panel')).y + (await box(page, '#panel')).height).toBeLessThanOrEqual(
+        (await box(page, '#preview-feedback')).y,
+      );
+      await page.locator('#dock').click();
+      await expect.poll(async () => (await box(page, '#panel')).height).toBeCloseTo(before.height, 1);
+
+      await page.setViewportSize({ width: 390, height: 360 });
+      await expect
+        .poll(async () => (await box(page, '#panel')).y + (await box(page, '#panel')).height)
+        .toBeLessThanOrEqual((await box(page, '#preview-feedback')).y);
+      await page.locator('#send').scrollIntoViewIfNeeded();
+      await visibleInside(page, '#send', 390, 360);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it('keeps the agent conversation and question details usable', async () => {
+    const page = await fixture(1280, 720, true);
+    try {
+      await page.locator('#edit').click();
+      await page.locator('.gc-fold > summary').click();
+      await page.locator('.gc-tool > summary').click();
+      expect(await page.locator('.gc-tool pre').textContent()).toContain('Które sterowanie wybrać?');
+      expect(await page.locator('.gc-tool pre').textContent()).toContain('Klawiatura — Sterowanie klawiszami');
+      await page.locator('#prompt').fill('Czy możesz wyjaśnić to pytanie?');
+      await visibleInside(page, '#send', 1280, 720);
+      if (process.env.CLI_PLAY_LAYOUT_SCREENSHOTS)
+        await page.screenshot({ path: `${process.env.CLI_PLAY_LAYOUT_SCREENSHOTS}/play-agent-chat.png` });
     } finally {
       await page.close();
     }

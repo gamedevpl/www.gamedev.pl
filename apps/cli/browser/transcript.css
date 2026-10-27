@@ -150,6 +150,9 @@
 #conversation.play-agent > .gc-chat {
   flex: 1;
   min-height: 0;
+  --gc-bg: #161c22;
+  --gc-panel: #161c22;
+  --gc-border: #34414a;
 }
 #conversation.play-agent .gc-composer {
   display: none;
@@ -163,8 +166,7 @@
 }
 #conversation.play-agent .play-agent-log {
   flex: none;
-  padding: 6px 12px;
-  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+  padding: 4px 14px;
 }
 #conversation.play-agent .play-agent-log[open] {
   max-height: 35%;

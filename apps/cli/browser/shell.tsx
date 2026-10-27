@@ -78,8 +78,8 @@ export function PlayShell() {
       <aside id="panel" hidden aria-labelledby="panel-title">
         <header className="panel-head">
           <div>
-            <span className="eyebrow">YOUR WORKSPACE</span>
             <h1 id="panel-title">Conversation</h1>
+            <p id="identity" />
           </div>
           <button id="dock" aria-label="Move conversation left">
             <Icon name="panel" />
@@ -88,7 +88,6 @@ export function PlayShell() {
             <Icon name="close" />
           </button>
         </header>
-        <p id="identity" />
         <Conversation />
         <section id="task-card" aria-label="Current task">
           <div id="task" />
