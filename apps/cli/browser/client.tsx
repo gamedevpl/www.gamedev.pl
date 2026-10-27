@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { PlayShell } from './shell.js';
 import { initializeWorkbenchResize } from './workbench-resize.js';
+import { startGamepadBridge } from './gamepad-bridge.js';
 import '../../web/src/core/styles/tokens.css';
 import 'genaicode/react/styles.css';
 import './style.css';
@@ -18,3 +19,4 @@ import './responsive.css';
 flushSync(() => createRoot(document.getElementById('workbench')!).render(<PlayShell />));
 
 initializeWorkbenchResize();
+startGamepadBridge();

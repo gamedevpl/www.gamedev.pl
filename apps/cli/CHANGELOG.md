@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `gamedevpl play` passes gamepads to the game; the preview used to ignore them (#PR).
+
 ## 0.61.0 — 2026-10-26
 
 ### Added
