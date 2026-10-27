@@ -157,6 +157,10 @@
 #conversation.play-agent .gc-app-controls select {
   display: none;
 }
+#conversation.play-agent .play-dismiss-action {
+  display: block;
+  margin-top: 8px;
+}
 #conversation.play-agent .play-agent-log {
   flex: none;
   padding: 6px 12px;
