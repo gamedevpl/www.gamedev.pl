@@ -206,6 +206,25 @@ function AgentConversation({
   openDiff: (diff: SessionDiffInfo) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem('play-dismissed-actions') ?? '[]');
+      return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === 'string').slice(-100) : [];
+    } catch {
+      return [];
+    }
+  });
+  const dismiss = (key: string) => {
+    setDismissed((previous) => {
+      const next = [...previous, key].slice(-100);
+      try {
+        localStorage.setItem('play-dismissed-actions', JSON.stringify(next));
+      } catch {
+        // The card can still be hidden for this session.
+      }
+      return next;
+    });
+  };
   const client = useMemo<AppAgentClient>(() => {
     const call = (command: unknown) => {
       setError(null);
@@ -214,7 +233,15 @@ function AgentConversation({
       );
     };
     return {
-      state,
+      state: {
+        ...state,
+        actions: state.actions.filter(
+          (action) =>
+            action.status === 'pending' ||
+            action.status === 'running' ||
+            !dismissed.includes(`${action.id}:${action.createdAt}`),
+        ),
+      },
       error,
       send(text) {
         const draft = document.getElementById('prompt') as HTMLTextAreaElement | null;
@@ -230,13 +257,37 @@ function AgentConversation({
       approve: (id, decision) => call({ kind: 'approval', id, decision }),
       changes: () => Promise.reject(new Error('Play delivers edits itself; use /diff.')),
     };
-  }, [state, error]);
+  }, [state, error, dismissed]);
   return (
     <div id="conversation" className="play-agent" aria-label="Conversation">
       <AppAgentChat
         client={client}
         foldSteps
         theme="dark"
+        renderAction={(action) =>
+          action.status === 'pending' || action.status === 'running' ? undefined : (
+            <>
+              {action.kind === 'commit' ? (
+                <pre>{action.commit?.message}</pre>
+              ) : (
+                <>
+                  <code>{action.tool?.name}</code>
+                  {action.tool && Object.keys(action.tool.args).length > 0 && (
+                    <pre>{JSON.stringify(action.tool.args, null, 2)}</pre>
+                  )}
+                </>
+              )}
+              <button
+                type="button"
+                className="gc-btn play-dismiss-action"
+                onClick={() => dismiss(`${action.id}:${action.createdAt}`)}
+                aria-label={`Dismiss ${action.summary}`}
+              >
+                Dismiss
+              </button>
+            </>
+          )
+        }
         emptyState={
           <div className="conversation-welcome">
             <h2>What shall we change?</h2>
