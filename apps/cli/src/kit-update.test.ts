@@ -137,3 +137,47 @@ it('repairs an npm Kit whose dependency or archive is missing despite an existin
   rmSync(join(root, 'node_modules/@gamedevpl/gamekit'), { recursive: true });
   expect((await checkKit(input)).current).toBe(false);
 });
+
+function sourceFixture() {
+  const f = fixture();
+  put(f.root, 'src/SPEC.md', '---\nslug: airtime\n---\n');
+  put(f.root, 'src/game.ts', 'local edits');
+  put(
+    f.root,
+    'gamedev-kit.json',
+    JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64), extra: 'keep' }),
+  );
+  put(f.root, '.gamedev/local/original', 'old runtime');
+  return f;
+}
+
+it('updates a source repository pin using the server digest and runs setup on the host', async () => {
+  const { input, root, lock } = sourceFixture();
+  vi.mocked(prepareWorkspace).mockImplementation(async ({ cwd }) => {
+    expect(cwd).toBe(root);
+    expect(JSON.parse(readFileSync(join(root, 'gamedev-kit.json'), 'utf8'))).toEqual({
+      engineRef: lock.engineRef,
+      kitSha256: lock.kitSha256,
+      extra: 'keep',
+    });
+    put(root, '.gamedev/local/new', 'new runtime');
+  });
+  await updateKit(input);
+  expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('local edits');
+  expect(readFileSync(join(root, '.gamedev/local/new'), 'utf8')).toBe('new runtime');
+  expect(existsSync(join(root, '.gamedev/local/original'))).toBe(false);
+});
+
+it('restores the source pin and runtime if setup fails or is cancelled', async () => {
+  const { input, root } = sourceFixture();
+  const original = readFileSync(join(root, 'gamedev-kit.json'), 'utf8');
+  vi.mocked(prepareWorkspace).mockImplementation(async () => {
+    put(root, '.gamedev/local/partial', 'incomplete');
+    throw Error('network timed out');
+  });
+  await expect(updateKit(input)).rejects.toThrow('network timed out');
+  expect(readFileSync(join(root, 'gamedev-kit.json'), 'utf8')).toBe(original);
+  expect(readFileSync(join(root, '.gamedev/local/original'), 'utf8')).toBe('old runtime');
+  expect(existsSync(join(root, '.gamedev/local/partial'))).toBe(false);
+  expect(readFileSync(join(root, 'src/game.ts'), 'utf8')).toBe('local edits');
+});

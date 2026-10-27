@@ -686,7 +686,17 @@ asks whether to update now or later. `/kit` repeats the check and offer. In a sh
 `gamedevpl play` reports available updates without prompting; an offline update
 check does not prevent local play.
 
-The update downloads the Kit and installs its pinned dependencies in a private
+In Play, the agent can propose `game_kit_update`; the creator approves it before
+the CLI host performs the update. Play agents start at the checkout root, with
+game edits scoped to `src/` or `games/<slug>/`.
+
+For source repositories, `gamedevpl kit update` updates `gamedev-kit.json` using
+the release revision and SHA-256 from the server, then runs the repository setup
+on the host. The previous pin and `.gamedev/local/` are restored if setup fails
+or is cancelled. Sources in `src/` are preserved. A hard process termination can
+leave a recovery copy in `.gamedev/kit-backup-*/`, including the original pin.
+
+For legacy checkouts, the update downloads the Kit and installs its pinned dependencies in a private
 staging directory under `.gamedev/`. Only after setup succeeds does the CLI replace
 Kit-owned paths, dependencies and the pin. Game sources, Git history and custom
 workflows stay in place. New Kit paths that would overwrite unowned files are
