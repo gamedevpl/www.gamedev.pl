@@ -155,7 +155,7 @@ describe('CodeSurface actions menu (VS Code-style palette)', () => {
 
     await pressOnPalette('Enter');
     expect(menu()).toBeNull();
-    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
+    expect(container.querySelector('[data-path="game/render.ts"] .code-surface-rail-item.is-active')).not.toBeNull();
     expect(container.querySelector('textarea')!.value).toContain('export const paint');
   });
 
@@ -260,7 +260,7 @@ describe('CodeSurface actions menu (VS Code-style palette)', () => {
     });
 
     expect(menu()).toBeNull();
-    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
+    expect(container.querySelector('[data-path="game/render.ts"] .code-surface-rail-item.is-active')).not.toBeNull();
   });
 
   it('read-only sessions keep navigation but list no editing commands', async () => {
@@ -278,7 +278,7 @@ describe('CodeSurface actions menu (VS Code-style palette)', () => {
     await pressGlobal('p');
     await typeIntoPalette('render');
     await pressOnPalette('Enter');
-    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
+    expect(container.querySelector('[data-path="game/render.ts"] .code-surface-rail-item.is-active')).not.toBeNull();
   });
 
   it('Escape closes the palette without acting', async () => {

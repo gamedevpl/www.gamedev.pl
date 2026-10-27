@@ -291,7 +291,7 @@ describe('CodeSurface goto-definition (GA-09)', () => {
       await Promise.resolve();
     });
 
-    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
+    expect(container.querySelector('[data-path="game/render.ts"] .code-surface-rail-item.is-active')).not.toBeNull();
     expect(capturedInitialSelections).toContainEqual({ anchor: 7, head: 12 });
   });
 

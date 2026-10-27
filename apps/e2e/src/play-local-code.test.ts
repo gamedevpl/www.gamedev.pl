@@ -50,6 +50,9 @@ it.skipIf(!executablePath)(
       await page.keyboard.type('\n// local draft');
       const folder = page.locator('.code-surface-tree-folder-toggle[title="game"]');
       if ((await folder.getAttribute('aria-expanded')) !== 'true') await folder.click();
+      const nestedFile = page.locator('.code-surface-tree-row[data-path="game/logic.ts"] .code-surface-rail-item');
+      expect(await nestedFile.innerText()).toBe('logic.ts');
+      expect(await nestedFile.getAttribute('title')).toBe('game/logic.ts');
       await folder.click();
       await expect.poll(() => page.locator('.code-surface-tree-row[data-path="game/logic.ts"]').count()).toBe(0);
       await folder.click();
