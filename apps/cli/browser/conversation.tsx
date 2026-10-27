@@ -5,6 +5,7 @@ import { codeApi } from './code-api.js';
 import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
 import { DiffFlyout } from './diff-flyout.js';
+import { showAgentQuestions } from './agent-questions.js';
 
 type Snapshot = {
   lines: string[];
@@ -234,7 +235,7 @@ function AgentConversation({
     };
     return {
       state: {
-        ...state,
+        ...showAgentQuestions(state),
         actions: state.actions.filter(
           (action) =>
             action.status === 'pending' ||

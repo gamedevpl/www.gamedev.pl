@@ -186,7 +186,7 @@ button:disabled {
   top: var(--panel-top);
   right: 12px;
   bottom: auto;
-  height: calc(var(--height) - var(--panel-top) - 14px - var(--notice-space, 0px));
+  height: calc(var(--height) - var(--panel-top) - 14px - var(--panel-notice-space, 0px));
   width: min(var(--panel-width, 390px), calc(100vw - 24px));
   display: flex;
   flex-direction: column;
@@ -228,8 +228,7 @@ button:disabled {
   margin-bottom: 5px;
 }
 #identity {
-  margin: 0;
-  padding: 10px 18px 0;
+  margin: 3px 0 0;
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
@@ -274,10 +273,8 @@ button:disabled {
   margin-left: 20px;
 }
 #task-card {
-  margin: 0 14px 8px;
-  border-radius: 10px;
-  background: var(--panel-card);
-  padding: 10px;
+  margin: 0 14px;
+  padding: 8px 0;
   display: flex;
   align-items: start;
   gap: 8px;
@@ -312,7 +309,7 @@ button:disabled {
   border-top: 1px solid var(--panel-border);
   padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
   max-height: 65%;
   overflow: auto;
@@ -392,9 +389,7 @@ textarea {
   overflow: auto;
 }
 #attachments > div {
-  background: var(--panel-card);
-  padding: 6px;
-  border-radius: 8px;
+  padding: 2px 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -409,6 +404,9 @@ textarea {
   font-size: 11px;
   min-height: 28px;
   padding: 4px;
+}
+#panel:has(.play-agent) #composer-hint {
+  display: none;
 }
 .sr-only {
   position: absolute;
