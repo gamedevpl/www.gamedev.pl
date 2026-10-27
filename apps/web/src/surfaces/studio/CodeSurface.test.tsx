@@ -157,7 +157,7 @@ describe('CodeSurface', () => {
     await render();
 
     expect(container.textContent).toContain('game.ts');
-    expect(container.textContent).toContain('game/render.ts');
+    expect(container.textContent).toContain('render.ts');
     expect(container.textContent).toContain('shared/');
     expect(container.textContent).toContain('tools/');
     // Read-only during a live agent round (CE-08): no editable textarea, and the banner shows.
@@ -244,16 +244,16 @@ describe('CodeSurface', () => {
     const sheet = container.querySelector('[role="dialog"]');
     expect(sheet).not.toBeNull();
     expect(sheet?.textContent).toContain('GAME.json');
-    expect(sheet?.textContent).toContain('src/main.ts');
+    expect(sheet?.textContent).toContain('main.ts');
 
     await act(async () => {
       [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option-open')]
-        .find((option) => option.textContent?.includes('src/main.ts'))
+        .find((option) => option.closest('[data-path]')?.getAttribute('data-path') === 'src/main.ts')
         ?.click();
     });
 
     expect(container.querySelector('textarea')!.value).toContain('export const boot');
-    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('src/main.ts');
+    expect(container.querySelector('[data-path="src/main.ts"] .code-surface-rail-item.is-active')).not.toBeNull();
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
@@ -283,7 +283,7 @@ describe('CodeSurface', () => {
 
     const deleteBtn = () =>
       [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
-        .find((option) => option.textContent?.includes('src/main.ts'))
+        .find((option) => option.closest('[data-path]')?.getAttribute('data-path') === 'src/main.ts')
         ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
 
     await act(async () => {
@@ -298,7 +298,7 @@ describe('CodeSurface', () => {
     });
 
     expect(mocked.deleteCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'src/main.ts');
-    expect(container.querySelector('[role="dialog"]')?.textContent).not.toContain('src/main.ts');
+    expect(container.querySelector('[role="dialog"] [data-path="src/main.ts"]')).toBeNull();
   });
 
   it('keeps Discard/Publish enabled when a delete is the only working-copy change', async () => {
@@ -330,7 +330,7 @@ describe('CodeSurface', () => {
     });
     const deleteBtn = () =>
       [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
-        .find((option) => option.textContent?.includes('src/main.ts'))
+        .find((option) => option.closest('[data-path]')?.getAttribute('data-path') === 'src/main.ts')
         ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
     await act(async () => {
       deleteBtn()!.click();
@@ -644,8 +644,8 @@ describe('CodeSurface', () => {
     });
 
     await render();
-    const renderTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
-      b.textContent?.includes('game/render.ts'),
+    const renderTab = [...container.querySelectorAll('.code-surface-rail-item')].find(
+      (b) => b.closest('[data-path]')?.getAttribute('data-path') === 'game/render.ts',
     ) as HTMLButtonElement;
     await act(async () => {
       renderTab.click();
@@ -667,7 +667,7 @@ describe('CodeSurface', () => {
     root = createRoot(container);
     await render();
     const active = container.querySelector('.code-surface-rail-item.is-active');
-    expect(active?.textContent).toContain('game/render.ts');
+    expect(active?.closest('[data-path]')?.getAttribute('data-path')).toBe('game/render.ts');
     expect(container.querySelector('textarea')!.value).toContain('tweaked');
   });
 
@@ -778,8 +778,8 @@ describe('CodeSurface', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find((btn) =>
-      btn.textContent?.includes('game/render.ts'),
+    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find(
+      (btn) => btn.closest('[data-path]')?.getAttribute('data-path') === 'game/render.ts',
     ) as HTMLButtonElement;
     await act(async () => {
       renderTsButton.click();
@@ -826,8 +826,8 @@ describe('CodeSurface', () => {
     await act(async () => {
       typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited game.ts */ };');
     });
-    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find((btn) =>
-      btn.textContent?.includes('game/render.ts'),
+    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find(
+      (btn) => btn.closest('[data-path]')?.getAttribute('data-path') === 'game/render.ts',
     ) as HTMLButtonElement;
     await act(async () => {
       renderTsButton.click();

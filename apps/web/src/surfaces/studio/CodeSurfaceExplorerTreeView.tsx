@@ -150,7 +150,7 @@ function FileRow(
 ) {
   const { t } = props;
   const active = props.node.path === props.selected;
-  const label = props.node.path;
+  const label = props.node.name;
   return (
     <div
       className={`code-surface-tree-row${props.variant === 'sheet' ? ' code-surface-file-option' : ''}${active ? ' is-active' : ''}`}
