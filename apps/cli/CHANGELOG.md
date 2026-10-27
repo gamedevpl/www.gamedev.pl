@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.61.2 — 2026-10-27
+
 ### Fixed
 
 - Play's Code file tree shows file names inside their folders instead of repeating full paths (#2010).
