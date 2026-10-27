@@ -191,6 +191,9 @@ describe('play brain', () => {
     const brain = await t.start();
     await brain.turn('how fast is the snake?');
     expect(t.tasks[0]!.prompt).toContain('You edit the gamedev.pl game "snake"');
+    expect(t.tasks[0]!.cwd).toBe(t.ws.root);
+    expect(t.tasks[0]!.prompt).toContain('cwd is the checkout root');
+    expect(t.tasks[0]!.prompt).toContain('game_kit_update');
     expect(t.tasks[0]!.prompt).toContain('game_script_client');
     expect(t.tasks[0]!.prompt).toContain('working directory, not /tmp or $TMPDIR');
     expect(t.tasks[0]!.prompt).toContain('improve the strategy file');
@@ -218,6 +221,23 @@ describe('play brain', () => {
       expect(existsSync(modulePath)).toBe(false);
     },
   );
+
+  it('gives a source repository the checkout root and its own Kit instructions', async () => {
+    const t = setup([async () => 'Ready.']);
+    mkdirSync(join(t.ws.root, 'src'));
+    writeFileSync(join(t.ws.root, 'src/SPEC.md'), '---\nslug: snake\n---\n');
+    writeFileSync(
+      join(t.ws.root, 'gamedev-kit.json'),
+      JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64) }),
+    );
+    const brain = await t.start();
+    await brain.turn('where is the Kit?');
+    expect(t.tasks[0]!.cwd).toBe(t.ws.root);
+    expect(t.tasks[0]!.prompt).toContain('Edit game sources in src/');
+    expect(t.tasks[0]!.prompt).toContain('gamedev-kit.json');
+    expect(t.tasks[0]!.prompt).toContain('.gamedev/local/');
+    expect(t.tasks[0]!.prompt).not.toContain('../.. from here');
+  });
 
   it('sends red checks back to the agent, then offers the green edit for delivery', async () => {
     const t = setup([

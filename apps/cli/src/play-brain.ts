@@ -24,7 +24,7 @@ import { startWorkshopPreview } from './local-preview-tools.js';
 import { playAppTools, type CaptureServer } from './play-tools.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
-import { gameSourcePath, gameSourceRoot } from './source-project.js';
+import { gameSourceRoot } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { modePermissions, taskPermissionMode, type PermissionMode } from './agent-permissions.js';
@@ -33,7 +33,7 @@ import { readAgentSelection, validateSelection } from './agent-settings.js';
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { liveGameAppTools } from './live-game-app-tools.js';
-import { LIVE_GAME_INSTRUCTIONS } from './live-game-protocol.js';
+import { playBrainInstructions } from './play-brain-instructions.js';
 import { playPushBridge, playTurnWriter } from './play-git-push.js';
 import { reconcileRemotePush } from './git-remote-main.js';
 
@@ -60,18 +60,6 @@ const APPROVE = 'Approve';
 const REJECT = 'Reject';
 const ALLOW = 'Allow';
 const DENY = 'Deny';
-function instructions(ws: Workshop): string {
-  return [
-    `You edit the gamedev.pl game "${ws.slug}". Your cwd is its source tree (${gameSourcePath(ws.root, ws.slug)} in the checkout).`,
-    'The checkout root (../.. from here) holds the Creator Kit: README.md, CREATOR-KIT.md and node_modules/@gamedevpl/gamekit (SKILL.md, shared/, tools/). Read it for reference; never edit it, the dependencies or lockfiles.',
-    'Before you change the game for a new request, call `game_round` with the request. If the platform answers instead of opening a round, pass its answer on and change nothing.',
-    'After your edits call `game_verify` and fix what it reports. Use `game_capture` to look at visual changes before you say they work.',
-    'When the checks are green and the game changed, call `game_submit` to deliver a preview; the creator approves it. Call `game_publish` only when the creator asked to publish.',
-    'Questions about the game need no round: answer them from the files.',
-    LIVE_GAME_INSTRUCTIONS,
-  ].join('\n');
-}
-
 // The creator's permission mode answers the agent CLI's own prompts.
 export function decideApproval(mode: PermissionMode, request: ApprovalRequest): ApprovalDecision | undefined {
   if (mode === 'yolo') return 'approve';
@@ -202,7 +190,7 @@ export async function startPlayBrain(input: {
   });
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
-    instructions: instructions(ws),
+    instructions: playBrainInstructions(ws),
     tools: [
       ...live.tools,
       ...playAppTools({
@@ -212,14 +200,22 @@ export async function startPlayBrain(input: {
         slug: ws.slug,
         root: ws.root,
         run: ws.run,
+        env: ws.env,
         abort: () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
         preview,
         capture,
+        resetPreview: async () => {
+          live.close();
+          const previous = captureServer;
+          captureServer = undefined;
+          previewUrl = undefined;
+          await (await previous?.catch(() => undefined))?.close();
+        },
         write,
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
     ],
-    dev: { cwd: gameRoot, commit: 'on-request', only: true },
+    dev: { cwd: ws.root, commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);

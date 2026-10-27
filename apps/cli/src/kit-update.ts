@@ -1,3 +1,4 @@
+import { updateSourceKit } from './source-kit-update.js';
 import { sourceProject } from './source-project.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import {
@@ -65,11 +66,6 @@ export async function checkKit(
   const checkout = findCheckout(input.cwd);
   if (!checkout) throw new CliError('Open a game checkout to update its Creator Kit.', EXIT_INPUT);
   const root = realpathSync(checkout.root);
-  if (sourceProject(root))
-    throw new CliError(
-      'This repository pins its Kit in gamedev-kit.json. Update that pin and run npm run setup.',
-      EXIT_REFUSED,
-    );
   const lock = await releaseRequest(input, checkout.slug);
   if (
     !lock ||
@@ -82,6 +78,11 @@ export async function checkKit(
     !Number.isFinite(Date.parse(lock.issuedAt))
   )
     throw new CliError('The server returned an invalid Creator Kit release.', EXIT_REFUSED);
+  if (sourceProject(root)) {
+    if (!/^[a-f0-9]{40}$/.test(lock.engineRef))
+      throw new CliError('The server returned an invalid source Kit revision.', EXIT_REFUSED);
+    return { root, lock, current: false, repair: false };
+  }
   const pin = readPin(root);
   const manifestPath = kitPath(root, '.gamedev/kit-manifest.json');
   const installed = existsSync(manifestPath)
@@ -107,6 +108,10 @@ export async function checkKit(
 async function updateKitUnlocked(input: Input & { release?: Awaited<ReturnType<typeof checkKit>> }): Promise<void> {
   const release = input.release ?? (await checkKit(input));
   const { root, lock } = release;
+  if (sourceProject(root)) {
+    await updateSourceKit({ ...input, root, lock });
+    return;
+  }
   const state = kitPath(root, '.gamedev');
   mkdirSync(state, { recursive: true });
   const busy = kitPath(root, '.gamedev/kit-update.pid');
@@ -163,7 +168,7 @@ async function updateKitUnlocked(input: Input & { release?: Awaited<ReturnType<t
 export async function offerKitUpdate(input: Input): Promise<void> {
   const checkout = findCheckout(input.cwd);
   if (checkout && sourceProject(checkout.root)) {
-    input.write('This repository uses the Creator Kit pinned in gamedev-kit.json.');
+    input.write('This repository uses gamedev-kit.json. Run /kit update to update its pin and prepare the runtime.');
     return;
   }
   const release = await checkKit(input);

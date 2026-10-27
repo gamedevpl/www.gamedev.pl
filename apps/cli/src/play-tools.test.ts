@@ -1,9 +1,12 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ApiClient } from './api.js';
+import { updateKit } from './kit-update.js';
 import { playAppTools, type PlayToolsInput } from './play-tools.js';
+
+vi.mock('./kit-update.js', () => ({ updateKit: vi.fn() }));
 
 function tools(overrides: Partial<PlayToolsInput> = {}) {
   const calls: Array<{ method: string; path: string; body?: unknown }> = [];
@@ -38,6 +41,7 @@ describe('playAppTools', () => {
     const { list } = tools();
     expect(list.map((tool) => [tool.name, tool.write === true])).toEqual([
       ['game_round', false],
+      ['game_kit_update', true],
       ['game_verify', false],
       ['game_preview', false],
       ['game_capture', false],
@@ -45,6 +49,20 @@ describe('playAppTools', () => {
       ['game_submit', true],
       ['game_publish', true],
     ]);
+  });
+
+  it.each([false, true])('invalidates preview and capture state after Kit setup (failure: %s)', async (fail) => {
+    vi.mocked(updateKit).mockImplementation(async () => {
+      if (fail) throw Error('setup failed');
+    });
+    const resetPreview = vi.fn(async () => {});
+    const writer = vi.fn(async (run: () => Promise<void>) => run());
+    const { tool } = tools({ resetPreview, writer });
+    const action = tool('game_kit_update').run({});
+    if (fail) await expect(action).rejects.toThrow('setup failed');
+    else await action;
+    expect(writer).toHaveBeenCalledOnce();
+    expect(resetPreview).toHaveBeenCalledOnce();
   });
 
   it('opens a round on the platform with the creator request', async () => {
@@ -130,6 +148,7 @@ describe('playAppTools', () => {
 
   it('refuses delivery while another agent session holds the game', async () => {
     const { tool } = tools();
-    await expect(tool('game_submit').run({})).rejects.toThrow(/your own open agent session/);
+    await expect(tool('game_submit').run({})).rejects.toThrow(/job 1, generation 1/);
+    await expect(tool('game_submit').run({})).rejects.toThrow(/Studio.*push --takeover/);
   });
 });

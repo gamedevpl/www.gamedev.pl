@@ -3,6 +3,7 @@ import type { ApiClient } from './api.js';
 import { diffGame } from './checkout.js';
 import { formatCheckoutDiff } from './checkout-display.js';
 import { formatError } from './errors.js';
+import { updateKit } from './kit-update.js';
 import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { postTurn } from './turn.js';
@@ -21,6 +22,8 @@ export type PlayToolsInput = {
   slug: string;
   root: string;
   run?: VerifyRun;
+  env?: NodeJS.ProcessEnv;
+  resetPreview?: () => Promise<void>;
   abort: () => AbortSignal;
   preview: () => Promise<string | undefined>;
   capture: () => Promise<CaptureServer | undefined>;
@@ -52,8 +55,8 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
     if (session?.locked)
       throw new Error(
         session.canTakeOver
-          ? 'Delivery is blocked by your own open agent session; the creator can run /push --takeover.'
-          : 'Delivery is blocked by an active platform agent; finish it in Studio first.',
+          ? `Delivery is blocked by your own open agent session (job ${session.jobId}, generation ${session.generation}). Open this game's Studio thread to finish the session, or run /push --takeover (shell: gamedevpl push --takeover) to stop it and deliver your local files.`
+          : `Delivery is blocked by an active platform agent (job ${session.jobId}, generation ${session.generation}); finish it in this game's Studio thread first.`,
       );
     // submitGame runs typecheck and check:static itself and refuses a red result.
     const submit = () =>
@@ -86,6 +89,33 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
         return result.kind === 'reply'
           ? `The platform answered instead of opening a round:\n${result.text}`
           : `Round ${result.roundId} is open.${result.ack ? ` Platform note: ${result.ack}` : ''}`;
+      },
+    },
+    {
+      name: 'game_kit_update',
+      description:
+        'Update the pinned Creator Kit to the server release and run setup on the CLI host. Also repairs the local runtime. Preserves game sources; never changes dependencies by hand. Ask the creator to approve this action.',
+      write: true,
+      run: async () => {
+        const lines: string[] = [];
+        const update = () =>
+          updateKit({
+            api: input.api,
+            cwd: input.root,
+            env: input.env ?? process.env,
+            abort: input.abort(),
+            telemetry: input.telemetry,
+            write: (line) => {
+              lines.push(line);
+              input.write(line);
+            },
+          });
+        try {
+          await (input.writer ? input.writer(update) : update());
+        } finally {
+          await input.resetPreview?.();
+        }
+        return lines.join('\n');
       },
     },
     {

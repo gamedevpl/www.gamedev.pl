@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Play agents work from the checkout root so requested Git operations can write repository metadata, update or repair the Creator Kit through an approved host action, and identify blocking delivery sessions (#2016).
 - Play lets you dismiss completed action cards, including old errors, and keeps them hidden after a refresh.
 - Play keeps the conversation full height when build errors appear beside it, and gives the chat a simpler layout (#2011).
 - Play shows the questions and choices from Claude's AskUserQuestion calls in the conversation history (#2011).
