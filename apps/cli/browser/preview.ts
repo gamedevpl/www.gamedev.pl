@@ -1,4 +1,5 @@
 import { embedGameHtml } from '../../../packages/contract/src/game-embed.js';
+import { startGamepadBridge } from './gamepad-bridge.js';
 import './preview.css';
 
 interface PreviewState {
@@ -42,6 +43,8 @@ pause.onclick = () => {
   pause.setAttribute('aria-pressed', String(paused));
   pauseLabel.textContent = paused ? 'Resume live reload' : 'Pause live reload';
 };
+
+startGamepadBridge();
 
 addEventListener('message', (event) => {
   const data = event.data;
