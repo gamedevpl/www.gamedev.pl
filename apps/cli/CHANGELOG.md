@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play agents work from the checkout root so requested Git operations can write repository metadata, update or repair the Creator Kit through an approved host action, and identify blocking delivery sessions.
+- Play agents work from the checkout root so requested Git operations can write repository metadata, update or repair the Creator Kit through an approved host action, and identify blocking delivery sessions (#2016).
 
 ## 0.61.2 — 2026-10-27
 
