@@ -21,9 +21,11 @@ export async function updateSourceKit(input: {
   mkdirSync(kitPath(root, '.gamedev'), { recursive: true });
   await startLocalPlay({ root, slug: lock.slug, env: input.env, write: input.write, stop: true, abort: input.abort });
   const backup = mkdtempSync(kitPath(root, '.gamedev/kit-backup-'));
+  writeFileSync(join(backup, 'gamedev-kit.json'), original, { mode: 0o600 });
   const saved = join(backup, 'local');
   const hadRuntime = existsSync(runtime);
   if (hadRuntime) renameSync(runtime, saved);
+  let restoredOrInstalled = false;
   try {
     input.telemetry?.record('kit_update_started');
     writeFileSync(
@@ -32,15 +34,17 @@ export async function updateSourceKit(input: {
     );
     await prepareWorkspace({ cwd: root, env: input.env, abort: input.abort, write: input.write });
     input.abort?.throwIfAborted();
+    restoredOrInstalled = true;
     input.telemetry?.record('kit_update_completed');
   } catch (error) {
     writeFileSync(pin, original);
     rmSync(runtime, { recursive: true, force: true });
     if (hadRuntime) renameSync(saved, runtime);
+    restoredOrInstalled = true;
     input.telemetry?.record('kit_update_failed');
     throw error;
   } finally {
-    rmSync(backup, { recursive: true, force: true });
+    if (restoredOrInstalled) rmSync(backup, { recursive: true, force: true });
   }
   input.write(
     `Creator Kit updated to ${lock.engineRef.slice(0, 12)}. Game sources are preserved. Use /play to restart the preview.`,
