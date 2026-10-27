@@ -1,5 +1,16 @@
 export const WORKBENCH_NAVIGATION_SCRIPT = String.raw`
-if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>{document.body.style.setProperty('--notice-space',el('notice').textContent.trim()||!el('build-error').hidden?(el('preview-feedback').getBoundingClientRect().height+28)+'px':'0px');}).observe(el('preview-feedback'));
+function feedbackLayout(){
+  const feedback=el('preview-feedback').getBoundingClientRect();
+  const space=el('notice').textContent.trim()||!el('build-error').hidden?feedback.height+28:0;
+  const visiblePanel=!panel.hidden?panel:!el('workbench-tools').hidden?el('workbench-tools'):null;
+  const bounds=visiblePanel?.getBoundingClientRect();
+  const overlaps=bounds&&bounds.left<feedback.right&&bounds.right>feedback.left;
+  document.body.style.setProperty('--notice-space',space+'px');
+  document.body.style.setProperty('--panel-notice-space',(overlaps?space:0)+'px');
+}
+if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(feedbackLayout);for(const id of ['preview-feedback','panel','workbench-tools'])observer.observe(el(id));}
+if(typeof MutationObserver!=='undefined'){const observer=new MutationObserver(feedbackLayout);observer.observe(document.body,{attributes:true,attributeFilter:['data-dock','data-code-open']});for(const id of ['panel','workbench-tools','code-panel'])observer.observe(el(id),{attributes:true,attributeFilter:['hidden','data-view']});}
+addEventListener('resize',feedbackLayout);
 function toolsLayout(){document.documentElement.style.setProperty('--panel-top',Math.max(Number(getComputedStyle(document.documentElement).getPropertyValue('--panel-min-top')),Math.ceil(el('tools').getBoundingClientRect().bottom+8))+'px');}
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(toolsLayout).observe(el('tools'));
 addEventListener('resize',toolsLayout);toolsLayout();

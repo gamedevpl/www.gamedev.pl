@@ -189,7 +189,28 @@ it('keeps the first prompt visible while the agent conversation starts', async (
             approvals: [],
             usage: {},
             canSteer: false,
-            turns: [{ id: 1, agent: 'claude', prompt: 'Add a blue track', entries: [], startedAt: Date.now() }],
+            turns: [
+              {
+                id: 1,
+                agent: 'claude',
+                prompt: 'Add a blue track',
+                entries: [
+                  {
+                    kind: 'tool',
+                    name: 'AskUserQuestion',
+                    input: {
+                      questions: [
+                        { question: 'Which track?', options: [{ label: 'Blue', description: 'Use blue paint' }] },
+                        { question: 'How wide?', options: [{ label: 'Wide' }] },
+                      ],
+                    },
+                    output: 'The user did not answer the questions.',
+                    done: true,
+                  },
+                ],
+                startedAt: Date.now(),
+              },
+            ],
           },
         },
       },
@@ -197,6 +218,10 @@ it('keeps the first prompt visible while the agent conversation starts', async (
   );
   await vi.waitFor(() => expect(doc.querySelector('.gc-prompt')?.textContent).toBe('Add a blue track'));
   expect(doc.querySelector('.conversation-welcome')).toBeNull();
+  expect(doc.querySelector('.gc-tool summary')?.textContent).toContain('Which track?');
+  expect(doc.querySelector('.gc-tool pre')?.textContent).toContain('Blue — Use blue paint');
+  expect(doc.querySelector('.gc-tool pre')?.textContent).toContain('How wide?');
+  expect(doc.querySelector('.gc-tool pre')?.textContent).toContain('The user did not answer the questions.');
 });
 
 it('dismisses a settled action across updates and remounts without hiding new or active actions', async () => {
