@@ -23,6 +23,7 @@ export type PlayToolsInput = {
   root: string;
   run?: VerifyRun;
   env?: NodeJS.ProcessEnv;
+  resetPreview?: () => Promise<void>;
   abort: () => AbortSignal;
   preview: () => Promise<string | undefined>;
   capture: () => Promise<CaptureServer | undefined>;
@@ -109,7 +110,11 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
               input.write(line);
             },
           });
-        await (input.writer ? input.writer(update) : update());
+        try {
+          await (input.writer ? input.writer(update) : update());
+        } finally {
+          await input.resetPreview?.();
+        }
         return lines.join('\n');
       },
     },

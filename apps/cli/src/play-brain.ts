@@ -204,6 +204,13 @@ export async function startPlayBrain(input: {
         abort: () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
         preview,
         capture,
+        resetPreview: async () => {
+          live.close();
+          const previous = captureServer;
+          captureServer = undefined;
+          previewUrl = undefined;
+          await (await previous?.catch(() => undefined))?.close();
+        },
         write,
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
