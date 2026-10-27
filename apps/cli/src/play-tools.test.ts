@@ -38,6 +38,7 @@ describe('playAppTools', () => {
     const { list } = tools();
     expect(list.map((tool) => [tool.name, tool.write === true])).toEqual([
       ['game_round', false],
+      ['game_kit_update', true],
       ['game_verify', false],
       ['game_preview', false],
       ['game_capture', false],
@@ -130,6 +131,7 @@ describe('playAppTools', () => {
 
   it('refuses delivery while another agent session holds the game', async () => {
     const { tool } = tools();
-    await expect(tool('game_submit').run({})).rejects.toThrow(/your own open agent session/);
+    await expect(tool('game_submit').run({})).rejects.toThrow(/job 1, generation 1/);
+    await expect(tool('game_submit').run({})).rejects.toThrow(/Studio.*push --takeover/);
   });
 });

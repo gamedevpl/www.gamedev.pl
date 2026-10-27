@@ -24,7 +24,7 @@ import { startWorkshopPreview } from './local-preview-tools.js';
 import { playAppTools, type CaptureServer } from './play-tools.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
-import { gameSourcePath, gameSourceRoot } from './source-project.js';
+import { gameSourcePath, gameSourceRoot, sourceProject } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { modePermissions, taskPermissionMode, type PermissionMode } from './agent-permissions.js';
@@ -62,8 +62,10 @@ const ALLOW = 'Allow';
 const DENY = 'Deny';
 function instructions(ws: Workshop): string {
   return [
-    `You edit the gamedev.pl game "${ws.slug}". Your cwd is its source tree (${gameSourcePath(ws.root, ws.slug)} in the checkout).`,
-    'The checkout root (../.. from here) holds the Creator Kit: README.md, CREATOR-KIT.md and node_modules/@gamedevpl/gamekit (SKILL.md, shared/, tools/). Read it for reference; never edit it, the dependencies or lockfiles.',
+    `You edit the gamedev.pl game "${ws.slug}". Your cwd is the checkout root. Edit game sources in ${gameSourcePath(ws.root, ws.slug)}/.`,
+    sourceProject(ws.root)
+      ? 'The Kit pin is gamedev-kit.json; the generated runtime and Kit docs live in .gamedev/local/. Use game_kit_update when a Kit update or setup repair is needed. Never edit generated Kit files, dependencies or lockfiles by hand.'
+      : 'The checkout root holds the Creator Kit: README.md, CREATOR-KIT.md and node_modules/@gamedevpl/gamekit (SKILL.md, shared/, tools/). Read it for reference. Use game_kit_update for Kit updates; never edit Kit files, dependencies or lockfiles by hand.',
     'Before you change the game for a new request, call `game_round` with the request. If the platform answers instead of opening a round, pass its answer on and change nothing.',
     'After your edits call `game_verify` and fix what it reports. Use `game_capture` to look at visual changes before you say they work.',
     'When the checks are green and the game changed, call `game_submit` to deliver a preview; the creator approves it. Call `game_publish` only when the creator asked to publish.',
@@ -212,6 +214,7 @@ export async function startPlayBrain(input: {
         slug: ws.slug,
         root: ws.root,
         run: ws.run,
+        env: ws.env,
         abort: () => AbortSignal.any([lifetime.signal, turnAbort.signal]),
         preview,
         capture,
@@ -219,7 +222,7 @@ export async function startPlayBrain(input: {
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
     ],
-    dev: { cwd: gameRoot, commit: 'on-request', only: true },
+    dev: { cwd: ws.root, commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);

@@ -191,6 +191,9 @@ describe('play brain', () => {
     const brain = await t.start();
     await brain.turn('how fast is the snake?');
     expect(t.tasks[0]!.prompt).toContain('You edit the gamedev.pl game "snake"');
+    expect(t.tasks[0]!.cwd).toBe(t.ws.root);
+    expect(t.tasks[0]!.prompt).toContain('cwd is the checkout root');
+    expect(t.tasks[0]!.prompt).toContain('game_kit_update');
     expect(t.tasks[0]!.prompt).toContain('game_script_client');
     expect(t.tasks[0]!.prompt).toContain('working directory, not /tmp or $TMPDIR');
     expect(t.tasks[0]!.prompt).toContain('improve the strategy file');
