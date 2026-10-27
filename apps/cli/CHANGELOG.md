@@ -12,6 +12,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Play lets you dismiss completed action cards, including old errors, and keeps them hidden after a refresh.
 - Play keeps the conversation full height when build errors appear beside it, and gives the chat a simpler layout (#2011).
 - Play shows the questions and choices from Claude's AskUserQuestion calls in the conversation history (#2011).
+- Play and verification warn when an installed GameKit differs from a source repository's pin; unknown module errors identify the pin and setup step.
 
 ## 0.61.2 — 2026-10-27
 

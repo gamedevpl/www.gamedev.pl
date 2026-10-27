@@ -1,4 +1,5 @@
 import { projectRuntimeRoot } from './source-project.js';
+import { sourceKitWarnings } from './source-kit-diagnostics.js';
 import { sourceSetupArgs, syncSourceRuntime } from './source-project-runtime.js';
 import { childEnv, spawnCommand } from './delegate.js';
 import { spawnSync } from 'node:child_process';
@@ -110,6 +111,7 @@ export function runLadder(input: {
     if (prepared.status !== 0)
       return { ok: false, stage: 'typecheck', detail: [prepared.stderr, prepared.stdout].filter(Boolean).join('\n') };
   }
+  sourceKitWarnings(input.cwd).forEach((warning) => input.onStage?.(warning));
   const cwd = setup ? syncSourceRuntime(input.cwd) : input.cwd;
   const steps = verificationSteps(cwd, input.publish, input.slug);
   for (const [index, step] of steps.entries()) {
@@ -150,6 +152,7 @@ export async function runLadderAsync(input: {
     const { prepareWorkspace } = await import('./prepare-workspace.js');
     await prepareWorkspace({ ...input, env: process.env, write: input.onStage ?? (() => {}) });
   }
+  sourceKitWarnings(input.cwd).forEach((warning) => input.onStage?.(warning));
   const cwd = syncSourceRuntime(input.cwd);
   const env = childEnv(process.env, '');
   const steps = verificationSteps(cwd, input.publish === true, input.slug);
