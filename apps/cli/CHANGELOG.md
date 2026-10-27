@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play's Code file tree shows file names inside their folders instead of repeating full paths.
+- Play's Code file tree shows file names inside their folders instead of repeating full paths (#2010).
 
 ## 0.61.1 — 2026-10-27
 
