@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play lets you dismiss completed action cards, including old errors, and keeps them hidden after a refresh.
+
 ## 0.61.1 — 2026-10-27
 
 ### Fixed
