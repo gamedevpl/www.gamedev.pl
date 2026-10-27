@@ -101,7 +101,10 @@ async function swapBuild(build,force=false,automatic=false) {
     await new Promise(r=>setTimeout(r,150));
     check();
     if(replacementBusy())throw Error('Game control changed while replacing the instance');
+    const focused=document.activeElement===previous||(!revision&&document.activeElement===document.body&&
+      el('panel')?.hidden!==false&&el('workbench-tools')?.hidden!==false&&el('code-panel')?.hidden!==false);
     previous.remove();next.style.cssText='';next.id='game';frame=next;
+    if(focused)next.focus();
     if(typeof liveRuntimeId!=='undefined')liveRuntimeId=crypto.randomUUID();
     if(typeof hotUnavailable!=='undefined')hotUnavailable=false;
     revision=build.revision;el('shown-build').textContent='Build '+revision.slice(0,10);

@@ -80,6 +80,41 @@ it('preserves state, keeps the old frame paused during readiness and commits onl
   expect(runtime.revision).toBe('new');
   expect(scores.get(runtime.frame)).toBe(8);
 });
+it('focuses the first game and transfers focus when a focused game is replaced', async () => {
+  const { runtime, previous, build } = player();
+  runtime.revision = '';
+  const initial = runtime.swapBuild(build);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await initial).toBe(true);
+  expect(document.activeElement).toBe(runtime.frame);
+
+  const replacement = runtime.swapBuild({ ...build, revision: 'newer' }, true);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await replacement).toBe(true);
+  expect(document.activeElement).toBe(runtime.frame);
+  expect(previous.isConnected).toBe(false);
+});
+it('does not steal focus from the user or an open panel while the game loads', async () => {
+  const { runtime, build } = player();
+  runtime.revision = '';
+  const input = document.createElement('input');
+  document.body.append(input);
+  input.focus();
+  const initial = runtime.swapBuild(build);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await initial).toBe(true);
+  expect(document.activeElement).toBe(input);
+
+  const next = player();
+  next.runtime.revision = '';
+  const panel = document.createElement('div');
+  panel.id = 'panel';
+  document.body.append(panel);
+  const loading = next.runtime.swapBuild(next.build);
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await loading).toBe(true);
+  expect(document.activeElement).toBe(document.body);
+});
 it('discards a candidate that rejects state and resumes the original frame', async () => {
   const { runtime, previous, scores, events, build } = player({ reject: true });
   const swap = runtime.swapBuild(build);
