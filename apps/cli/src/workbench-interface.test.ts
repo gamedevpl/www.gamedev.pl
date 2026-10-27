@@ -199,6 +199,79 @@ it('keeps the first prompt visible while the agent conversation starts', async (
   expect(doc.querySelector('.conversation-welcome')).toBeNull();
 });
 
+it('dismisses a settled action across updates and remounts without hiding new or active actions', async () => {
+  const { doc, dom, state } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('conversation')!.textContent).toContain('Turn the car red'));
+  const agent = {
+    name: 'Play',
+    mode: 'use',
+    modes: ['use'],
+    agent: 'claude',
+    agents: [],
+    links: [],
+    view: null,
+    navigation: null,
+    history: [],
+    session: {
+      agent: 'claude',
+      cwd: '/game',
+      status: 'running',
+      queued: [],
+      approvals: [],
+      usage: {},
+      canSteer: false,
+      turns: [{ id: 1, agent: 'claude', prompt: 'Fix controls', entries: [], startedAt: 1 }],
+    },
+    actions: [
+      {
+        id: '1',
+        createdAt: 100,
+        kind: 'tool',
+        status: 'failed',
+        summary: 'Old delivery',
+        tool: { name: 'game_submit', args: {} },
+        result: 'Failed',
+      },
+      {
+        id: '2',
+        createdAt: 101,
+        kind: 'tool',
+        status: 'pending',
+        summary: 'Awaiting decision',
+        tool: { name: 'game_submit', args: {} },
+      },
+      {
+        id: '3',
+        createdAt: 102,
+        kind: 'tool',
+        status: 'running',
+        summary: 'Still running',
+        tool: { name: 'game_submit', args: {} },
+      },
+    ],
+  };
+  const update = (value: unknown) =>
+    dom.window.dispatchEvent(
+      new dom.window.CustomEvent('play-session', {
+        detail: { lines: state.lines, workspace: { mode: 'game' }, agent: value },
+      }),
+    );
+  update(agent);
+  await vi.waitFor(() => expect(doc.querySelector('[aria-label="Dismiss Old delivery"]')).not.toBeNull());
+  expect(doc.querySelectorAll('.play-dismiss-action')).toHaveLength(1);
+  (doc.querySelector('[aria-label="Dismiss Old delivery"]') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(doc.querySelector('.gc-failed')).toBeNull());
+  expect(doc.querySelector('.gc-pending')?.textContent).toContain('Awaiting decision');
+  expect(doc.querySelector('.gc-running')?.textContent).toContain('Still running');
+  update(null);
+  await vi.waitFor(() => expect(doc.querySelector('.play-agent')).toBeNull());
+  update(agent);
+  await vi.waitFor(() => expect(doc.querySelector('.gc-pending')).not.toBeNull());
+  expect(doc.querySelector('.gc-failed')).toBeNull();
+  update({ ...agent, actions: [{ ...agent.actions[0], createdAt: 200, summary: 'New delivery' }] });
+  await vi.waitFor(() => expect(doc.querySelector('.gc-failed')?.textContent).toContain('New delivery'));
+});
+
 it('embeds only the two WOFF2 font weights used by Play', () => {
   expect(PLAY_STYLE.match(/@font-face/g)).toHaveLength(2);
   expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);
