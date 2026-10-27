@@ -1,4 +1,4 @@
-// Framework-free pad reading, shared by the site player and the CLI preview.
+// Framework-free pad reading for the site player and CLI preview.
 export type StandardPad = { index: number; mapping: 'standard'; axes: number[]; buttons: number[] };
 // Non-standard devices, only for games that ask for them.
 type RawFramePad = { index: number; mapping: ''; axes: number[]; buttons: number[] };
