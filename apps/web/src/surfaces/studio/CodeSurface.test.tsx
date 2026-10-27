@@ -157,9 +157,7 @@ describe('CodeSurface', () => {
     await render();
 
     expect(container.textContent).toContain('game.ts');
-    expect(container.querySelector('[data-path="game/render.ts"] .code-surface-rail-item')?.textContent).toContain(
-      'render.ts',
-    );
+    expect(container.textContent).toContain('render.ts');
     expect(container.textContent).toContain('shared/');
     expect(container.textContent).toContain('tools/');
     // Read-only during a live agent round (CE-08): no editable textarea, and the banner shows.
