@@ -9,10 +9,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Play shows delivery approval once in the browser, keeping Approve/Reject on the action card and preserving terminal approval (#2025).
 - Play explains why a code update cannot use HMR when the running game also cannot transfer its state (#2023).
 - Play shows pasted images as clickable thumbnails in agent conversation history instead of raw attachment metadata (#2021).
 - Play keeps the agent's latest status update visible while it runs tools with steps collapsed (#2027).
-- Play shows delivery approval once in the browser, keeping Approve/Reject on the action card and preserving terminal approval (#2025).
 
 ## 0.62.0 — 2026-10-28
 
