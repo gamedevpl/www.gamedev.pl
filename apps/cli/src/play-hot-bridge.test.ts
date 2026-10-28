@@ -186,8 +186,6 @@ it('aborts pending assets and fences superseded or expired resource preparations
 
 it('does not suppress live errors while resources decode', async () => {
   const f = resourceFixture();
-  await f.request('hot:prepare', f.input);
-  await f.request('hot:apply', f.input);
   let release!: (value: object) => void;
   f.hot.controller.stage.mockImplementationOnce(
     () =>
@@ -195,7 +193,7 @@ it('does not suppress live errors while resources decode', async () => {
         release = resolve;
       }),
   );
-  const input = { ...f.input, id: 'next', expectedEpoch: 1 };
+  const input = { ...f.input, id: 'next', expectedEpoch: 0 };
   const pending = f.request('hot:prepare', input);
   f.win.dispatchEvent(new f.win.ErrorEvent('error', { message: 'old callback failed' }));
   expect(f.messages.some((m) => (m as unknown as { type: string }).type === 'unavailable')).toBe(true);

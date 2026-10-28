@@ -16,7 +16,7 @@ export const PLAY_HOT_BRIDGE = String.raw`
     clearTimeout(prepared.timer);runtime()?.controller?.discard?.();prepared=undefined;
   }
   function failed(){
-    if(unavailable||preparing||!runtime()?.controller?.status().epoch)return;
+    if(unavailable||preparing||!runtime()?.controller)return;
     unavailable=true;abort();
     const h=window.__GAME_HARNESS__;h?.pause?.();if(h){h.ready=false;h.metadata={};delete h.ui;delete h.observation;delete h.api;delete h.helpers;}
     parent.postMessage({source:'gdpl-workbench-hot',type:'unavailable'},'*');
