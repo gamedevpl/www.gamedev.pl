@@ -381,30 +381,6 @@ textarea {
   margin: 0;
   line-height: 1.5;
 }
-#attachments {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  max-height: 100px;
-  overflow: auto;
-}
-#attachments > div {
-  padding: 2px 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  font-size: 11px;
-}
-#attachments span {
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-#attachments button {
-  font-size: 11px;
-  min-height: 28px;
-  padding: 4px;
-}
 #panel:has(.play-agent) #composer-hint {
   display: none;
 }
