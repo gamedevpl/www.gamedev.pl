@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { PLAY_STYLE } from './generated/play-ui.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
+import type { AppAgentState, SessionEntry } from 'genaicode/react';
 
 const windows: JSDOM[] = [];
 afterEach(() => {
@@ -28,6 +29,7 @@ function fixture(status = 200, mode?: string) {
     actions: ['status'],
     actionCommands: { status: '/status' },
     addresses: [],
+    agent: undefined as AppAgentState | undefined,
   };
   const requests: string[] = [];
   const dom = new JSDOM(SESSION_BROWSER_PAGE, {
@@ -149,6 +151,78 @@ it('keeps tool output collapsed and labels the actual agent reply', async () => 
   expect(doc.querySelectorAll('.message.assistant')).toHaveLength(1);
   expect(doc.querySelector('.session-output')?.textContent).toContain('⚙ cat game.ts');
   expect(doc.querySelector('.session-output')?.hasAttribute('open')).toBe(false);
+});
+
+it('keeps the latest agent update visible between tools and clears it when the turn ends or changes', async () => {
+  const { doc, dom, state } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  const session: NonNullable<AppAgentState['session']> = {
+    agent: 'claude',
+    cwd: '/game',
+    status: 'running',
+    queued: [],
+    approvals: [],
+    usage: {},
+    canSteer: false,
+    turns: [{ id: 1, agent: 'claude', prompt: 'Fix steering', startedAt: Date.now(), entries: [] }],
+  };
+  state.agent = {
+    name: 'Play',
+    mode: 'use',
+    modes: ['use'],
+    agent: 'claude',
+    agents: [],
+    actions: [],
+    links: [],
+    view: null,
+    navigation: null,
+    history: [],
+    session,
+  };
+  const update = (entries: SessionEntry[]) => {
+    session.turns[0].entries = entries;
+    state.agent = { ...state.agent!, session: { ...session, turns: [{ ...session.turns[0] }] } };
+    dom.window.dispatchEvent(new dom.window.CustomEvent('play-session', { detail: { ...state } }));
+  };
+  const tool: SessionEntry = { kind: 'tool', name: 'Edit', done: false };
+  const first: SessionEntry = { kind: 'text', text: 'Poprawiam **sterowanie**.', streaming: false };
+  const latest: SessionEntry = { kind: 'text', text: 'Sprawdzam `game.ts`.', streaming: false };
+  const progress = () => doc.querySelector('[role="status"][aria-label="Agent progress"]');
+  const visibleReplies = () => doc.querySelector('.gc-steps > .gc-md');
+
+  update([tool]);
+  await vi.waitFor(() => expect(doc.querySelector('.gc-fold')).not.toBeNull());
+  expect(progress()).toBeNull();
+
+  update([first]);
+  await vi.waitFor(() => expect(visibleReplies()?.textContent).toContain('Poprawiam sterowanie.'));
+  expect(progress()).toBeNull();
+
+  update([first, tool]);
+  await vi.waitFor(() => expect(progress()?.textContent).toContain('Poprawiam sterowanie.'));
+  expect(progress()?.closest('details')).toBeNull();
+  expect(progress()?.querySelector('strong')?.textContent).toBe('sterowanie');
+  expect(doc.querySelector('.gc-fold')?.hasAttribute('open')).toBe(false);
+
+  update([first, tool, latest, { kind: 'files', paths: ['/game/game.ts'] }]);
+  await vi.waitFor(() => expect(progress()?.textContent).toContain('Sprawdzam game.ts.'));
+  expect(progress()?.textContent).not.toContain('Poprawiam');
+
+  update([first, tool, latest, { ...tool, done: true }]);
+  await vi.waitFor(() => expect(doc.querySelector('.gc-fold-body .gc-state.gc-ok')?.textContent).toBe('✓'));
+  expect(progress()?.textContent).toContain('Sprawdzam game.ts.');
+
+  session.turns[0].result = { ok: true, text: 'Done' };
+  session.status = 'idle';
+  update(session.turns[0].entries);
+  await vi.waitFor(() => expect(progress()).toBeNull());
+  expect(visibleReplies()?.textContent).toContain('Sprawdzam game.ts.');
+
+  session.status = 'running';
+  session.turns = [{ id: 2, agent: 'claude', prompt: 'Next change', startedAt: Date.now(), entries: [] }];
+  update([tool]);
+  await vi.waitFor(() => expect(doc.querySelector('.gc-prompt')?.textContent).toBe('Next change'));
+  expect(progress()).toBeNull();
 });
 
 it('keeps the first prompt visible while the agent conversation starts', async () => {
