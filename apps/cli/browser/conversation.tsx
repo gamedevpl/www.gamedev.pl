@@ -1,6 +1,7 @@
+import { PlayAgentChat, renderEvidencePrompt } from './evidence-prompt.js';
 import { agentTranscriptLine } from '../src/transcript-line.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppAgentChat, userText, useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
+import { userText, useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
 import { codeApi } from './code-api.js';
 import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
@@ -149,9 +150,11 @@ function SessionMessages({
         ) : (
           <article key={i} className={'message ' + message.kind}>
             <span className="message-author">{message.kind === 'user' ? 'You' : (message.author ?? 'gamedev.pl')}</span>
-            <p>
-              <RichText text={message.text} />
-            </p>
+            {(message.kind === 'user' ? renderEvidencePrompt(message.text) : undefined) ?? (
+              <p>
+                <RichText text={message.text} />
+              </p>
+            )}
           </article>
         ),
       )}
@@ -261,8 +264,9 @@ function AgentConversation({
   }, [state, error, dismissed]);
   return (
     <div id="conversation" className="play-agent" aria-label="Conversation">
-      <AppAgentChat
+      <PlayAgentChat
         client={client}
+        renderPrompt={renderEvidencePrompt}
         foldSteps
         theme="dark"
         renderAction={(action) =>

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as z from 'zod';
@@ -67,6 +67,11 @@ export function workbenchArtifacts() {
       records.set(id, record);
       const { path: _path, ...publicRecord } = record;
       return publicRecord;
+    },
+    image(id: string) {
+      const record = records.get(id);
+      if (!record || !record.mime.startsWith('image/')) return undefined;
+      return { mime: record.mime, data: readFileSync(record.path).toString('base64') };
     },
     resolve(ids: string[]) {
       if (ids.length > 8 || new Set(ids).size !== ids.length) throw Error('Too many attachments');
