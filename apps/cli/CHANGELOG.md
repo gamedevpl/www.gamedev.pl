@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play shows pasted images as clickable thumbnails in agent conversation history instead of raw attachment metadata.
+- Play shows pasted images as clickable thumbnails in agent conversation history instead of raw attachment metadata (#2021).
 
 ## 0.62.0 — 2026-10-28
 
