@@ -34,7 +34,7 @@ export const WORKBENCH_GAME_BRIDGE = String.raw`
       else if(m.type==='record') { if(!canvas()?.captureStream||typeof MediaRecorder!=='function')throw Error('Canvas recording unavailable'); if(!recording){clip=undefined;stream=canvas().captureStream(20);recording=true;segment();} data=true; }
       else if(m.type==='record-stop') {halt();data=true;}
       else if(m.type==='clip') { if(!clip)throw Error('No complete 8-second segment yet. Enable recording and play for at least 8 seconds.'); data={bytes:await clip.arrayBuffer(),mime:clip.type,surface:'largest canvas; no audio or DOM overlays',durationSeconds:8}; }
-      else if(['hot:status','hot:apply','hot:result'].includes(m.type))return;
+      else if(['hot:status','hot:apply','hot:result','hot:prepare','hot:abort'].includes(m.type))return;
       else throw Error('Unknown game operation');
     } catch(e) {error=String(e.message||e).slice(0,300);}
     parent.postMessage({source:'gdpl-workbench-game',id:m.id,data,error},'*');

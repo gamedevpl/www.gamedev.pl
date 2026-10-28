@@ -23,12 +23,22 @@ async function ready(target) {
   }
   throw Error('Candidate did not become ready');
 }
-let swapEpoch=0,lastSwapError='',replacingFrame=false;
+let swapEpoch=0,lastSwapError='',replacingFrame=false,resourceRecovery=false;
 function replacementBusy(){return typeof liveControlled!=='undefined'&&(liveControlled||liveOperation);}
+async function hotResources(build){
+  const matches=[...build.html.matchAll(/<script type="application\/json" id="gk-hot-resources">([^<]*)<\/script>/g)];
+  if(matches.length!==1)throw Error('Missing resource snapshot; restart with update');
+  const text=matches[0][1],bytes=new TextEncoder().encode(text);
+  if(bytes.byteLength!==build.hot.resources.bytes)throw Error('Update resource size mismatch');
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  if([...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('')!==build.hot.resources.hash)throw Error('Update resource hash mismatch');
+  return JSON.parse(text);
+}
 async function hotBuild(build,check){
   const target=frame;
   const before=await gameRequest(target,'hot:status');check();
   if(!before||before.bootHash!==build.hot.bootHash)return null;
+  if(build.hot.protocol===2&&before.resourceStatus?.available===false)return null;
   if(!before.ready)throw Error('Current game is unavailable. Restart with update to recover.');
   if(liveOperation)throw Error('Wait for the current game operation to finish.');
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(build.hot.bundle));check();
@@ -36,6 +46,16 @@ async function hotBuild(build,check){
   if([...new Uint8Array(digest)].map(n=>n.toString(16).padStart(2,'0')).join('')!==build.hot.bundleHash)throw Error('Update code hash mismatch');
   const id=crypto.randomUUID(),previousRevision=revision,expectedEpoch=before.epoch;
   try{
+    if(build.hot.protocol===2){
+      if(before.protocol!==2)return null;
+      const payload=await hotResources(build);check();
+      const candidate=await gameRequest(target,'hot:prepare',{...build.hot,id,revision:build.revision,expectedEpoch,payload},18000);check();
+      if(candidate.status!=='prepared'){
+        if(candidate.reason==='incompatible')return null;
+        throw Error(candidate.error||'Resource preparation failed; current build kept');
+      }
+      if(liveOperation)throw Error('Wait for the current game operation to finish.');
+    }
     const transaction=await liveHotUpdate({phase:'begin',id,sourceId,previousRevision,revision:build.revision,expectedEpoch});
     if(transaction.state!=='prepared')throw Error('Update transaction is no longer pending');
     hotUpdating=true;
@@ -61,7 +81,7 @@ async function hotBuild(build,check){
     lastSwapError=result.status==='applied'?'Code updated · gameplay continued':'Updated code failed to refresh. Restart with update to recover.';
     el('notice').textContent=lastSwapError;
     return result.status==='applied';
-  }finally{hotUpdating=false;}
+  }finally{hotUpdating=false;if(build.hot.protocol===2)await gameRequest(target,'hot:abort',{id}).catch(()=>{});}
 }
 async function swapBuild(build,force=false,automatic=false) {
   const epoch=++swapEpoch, previous=frame;let next;
@@ -79,7 +99,7 @@ async function swapBuild(build,force=false,automatic=false) {
     if(revision&&!force) {
       const caps=await gameRequest(previous,'capabilities');check();
       if(!caps.state)throw Error('This game cannot preserve state. Use Restart with update.');
-      if(automatic&&(!caps.validate||!caps.safe)){
+      if((automatic||build.hot?.protocol===2)&&(!caps.validate||!caps.safe)){
         if(caps.validate&&typeof lastAuto!=='undefined')lastAuto='';
         throw Error('Update ready. Apply manually at a safe moment.');
       }
@@ -93,7 +113,7 @@ async function swapBuild(build,force=false,automatic=false) {
     document.body.prepend(next);next.srcdoc=build.html;
     const caps=await ready(next);check();posture(next,'pause');
     if(saved!==null) {
-      if(!caps.state||automatic&&!caps.validate)throw Error('Candidate cannot safely restore this state');
+      if(!caps.state||(automatic||build.hot?.protocol===2)&&!caps.validate)throw Error('Candidate cannot safely restore this state');
       const restored=await gameRequest(next,'restore',saved);check();
       if(restored!==true)throw Error('Candidate rejected the saved state');
     }
@@ -107,6 +127,7 @@ async function swapBuild(build,force=false,automatic=false) {
     if(focused)next.focus();
     if(typeof liveRuntimeId!=='undefined')liveRuntimeId=crypto.randomUUID();
     if(typeof hotUnavailable!=='undefined')hotUnavailable=false;
+    resourceRecovery=false;
     revision=build.revision;el('shown-build').textContent='Build '+revision.slice(0,10);
     el('empty').hidden=true;el('apply').hidden=true;el('restart').hidden=true;
     lastSwapError='';el('notice').textContent=saved!==null?'Updated · game state restored':'Build loaded';

@@ -139,7 +139,7 @@ async function previewTick() {
         if (!build.error && !build.busy && !build.stale && build.revision) {
           candidate = build.revision;
           if (!revision) await apply();
-          else {el('apply').hidden=candidate===revision||el('policy').value==='freeze';if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);const hot=build.hot?await gameRequest(frame,'hot:status').catch(()=>null):null;if(hot?.ready||caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
+          else {el('apply').hidden=!resourceRecovery&&(candidate===revision||el('policy').value==='freeze');if(candidate!==revision&&el('policy').value==='auto'&&lastAuto!==candidate){const caps=await gameRequest(frame,'capabilities').catch(()=>null);const hot=build.hot?await gameRequest(frame,'hot:status').catch(()=>null):null;if(hot?.ready||caps?.validate&&caps.safe){lastAuto=candidate;await apply(false,true);}else el('notice').textContent='Update ready · waiting for a supported safe point, or apply manually.';}}
         }
       }
     }
