@@ -164,6 +164,42 @@
   display: block;
   margin-top: 8px;
 }
+#conversation.play-agent .play-agent-progress {
+  --_mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --_code-bg: var(--panel-card);
+  --_radius: 6px;
+  --_accent: var(--turquoise);
+  --_border: var(--panel-border);
+  --_muted: var(--muted);
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 64px;
+  max-height: 25%;
+  border-top: 1px solid var(--panel-border);
+  padding: 8px 14px;
+}
+.play-agent-progress-label {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.play-agent-progress-text {
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.play-agent-progress-text .gc-md > :first-child {
+  margin-top: 4px;
+}
+.play-agent-progress-text .gc-md > :last-child {
+  margin-bottom: 0;
+}
+body[data-compact='true'] #conversation.play-agent:has(.play-agent-progress) {
+  min-height: 220px;
+  max-height: 220px;
+}
 #conversation.play-agent .play-agent-log {
   flex: none;
   padding: 4px 14px;

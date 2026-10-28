@@ -7,6 +7,7 @@ import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
 import { DiffFlyout } from './diff-flyout.js';
 import { showAgentQuestions } from './agent-questions.js';
+import { AgentProgress } from './agent-progress.js';
 
 type Snapshot = {
   lines: string[];
@@ -300,6 +301,7 @@ function AgentConversation({
           </div>
         }
       />
+      <AgentProgress state={state} />
       {log.length > 0 && (
         // Folded, so only the agent chat scrolls.
         <details className="play-agent-log" aria-label="Session output">
