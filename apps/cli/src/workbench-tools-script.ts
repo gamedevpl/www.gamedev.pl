@@ -2,7 +2,38 @@ export const WORKBENCH_TOOLS_SCRIPT = String.raw`
 let attachments=[];try{const saved=sessionStorage.getItem('play-attachments');if(saved&&saved.length<16000)attachments=JSON.parse(saved).slice(0,8);}catch{}
 const device=crypto.randomUUID();
 const staged=()=>attachments.filter(a=>!a.sent);
-function tray(){sessionStorage.setItem('play-attachments',JSON.stringify(attachments.map(({thumbnail,...meta})=>meta)));el('attachments').replaceChildren();for(const item of attachments){const row=document.createElement('div');if(item.thumbnail){const img=document.createElement('img');img.src=item.thumbnail;img.alt=item.name;img.style.cssText='width:80px;height:50px;object-fit:contain';row.append(img);}const label=document.createElement('span');label.textContent=item.name+' · '+item.purpose+' · '+Math.round(item.bytes/1024)+' KB ';row.append(label);if(item.sent){row.className='attachment-sent';label.textContent='Sent ✓ · '+label.textContent;const again=document.createElement('button');again.type='button';again.textContent='Attach again';again.onclick=()=>{item.sent=false;tray();};row.append(again);}const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>{attachments=attachments.filter(a=>a.id!==item.id);tray();};row.append(remove);el('attachments').append(row);}}
+function tray(){
+  sessionStorage.setItem('play-attachments',JSON.stringify(attachments.map(({thumbnail,...meta})=>meta)));
+  el('attachments').replaceChildren();
+  for(const item of attachments){
+    const card=document.createElement('div');
+    card.className='attachment-card'+(item.sent?' attachment-sent':'');
+    const preview=document.createElement('div');preview.className='attachment-preview';
+    if(item.thumbnail){
+      const img=document.createElement('img');img.src=item.thumbnail;img.alt=item.name;preview.append(img);
+    }else{
+      preview.textContent=(item.name.split('.').pop()||'FILE').slice(0,5).toUpperCase();
+      preview.setAttribute('aria-hidden','true');
+    }
+    const details=document.createElement('div');details.className='attachment-details';
+    const name=document.createElement('span');name.className='attachment-name';
+    name.textContent=item.name;name.title=item.name;
+    const meta=document.createElement('span');meta.className='attachment-meta';
+    meta.textContent=item.purpose+' · '+Math.round(item.bytes/1024)+' KB';
+    details.append(name,meta);
+    if(item.sent){
+      const actions=document.createElement('div');actions.className='attachment-actions';
+      const status=document.createElement('span');status.className='attachment-status';status.textContent='Sent ✓';
+      const again=document.createElement('button');again.type='button';again.className='attachment-again';
+      again.textContent='Attach again';again.setAttribute('aria-label','Attach '+item.name+' again');
+      again.onclick=()=>{item.sent=false;tray();};actions.append(status,again);details.append(actions);
+    }
+    const remove=document.createElement('button');remove.type='button';remove.className='attachment-remove';
+    remove.textContent='×';remove.title='Remove '+item.name;remove.setAttribute('aria-label',remove.title);
+    remove.onclick=()=>{attachments=attachments.filter(a=>a.id!==item.id);tray();};
+    card.append(preview,details,remove);el('attachments').append(card);
+  }
+}
 async function attach(name,mime,data,purpose='diagnostic',shown=revision) {
   if(staged().length>=8)throw Error('Up to 8 attachments per request');
   const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);

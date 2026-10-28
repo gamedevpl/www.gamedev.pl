@@ -6,6 +6,7 @@ import { startGamepadBridge } from './gamepad-bridge.js';
 import '../../web/src/core/styles/tokens.css';
 import 'genaicode/react/styles.css';
 import './style.css';
+import './attachments.css';
 import '../../web/src/surfaces/studio/code-surface-editor.css';
 import './code-panel.css';
 import './build-error.css';
