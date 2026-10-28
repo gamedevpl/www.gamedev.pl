@@ -21,7 +21,9 @@ addEventListener('message',event=>{
   const m=event.data;if(m?.source!=='gdpl-workbench')return;
   const data=m.type==='capabilities'?{ready:true,state:true,validate:true,safe:true}:m.type==='snapshot'?{score:1}:true;
   parent.postMessage({source:'gdpl-workbench-game',id:m.id,data},'*');
-});</script>`;
+});
+addEventListener('keydown',event=>document.body.dataset.key=event.key);
+</script>`;
 
 async function fixture(width: number, height: number, agent = false) {
   const page = await browser.newPage({ viewport: { width, height } });
@@ -145,6 +147,19 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
   });
   afterAll(async () => {
     await browser?.close();
+  });
+
+  it('focuses the game and accepts keyboard input after refreshing', async () => {
+    const page = await fixture(1280, 720);
+    try {
+      await page.reload();
+      await page.waitForFunction(() => document.getElementById('shown-build')?.textContent === 'Build one');
+      await expect.poll(() => page.locator('#game').evaluate((frame) => document.activeElement === frame)).toBe(true);
+      await page.keyboard.press('ArrowDown');
+      await expect.poll(() => page.frameLocator('#game').locator('body').getAttribute('data-key')).toBe('ArrowDown');
+    } finally {
+      await page.close();
+    }
   });
 
   it.each(sizes)('keeps controls, updates and chat reachable at %i × %i', async (width, height) => {
