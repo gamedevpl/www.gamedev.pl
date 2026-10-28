@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.62.0 — 2026-10-28
+
 ### Added
 
 - Play updates opted-in images, themes and native effects without resetting the running game, and keeps resource revisions in its local journal (#2019).
