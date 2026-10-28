@@ -91,6 +91,22 @@ Policy reasons and shell commands remain local and are not telemetry dimensions.
 
 ## Implemented transports
 
+Local Play exposes `game_git_push` as an approved host action. When the creator
+asks to push, the agent reads the configured remote's push URL and the branch's full
+commit SHA, then proposes that exact destination and commit in Play. Approval runs
+Git on the CLI host with the creator's existing SSH agent or credential helper;
+the agent's shell sandbox remains enabled. The action checks the repository root,
+push URL and branch commit again before executing. It pushes that immutable commit
+to the same branch, without force, tags, mirror mode or submodule pushes. Multiple
+push URLs and changed destinations or branch commits require a new request. Stop
+cancels the process group, and a timeout or cancellation reports uncertainty: inspect
+the remote before retrying. Existing Git hooks still run. This action never commits
+files or publishes on gamedev.pl, and requires approval even in Auto or YOLO.
+
+This affects creator-funnel question 4: `cli_step` events `brain_turn` and
+`delegate_used` still describe the task. Git push outcomes remain local; repository
+URLs, branches, commit IDs and credentials are not added to telemetry.
+
 | Adapter | Mechanism                                                                                                                    | Behavior                                                                                                                                                                                                                                                                                                          |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Claude  | `--permission-prompt-tool mcp__gamedevpl_local__approve`                                                                     | Existing private, bearer-authenticated MCP listener asks the creator and returns `allow` with unchanged `updatedInput`, or `deny`. `acceptEdits` stays enabled. No preview is required. A disconnected MCP caller cancels its question.                                                                           |

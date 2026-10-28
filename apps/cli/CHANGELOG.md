@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Play agents push committed branches through an approved host action when their shell sandbox blocks SSH.
 - Play arranges pasted images and other attachments in compact cards with consistent previews, readable file details and separate resend and remove controls (#2026).
 - Play explains why a code update cannot use HMR when the running game also cannot transfer its state (#2023).
 - Play shows pasted images as clickable thumbnails in agent conversation history instead of raw attachment metadata (#2021).

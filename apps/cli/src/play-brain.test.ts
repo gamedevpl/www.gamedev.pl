@@ -199,6 +199,7 @@ describe('play brain', () => {
     expect(t.tasks[0]!.prompt).toContain('improve the strategy file');
     expect(t.tasks[0]!.prompt).toContain('how fast is the snake?');
     expect(t.tasks[0]!.prompt).toContain('Commit or push only when the user asks you to.');
+    expect(t.tasks[0]!.prompt).toContain('For Git pushes use game_git_push');
     expect(t.tasks[0]!.prompt).not.toContain('Do not commit or push.');
     expect(t.lines).toContain('The snake moves one cell per tick.');
     expect(t.picks).toEqual([]);
