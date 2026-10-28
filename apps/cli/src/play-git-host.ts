@@ -10,7 +10,11 @@ const pushSchema = z
       .string()
       .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
       .max(200),
-    remoteUrl: z.string().min(1).max(2048),
+    remoteUrl: z
+      .string()
+      .min(1)
+      .max(2048)
+      .refine((url) => !/^gamedevpl:/i.test(url), 'Platform remotes use the existing gamedev.pl Git delivery flow.'),
     branch: z.string().min(1).max(1024),
     commit: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/),
   })
@@ -88,7 +92,7 @@ export function playGitPushTool(input: {
   return {
     name: 'game_git_push',
     description:
-      'Push a committed local branch through the CLI host, using the creator’s normal Git/SSH credentials even when the agent shell cannot use SSH. Only when the creator asked to push. Inspect git remote get-url --push --all REMOTE and git rev-parse refs/heads/BRANCH first; pass that exact URL and full commit SHA. Include the remote, branch and commit in approval_summary. Requires approval in Play; refuses changed branches/destinations, force pushes, deletions and multiple push URLs. Does not commit files or publish on gamedev.pl.',
+      'Push a committed source-repository branch through the CLI host, using the creator’s normal Git/SSH credentials even when the agent shell cannot use SSH. Only when the creator asked to push. Inspect git remote get-url --push --all REMOTE and git rev-parse refs/heads/BRANCH first; pass that exact URL and full commit SHA. Include the remote, branch and commit in approval_summary. Requires approval in Play; refuses changed branches/destinations, force pushes, deletions, multiple push URLs and gamedevpl: platform delivery remotes. Does not commit files or publish on gamedev.pl.',
     write: true,
     inputSchema: {
       type: 'object',

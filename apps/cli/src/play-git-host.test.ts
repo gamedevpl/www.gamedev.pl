@@ -161,6 +161,7 @@ it('refuses multiple push URLs and malformed or option-like arguments', async ()
     { ...f.args, commit: 'HEAD' },
     { ...f.args, force: true },
     { ...f.args, command: 'touch outside' },
+    { ...f.args, remoteUrl: 'gamedevpl://gamedev.pl/snake' },
   ])
     expect(() => f.tool.validate!(args)).toThrow();
   await expect(f.tool.run({ ...f.args, branch: 'master:other' })).rejects.toThrow();

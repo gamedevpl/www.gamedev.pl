@@ -17,7 +17,8 @@ per-round managed opener (`mcpOpenerToken`), and `start` exchanges it for the ro
 ## Local CLI delegation
 
 Local Play's `game_git_push` proposes a host action for an explicitly requested
-Git push. It requires approval even in Auto/YOLO, validates the configured push URL
+source-repository push. `gamedevpl:` remotes keep their existing platform Git delivery flow.
+It requires approval even in Auto/YOLO, validates the configured push URL
 and immutable branch commit again, and uses host Git/SSH without relaxing the
 agent's shell sandbox. It never opens a round or publishes on gamedev.pl.
 

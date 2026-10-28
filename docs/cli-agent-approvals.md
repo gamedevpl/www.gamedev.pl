@@ -91,7 +91,9 @@ Policy reasons and shell commands remain local and are not telemetry dimensions.
 
 ## Implemented transports
 
-Local Play exposes `game_git_push` as an approved host action. When the creator
+Local Play exposes `game_git_push` as an approved host action for source repositories.
+`gamedevpl:` remotes retain their existing platform Git delivery flow.
+When the creator
 asks to push, the agent reads the configured remote's push URL and the branch's full
 commit SHA, then proposes that exact destination and commit in Play. Approval runs
 Git on the CLI host with the creator's existing SSH agent or credential helper;
