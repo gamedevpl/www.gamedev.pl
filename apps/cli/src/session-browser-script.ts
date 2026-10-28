@@ -47,13 +47,15 @@ function render(next) {
   reconcilePending(next.sessionId);
   const old = state;
   state = next;
+  const actionQuestion = state.approvalPending && state.choices.length === 2 && state.choices[0].value === 'Approve' && state.choices[1].value === 'Reject' && state.agent?.actions?.some(action => action.status === 'pending' && action.summary === state.question);
+  for (const id of ['question', 'choices']) el(id).hidden = Boolean(actionQuestion);
   el('session-lifetime').textContent=state.detached?'Play ends 60 seconds after its last tab closes, once active work finishes. Commands → End session stops it now.':'Keep the terminal session open. Ctrl+C ends Play.';
   const fingerprint=JSON.stringify([next.addresses,next.phone,next.reports]);if(fingerprint!==deviceFingerprint){deviceFingerprint=fingerprint;devices(next);}
   if (stopping >= 0 && state.taskId !== stopping) { stopping = -1; el('feedback').textContent = 'The stopped task is no longer active.'; }
   el('connection').textContent = state.localTask ? state.localTask + ' · ' + state.activity : state.mode === 'busy' ? state.activity : 'Connected · ready';
   el('identity').textContent = state.identity;
   el('game-name').textContent = state.identity || 'gamedev.pl';
-  el('destination').textContent = state.question || state.choices.length ? 'Answering the current question' : state.agent ? 'To: ' + state.agent.agent + ' · edits, checks and asks before delivery' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
+  el('destination').textContent = actionQuestion ? 'Review the pending action above' : state.question || state.choices.length ? 'Answering the current question' : state.agent ? 'To: ' + state.agent.agent + ' · edits, checks and asks before delivery' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
   window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent}}));
   el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
