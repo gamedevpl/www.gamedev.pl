@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.62.1 — 2026-10-28
+
 ### Fixed
 
 - Play arranges pasted images and other attachments in compact cards with consistent previews, readable file details and separate resend and remove controls (#2026).
