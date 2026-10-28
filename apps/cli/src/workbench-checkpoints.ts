@@ -29,7 +29,15 @@ async function localActionUnlocked(
     ws.onLocalTask?.('verification');
     let failure: VerificationError | undefined;
     try {
-      const result = await runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: abort.signal });
+      const result = await runLadderAsync({
+        cwd: ws.root,
+        slug: ws.slug,
+        run: ws.run,
+        abort: abort.signal,
+        onStage: (message) => {
+          if (message.startsWith('Warning:')) write(message);
+        },
+      });
       if (abort.signal.aborted) write('Verification stopped. Your edits remain local.');
       else if (verificationSourceHash(ws.root, ws.slug) !== hash)
         write('Sources changed during verification; result is stale.');

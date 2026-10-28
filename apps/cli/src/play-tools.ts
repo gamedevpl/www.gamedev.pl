@@ -123,15 +123,23 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
       description:
         'Run the game checks (typecheck, then check:static). Run it after your edits; fix what it reports and run it again.',
       run: async () => {
+        const warnings: string[] = [];
         const result = await runLadderAsync({
           cwd: input.root,
           slug: input.slug,
           run: input.run,
           abort: input.abort(),
+          onStage: (message) => {
+            if (message.startsWith('Warning:')) warnings.push(message);
+          },
         });
-        return result.ok
-          ? 'Checks are green: typecheck, check:static.'
-          : `Checks failed at ${result.stage}:\n${result.detail.trim()}`;
+        return warnings
+          .concat(
+            result.ok
+              ? 'Checks are green: typecheck, check:static.'
+              : `Checks failed at ${result.stage}:\n${result.detail.trim()}`,
+          )
+          .join('\n');
       },
     },
     {

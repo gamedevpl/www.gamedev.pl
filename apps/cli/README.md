@@ -732,6 +732,8 @@ pinned Kit in `.gamedev/local/`. The CLI mirrors current game sources into that
 build directory, including deletions; edit `src/`, not the generated runtime.
 PNG/WebP assets remain binary files in `src/` and the runtime; delivery uses base64.
 Kit changes remain controlled by `gamedev-kit.json` and the repository's setup.
+Play and verification warn if a separately installed Kit identifies a different
+engine revision. A missing version marker cannot establish whether copies match.
 If the first connection finds local differences without `.gamedev-base.json`,
 local editing is available, but delivery and pull still require reconciliation.
 Review `gamedevpl diff`: `push --force` explicitly delivers your local sources;

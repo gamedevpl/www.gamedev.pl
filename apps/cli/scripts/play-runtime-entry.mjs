@@ -1,5 +1,6 @@
 import { gameSourceRoot, projectRuntimeRoot } from '../src/source-project.ts';
 import { sourceKitRoot, syncSourceRuntime } from '../src/source-project-runtime.ts';
+import { sourceKitBuildDiagnostic } from '../src/source-kit-diagnostics.ts';
 import { renderPlayPage } from '../src/play-page.ts';
 import { playPresence, attachPlayPresence } from '../src/play-presence.ts';
 import { previewAllowedHosts, previewHostConfig, trustedPreviewRequest } from '../src/preview-request.ts';
@@ -99,7 +100,7 @@ function assemble() {
       busy = false;
       attemptedFingerprint = buildingFingerprint;
       if (failure) {
-        error = (stderr || failure.message).slice(-4000);
+        error = sourceKitBuildDiagnostic(root, (stderr || failure.message).slice(-4000));
         return;
       }
       if (!stdout.trim()) {

@@ -26,6 +26,7 @@ import { childEnv } from './delegate.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { openUrl } from './open-url.js';
 import { prepareWorkspace } from './prepare-workspace.js';
+import { sourceKitWarnings } from './source-kit-diagnostics.js';
 import { PLAY_RUNTIME } from './play-runtime.js';
 import type { CliTelemetry } from './telemetry.js';
 import { CLI_VERSION, compareSemver } from './update.js';
@@ -72,7 +73,10 @@ export async function startLocalPlay(input: {
     input.write(existing ? 'local preview stopped' : 'no local preview is running');
     return null;
   }
-  if (reusablePreview(existing, env)) return existing;
+  if (reusablePreview(existing, env)) {
+    sourceKitWarnings(root).forEach(input.write);
+    return existing;
+  }
   for (let attempt = 0; ; attempt++) {
     checkAbort();
     try {
@@ -126,6 +130,7 @@ export async function startLocalPlay(input: {
     }
     checkAbort();
     if (!input.prepared) await prepareWorkspace({ cwd: root, env: input.env, write: input.write, abort: input.abort });
+    sourceKitWarnings(root).forEach(input.write);
     checkAbort();
     const runtime = join(mkdtempSync(join(dir, 'runtime-')), 'server.mjs');
     writeFileSync(runtime, PLAY_RUNTIME, { mode: 0o600 });
