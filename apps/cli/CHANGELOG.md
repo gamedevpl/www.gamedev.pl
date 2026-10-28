@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Play updates opted-in images, themes and native effects without resetting the running game, and keeps resource revisions in its local journal.
+- Play updates opted-in images, themes and native effects without resetting the running game, and keeps resource revisions in its local journal (#2019).
 
 ## 0.61.3 — 2026-10-28
 
