@@ -33,7 +33,7 @@ function player(options: { ready?: boolean; rejection?: boolean; lostReply?: boo
   };
   runInNewContext(WORKBENCH_PLAYER_SCRIPT, context);
   const runtime = context as typeof context & {
-    hotBuild(build: object, check: () => void): Promise<boolean>;
+    hotBuild(build: object, check: () => void): Promise<boolean | string>;
     gameRequest(
       frame: HTMLIFrameElement,
       type: string,
@@ -124,9 +124,26 @@ it('verifies resource bytes and prepares before fencing live observations or com
 
 it('uses validated checkpoint fallback on resource incompatibility without creating a commit fence', async () => {
   const f = await resourcePlayer('rejected');
-  expect(await f.runtime.hotBuild(f.build, () => {})).toBeNull();
+  expect(await f.runtime.hotBuild(f.build, () => {})).toContain('resource update was rejected');
   expect(f.runtime.liveHotUpdate).not.toHaveBeenCalled();
   expect(f.order).toEqual(['hot:status', 'hot:prepare', 'hot:abort']);
+  expect(f.runtime.revision).toBe('A');
+});
+
+it.each([
+  [null, 'no active hot-update runtime'],
+  [{ bootHash: 'other', ready: true }, 'startup code'],
+  [{ bootHash: 'boot', ready: true, protocol: 2, resourceStatus: { available: false } }, 'graphics resources'],
+  [{ bootHash: 'boot', ready: true, protocol: 1 }, 'different resource-update protocol'],
+])('explains incompatible HMR before requesting a replacement: %j', async (status, reason) => {
+  const f = await resourcePlayer();
+  f.runtime.gameRequest = vi.fn(async (_frame, type) => {
+    if (type === 'hot:status') return status;
+    if (type === 'hot:abort') return true;
+    throw Error('Unexpected operation: ' + type);
+  });
+  expect(await f.runtime.hotBuild(f.build, () => {})).toContain(reason);
+  expect(f.runtime.liveHotUpdate).not.toHaveBeenCalled();
   expect(f.runtime.revision).toBe('A');
 });
 

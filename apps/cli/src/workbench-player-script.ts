@@ -37,8 +37,9 @@ async function hotResources(build){
 async function hotBuild(build,check){
   const target=frame;
   const before=await gameRequest(target,'hot:status');check();
-  if(!before||before.bootHash!==build.hot.bootHash)return null;
-  if(build.hot.protocol===2&&before.resourceStatus?.available===false)return null;
+  if(!before)return 'HMR unavailable: the running game has no active hot-update runtime.';
+  if(before.bootHash!==build.hot.bootHash)return 'HMR incompatible: startup code, its dependencies or unmanaged resources changed.';
+  if(build.hot.protocol===2&&before.resourceStatus?.available===false)return 'HMR unavailable: the running graphics resources cannot be updated.';
   if(!before.ready)throw Error('Current game is unavailable. Restart with update to recover.');
   if(liveOperation)throw Error('Wait for the current game operation to finish.');
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(build.hot.bundle));check();
@@ -47,11 +48,11 @@ async function hotBuild(build,check){
   const id=crypto.randomUUID(),previousRevision=revision,expectedEpoch=before.epoch;
   try{
     if(build.hot.protocol===2){
-      if(before.protocol!==2)return null;
+      if(before.protocol!==2)return 'HMR incompatible: the running game uses a different resource-update protocol.';
       const payload=await hotResources(build);check();
       const candidate=await gameRequest(target,'hot:prepare',{...build.hot,id,revision:build.revision,expectedEpoch,payload},18000);check();
       if(candidate.status!=='prepared'){
-        if(candidate.reason==='incompatible')return null;
+        if(candidate.reason==='incompatible')return 'HMR incompatible: the resource update was rejected by the running game.';
         throw Error(candidate.error||'Resource preparation failed; current build kept');
       }
       if(liveOperation)throw Error('Wait for the current game operation to finish.');
@@ -84,11 +85,12 @@ async function hotBuild(build,check){
   }finally{hotUpdating=false;if(build.hot.protocol===2)await gameRequest(target,'hot:abort',{id}).catch(()=>{});}
 }
 async function swapBuild(build,force=false,automatic=false) {
-  const epoch=++swapEpoch, previous=frame;let next;
+  const epoch=++swapEpoch, previous=frame;let next,fallbackReason='';
   const current=()=>epoch===swapEpoch&&frame===previous;
   const check=()=>{if(!current())throw Error('Update superseded');};
+  if(revision&&!force&&!build.hot)fallbackReason='HMR unavailable: the new build has no hot-update artifact. Check GAME.json.hot and the active GameKit.';
   if(revision&&!force&&build.hot){
-    try{const updated=await hotBuild(build,check);if(updated!==null)return updated;}
+    try{const updated=await hotBuild(build,check);if(typeof updated!=='string')return updated;fallbackReason=updated;}
     catch(error){if(!current())return false;if(/Wait for the current/.test(error.message)&&typeof lastAuto!=='undefined')lastAuto='';lastSwapError=error.message;el('notice').textContent=lastSwapError;el('restart').hidden=false;return false;}
   }
   if(typeof liveControlled!=='undefined'&&liveControlled){el('notice').textContent='Take back control before replacing this game instance.';return false;}
@@ -137,7 +139,7 @@ async function swapBuild(build,force=false,automatic=false) {
     next?.remove();
     if(!current())return false;
     if(!replacementBusy())posture(previous,'resume');
-    lastSwapError=error.message+' Current build kept.';el('notice').textContent=lastSwapError;
+    lastSwapError=(fallbackReason?fallbackReason+' ':'')+error.message+' Current build kept.';el('notice').textContent=lastSwapError;
     if(revision)el('restart').hidden=false;
     return false;
   }finally{if(epoch===swapEpoch)replacingFrame=false;}
