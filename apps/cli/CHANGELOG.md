@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.61.3 — 2026-10-28
+
 ### Fixed
 
 - Play focuses the game after loading or refreshing so keyboard controls work immediately (#2015).
