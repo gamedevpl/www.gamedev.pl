@@ -36,6 +36,9 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
     }
   }
   window.__GAME_JOURNAL_HOT__={
+    resourcePreparation(details,result){
+      append('lifecycle',{event:'hot-resources-prepared',revision:details.revision,resourceHash:details.resources?.hash,status:result.status,reason:result.reason});
+    },
     begin(details){
       if(transition)throw Error('A journal transition is already pending');
       if(sealed.size>=255)throw Error('Too many unacknowledged journal segments');
@@ -59,7 +62,8 @@ export const PLAY_JOURNAL_RECORDER = String.raw`
         revision=details.revision;
         segment={runtimeInstanceId,buildEpoch:result.epoch,previousRecordingId,transitionId:details.id,
           stateVersion:details.stateVersion,observationVersion:details.observationVersion,frame:result.frame,simulationTick:result.simulationTick,
-          protocol:details.protocol,bootHash:details.bootHash,bundleHash:details.bundleHash,sourceTreeHash:details.sourceTreeHash};
+          protocol:details.protocol,bootHash:details.bootHash,bundleHash:details.bundleHash,sourceTreeHash:details.sourceTreeHash,
+          ...(details.resourceHash?{resourceHash:details.resourceHash}:{})};
         append('lifecycle',{event:'recording-start',mode:'hmr',...segment,revision,ready:result.ready},{at:started,frame:result.frame});
         for(const event of pending)append(event.kind,event.data,event);
         if(lost)gap('Update event buffer overflow',{count:lost});

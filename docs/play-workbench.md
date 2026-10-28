@@ -234,6 +234,10 @@ model call may finish and consume its normal budget after a client disconnect.
 
 ## State-preserving updates
 
+Opted-in GameKit projects support [in-place behavior and resource HMR](./local-play-hmr.md).
+Compatible updates retain the running instance; the flow below is the fallback for
+projects and changes outside that contract.
+
 The shell uses the same game embedding bridge as Studio. Generated shell titles,
 descriptions and padding are hidden; game menus and HUD remain intact. Logical canvas
 proportions are preserved. Custom game HTML outside the supported shell contract may
@@ -357,7 +361,8 @@ workbench's local preview are retained. `game_journal` and `game_journal_read`
 report each recording's code availability; `game_journal` also reports archive usage.
 Capacity or storage failure stops new archival writes without evicting earlier code
 or blocking gameplay. Unretained code is explicitly unavailable. Closing Play removes
-the archive. This does not enable HMR or add code-version segments within a recording.
+the archive. Compatible HMR commits start a new linked recording; see
+[Local Play code updates](./local-play-hmr.md) for the code/resource revision boundary.
 
 Both tools also return an `instrumentation` report and `instrumentationHelp`.
 The report distinguishes an absent/not-ready harness, observed state samples,

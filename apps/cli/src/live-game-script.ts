@@ -49,7 +49,8 @@ function liveAsk(type,extra={}){
 }
 addEventListener('message',e=>{
   if(e.source===frame.contentWindow&&e.data?.source==='gdpl-workbench-hot'&&e.data.type==='unavailable'){
-    hotUnavailable=true;el('notice').textContent='Updated code stopped after an error. Inspect the journal or restart with update.';el('restart').hidden=false;
+    if(e.data.resources){resourceRecovery=true;el('apply').hidden=false;}
+    hotUnavailable=true;lastSwapError=e.data.resources?'Graphics context lost. Release control and apply the build to restore a compatible checkpoint, or restart with update.':'Updated code stopped after an error. Inspect the journal or restart with update.';el('notice').textContent=lastSwapError;el('restart').hidden=false;
   }
   const m=e.data;if(!m||m.source!=='gdpl-player'||m.type!=='agent:state')return;
   const p=liveReplies.get(m.id);

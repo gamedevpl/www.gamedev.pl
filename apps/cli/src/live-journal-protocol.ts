@@ -27,7 +27,11 @@ export const journalBatch = z
         observationVersion: integer.optional(),
         frame: integer.optional(),
         simulationTick: integer.optional(),
-        protocol: z.literal(1).optional(),
+        protocol: z.union([z.literal(1), z.literal(2)]).optional(),
+        resourceHash: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
         bootHash: z
           .string()
           .regex(/^[a-f0-9]{64}$/)

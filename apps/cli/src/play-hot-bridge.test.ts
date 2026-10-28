@@ -114,3 +114,92 @@ it('reports current unavailability when a historical success is queried after a 
   expect(f.send(f.input)?.data).toMatchObject({ status: 'failed', epoch: 1, ready: false });
   expect(f.replace).toHaveBeenCalledTimes(1);
 });
+
+function resourceFixture() {
+  const f = fixture();
+  const hot = (
+    f.win as unknown as {
+      __GAME_HOT__: {
+        protocol: number;
+        controller: { stage: ReturnType<typeof vi.fn>; discard: ReturnType<typeof vi.fn> };
+      };
+    }
+  ).__GAME_HOT__;
+  hot.protocol = 2;
+  hot.controller.stage = vi.fn(async () => ({ status: 'prepared', token: { resource: true } }));
+  hot.controller.discard = vi.fn();
+  const input = {
+    ...f.input,
+    protocol: 2,
+    resources: { version: 1, hash: 'resource-hash', bytes: 50 },
+    payload: { version: 1, images: {}, theme: '' },
+  };
+  async function send(type: string, data: object) {
+    const id = crypto.randomUUID();
+    f.win.dispatchEvent(
+      new f.win.MessageEvent('message', {
+        source: f.win as unknown as Window,
+        data: { source: 'gdpl-workbench', id, type, data },
+      }),
+    );
+    await vi.waitFor(() => expect(f.messages.some((m) => m.id === id)).toBe(true));
+    return f.messages.find((m) => m.id === id)!;
+  }
+  return { ...f, hot, input, request: send };
+}
+
+it('prepares resources while the old segment runs, commits once and records the resource hash', async () => {
+  const f = resourceFixture();
+  expect((await f.request('hot:prepare', f.input)).data).toEqual({ status: 'prepared' });
+  expect(f.replace).not.toHaveBeenCalled();
+  expect(f.status().epoch).toBe(0);
+  const result = (await f.request('hot:apply', f.input)).data;
+  expect(result).toMatchObject({ status: 'applied', epoch: 1 });
+  expect(f.replace).toHaveBeenCalledWith({ build: 'new' }, 0, { resource: true });
+  const batches = f.messages.filter((m) => m.recordingId === result?.recordingId) as unknown as {
+    segment: { protocol: number; resourceHash: string };
+  }[];
+  expect(batches.some((batch) => batch.segment.protocol === 2 && batch.segment.resourceHash === 'resource-hash')).toBe(
+    true,
+  );
+  expect((await f.request('hot:apply', f.input)).data).toEqual(result);
+  expect(f.replace).toHaveBeenCalledTimes(1);
+});
+
+it('aborts pending assets and fences superseded or expired resource preparations', async () => {
+  const f = resourceFixture();
+  let release!: (value: object) => void;
+  f.hot.controller.stage.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const preparing = f.request('hot:prepare', f.input);
+  await f.request('hot:abort', { id: f.input.id });
+  release({ status: 'prepared', token: {} });
+  expect((await preparing).data).toMatchObject({ status: 'rejected', reason: 'superseded' });
+  expect((await f.request('hot:apply', f.input)).error).toContain('expired');
+  expect(f.hot.controller.discard).toHaveBeenCalled();
+  expect(f.replace).not.toHaveBeenCalled();
+});
+
+it('does not suppress live errors while resources decode', async () => {
+  const f = resourceFixture();
+  await f.request('hot:prepare', f.input);
+  await f.request('hot:apply', f.input);
+  let release!: (value: object) => void;
+  f.hot.controller.stage.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+  );
+  const input = { ...f.input, id: 'next', expectedEpoch: 1 };
+  const pending = f.request('hot:prepare', input);
+  f.win.dispatchEvent(new f.win.ErrorEvent('error', { message: 'old callback failed' }));
+  expect(f.messages.some((m) => (m as unknown as { type: string }).type === 'unavailable')).toBe(true);
+  expect(f.hot.controller.discard).toHaveBeenCalled();
+  release({ status: 'prepared', token: {} });
+  await pending;
+});
