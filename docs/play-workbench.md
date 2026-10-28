@@ -432,6 +432,15 @@ source files. Draft text, staged references and uncertain command receipts survi
 browser refresh within the same session. Attachments remain staged until explicitly removed,
 including across assistant clarification turns and subsequent tasks.
 
+Agent conversation history shows image evidence as thumbnails. Click a thumbnail to
+open the original image in a separate tab. Image reads require the local session token;
+unavailable evidence shows its filename and an unavailable label. Refreshing the browser
+can reload images while that session is alive; ending the session removes its files.
+The CLI UI build forwards a prompt-rendering hook through GenAIcode's AppAgentChat
+until the dependency exposes that hook directly. The adapter checks its upstream anchor
+and fails the build if it changes. The generated-page regression exercises this adapter.
+This display correction adds no funnel step or telemetry; image contents and paths stay local.
+
 Screenshots use Studio's canvas/media composite; DOM overlays may be absent. Video
 records the largest canvas without audio, in independent eight-second segments; the
 latest completed segment is offered. Recording starts only after Enable recording.

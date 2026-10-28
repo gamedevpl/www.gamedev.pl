@@ -15,6 +15,24 @@ const shared = {
   loader: { '.woff2': 'dataurl' },
   plugins: [
     {
+      name: 'play-prompt-renderer',
+      setup(build) {
+        build.onLoad({ filter: /genaicode[/\\]dist[/\\]react[/\\]app-agent-chat\.js$/ }, async ({ path }) => {
+          const source = await readFile(path, 'utf8');
+          const needle = 'const typed = userText(text);';
+          if (source.split(needle).length !== 2) throw new Error('Update Play prompt renderer for genaicode');
+          return {
+            contents: source.replace(
+              needle,
+              needle + '\nconst rendered = props.renderPrompt?.(typed); if (rendered !== undefined) return rendered;',
+            ),
+            loader: 'js',
+            resolveDir: dirname(path),
+          };
+        });
+      },
+    },
+    {
       name: 'play-shared-fonts',
       setup(build) {
         build.onLoad({ filter: /core[/\\]styles[/\\]tokens\.css$/ }, async ({ path }) => ({
