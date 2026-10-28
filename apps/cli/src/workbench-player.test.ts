@@ -147,6 +147,28 @@ it('requires explicit restart for unsupported state and waits for safe points in
   expect(await unsafe.runtime.swapBuild(build, false, true)).toBe(false);
   expect(unsafe.previous.isConnected).toBe(true);
 });
+
+it.each([
+  ['missing artifact', undefined, null, 'Check GAME.json.hot'],
+  ['missing runtime', { bootHash: 'new' }, null, 'no active hot-update runtime'],
+  ['changed startup', { bootHash: 'new' }, { bootHash: 'old', ready: true }, 'startup code'],
+])('keeps the HMR reason when state fallback is unavailable: %s', async (_name, hot, status, reason) => {
+  const f = player({ unsupported: true });
+  const request = f.runtime.gameRequest;
+  f.runtime.gameRequest = (frame, type, data) =>
+    type === 'hot:status' ? Promise.resolve(status) : request(frame, type, data);
+  const build = { ...f.build, hot };
+  expect(await f.runtime.swapBuild(build)).toBe(false);
+  const notice = document.getElementById('notice')!.textContent;
+  expect(notice).toContain(reason);
+  expect(notice).toContain('cannot preserve state');
+  expect(notice).toContain('Current build kept');
+  expect(f.runtime.frame).toBe(f.previous);
+  expect(f.runtime.revision).toBe('old');
+  expect(document.querySelectorAll('iframe')).toHaveLength(1);
+  expect(f.scores.get(f.previous)).toBe(8);
+  expect(f.events.some((event) => event.type === 'pause')).toBe(false);
+});
 it.each([
   ['desktop', SESSION_BROWSER_PAGE],
   ['phone', PHONE_PAGE],

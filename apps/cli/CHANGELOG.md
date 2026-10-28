@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play explains why a code update cannot use HMR when the running game also cannot transfer its state.
+
 ## 0.62.0 — 2026-10-28
 
 ### Added
