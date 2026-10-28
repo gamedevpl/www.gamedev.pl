@@ -181,3 +181,43 @@
   margin-left: 4px;
   opacity: 0.8;
 }
+
+.play-prompt-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.play-prompt-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.play-evidence-image {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+  font: inherit;
+  text-align: left;
+}
+.play-evidence-image img {
+  display: block;
+  max-width: 100%;
+  width: 220px;
+  height: 140px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.play-evidence-image span {
+  font-size: 12px;
+}
+.play-evidence-image:focus-visible {
+  outline: 3px solid var(--tone-cyan);
+  outline-offset: 3px;
+}

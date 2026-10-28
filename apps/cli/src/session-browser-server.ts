@@ -173,6 +173,11 @@ export async function startSessionBrowser(
       return;
     }
     try {
+      if (req.method === 'GET' && /^\/artifacts\/[0-9a-f-]{36}$/.test(req.url ?? '')) {
+        const image = artifacts.image(req.url!.slice('/artifacts/'.length));
+        reply(image ? 200 : 404, image ?? { error: 'Attachment unavailable' });
+        return;
+      }
       if (await code.route(req, origin, body, reply)) return;
       if (req.method === 'GET' && /^\/diff\/\d+$/.test(req.url ?? '')) {
         const id = Number(req.url!.slice(6));
