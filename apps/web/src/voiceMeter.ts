@@ -3,6 +3,7 @@ import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './fr
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { setCaptureAudioSession } from './audioSession.js';
+import { frameLevel, mediaSupported, micConstraints, nextMic, useMicDevice } from './micInput.js';
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
 export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:stop' };
@@ -22,65 +23,11 @@ export function parseVoiceMeterMessage(raw: unknown): VoiceMeterGameMessage | nu
   return null;
 }
 
-function mediaSupported(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices &&
-    typeof navigator.mediaDevices.getUserMedia === 'function' &&
-    !!(window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
-  );
-}
-
-const MIC_KEY = 'gdp.voiceMeter.mic';
-
-function savedMic(): string | null {
-  try {
-    return localStorage.getItem(MIC_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function saveMic(deviceId: string) {
-  try {
-    localStorage.setItem(MIC_KEY, deviceId);
-  } catch {
-    /* ignore */
-  }
-}
-
-/** A microphone's name without Chrome's "Default - " prefix and USB id suffix. */
-export function micName(label: string): string {
-  return label
-    .replace(/^default\s*-\s*/i, '')
-    .replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '')
-    .trim();
-}
-
-/** A mic name short enough for the theater bar. */
-export function shortMic(name: string): string {
-  return name.length > 14 ? `${name.slice(0, 13).trimEnd()}…` : name;
-}
-
-/** The real microphones, without Chrome's "default" and "communications" aliases. */
-async function audioInputs(): Promise<MediaDeviceInfo[]> {
-  try {
-    const devices = (await navigator.mediaDevices.enumerateDevices?.()) ?? [];
-    return devices.filter(
-      (d) => d.kind === 'audioinput' && d.deviceId !== 'default' && d.deviceId !== 'communications',
-    );
-  } catch {
-    return [];
-  }
-}
-
 export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>) {
   const frameDocument = useFrameDocument(frameRef);
   const [available, setAvailable] = useState(false);
   const [status, setStatus] = useState<VoiceMeterShellStatus>(() => (mediaSupported() ? 'idle' : 'unsupported'));
-  // macOS hands Chrome an iPhone nearby (Continuity) as the mic, so the player must see which one listens.
-  const [device, setDevice] = useState<string | null>(null);
-  const [inputs, setInputs] = useState(0);
+  const { device, canSwitch, heard: micHeard, clear: micClear } = useMicDevice();
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -133,23 +80,16 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
   const stopMic = useCallback(() => {
     teardown();
-    setDevice(null);
+    micClear();
     if (statusRef.current === 'unsupported') return;
     publishStatus('idle');
-  }, [publishStatus, teardown]);
+  }, [micClear, publishStatus, teardown]);
 
   const pumpLevels = useCallback(() => {
     const analyser = analyserRef.current;
     const timeDomain = timeDomainRef.current;
     if (!analyser || !timeDomain || statusRef.current !== 'live') return;
-    analyser.getByteTimeDomainData(timeDomain as Uint8Array<ArrayBuffer>);
-    let sum = 0;
-    for (let i = 0; i < timeDomain.length; i++) {
-      const v = (timeDomain[i]! - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / timeDomain.length);
-    const boosted = Math.min(1, rms * 4);
+    const boosted = frameLevel(analyser, timeDomain);
     // Light shell-side smoothing; the kit applies its own smoothing on top.
     levelRef.current = levelRef.current * 0.55 + boosted * 0.45;
     postToGame({ t: 'voice:level', value: levelRef.current });
@@ -175,12 +115,8 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
       const generation = ++acquisition.current;
       publishStatus('pending');
-      const wanted = deviceId ?? savedMic();
       void navigator.mediaDevices
-        .getUserMedia({
-          audio: wanted ? { deviceId: deviceId ? { exact: wanted } : { ideal: wanted } } : true,
-          video: false,
-        })
+        .getUserMedia(micConstraints(deviceId))
         .then((mediaStream) => {
           if (
             generation !== acquisition.current ||
@@ -209,9 +145,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
           source.connect(analyser);
           if (context.state === 'suspended') void context.resume();
           publishStatus('live');
-          const track = mediaStream.getAudioTracks?.()[0];
-          setDevice(track?.label ? micName(track.label) : null);
-          void audioInputs().then((list) => setInputs(list.length));
+          micHeard(mediaStream);
           rafRef.current = requestAnimationFrame(pumpLevels);
         })
         .catch(() => {
@@ -220,7 +154,7 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
           publishStatus('denied');
         });
     },
-    [frameRef, publishStatus, pumpLevels, stopMic, teardown],
+    [frameRef, micHeard, publishStatus, pumpLevels, stopMic, teardown],
   );
 
   const toggle = useCallback(() => {
@@ -228,17 +162,12 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
     else startMic();
   }, [startMic, stopMic]);
 
-  /** Listens through the next microphone and remembers it for the next game. */
   const switchMic = useCallback(async () => {
-    if (statusRef.current !== 'live') return;
-    const list = await audioInputs();
-    if (list.length < 2 || statusRef.current !== 'live') return;
-    const current = streamRef.current?.getAudioTracks?.()[0]?.getSettings?.().deviceId;
-    const next = list[(list.findIndex((d) => d.deviceId === current) + 1) % list.length]!;
-    saveMic(next.deviceId);
+    const next = statusRef.current === 'live' ? await nextMic(streamRef.current) : null;
+    if (!next || statusRef.current !== 'live') return;
     teardown();
     statusRef.current = 'idle';
-    startMic(next.deviceId);
+    startMic(next);
   }, [startMic, teardown]);
 
   useEffect(() => {
@@ -292,9 +221,8 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
     available,
     status,
     live: status === 'live',
-    /** The listening microphone's name while live. */
     device,
-    canSwitch: status === 'live' && inputs > 1,
+    canSwitch,
     switchMic,
     toggle,
     stop: stopMic,

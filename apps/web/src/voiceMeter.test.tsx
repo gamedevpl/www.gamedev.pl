@@ -4,7 +4,7 @@ import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-import { micName, parseVoiceMeterMessage, shortMic, useVoiceMeterBridge } from './voiceMeter.js';
+import { parseVoiceMeterMessage, useVoiceMeterBridge } from './voiceMeter.js';
 
 function frame(payload: Record<string, unknown>) {
   return { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload };
@@ -177,14 +177,5 @@ describe('useVoiceMeterBridge', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     expect(latest?.status).toBe('idle');
-  });
-});
-
-describe('mic names', () => {
-  it('drops Chrome default prefix and USB id, and shortens for the bar', () => {
-    expect(micName('Default - MacBook Pro Microphone (Built-in)')).toBe('MacBook Pro Microphone (Built-in)');
-    expect(micName('USB Audio Device (046d:0825)')).toBe('USB Audio Device');
-    expect(shortMic('Grzegorz’s iPhone Microphone')).toBe('Grzegorz’s iP…');
-    expect(shortMic('iPhone')).toBe('iPhone');
   });
 });
