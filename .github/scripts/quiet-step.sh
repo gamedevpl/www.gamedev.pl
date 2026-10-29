@@ -40,12 +40,17 @@ else
   echo "FAIL ${label} (exit ${code}, ${elapsed}s)"
   # Verdict word and slug, plus the reason only when it is a known safe phrase.
   # Free-form lines (field names, values, Check examples) can quote source.
-  grep -E '^[[:space:]]*(FAIL|ERROR)[[:space:]]' "$log" \
+  grep -E '^[[:space:]]*(FAIL|FAILED|ERROR)[[:space:]]' "$log" \
+    | grep -v 'could not be baked' \
     | sed -E 's/^[[:space:]]+//' \
     | sed -nE \
-      -e 's/^((FAIL|ERROR)[[:space:]]+([a-z]+[[:space:]]+)?[a-z0-9]+(-[a-z0-9]+)*)[: ]+(behavior changed against the committed trace|cost regressed from [0-9]+ms to [0-9]+ms( \(>[0-9]+x baseline\))?|CDP timeout: [A-Za-z.]+).*/\1: \5/p' \
+      -e 's/^((FAIL|ERROR)[[:space:]]+(smoke|trace|build|accept|playtest|validate|agency)[[:space:]]+[a-z0-9-]+)[: ]+(behavior changed against the committed trace|cost regressed from [0-9]+ms to [0-9]+ms( \(>[0-9]+x baseline\))?|CDP timeout: [A-Za-z.]+).*/\1: \4/p' \
       -e 't' \
-      -e 's/^((FAIL|ERROR)[[:space:]]+([a-z]+[[:space:]]+)?[a-z0-9]+(-[a-z0-9]+)*).*/\1/p' \
+      -e 's/^FAILED[[:space:]]+([a-z0-9-]+).*/FAIL accept \1/p' \
+      -e 't' \
+      -e 's/^((FAIL|ERROR)[[:space:]]+[a-z0-9-]+):[[:space:]]+(.*)/\1: \3/p' \
+      -e 't' \
+      -e 's/^((FAIL|ERROR)[[:space:]]+((smoke|trace|build|accept|playtest|validate|agency)[[:space:]]+)?[a-z0-9-]+).*/\1/p' \
     | sort -u | head -n 40 | sed 's/^/       /' || true
   echo "::error title=${label} failed::Exit ${code}. Output is withheld from this public log; rerun it in the games repo at the gated SHA."
 fi
