@@ -103,7 +103,7 @@ export interface GameSourcesTimings {
   audioMs: number;
   // Music catalog + track selection. 0 when the game declares no music.
   musicMs: number;
-  // core.ts transform plus the game's own esbuild graph.
+  // Core bundling plus the game's own esbuild graph.
   bundleMs: number;
 }
 
@@ -891,9 +891,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     if (cached !== undefined) return cached;
     const coreTs = await readRawFile('shared/modules/core.ts', sha);
     if (coreTs === null) return null;
-    const result = await transform(coreTs, { loader: 'ts', target: 'es2022', format: 'iife', legalComments: 'inline' });
-    rememberBounded(coreJsBySha, sha, result.code, ENGINE_CACHE_CAPACITY);
-    return result.code;
+    const code = await bundleTypeScriptGraph(
+      coreTs,
+      sha,
+      '/shared/modules',
+      '/shared/modules/core.ts',
+      'GameKit module',
+    );
+    rememberBounded(coreJsBySha, sha, code, ENGINE_CACHE_CAPACITY);
+    return code;
   }
 
   async function getCachedGameKitModule(sha: string, moduleName: GameKitModuleName): Promise<string | null> {
