@@ -117,6 +117,7 @@ jobs:
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
           gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
           docker build -f apps/api/Dockerfile \
+            --build-arg "PLATFORM_SOURCE_SHA=${DEPLOY_SHA}" \
             --build-arg "VITE_GOOGLE_OAUTH_CLIENT_ID=${VITE_GOOGLE_OAUTH_CLIENT_ID}" \
             --build-arg "VITE_APPLE_SERVICES_ID=${VITE_APPLE_SERVICES_ID}" \
             --build-arg "VITE_MP_RELAY_URL=${VITE_MP_RELAY_URL}" \

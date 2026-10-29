@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build the image
-        run: docker build -f apps/api/Dockerfile -t gamedev-app:ci .
+        run: docker build -f apps/api/Dockerfile --build-arg "PLATFORM_SOURCE_SHA=${{ github.sha }}" -t gamedev-app:ci .
       - name: Boot it and check health
         run: |
           set -euo pipefail
@@ -134,6 +134,7 @@ jobs:
             gamedev-app:ci
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/api/health > /tmp/health.json 2>/dev/null; then
+              test "$(jq -r .buildSha /tmp/health.json)" = "${{ github.sha }}"
               echo "healthy after ${i}s: $(cat /tmp/health.json)"
               exit 0
             fi

@@ -1,4 +1,5 @@
 import { createCreatorPerformanceReader } from '../creation/creator-performance.js';
+import { BUILD_SHA } from './build-info.js';
 import { registerCreatorPerformanceRoute } from '../creation/creator-performance-route.js';
 import { createReviewPreviewLoader } from './review-preview-loader.js';
 import { registerErrorHandler } from './error-handler.js';
@@ -373,19 +374,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return app;
   }
 
-  // Apple sign-in also needs a Services ID baked into the client.
   app.get('/api/health', async () => ({
     status: 'ok',
+    buildSha: BUILD_SHA,
     provider: 'mock',
     privateBeta: !(await openToVisitors()),
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
     publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
   }));
 
-  // Where a delivered game is stored, and what verifies it. Resolved once and shared by
-  // every registration that needs them: three copies of these expressions is three ways
-  // for delivery, publishing and the health sweep to end up pointed at different buckets
-  // or different gates.
+  // Resolve delivery storage and verification once for all route registrations.
   const gamesStoreBucket = process.env.GAMES_STORE_BUCKET?.trim();
   const gamesStore =
     options.submissionRoutes?.agentChannel?.gamesStore ??
