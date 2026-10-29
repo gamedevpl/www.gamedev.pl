@@ -24,7 +24,7 @@ import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge, type BackdropFacing } from './sensing.js';
-import { useVoiceMeterBridge } from './voiceMeter.js';
+import { shortMic, useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useAgentViewportTrack, useTheaterMidWidth, useTheaterNarrow } from './useTheaterLayout.js';
@@ -469,7 +469,9 @@ export function GameTheater({
         : voiceMeter.status === 'unsupported'
           ? t('player.micUnsupported')
           : voiceMeter.live
-            ? t('player.micOn')
+            ? voiceMeter.device
+              ? t('player.micOnDevice', { device: shortMic(voiceMeter.device) })
+              : t('player.micOn')
             : t('player.micOff');
 
   const micControl = (className: string) =>
@@ -480,10 +482,25 @@ export function GameTheater({
         onClick={voiceMeter.toggle}
         aria-pressed={voiceMeter.live}
         aria-label={micLabel}
+        title={voiceMeter.device ?? undefined}
         disabled={voiceMeter.status === 'unsupported' || voiceMeter.status === 'pending'}
       >
         <PixelIcon name="mic" size={13} />
         <span className="btn-label">{micLabel}</span>
+      </button>
+    ) : null;
+
+  const micSwitchControl = (className: string) =>
+    voiceMeter.available && voiceMeter.canSwitch ? (
+      <button
+        type="button"
+        className={className}
+        onClick={() => void voiceMeter.switchMic()}
+        aria-label={t('player.micSwitch')}
+        title={t('player.micSwitch')}
+      >
+        <PixelIcon name="handover" size={13} />
+        <span className="btn-label">{t('player.micSwitchShort')}</span>
       </button>
     ) : null;
 
@@ -635,6 +652,7 @@ export function GameTheater({
             {/* Mic sheds at 900px with How-to-play (not 768px with sound) — Polish
                 "Mikrofon: …" labels otherwise clip the title at mid widths. */}
             {micControl('secondary-btn mic-btn mic-bar')}
+            {micSwitchControl('secondary-btn mic-btn mic-bar')}
             {fullscreenControl('secondary-btn fullscreen-btn theater-desktop-chrome')}
             {showMoreMenu && (
               <div className={`theater-more${moreOpen ? ' is-open' : ''}`} ref={moreRef}>
@@ -682,6 +700,7 @@ export function GameTheater({
                     </button>
                   ) : null}
                   {micControl('theater-menu-item mic-menu')}
+                  {micSwitchControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
                   {reportSlug && (
