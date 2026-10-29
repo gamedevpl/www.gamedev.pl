@@ -117,6 +117,17 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+Shared GameKit changes must be checked through each consuming assembler. The games
+repo's browser gate and local Play can pass while the API emits broken JavaScript.
+Run the real API assembler with core and dependencies from the candidate engine SHA,
+then execute its output in the production iframe sandbox and require startup and
+advancing frames. Bind results to both repository SHAs and the tested artifact bytes.
+Check snapshot and Kit promotion separately: a website deploy gate does not run when
+only those pointers change. HTTP 200 and successful HTML generation do not prove boot.
+For gate repairs, demonstrate that the historical broken candidate is rejected before
+promotion and the corrected candidate passes. Distinguish a local gate attestation
+from an independently executed CI check; neither substitutes for artifact execution.
+
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the
 renderer context's canvas when testing pixel scale. Match geometry assertions to the
