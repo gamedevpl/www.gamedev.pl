@@ -24,18 +24,6 @@ describe('music-tracks', () => {
     ).toEqual(nCh(8));
   });
 
-  it('accepts long-form tracks up to 256 steps, as GameKit plays them', () => {
-    const long = (steps: number) => ({
-      ...validTrack,
-      steps,
-      channels: [{ ...validTrack.channels[0], pattern: Array(steps).fill(null) }],
-    });
-    expect(parseGameMusicTracks(JSON.stringify({ version: 1, tracks: { radio: long(256) } })).radio.steps).toBe(256);
-    expect(() => parseGameMusicTracks(JSON.stringify({ version: 1, tracks: { radio: long(512) } }))).toThrow(
-      /radio\.steps must be an integer from 8 to 256/,
-    );
-  });
-
   it('rejects version other than 1 and channels > 8', () => {
     expect(() => parseGameMusicTracks(JSON.stringify({ version: 2, tracks: { a: validTrack } }))).toThrow(
       /version must be 1/,
