@@ -17,6 +17,7 @@ function required(name: string): string {
 
 export async function verifyInstalledKit(options: {
   kitDir: string;
+  engineSourceRoot: string;
   engineRef: string;
   consumerSha: string;
   tarballSha256: string;
@@ -34,6 +35,10 @@ export async function verifyInstalledKit(options: {
   if (actualConsumer !== options.consumerSha) throw new Error('Consumer checkout does not match deployed API');
   execFileSync('git', ['diff', '--quiet', 'HEAD', '--'], { cwd: consumerRoot });
   const kitDir = await realpath(options.kitDir);
+  const engineSourceRoot = await realpath(options.engineSourceRoot);
+  if ((await readFile(path.join(engineSourceRoot, 'engine-ref.txt'), 'utf8')).trim() !== options.engineRef) {
+    throw new Error('API engine source does not match the candidate ref');
+  }
   const kit = JSON.parse(await readFile(path.join(kitDir, 'kit.json'), 'utf8')) as { engineRef?: string };
   if (kit.engineRef !== options.engineRef) throw new Error('Installed Kit has a different engine ref');
   const workspace = await mkdtemp(path.join(tmpdir(), 'kit-browser-'));
@@ -74,8 +79,8 @@ export default {
   snapshot(round){return {ticks:round.ticks}}
 }`,
     );
-    const read = async (file: string, text: boolean): Promise<Buffer | null> => {
-      const root = file.startsWith('shared/') ? kitDir : file.startsWith('games/') ? workspace : null;
+    const read = async (file: string): Promise<Buffer | null> => {
+      const root = file.startsWith('shared/') ? engineSourceRoot : file.startsWith('games/') ? workspace : null;
       if (!root) return null;
       const resolved = path.resolve(root, file);
       if (!resolved.startsWith(root + path.sep)) throw new Error('Kit source escaped its root');
@@ -83,13 +88,6 @@ export default {
         return await readFile(resolved);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        if (text && file.endsWith('.ts')) {
-          try {
-            return await readFile(resolved.slice(0, -3) + '.js');
-          } catch (fallback) {
-            if ((fallback as NodeJS.ErrnoException).code !== 'ENOENT') throw fallback;
-          }
-        }
         return null;
       }
     };
@@ -98,8 +96,8 @@ export default {
       repo: 'local/kit',
       fetchImpl: async () => Response.json({ sha: options.engineRef }),
       files: {
-        readText: async (file) => (await read(file, true))?.toString('utf8') ?? null,
-        readBytes: async (file) => read(file, false),
+        readText: async (file) => (await read(file))?.toString('utf8') ?? null,
+        readBytes: async (file) => read(file),
       },
     });
     const assemblerPath = path.join(kitDir, 'tools/lib/assemble.js');
@@ -139,6 +137,7 @@ export default {
 
 export async function verifyKitArchive(options: {
   tarball: string;
+  engineSourceRoot: string;
   engineRef: string;
   consumerSha: string;
   tarballSha256: string;
@@ -173,6 +172,7 @@ export async function verifyKitArchive(options: {
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
   const result = await verifyKitArchive({
     tarball: required('tarball'),
+    engineSourceRoot: required('engine-source-root'),
     engineRef: required('engine-ref'),
     consumerSha: required('consumer-sha'),
     tarballSha256: required('tarball-sha256'),
