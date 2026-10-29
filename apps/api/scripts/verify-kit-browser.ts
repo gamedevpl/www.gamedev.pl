@@ -85,7 +85,9 @@ export default {
       const resolved = path.resolve(root, file);
       if (!resolved.startsWith(root + path.sep)) throw new Error('Kit source escaped its root');
       try {
-        return await readFile(resolved);
+        const canonical = await realpath(resolved);
+        if (!canonical.startsWith(root + path.sep)) throw new Error('Kit source symlink escaped its root');
+        return await readFile(canonical);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         return null;
