@@ -233,8 +233,13 @@ echo "==> Building image via Cloud Build: ${IMAGE}"
 # then dials an origin that no longer serves /api/mp/ws.
 # ANDROID_SHA256_CERT_FINGERPRINTS may itself contain commas (it is a comma-joined
 # list), so it uses "^;^" to pick a substitutions delimiter that value cannot contain.
+SOURCE_SHA=$(git -C "$REPO_ROOT" rev-parse HEAD)
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+  echo "Commit source changes before building a versioned production image." >&2
+  exit 1
+fi
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "^;^_IMAGE=${IMAGE};_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID};_APPLE_SERVICES_ID=${APPLE_SERVICES_ID};_MP_RELAY_URL=${MP_RELAY_URL};_IOS_TEAM_ID=${IOS_TEAM_ID};_IOS_BUNDLE_ID=${IOS_BUNDLE_ID};_ANDROID_PACKAGE_NAME=${ANDROID_PACKAGE_NAME};_ANDROID_SHA256_CERT_FINGERPRINTS=${ANDROID_SHA256_CERT_FINGERPRINTS}" \
+  --substitutions "^;^_IMAGE=${IMAGE};_SOURCE_SHA=${SOURCE_SHA};_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID};_APPLE_SERVICES_ID=${APPLE_SERVICES_ID};_MP_RELAY_URL=${MP_RELAY_URL};_IOS_TEAM_ID=${IOS_TEAM_ID};_IOS_BUNDLE_ID=${IOS_BUNDLE_ID};_ANDROID_PACKAGE_NAME=${ANDROID_PACKAGE_NAME};_ANDROID_SHA256_CERT_FINGERPRINTS=${ANDROID_SHA256_CERT_FINGERPRINTS}" \
   --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets

@@ -4,6 +4,7 @@
 # infra/deploy-api.sh via `gcloud builds submit --config infra/cloudbuild.yaml`.
 substitutions:
   _IMAGE: '' # e.g. europe-central2-docker.pkg.dev/PROJECT/gamedev/api:latest
+  _SOURCE_SHA: ''
   _GOOGLE_OAUTH_CLIENT_ID: ''
   _APPLE_SERVICES_ID: ''
   # Must match the MP_RELAY_URL passed to the *service* env. The bundle needs it too: the
@@ -23,6 +24,8 @@ steps:
       - 'build'
       - '-f'
       - 'apps/api/Dockerfile'
+      - '--build-arg'
+      - 'PLATFORM_SOURCE_SHA=${_SOURCE_SHA}'
       - '--build-arg'
       - 'VITE_GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID}'
       - '--build-arg'
