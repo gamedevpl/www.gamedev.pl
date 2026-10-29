@@ -18,6 +18,23 @@ export async function createGameArtifactBrowser(options: {
     executablePath: options.executablePath,
     headless: true,
     chromiumSandbox: !options.noSandbox,
+    env: Object.fromEntries(
+      [
+        'PATH',
+        'LANG',
+        'LC_ALL',
+        'TZ',
+        'DISPLAY',
+        'TMPDIR',
+        'XDG_RUNTIME_DIR',
+        'HTTP_PROXY',
+        'HTTPS_PROXY',
+        'NO_PROXY',
+        'http_proxy',
+        'https_proxy',
+        'no_proxy',
+      ].flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]!]])),
+    ),
   });
   const timeout = options.timeoutMs ?? 30_000;
   const verify = async (artifact: GameArtifact) => {
