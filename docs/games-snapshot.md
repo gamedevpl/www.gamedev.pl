@@ -115,6 +115,23 @@ the game page's `SPEC.md` read (`catalog/game-page-routes.ts`) and the search in
 
 ## The publish path
 
+Snapshot publication requires a Chromium check of every final game document before
+the pointer can move. The check uses the API assembler's HTML in an iframe with
+`sandbox="allow-scripts allow-pointer-lock"`, blocks network requests, and requires
+the GameKit harness to become ready and advance frames. It also sends initial
+keyboard input and requires further frames without JavaScript errors.
+
+The result must match the engine ref and SHA-256 of the exact HTML being written.
+Documents are not rebuilt after verification. A missing browser, startup timeout,
+runtime exception or mismatched result leaves the previous snapshot current.
+`--dry-run` requires the same browser checks. Local runs must provide
+`E2E_CHROMIUM_PATH`; the publication workflow installs a matching Chromium and
+enables its sandbox before authenticating to cloud storage.
+
+This is a startup and initial-input check of the served artifact. Scenario tests,
+TRACE and game-specific playability checks still cover longer gameplay. The
+post-publication HTTP probe checks route availability, not game execution.
+
 ```
 merge to games-repo main
   → gate-service: classify the push (tools/gate-scope.mjs --event push)

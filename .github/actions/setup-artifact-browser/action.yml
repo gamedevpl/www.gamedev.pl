@@ -1,0 +1,26 @@
+name: Set up game artifact browser
+description: Install Chromium and require its sandbox for artifact verification.
+runs:
+  using: composite
+  steps:
+    - name: Install matching Chromium
+      shell: bash
+      env:
+        PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/artifact-browsers
+      run: |
+        set -euo pipefail
+        VERSION=$(node -p "require('playwright-core/package.json').version")
+        npx --yes --package="playwright@$VERSION" playwright install --with-deps chromium
+        BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x | sort | tail -1)
+        test -n "$BIN"
+        echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
+    - name: Enable Chromium sandbox
+      shell: bash
+      run: |
+        set -euo pipefail
+        RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
+        if [ "$RESTRICT" != "1" ]; then exit 0; fi
+        PROFILE=/etc/apparmor.d/artifact-chromium
+        printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile artifact-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' \
+          "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
+        sudo apparmor_parser -r "$PROFILE"

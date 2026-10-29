@@ -1,43 +1,9 @@
-/**
- * Bakes the published games into the snapshot bucket and flips the pointer.
- *
- * This moves game assembly off the request path: instead of every cache-cold play
- * rebuilding a game from a fan-out of GitHub reads plus an esbuild bundle, a merge
- * to the games repo's default branch bakes every published game once and the site
- * serves the result. GitHub stays the source of truth for content and for
- * unmerged PR / draft previews; it is not a published-serve fallback when the
- * snapshot bucket is configured.
- *
- * A non-empty failures list leaves `current.json` on the previous good snapshot
- * (immutable objects under the new id may still be written for debugging) and
- * exits non-zero — without a serve-time GitHub fallback, advancing the pointer
- * on a partial bake would half-publish failed games.
- *
- * Run by .github/workflows/publish-games.yml on a repository_dispatch from the
- * games repo (and manually via workflow_dispatch). Safe to re-run: each successful
- * run writes a fresh immutable snapshot prefix and only then moves `current.json`.
- *
- * Environment:
- *   GAMES_SNAPSHOT_BUCKET  target GCS bucket (required unless --dry-run)
- *   GAMES_REPO_TOKEN       contents:read PAT on the games repo (or GITHUB_TOKEN)
- *   GAMES_REPO             defaults to gamedevpl/www.gamedev.pl-games
- *   GAMES_PUBLISHED_REF    defaults to main
- *
- * Usage:
- *   npm run snapshot:publish -w @gamedevpl/api
- *   npm run snapshot:publish -w @gamedevpl/api -- --dry-run
- *   npm run snapshot:publish -w @gamedevpl/api -- --ref main --commit-sha <sha>
- *
- * `--commit-sha` is not just metadata: when present it is the ref every read
- * is pinned to, so a bake is a photograph of one tree rather than of whatever
- * the branch pointed at during each request. See `ref` below.
- */
-
 import { publishSnapshot } from '../src/catalog/game-snapshot-publish.js';
 import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/catalog/game-snapshot.js';
 import { withArchiveCommitCounts } from '../src/catalog/catalog-commit-counts.js';
 import { fetchGamesRepoArchive } from '../src/platform/games-repo-archive.js';
 import { createGitHubClient, type RepoFileSource } from '../src/catalog/github-client.js';
+import { createGameArtifactBrowser } from '../src/catalog/game-artifact-browser.js';
 
 function readFlag(name: string): string | null {
   const index = process.argv.indexOf(`--${name}`);
@@ -70,7 +36,7 @@ const commitSha = readFlag('commit-sha')?.trim() || null;
  * what keeps them consistent — `games-repo-archive` refuses to serve a ref it
  * does not hold, and rightly so.
  */
-const ref = commitSha || requestedRef;
+let ref = commitSha || requestedRef;
 const bucket = (process.env.GAMES_SNAPSHOT_BUCKET ?? '').trim();
 const token = (process.env.GAMES_REPO_TOKEN ?? process.env.GITHUB_TOKEN ?? '').trim();
 
@@ -97,6 +63,11 @@ async function main(): Promise<void> {
   }
   if (!bucket && !dryRun) {
     fail('GAMES_SNAPSHOT_BUCKET is required (or pass --dry-run)');
+  }
+  if (!/^[0-9a-f]{40}$/i.test(ref)) {
+    const sha = await createGitHubClient({ token, repo }).getRefSha(ref);
+    if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) fail('could not pin games ref to a commit');
+    ref = sha;
   }
 
   // One tarball instead of a read per file. A bake touches nearly every file in
@@ -128,13 +99,18 @@ async function main(): Promise<void> {
       ` → ${dryRun ? '(dry run, nothing written)' : `gs://${bucket}`}`,
   );
 
+  const browser = await createGameArtifactBrowser({
+    executablePath: process.env.E2E_CHROMIUM_PATH ?? '',
+    noSandbox: process.env.E2E_CHROMIUM_NO_SANDBOX === '1',
+  });
   const result = await publishSnapshot({
     client,
     writer,
     ref,
-    commitSha,
+    commitSha: ref,
+    verifyGame: browser.verify,
     log: (message) => console.log(message),
-  });
+  }).finally(() => browser.close());
 
   console.log('');
   console.log(`  snapshot id : ${result.snapshotId}`);

@@ -113,6 +113,8 @@ jobs:
 
       - run: npm run build:packages
 
+      - uses: ./.github/actions/setup-artifact-browser
+
       - name: Resolve games-repo ref
         env:
           VALIDATED_SHA: ${{ needs.validate-games.outputs.games_sha }}
@@ -180,14 +182,7 @@ jobs:
         env:
           GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
         run: |
-          # A green publish that the site cannot read is the failure mode worth
-          # catching here: the bucket is written by this job but read by Cloud Run
-          # under a different identity, so permissions can be wrong in one
-          # direction only. Serving falls back to GitHub either way, which is
-          # precisely why this would otherwise go unnoticed.
-          #
-          # Catalog/play are behind the closed-beta wall, so this needs the CI
-          # bearer token. Without it we can only warn — anonymous probes 401 by design.
+          # Runtime verification precedes promotion; this probes serving availability.
           BASE_URL="https://www.gamedev.pl"
           if [ -z "$GAMEDEV_ACCESS_TOKEN" ]; then
             echo "::warning::GAMEDEV_ACCESS_TOKEN not set — skipping post-publish catalog/play verify (wall requires a session)"
@@ -210,4 +205,4 @@ jobs:
             echo "Error: /api/games/${PLAY_SLUG} returned ${STATUS_CODE} after publish"
             exit 1
           fi
-          echo "Play route healthy after publish (${PLAY_SLUG})."
+          echo "Play route available after publish (${PLAY_SLUG}); runtime verified before promotion."
