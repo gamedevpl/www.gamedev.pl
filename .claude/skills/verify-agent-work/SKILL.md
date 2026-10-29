@@ -128,6 +128,14 @@ For gate repairs, demonstrate that the historical broken candidate is rejected b
 promotion and the corrected candidate passes. Distinguish a local gate attestation
 from an independently executed CI check; neither substitutes for artifact execution.
 
+Treat build credentials as an execution-boundary concern too. An empty environment
+and a different Unix user do not remove cloud metadata access or readable host
+credential files. Execute candidate toolchains with networking disabled and only
+their required inputs mounted read-only; keep publisher storage credentials and
+the container-runtime socket outside that environment. Test isolation with dummy
+host files and environment values, blocked metadata addresses and attempted source
+writes, alongside working and deliberately broken artifact checks.
+
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the
 renderer context's canvas when testing pixel scale. Match geometry assertions to the
