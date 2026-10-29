@@ -196,28 +196,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build:packages
-      # Same install and hand-off as deploy.yml's browser gate. A missing binary fails
-      # here: without E2E_CHROMIUM_PATH the suites skip and the job passes on nothing.
-      - name: Install Chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
-        run: |
-          npx playwright install --with-deps chromium
-          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
-          if [ -z "$BIN" ]; then
-            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH"
-            exit 1
-          fi
-          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
-      # The fixtures load hostile frames, so keep Chromium's sandbox on (see deploy.yml).
-      - name: Let Chromium use its sandbox
-        run: |
-          RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
-          if [ "$RESTRICT" != "1" ]; then exit 0; fi
-          PROFILE=/etc/apparmor.d/e2e-chromium
-          printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile e2e-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' \
-            "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
-          sudo apparmor_parser -r "$PROFILE"
+      - uses: ./.github/actions/setup-artifact-browser
       - run: npm run e2e:hermetic -w @gamedevpl/e2e
       - run: npm run prebuild -w @gamedevpl/cli
       - run: npm run e2e:play-code -w @gamedevpl/e2e
