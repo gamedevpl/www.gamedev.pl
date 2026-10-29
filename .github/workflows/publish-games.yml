@@ -92,7 +92,7 @@ jobs:
 
   publish:
     needs: validate-games
-    if: !cancelled() && (github.event_name != 'repository_dispatch' || github.event.action == 'games-published')
+    if: ${{ !cancelled() && (github.event_name != 'repository_dispatch' || github.event.action == 'games-published') }}
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: 'gamedevpl'
