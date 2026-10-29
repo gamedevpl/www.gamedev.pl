@@ -1,15 +1,4 @@
-/**
- * The target N1 module map for `apps/api/src`, per the north-star-architecture.md plan
- * (private gamedevpl/www.gamedev.pl-ops repo -- see AGENTS.md) Phase 0/3.
- *
- * Phase 3 physically moves files into these directories and flips the boundary rule from
- * warn to error, module by module. Phase 0 only needs the *assignment* -- which bucket each
- * file already belongs to by its current name and purpose -- so cross-bucket imports are
- * visible in review before any file moves. `platform` (composition root, auth, shared
- * primitives, the Store) is a real bucket like any other and is listed explicitly below,
- * same as every domain file; a name with no entry at all is genuinely unclassified and the
- * boundary rule warns about that too, rather than quietly trusting it as platform.
- */
+// Maps API files to their enforced module boundaries.
 
 /** Doc order: platform, creation, agent-surface, delivery, catalog, community, realtime, telemetry, notifications. */
 export const MODULE_BUCKETS = [
@@ -616,6 +605,9 @@ const FILE_BUCKET = {
   'bake-media': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
+  'game-snapshot-publish.fixture': 'catalog',
+  'game-artifact': 'catalog',
+  'game-artifact-browser': 'catalog',
   'media-object-choice': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
