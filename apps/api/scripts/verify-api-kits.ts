@@ -52,7 +52,7 @@ async function plan(): Promise<ApiKitPlan> {
 }
 async function assertCandidate(): Promise<void> {
   const response = await fetch(new URL('/api/health', candidate), {
-    cache: 'no-store',
+    headers: { 'cache-control': 'no-cache' },
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok || ((await response.json()) as { buildSha?: string }).buildSha !== sourceSha) {

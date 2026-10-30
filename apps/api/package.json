@@ -7,7 +7,7 @@
     "dev": "PORT=3001 tsx watch src/platform/server.ts",
     "build": "tsc -p tsconfig.json && npm run build:assets",
     "start": "node dist/platform/server.js",
-    "type-check": "tsc -p tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.verification.json",
     "test": "vitest run",
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "snapshot:publish": "tsx scripts/publish-snapshot.ts",

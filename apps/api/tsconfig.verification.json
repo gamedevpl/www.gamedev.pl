@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["scripts/verify-api-*.ts", "scripts/check-api-kit-container.ts"],
+  "exclude": ["dist"]
+}
