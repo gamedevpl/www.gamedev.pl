@@ -82,4 +82,28 @@ describe('createHarnessRunner', () => {
       else process.env.GATE_REQUIRE_METADATA_BLOCK = saved.require;
     }
   });
+
+  it('forwards the delivery slug to harness commands', async () => {
+    const saved = { user: process.env.GATE_SANDBOX_USER, require: process.env.GATE_REQUIRE_METADATA_BLOCK };
+    delete process.env.GATE_SANDBOX_USER;
+    delete process.env.GATE_REQUIRE_METADATA_BLOCK;
+    try {
+      let seen: NodeJS.ProcessEnv | undefined;
+      const { runInHarness } = await createHarnessRunner(
+        async (_command, _args, _cwd, options) => {
+          seen = options?.env;
+          return { code: 0, output: '' };
+        },
+        [],
+        { GATE_DELIVERY_SLUG: 'airtime' },
+      );
+      await runInHarness('npm', ['run', 'check:game', '--', 'airtime'], '/tmp');
+      expect(seen?.GATE_DELIVERY_SLUG).toBe('airtime');
+    } finally {
+      if (saved.user === undefined) delete process.env.GATE_SANDBOX_USER;
+      else process.env.GATE_SANDBOX_USER = saved.user;
+      if (saved.require === undefined) delete process.env.GATE_REQUIRE_METADATA_BLOCK;
+      else process.env.GATE_REQUIRE_METADATA_BLOCK = saved.require;
+    }
+  });
 });

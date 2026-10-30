@@ -130,7 +130,8 @@ async function main(): Promise<void> {
   }
   const harnesses: string[] = [];
   // Harness commands: sandbox user, no credentials in env.
-  const { sandbox, runInHarness } = await createHarnessRunner(run, harnesses);
+  // GATE_DELIVERY_SLUG lets gate-attest accept the uncommitted delivery in games/<slug>/.
+  const { sandbox, runInHarness } = await createHarnessRunner(run, harnesses, { GATE_DELIVERY_SLUG: slug });
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');
   // The proposal lane: the full acceptance check, except that a behavioural-golden
