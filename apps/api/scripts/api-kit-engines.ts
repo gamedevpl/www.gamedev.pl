@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { readTarEntries } from '../src/platform/tar.js';
 
@@ -38,6 +40,7 @@ export function apiKitEngines(options: { directory: string; repoUrl: string; ref
     });
   git(['init', '--quiet']);
   git(['config', 'core.hooksPath', '/dev/null']);
+  writeFileSync(path.join(options.directory, '.git/info/attributes'), '* -export-ignore -export-subst\n');
   git(['remote', 'add', 'origin', options.repoUrl]);
   git(['fetch', '--quiet', '--no-tags', '--filter=blob:none', '--depth=1', 'origin', ...options.refs]);
   const refs = new Set(options.refs);

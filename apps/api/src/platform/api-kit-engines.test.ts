@@ -26,6 +26,12 @@ describe('shared-only API engine fetch', () => {
       await mkdir(path.join(source, 'shared'));
       await mkdir(path.join(source, 'games'));
       await writeFile(path.join(source, 'shared/value.ts'), 'export const value=1;');
+      await writeFile(path.join(source, 'shared/hidden.ts'), 'export const hidden=3;');
+      await writeFile(path.join(source, 'shared/formatted.ts'), 'export const literal="$Format:%H$";');
+      await writeFile(
+        path.join(source, 'shared/.gitattributes'),
+        'hidden.ts export-ignore\nformatted.ts export-subst\n',
+      );
       await writeFile(path.join(source, 'games/private.bin'), 'private-game-media'.repeat(100_000));
       await writeFile(path.join(source, '.gitattributes'), 'shared/value.ts filter=fixture\n');
       git(['add', '.']);
@@ -60,7 +66,12 @@ describe('shared-only API engine fetch', () => {
         repoUrl: new URL(`file://${remote}`).href,
         refs: [first, second],
       });
-      expect(Buffer.from((await engine(first))['shared/value.ts'], 'base64').toString()).toBe('export const value=1;');
+      const original = await engine(first);
+      expect(Buffer.from(original['shared/value.ts'], 'base64').toString()).toBe('export const value=1;');
+      expect(Buffer.from(original['shared/hidden.ts'], 'base64').toString()).toBe('export const hidden=3;');
+      expect(Buffer.from(original['shared/formatted.ts'], 'base64').toString()).toBe(
+        'export const literal="$Format:%H$";',
+      );
       expect(Buffer.from((await engine(second))['shared/value.ts'], 'base64').toString()).toBe('export const value=2;');
       await expect(readFile(canary)).rejects.toThrow();
       const localObjects = git(['cat-file', '--batch-all-objects', '--batch-check=%(objectname)'], destination);
