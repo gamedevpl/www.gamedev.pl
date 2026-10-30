@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { CreationLimits, Store } from './store.js';
-import type { InternalAuthVerifier } from './internal-auth.js';
-import type { RemoteCaptureRevoker } from './remote-capture-brake.js';
+import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { createRemoteCaptureRevokerFromEnv, type RemoteCaptureRevoker } from './remote-capture-brake.js';
 
 // The brake an alert pulls itself. See CC-22 in the plan.
 
@@ -23,7 +23,7 @@ const PAUSEABLE = {
   video: { videoPaused: true },
   media: { mediaLean: true },
   anonymous: { anonymousPaused: true },
-  // Writes nothing here: the GPU capture job is outside the app (remote-capture-brake.ts).
+  // Writes nothing; remote-capture-brake.ts revokes the job's executors.
   remoteCapture: {},
 } as const satisfies Record<string, Partial<CreationLimits>>;
 
@@ -157,16 +157,20 @@ const HANDLED_INCIDENTS_KEPT = 20;
 
 export interface SpendBrakeRoutesOptions {
   store?: Store;
-  internalAuthVerifier: InternalAuthVerifier;
+  // Both default from env; unset means deny-all and no revoker.
+  internalAuthVerifier?: InternalAuthVerifier;
   revokeRemoteCapture?: RemoteCaptureRevoker;
 }
 
 export async function registerSpendBrakeRoutes(app: FastifyInstance, options: SpendBrakeRoutesOptions): Promise<void> {
+  const verifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv(process.env, 'spendBrake');
+  const revokeRemoteCapture =
+    'revokeRemoteCapture' in options ? options.revokeRemoteCapture : createRemoteCaptureRevokerFromEnv(process.env);
   app.post(
     '/api/internal/spend-brake',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!(await options.internalAuthVerifier.verify(request.headers.authorization))) {
+      if (!(await verifier.verify(request.headers.authorization))) {
         return reply.status(401).send({ error: 'unauthorized' });
       }
       const { store } = options;
@@ -188,10 +192,38 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
         return reply.send({ paused: [], reason });
       }
 
+      // Tracked apart, so a failed revoke retries while the pause stands.
+      const revokeKey =
+        lanes.includes('remoteCapture') && revokeRemoteCapture && incidentId ? `${incidentId}:revoked` : undefined;
+      const revoke = async (): Promise<boolean> => {
+        if (!lanes.includes('remoteCapture')) return true;
+        if (!revokeRemoteCapture) {
+          request.log.error({ incidentId }, 'spend brake named remoteCapture but no revoker is configured');
+          return true;
+        }
+        try {
+          const { removed } = await revokeRemoteCapture();
+          request.log.error({ incidentId, removed }, 'spend brake revoked remote capture executors');
+        } catch (error) {
+          request.log.error({ incidentId, err: error }, 'spend brake could not revoke remote capture executors');
+          return false;
+        }
+        if (revokeKey) {
+          const latest = (await store.getCreationLimits())?.handledBrakeIncidents ?? [];
+          const handledBrakeIncidents = [...latest.slice(-(HANDLED_INCIDENTS_KEPT - 1)), revokeKey];
+          await store.setCreationLimits({ handledBrakeIncidents }, `alert:${revokeKey}`);
+        }
+        return true;
+      };
+
       // Same alert again: a resume after it was a decision.
       const stored = await store.getCreationLimits();
       const handled = stored?.handledBrakeIncidents ?? [];
       if (incidentId && handled.includes(incidentId)) {
+        if (revokeKey && !handled.includes(revokeKey)) {
+          if (!(await revoke())) return reply.status(503).send({ error: 'remote capture revoke failed; retry' });
+          return reply.send({ paused: [], revoked: true, reason: 'already_handled' });
+        }
         request.log.info({ incidentId, policyName }, 'spend brake already handled this alert');
         return reply.send({ paused: [], reason: 'already_handled' });
       }
@@ -203,19 +235,9 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       for (const lane of lanes) Object.assign(patch, PAUSEABLE[lane]);
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
       request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');
-      if (lanes.includes('remoteCapture')) {
-        // After the record, so a failure here cannot keep the other lanes running.
-        if (!options.revokeRemoteCapture) {
-          request.log.error({ incidentId }, 'spend brake named remoteCapture but no revoker is configured');
-        } else {
-          try {
-            const { removed } = await options.revokeRemoteCapture();
-            request.log.error({ incidentId, removed }, 'spend brake revoked remote capture executors');
-          } catch (error) {
-            request.log.error({ incidentId, err: error }, 'spend brake could not revoke remote capture executors');
-          }
-        }
-      }
+      // A 503 makes Pub/Sub redeliver; the pause is already recorded.
+      if (!(await revoke()))
+        return reply.status(503).send({ paused: lanes, error: 'remote capture revoke failed; retry' });
       return reply.send({ paused: lanes });
     },
   );

@@ -1,8 +1,6 @@
 import { GoogleAuth } from 'google-auth-library';
 
-// The remote GPU capture job lives outside the app: agents launch it with their own
-// gcloud identity, so no flag in opsConfig reaches it. The brake takes their executor
-// binding on the job away instead. Resuming is granting it back, by hand.
+// Agents run the capture job directly; the brake revokes their binding.
 
 export type RemoteCaptureRevoker = () => Promise<{ removed: number }>;
 
@@ -14,7 +12,7 @@ interface IamPolicy {
 
 export type IamRequest = (method: 'GET' | 'POST', url: string, body?: unknown) => Promise<unknown>;
 
-// Drops `member` from every binding, and drops bindings it leaves empty.
+// Drops the member everywhere, and any binding left empty.
 export function withoutMember(policy: IamPolicy, member: string): { policy: IamPolicy; removed: number } {
   let removed = 0;
   const bindings = (policy.bindings ?? []).flatMap((binding) => {
@@ -30,14 +28,13 @@ export function createRemoteCaptureRevoker(job: string, member: string, request:
   return async () => {
     const current = (await request('GET', `${base}:getIamPolicy`)) as IamPolicy;
     const { policy, removed } = withoutMember(current, member);
-    // The etag makes a concurrent edit fail instead of being overwritten.
+    // The etag turns a concurrent edit into a failure, not an overwrite.
     if (removed) await request('POST', `${base}:setIamPolicy`, { policy });
     return { removed };
   };
 }
 
-// REMOTE_CAPTURE_JOB is the full resource name, projects/P/locations/R/jobs/J;
-// REMOTE_CAPTURE_EXECUTOR the IAM member, serviceAccount:… . Unset: no revoker.
+// Job resource name plus IAM member; either unset means no revoker.
 export function createRemoteCaptureRevokerFromEnv(env: NodeJS.ProcessEnv): RemoteCaptureRevoker | undefined {
   const job = env.REMOTE_CAPTURE_JOB?.trim();
   const member = env.REMOTE_CAPTURE_EXECUTOR?.trim();
