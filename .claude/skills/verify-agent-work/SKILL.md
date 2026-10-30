@@ -138,6 +138,8 @@ their required inputs mounted read-only; keep publisher storage credentials and
 the container-runtime socket outside that environment. Test isolation with dummy
 host files and environment values, blocked metadata addresses and attempted source
 writes, alongside working and deliberately broken artifact checks.
+Exercise a restrictive host umask too. Git exports and staged JSON can inherit
+owner-only modes; normalize image source and input readability for the container UID.
 
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the

@@ -143,8 +143,10 @@ if (process.argv.includes('--recheck')) {
       const outputDir = path.join(staging, 'output');
       await mkdir(inputDir, { recursive: true });
       await mkdir(outputDir, { recursive: true });
+      await chmod(inputDir, 0o755);
       await chmod(outputDir, 0o777);
       await writeFile(path.join(inputDir, 'kit.json'), JSON.stringify(input), { mode: 0o644 });
+      await chmod(path.join(inputDir, 'kit.json'), 0o644);
       execFileSync('docker', apiKitContainerArgs(image, inputDir, outputDir), { stdio: 'inherit', timeout: 180_000 });
       const result: unknown = JSON.parse(await readFile(path.join(outputDir, 'receipt.json'), 'utf8'));
       validateApiKitEvidence(result, { ...kit, consumerSha: sourceSha, modes });

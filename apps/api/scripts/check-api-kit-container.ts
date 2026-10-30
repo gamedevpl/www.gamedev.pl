@@ -15,6 +15,7 @@ const inputDir = path.join(root, 'input');
 const outputDir = path.join(root, 'output');
 await mkdir(inputDir);
 await mkdir(outputDir);
+await chmod(inputDir, 0o755);
 await chmod(outputDir, 0o777);
 const args = apiKitContainerArgs(image, inputDir, outputDir);
 const run = (command: string[]) =>
@@ -64,6 +65,7 @@ Promise.all(['http://169.254.169.254/','http://[fd20:ce::254]/'].map(async url=>
     ),
   };
   await writeFile(path.join(inputDir, 'kit.json'), JSON.stringify(input));
+  await chmod(path.join(inputDir, 'kit.json'), 0o644);
   run(args);
   validateApiKitEvidence(JSON.parse(await readFile(path.join(outputDir, 'receipt.json'), 'utf8')), {
     engineRef: input.engineRef,
