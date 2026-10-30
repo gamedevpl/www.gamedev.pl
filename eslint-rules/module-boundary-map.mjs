@@ -35,6 +35,8 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'api-kit-compatibility': 'platform',
+  'api-kit-input': 'platform',
   'build-info': 'platform',
   'mcp-managed-context-tools': 'agent-surface',
   'erase-creator-attachments': 'platform',

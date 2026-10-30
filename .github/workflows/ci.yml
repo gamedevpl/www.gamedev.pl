@@ -212,3 +212,14 @@ jobs:
       # deploy.yml's browser gate, after merge; this catches them before.
       - run: npm run build -w @gamedevpl/web
       - run: npm run e2e:framed-local -w @gamedevpl/e2e
+      - uses: ./.github/actions/setup-api-kit-container
+      - name: Build and exercise the API compatibility container
+        run: |
+          set -euo pipefail
+          CONTEXT=$(mktemp -d)
+          git archive HEAD | tar -x -C "$CONTEXT"
+          git rev-parse HEAD > "$CONTEXT/api-ref.txt"
+          docker build -f "$CONTEXT/infra/api-kit-verifier.Dockerfile" \
+            --iidfile "$RUNNER_TEMP/api-kit-image" "$CONTEXT"
+          node --import tsx apps/api/scripts/check-api-kit-container.ts \
+            "$(cat "$RUNNER_TEMP/api-kit-image")" "$(git rev-parse HEAD)"

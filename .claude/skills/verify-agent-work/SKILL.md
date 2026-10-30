@@ -124,6 +124,9 @@ then execute its output in the production iframe sandbox and require startup and
 advancing frames. Bind results to both repository SHAs and the tested artifact bytes.
 Check snapshot and Kit promotion separately: a website deploy gate does not run when
 only those pointers change. HTTP 200 and successful HTML generation do not prove boot.
+Check the reverse release boundary too: a new API must execute artifacts using
+every published Kit it still accepts, including older same-major sidecars. Recheck
+that window before promoting the identified candidate revision, not an implicit latest.
 For gate repairs, demonstrate that the historical broken candidate is rejected before
 promotion and the corrected candidate passes. Distinguish a local gate attestation
 from an independently executed CI check; neither substitutes for artifact execution.
@@ -135,6 +138,16 @@ their required inputs mounted read-only; keep publisher storage credentials and
 the container-runtime socket outside that environment. Test isolation with dummy
 host files and environment values, blocked metadata addresses and attempted source
 writes, alongside working and deliberately broken artifact checks.
+Exercise a restrictive host umask too. Git exports and staged JSON can inherit
+owner-only modes; normalize image source and input readability for the container UID.
+Keep private-engine compiler output out of public deployment logs, including errors.
+Exercise the real shell step with failing verification and assert traffic stays unchanged.
+AppArmor-restricted runners need a named userns profile for the container too;
+granting it to a downloaded host Chromium does not cover the container binary.
+Filtered Git fetches can still load every blob when archiving a commit with a
+pathspec. Archive the shared subtree itself and assert unrelated game blobs stay
+absent from the local object database. Filtering HTTP archive entries saves memory,
+not the network transfer of the complete games repository.
 
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the

@@ -601,12 +601,17 @@ fi
 # a seed may take up to ten minutes to generate plus a typecheck, and the default 300s
 # would cut it off. Same threading rule as the flags above: both supported deploy paths
 # carry these, or neither should.
-echo "==> Deploying to Cloud Run (scale-to-zero, request-scoped CPU, max ${MAX_INSTANCES} instance(s))"
+echo "==> Deploying an unpromoted candidate (max ${MAX_INSTANCES} instance(s))"
+COMPAT_REVISION_SUFFIX="compat-${SOURCE_SHA:0:12}-$(date +%s)"
+COMPAT_TAG="api-compat-${SOURCE_SHA:0:12}"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
   --project "$PROJECT_ID" \
   --platform managed \
+  --no-traffic \
+  --tag "$COMPAT_TAG" \
+  --revision-suffix "$COMPAT_REVISION_SUFFIX" \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances "$MAX_INSTANCES" \
@@ -617,6 +622,20 @@ gcloud run deploy "$SERVICE" \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
+
+COMPAT_CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
+  --format=json | jq -er --arg tag "$COMPAT_TAG" '.status.traffic[] | select(.tag==$tag) | .url')
+COMPAT_RECEIPT=$(mktemp)
+trap 'rm -f "$COMPAT_RECEIPT"' EXIT
+npm --prefix "$REPO_ROOT" run build:packages
+node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" \
+  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
+  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" --recheck \
+  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
+  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+gcloud run services update-traffic "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
+  --to-revisions "${SERVICE}-${COMPAT_REVISION_SUFFIX}=100" --remove-tags "$COMPAT_TAG"
 
 echo "==> Done. The app (web + API) is live at:"
 gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
