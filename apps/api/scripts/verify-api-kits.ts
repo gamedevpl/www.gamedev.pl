@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,14 +41,20 @@ function object(name: string): Buffer {
   return run('gcloud', ['storage', 'cat', `gs://${bucket}/${name}`]);
 }
 async function plan(): Promise<ApiKitPlan> {
-  const raw = object('kits/current.json').toString('utf8');
-  const listing = run('gcloud', ['storage', 'ls', `gs://${bucket}/kits/*.json`]).toString('utf8');
-  const sidecars: Record<string, string> = {};
-  for (const url of listing.split('\n')) {
-    const match = new RegExp(`^gs://[^/]+/kits/([a-f0-9]{40})\\.json$`).exec(url.trim());
-    if (match) sidecars[match[1]] = object(`kits/${match[1]}.json`).toString('utf8');
+  const staging = await mkdtemp(path.join(tmpdir(), 'api-kit-plan-'));
+  try {
+    run('gcloud', ['storage', 'cp', `gs://${bucket}/kits/*.json`, staging]);
+    const raw = await readFile(path.join(staging, 'current.json'), 'utf8');
+    const files = await readdir(staging);
+    const sidecars: Record<string, string> = {};
+    for (const file of files) {
+      const match = /^([a-f0-9]{40})\.json$/.exec(file);
+      if (match) sidecars[match[1]] = await readFile(path.join(staging, file), 'utf8');
+    }
+    return apiKitPlan(raw, sidecars);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
   }
-  return apiKitPlan(raw, sidecars);
 }
 async function assertCandidate(): Promise<void> {
   const response = await fetch(new URL('/api/health', candidate), {

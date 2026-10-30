@@ -1145,6 +1145,7 @@ jobs:
             --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
             > "$RUNNER_TEMP/api-kit-verification.log" 2>&1; then
             echo "::error::API/Kit compatibility failed. App traffic retained; private engine diagnostics withheld."
+            grep -E '^(Error:|[A-Za-z]+Error:|    at |API compatibility|Verified API|Supported Kits|gate:)' "$RUNNER_TEMP/api-kit-verification.log" | tail -n 25 || true
             exit 1
           fi
           echo "API/Kit compatibility passed for API ${DEPLOY_SHA}."
@@ -1325,6 +1326,7 @@ jobs:
             --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
             > "$RUNNER_TEMP/api-kit-recheck.log" 2>&1; then
             echo "::error::API/Kit identity recheck failed. App traffic retained; private diagnostics withheld."
+            grep -E '^(Error:|[A-Za-z]+Error:|    at |API compatibility|Verified API|Supported Kits|gate:)' "$RUNNER_TEMP/api-kit-recheck.log" | tail -n 25 || true
             exit 1
           fi
           gcloud run services update-traffic "$SERVICE" \
