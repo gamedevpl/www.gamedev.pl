@@ -155,6 +155,8 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
      `end`; the owner can then seal it. A pending or red gate still blocks readiness,
      and sealing never bypasses operator approval to publish. Cover the no-dispatch
      case when changing preview completion: agent-only fixtures miss this path.
+     Pin both observed version fields in the closing transaction, including absence:
+     a replacement delivery can change versions before its activity timestamp advances.
 5. Only call `get_gate_verdict` once when an already-available verdict would change
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`

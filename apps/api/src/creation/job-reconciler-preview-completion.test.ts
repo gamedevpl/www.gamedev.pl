@@ -111,6 +111,15 @@ describe('a manually delivered preview without an agent session', () => {
     expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
     expect((await store.getSubmission(9))?.state).toBe('building');
   });
+
+  it.each(['preview', 'publish'] as const)('does not close over a replacement %s delivery', async (mode) => {
+    const { store, reconciler } = await setup({ green: true }, 0, false, null);
+    const evaluated = (await store.getSubmission(9))!;
+    if (mode === 'preview') await store.setSubmissionPreviewVersion(9, 'v2');
+    else await store.setSubmissionDeliveredVersion(9, 'v1');
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
 });
 
 describe('a finished session that delivered only a preview', () => {

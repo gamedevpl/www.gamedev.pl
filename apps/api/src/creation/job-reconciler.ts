@@ -432,6 +432,8 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           activityAt: lastRoundActivityAt(record),
           roundGeneration: record.roundGeneration ?? 1,
           dispatchRef: record.dispatch?.refs.at(-1) ?? null,
+          previewVersion: record.previewVersion,
+          deliveredVersion: record.deliveredVersion,
         };
         if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
         // Sealing opens a generation; a dream claimed before it is superseded.
