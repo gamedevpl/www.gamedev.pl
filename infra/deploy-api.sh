@@ -191,6 +191,9 @@ SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
 # Its own caller identity: the Pub/Sub push subscription, not the scheduler.
 SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
 SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
+# The remoteCapture lane revokes this member on this job; unset disarms it.
+REMOTE_CAPTURE_JOB="${REMOTE_CAPTURE_JOB:-}"
+REMOTE_CAPTURE_EXECUTOR="${REMOTE_CAPTURE_EXECUTOR:-}"
 # The private ops console (/api/internal/ops/*): fixed audience, identity-only SA.
 OPS_CONSOLE_AUDIENCE="${OPS_CONSOLE_AUDIENCE:-https://www.gamedev.pl/api/internal/ops}"
 OPS_CONSOLE_SA="${OPS_CONSOLE_SA:-ops-console@${PROJECT_ID}.iam.gserviceaccount.com}"
@@ -538,6 +541,12 @@ if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
 fi
 if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
   ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
+fi
+if [ -n "$REMOTE_CAPTURE_JOB" ]; then
+  ENV_VARS="${ENV_VARS}|REMOTE_CAPTURE_JOB=${REMOTE_CAPTURE_JOB}"
+fi
+if [ -n "$REMOTE_CAPTURE_EXECUTOR" ]; then
+  ENV_VARS="${ENV_VARS}|REMOTE_CAPTURE_EXECUTOR=${REMOTE_CAPTURE_EXECUTOR}"
 fi
 if [ -n "$OPS_CONSOLE_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|OPS_CONSOLE_AUDIENCE=${OPS_CONSOLE_AUDIENCE}"

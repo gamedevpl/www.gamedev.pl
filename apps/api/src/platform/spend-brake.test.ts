@@ -45,7 +45,7 @@ describe('spend brake payload reading', () => {
     });
     // Spent over: plus round 0, concept art and the gate.
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
-      lanes: ['managed', 'seeding', 'dreams', 'gate'],
+      lanes: ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture'],
       incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
       policyName: 'zł130 Monthly Budget Alert',
     });
@@ -55,6 +55,7 @@ describe('spend brake payload reading', () => {
       'seeding',
       'dreams',
       'gate',
+      'remoteCapture',
       'video',
       'media',
     ]);
@@ -72,6 +73,7 @@ describe('spend brake payload reading', () => {
       'video',
       'media',
       'anonymous',
+      'remoteCapture',
     ]);
   });
 
@@ -275,7 +277,7 @@ describe('POST /api/internal/spend-brake', () => {
 
     const first = await tick();
     expect(first.statusCode).toBe(200);
-    expect(first.json().paused).toEqual(['managed', 'seeding', 'dreams', 'gate']);
+    expect(first.json().paused).toEqual(['managed', 'seeding', 'dreams', 'gate', 'remoteCapture']);
     const limits = await store.getCreationLimits();
     // Agent, round 0, concept art and gate stop; cheap lanes stay open.
     expect(limits).toMatchObject({
