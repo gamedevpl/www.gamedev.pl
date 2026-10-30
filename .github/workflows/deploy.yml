@@ -38,6 +38,7 @@ jobs:
       id-token: write
     outputs:
       candidate_url: ${{ steps.smoke.outputs.candidate_url }}
+      candidate_revision: ${{ steps.smoke.outputs.candidate_revision }}
     env:
       PROJECT_ID: 'gamedevpl'
       # europe-west1 (not europe-central2): Cloud Run native domain mapping for
@@ -655,6 +656,10 @@ jobs:
           # browser-gate job, which receives it as this job's output.
           echo "CANDIDATE_URL=${CANDIDATE_URL}" >> "$GITHUB_ENV"
           echo "candidate_url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
+          CANDIDATE_REVISION=$(gcloud run services describe "$SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format=json \
+            | jq -er '.status.traffic[] | select(.tag=="candidate") | .revisionName')
+          echo "candidate_revision=${CANDIDATE_REVISION}" >> "$GITHUB_OUTPUT"
 
           fetch_status() {
             local code
@@ -1097,6 +1102,9 @@ jobs:
       RELAY_RUNTIME_SA: 'gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com'
       WORLD_RUNTIME_SA: 'gamedev-world@gamedevpl.iam.gserviceaccount.com'
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      CANDIDATE_URL: ${{ needs.deploy.outputs.candidate_url }}
+      CANDIDATE_REVISION: ${{ needs.deploy.outputs.candidate_revision }}
+      KIT_COMPAT_RECEIPT: /tmp/api-kit-compatibility.json
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -1113,6 +1121,24 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
+
+      - name: Set up Node for compatibility and Hosting
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Verify candidate API with every supported published Kit
+        env:
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+        run: |
+          npm run build:packages
+          node --import tsx apps/api/scripts/verify-api-kits.ts \
+            --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
+            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT"
 
       - name: Keep the zone host on the same source revision
         # gamedev-world was the one production service with no CI path at all: its image
@@ -1269,15 +1295,6 @@ jobs:
           fi
           exit "$fail"
 
-      - name: Set up Node for the Hosting build
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install workspace dependencies
-        run: npm ci
-
       - name: Upload web assets to Firebase Hosting
         id: hosting-assets
         # Preserve retired assets before promoting Cloud Run; see infra/firebase/README.md.
@@ -1294,10 +1311,13 @@ jobs:
 
       - name: Promote candidate revision to 100% traffic
         run: |
+          node --import tsx apps/api/scripts/verify-api-kits.ts --recheck \
+            --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
+            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT"
           gcloud run services update-traffic "$SERVICE" \
             --region "$REGION" \
             --project "$PROJECT_ID" \
-            --to-latest \
+            --to-revisions "${CANDIDATE_REVISION}=100" \
             --remove-tags candidate
 
       - name: Start asset retention deadlines after promotion

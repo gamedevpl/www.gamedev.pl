@@ -124,6 +124,9 @@ then execute its output in the production iframe sandbox and require startup and
 advancing frames. Bind results to both repository SHAs and the tested artifact bytes.
 Check snapshot and Kit promotion separately: a website deploy gate does not run when
 only those pointers change. HTTP 200 and successful HTML generation do not prove boot.
+Check the reverse release boundary too: a new API must execute artifacts using
+every published Kit it still accepts, including older same-major sidecars. Recheck
+that window before promoting the identified candidate revision, not an implicit latest.
 For gate repairs, demonstrate that the historical broken candidate is rejected before
 promotion and the corrected candidate passes. Distinguish a local gate attestation
 from an independently executed CI check; neither substitutes for artifact execution.

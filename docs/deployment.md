@@ -863,6 +863,26 @@ rule, it simply needs project credentials instead.
 
 ## How to deploy manually
 
+Both deployment paths gate a no-traffic candidate against every currently supported
+published Creator Kit before switching app traffic. The check includes current,
+previous and all sidecars accepted by the same-major compatibility rule. It hashes
+each actual archive, uses its starter with raw engine sources from that exact SHA,
+and executes the candidate API's assembled HTML in the production iframe sandbox.
+Every Kit must boot and advance after input; engines with the hot controller must
+also boot the hot behavior probe. This checks API compatibility, not HMR state migration.
+
+Candidate execution runs in an offline, non-root, read-only container containing
+only a clean Git export of the API and its dependencies. The inputs contain no
+publisher credentials, host directories or Docker socket. Chromium's sandbox stays on.
+Failure retains existing app traffic. Registry/sidecar identities and candidate
+`health.buildSha` are rechecked immediately before promoting the specific tested
+revision; concurrent API/Kit releases are still not an atomic transaction.
+
+The manual script additionally requires Node dependencies installed locally,
+Docker with user-namespace support, `jq`, store read/list access and a read-only
+`GAMES_REPO_TOKEN`. A missing registry, browser, archive or source is a failed gate.
+The receipt is local evidence, never a hand-written substitute for execution.
+
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
 (monorepo context). It builds both the API and the static web bundle, and the Fastify server
 serves that bundle from the same origin (`WEB_DIST_DIR`), so the browser makes only same-origin
