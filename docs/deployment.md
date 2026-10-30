@@ -882,6 +882,9 @@ The manual script additionally requires Node dependencies installed locally,
 Docker with user-namespace support, `jq`, store read/list access and a read-only
 `GAMES_REPO_TOKEN`. A missing registry, browser, archive or source is a failed gate.
 The receipt is local evidence, never a hand-written substitute for execution.
+Hosted deploy logs withhold verifier output because compiler diagnostics can quote
+private engine sources. Run the same verifier locally to inspect those diagnostics;
+the public workflow reports failure and retains the previous app traffic.
 
 [`apps/api/Dockerfile`](../apps/api/Dockerfile) is a multi-stage image built from the repo root
 (monorepo context). It builds both the API and the static web bundle, and the Fastify server

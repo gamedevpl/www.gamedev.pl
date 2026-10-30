@@ -140,6 +140,8 @@ host files and environment values, blocked metadata addresses and attempted sour
 writes, alongside working and deliberately broken artifact checks.
 Exercise a restrictive host umask too. Git exports and staged JSON can inherit
 owner-only modes; normalize image source and input readability for the container UID.
+Keep private-engine compiler output out of public deployment logs, including errors.
+Exercise the real shell step with failing verification and assert traffic stays unchanged.
 
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the

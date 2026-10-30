@@ -1136,9 +1136,14 @@ jobs:
           GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
         run: |
           npm run build:packages
-          node --import tsx apps/api/scripts/verify-api-kits.ts \
+          if ! node --import tsx apps/api/scripts/verify-api-kits.ts \
             --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
-            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT"
+            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
+            > "$RUNNER_TEMP/api-kit-verification.log" 2>&1; then
+            echo "::error::API/Kit compatibility failed. App traffic retained; private engine diagnostics withheld."
+            exit 1
+          fi
+          echo "API/Kit compatibility passed for API ${DEPLOY_SHA}."
 
       - name: Keep the zone host on the same source revision
         # gamedev-world was the one production service with no CI path at all: its image
@@ -1311,9 +1316,13 @@ jobs:
 
       - name: Promote candidate revision to 100% traffic
         run: |
-          node --import tsx apps/api/scripts/verify-api-kits.ts --recheck \
+          if ! node --import tsx apps/api/scripts/verify-api-kits.ts --recheck \
             --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
-            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT"
+            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
+            > "$RUNNER_TEMP/api-kit-recheck.log" 2>&1; then
+            echo "::error::API/Kit identity recheck failed. App traffic retained; private diagnostics withheld."
+            exit 1
+          fi
           gcloud run services update-traffic "$SERVICE" \
             --region "$REGION" \
             --project "$PROJECT_ID" \
