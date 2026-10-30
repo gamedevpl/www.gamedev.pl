@@ -10,7 +10,7 @@ import {
   type ApiKitPlan,
 } from '../src/platform/api-kit-compatibility.js';
 import { apiKitContainerArgs, apiKitStarter } from '../src/platform/api-kit-input.js';
-import { fetchGamesRepoArchive } from '../src/platform/games-repo-archive.js';
+import { apiKitEngines } from './api-kit-engines.js';
 import type { ApiKitInput } from './verify-api-kit-artifacts.js';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
@@ -117,19 +117,23 @@ if (process.argv.includes('--recheck')) {
       },
     );
     const image = (await readFile(imageFile, 'utf8')).trim();
+    const engineDirectory = path.join(staging, 'engines');
+    await mkdir(engineDirectory);
+    const repo = process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
+    if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) throw new Error('Invalid games repository');
+    const engineSources = apiKitEngines({
+      directory: engineDirectory,
+      repoUrl: `https://github.com/${repo}.git`,
+      refs: expected.kits.map((kit) => kit.engineRef),
+      token: process.env.GAMES_REPO_TOKEN,
+    });
     const results = [];
     for (const kit of expected.kits) {
       const files = await apiKitStarter(object(`kits/${kit.engineRef}.tgz`), kit.engineRef, kit.sha256);
-      const engine = await fetchGamesRepoArchive({
-        repo: process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games',
-        ref: kit.engineRef,
-        token: process.env.GAMES_REPO_TOKEN ?? '',
-        include: (name) => name.startsWith('shared/'),
-      });
-      for (const name of engine.listPaths()) {
-        files[name] = Buffer.from((await engine.readBytes(name, kit.engineRef))!).toString('base64');
-      }
-      const core = await engine.readText('shared/modules/core.ts', kit.engineRef);
+      Object.assign(files, await engineSources(kit.engineRef));
+      const core = files['shared/modules/core.ts']
+        ? Buffer.from(files['shared/modules/core.ts'], 'base64').toString('utf8')
+        : null;
       if (!core) throw new Error('Published Kit engine has no core source');
       const modes = ['ordinary-probe', ...(core.includes('function createHotController(') ? ['hot-probe'] : [])];
       const input: ApiKitInput = {

@@ -142,6 +142,12 @@ Exercise a restrictive host umask too. Git exports and staged JSON can inherit
 owner-only modes; normalize image source and input readability for the container UID.
 Keep private-engine compiler output out of public deployment logs, including errors.
 Exercise the real shell step with failing verification and assert traffic stays unchanged.
+AppArmor-restricted runners need a named userns profile for the container too;
+granting it to a downloaded host Chromium does not cover the container binary.
+Filtered Git fetches can still load every blob when archiving a commit with a
+pathspec. Archive the shared subtree itself and assert unrelated game blobs stay
+absent from the local object database. Filtering HTTP archive entries saves memory,
+not the network transfer of the complete games repository.
 
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the

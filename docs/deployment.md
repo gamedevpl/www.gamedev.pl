@@ -868,6 +868,8 @@ published Creator Kit before switching app traffic. The check includes current,
 previous and all sidecars accepted by the same-major compatibility rule. It hashes
 each actual archive, uses its starter with raw engine sources from that exact SHA,
 and executes the candidate API's assembled HTML in the production iframe sandbox.
+One filtered Git cache fetches only shared blobs and reuses objects across refs;
+the gate never downloads the full games/media archive for each supported Kit.
 Every Kit must boot and advance after input; engines with the hot controller must
 also boot the hot behavior probe. This checks API compatibility, not HMR state migration.
 
