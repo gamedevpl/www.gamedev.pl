@@ -418,8 +418,9 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
             version,
             ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
           });
-        // Session over, preview green: the owner seals it from ready_for_review.
-        const sealable = state === 'building' && currentSessionFinished(record) && !record.deliveredVersion;
+        // Manual rounds have no agent session to wait for.
+        const builderFinished = !record.dispatch?.refs.length || currentSessionFinished(record);
+        const sealable = state === 'building' && builderFinished && !record.deliveredVersion;
         if (!sealable || !canTransition(state, 'ready_for_review')) {
           await dream(record);
           return null;
@@ -430,7 +431,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         const guard = {
           activityAt: lastRoundActivityAt(record),
           roundGeneration: record.roundGeneration ?? 1,
-          dispatchRef: record.dispatch?.refs.at(-1),
+          dispatchRef: record.dispatch?.refs.at(-1) ?? null,
         };
         if (!(await store.recordJobTransition(record.jobId, transition, guard))) return null;
         // Sealing opens a generation; a dream claimed before it is superseded.
