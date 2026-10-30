@@ -186,12 +186,13 @@ export type HarnessRun = (
 export async function createHarnessRunner(
   run: HarnessRun,
   harnesses: readonly string[],
+  extraEnv: Record<string, string> = {},
 ): Promise<{ sandbox: GateSandbox | null; runInHarness: HarnessRun }> {
   const sandbox = await resolveGateSandbox();
-  const harnessEnv = scrubbedEnv(
-    process.env,
-    sandbox ? { HOME: sandbox.home, USER: sandbox.user, LOGNAME: sandbox.user } : {},
-  );
+  const harnessEnv = scrubbedEnv(process.env, {
+    ...extraEnv,
+    ...(sandbox ? { HOME: sandbox.home, USER: sandbox.user, LOGNAME: sandbox.user } : {}),
+  });
   const chrome = process.env.GAME_CAPTURE_CHROME?.trim();
   if (!sandbox && process.env.GATE_REQUIRE_METADATA_BLOCK === '1') {
     throw new Error('GATE_REQUIRE_METADATA_BLOCK=1 needs GATE_SANDBOX_USER to run candidate code');
