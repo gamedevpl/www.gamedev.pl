@@ -95,6 +95,9 @@ describe('published Kit input and isolation', () => {
       'type=bind,src=/output,dst=/result',
     ]);
     expect(args).toContain('--env=HTTPS_PROXY=');
+    expect(apiKitContainerArgs(`sha256:${digest}`, '/input', '/output', 'api-kit-verifier')).toContain(
+      '--security-opt=apparmor=api-kit-verifier',
+    );
     expect(() => apiKitContainerArgs('node:latest', '/input', '/output')).toThrow(/immutable/);
   });
 });

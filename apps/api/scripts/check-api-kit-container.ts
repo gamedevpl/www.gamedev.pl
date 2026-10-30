@@ -17,7 +17,7 @@ await mkdir(inputDir);
 await mkdir(outputDir);
 await chmod(inputDir, 0o755);
 await chmod(outputDir, 0o777);
-const args = apiKitContainerArgs(image, inputDir, outputDir);
+const args = apiKitContainerArgs(image, inputDir, outputDir, process.env.API_KIT_APPARMOR_PROFILE);
 const run = (command: string[]) =>
   execFileSync('docker', command, {
     encoding: 'utf8',

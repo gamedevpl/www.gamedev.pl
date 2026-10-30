@@ -1131,6 +1131,8 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      - uses: ./.github/actions/setup-api-kit-container
+
       - name: Verify candidate API with every supported published Kit
         env:
           GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}

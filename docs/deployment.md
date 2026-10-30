@@ -881,6 +881,10 @@ revision; concurrent API/Kit releases are still not an atomic transaction.
 The manual script additionally requires Node dependencies installed locally,
 Docker with user-namespace support, `jq`, store read/list access and a read-only
 `GAMES_REPO_TOKEN`. A missing registry, browser, archive or source is a failed gate.
+On AppArmor-restricted hosts, load the profile shown in
+[`setup-api-kit-container`](../.github/actions/setup-api-kit-container/action.yml)
+and set `API_KIT_APPARMOR_PROFILE=api-kit-verifier`. Both Actions paths set it up
+automatically without disabling Chromium's sandbox or the host-wide restriction.
 The receipt is local evidence, never a hand-written substitute for execution.
 Hosted deploy logs withhold verifier output because compiler diagnostics can quote
 private engine sources. Run the same verifier locally to inspect those diagnostics;

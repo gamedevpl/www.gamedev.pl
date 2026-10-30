@@ -35,7 +35,12 @@ export async function apiKitStarter(
   return files;
 }
 
-export function apiKitContainerArgs(image: string, input: string, output: string): string[] {
+export function apiKitContainerArgs(
+  image: string,
+  input: string,
+  output: string,
+  appArmorProfile = 'unconfined',
+): string[] {
   if (!/^sha256:[a-f0-9]{64}$/.test(image)) throw new Error('API verification requires an immutable image');
   return [
     'run',
@@ -47,7 +52,7 @@ export function apiKitContainerArgs(image: string, input: string, output: string
     '--cap-drop=ALL',
     '--security-opt=no-new-privileges',
     '--security-opt=seccomp=unconfined',
-    '--security-opt=apparmor=unconfined',
+    `--security-opt=apparmor=${appArmorProfile}`,
     '--tmpfs=/tmp:rw,nosuid,nodev,size=536870912,mode=1777',
     '--shm-size=256m',
     '--env=HOME=/tmp',
