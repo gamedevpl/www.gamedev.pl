@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { CreationLimits, Store } from './store.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
+import type { RemoteCaptureRevoker } from './remote-capture-brake.js';
 
 // The brake an alert pulls itself. See CC-22 in the plan.
 
@@ -22,6 +23,8 @@ const PAUSEABLE = {
   video: { videoPaused: true },
   media: { mediaLean: true },
   anonymous: { anonymousPaused: true },
+  // Writes nothing here: the GPU capture job is outside the app (remote-capture-brake.ts).
+  remoteCapture: {},
 } as const satisfies Record<string, Partial<CreationLimits>>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;
@@ -77,8 +80,8 @@ export interface BrakeNotification {
 // Graded by how far over: the agent first, the pennies last.
 export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
   if (spent >= 1.5) return Object.keys(PAUSEABLE) as PauseableLane[];
-  if (spent >= 1.25) return ['managed', 'seeding', 'dreams', 'gate', 'video', 'media'];
-  if (spent >= 1) return ['managed', 'seeding', 'dreams', 'gate'];
+  if (spent >= 1.25) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture', 'video', 'media'];
+  if (spent >= 1) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture'];
   if (forecast >= 1) return ['managed'];
   return [];
 }
@@ -155,6 +158,7 @@ const HANDLED_INCIDENTS_KEPT = 20;
 export interface SpendBrakeRoutesOptions {
   store?: Store;
   internalAuthVerifier: InternalAuthVerifier;
+  revokeRemoteCapture?: RemoteCaptureRevoker;
 }
 
 export async function registerSpendBrakeRoutes(app: FastifyInstance, options: SpendBrakeRoutesOptions): Promise<void> {
@@ -199,6 +203,19 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       for (const lane of lanes) Object.assign(patch, PAUSEABLE[lane]);
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
       request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');
+      if (lanes.includes('remoteCapture')) {
+        // After the record, so a failure here cannot keep the other lanes running.
+        if (!options.revokeRemoteCapture) {
+          request.log.error({ incidentId }, 'spend brake named remoteCapture but no revoker is configured');
+        } else {
+          try {
+            const { removed } = await options.revokeRemoteCapture();
+            request.log.error({ incidentId, removed }, 'spend brake revoked remote capture executors');
+          } catch (error) {
+            request.log.error({ incidentId, err: error }, 'spend brake could not revoke remote capture executors');
+          }
+        }
+      }
       return reply.send({ paused: lanes });
     },
   );

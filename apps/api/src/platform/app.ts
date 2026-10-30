@@ -50,6 +50,7 @@ import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js'
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes } from './spend-brake.js';
+import { createRemoteCaptureRevokerFromEnv, type RemoteCaptureRevoker } from './remote-capture-brake.js';
 import type { CreatorCodeRoutesOptions } from '../creation/creator-code.js';
 import { registerCodeEditorRoutes } from '../creation/code-completion-routes.js';
 import { createKitFileStore } from '../agent-surface/kit-files.js';
@@ -207,7 +208,7 @@ export interface BuildAppOptions {
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
   > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
   // Seam for the spend brake; OIDC-or-deny-all from env.
-  spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier };
+  spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier; revokeRemoteCapture?: RemoteCaptureRevoker };
   opsConsole?: { verifier?: InternalAuthVerifier };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
@@ -1044,6 +1045,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     internalAuthVerifier:
       options.spendBrakeRoutes?.internalAuthVerifier ?? createInternalAuthVerifierFromEnv(process.env, 'spendBrake'),
+    revokeRemoteCapture:
+      options.spendBrakeRoutes?.revokeRemoteCapture ?? createRemoteCaptureRevokerFromEnv(process.env),
   });
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
