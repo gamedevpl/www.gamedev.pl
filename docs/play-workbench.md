@@ -85,6 +85,7 @@ either side or close without resetting the game. Hide controls also closes the p
 The composer names the session assistant as the initial recipient; builder selection
 happens in the existing execution flow. During a local task it labels follow-ups as
 queued for the assistant after that task. Opening Chat does not start an agent.
+Use Cmd+Enter on macOS or Ctrl+Enter to send; Enter inserts a new line.
 Commands are searchable and typing `/` offers the server's supported action map;
 Tab completes a suggestion. Prompt history is shared with the terminal. Up recalls
 history at the start of the composer; the history button also supports touch access.

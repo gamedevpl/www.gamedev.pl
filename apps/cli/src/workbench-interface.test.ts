@@ -101,6 +101,55 @@ it('sends slash actions through guarded commands and clears only the accepted co
   expect(requests.filter((path) => path === '/commands')).toHaveLength(1);
   expect(doc.getElementById('details-section')!.hidden).toBe(false);
 });
+
+it.each([{ ctrlKey: true }, { metaKey: true }])('sends the chat with a modified Enter: %j', async (modifier) => {
+  const { doc, dom, requests } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  const draft = doc.getElementById('prompt') as HTMLTextAreaElement;
+  draft.value = 'Play and report what you find';
+  const event = new dom.window.KeyboardEvent('keydown', { key: 'Enter', ...modifier, bubbles: true, cancelable: true });
+  draft.dispatchEvent(event);
+  await vi.waitFor(() => expect(draft.value).toBe(''));
+  expect(event.defaultPrevented).toBe(true);
+  expect(requests.filter((path) => path === '/commands')).toHaveLength(1);
+});
+
+it('does not submit plain, repeated or composing Enter, or a disabled send', async () => {
+  const { doc, dom, requests } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  const draft = doc.getElementById('prompt') as HTMLTextAreaElement;
+  draft.value = 'Keep this draft';
+  const press = (options: KeyboardEventInit) => {
+    const event = new dom.window.KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+      ...options,
+    });
+    draft.dispatchEvent(event);
+    return event;
+  };
+  expect(press({}).defaultPrevented).toBe(false);
+  expect(press({ metaKey: true, isComposing: true }).defaultPrevented).toBe(false);
+  expect(press({ ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
+  (doc.getElementById('send') as HTMLButtonElement).disabled = true;
+  expect(press({ metaKey: true }).defaultPrevented).toBe(true);
+  expect(draft.value).toBe('Keep this draft');
+  expect(requests.filter((path) => path === '/commands')).toHaveLength(0);
+});
+
+it('uses the same command routing for Cmd+Enter as for Send', async () => {
+  const { doc, dom, requests } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  const draft = doc.getElementById('prompt') as HTMLTextAreaElement;
+  draft.value = '/status';
+  draft.dispatchEvent(
+    new dom.window.KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true, cancelable: true }),
+  );
+  await vi.waitFor(() => expect(draft.value).toBe(''));
+  expect(requests.filter((path) => path === '/commands')).toHaveLength(1);
+  expect(doc.getElementById('details-section')!.hidden).toBe(false);
+});
 it('does not reopen a dismissed question or close its attachment drawer on each poll', async () => {
   const { doc, state } = fixture();
   state.question = 'Choose a color';

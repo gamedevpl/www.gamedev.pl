@@ -162,6 +162,35 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
     }
   });
 
+  it('sends Play chat with Ctrl+Enter or Cmd+Enter and keeps Enter multiline', async () => {
+    const page = await fixture(1280, 720);
+    const commands: Array<{ command?: { text?: string } }> = [];
+    try {
+      await page.route('**/commands', async (route) => {
+        commands.push(route.request().postDataJSON() as { command?: { text?: string } });
+        await route.fulfill({ json: { status: 'accepted' } });
+      });
+      await page.click('#edit');
+      const draft = page.locator('#prompt');
+      await draft.fill('First line');
+      await draft.press('Enter');
+      await draft.pressSequentially('Second line');
+      expect(await draft.inputValue()).toBe('First line\nSecond line');
+      expect(commands).toHaveLength(0);
+      await draft.press('Control+Enter');
+      await expect.poll(() => commands.length).toBe(1);
+      await expect.poll(() => draft.inputValue()).toBe('');
+      expect(commands[0]?.command?.text).toBe('First line\nSecond line');
+      await draft.fill('Try another message');
+      await draft.press('Meta+Enter');
+      await expect.poll(() => commands.length).toBe(2);
+      await expect.poll(() => draft.inputValue()).toBe('');
+      expect(commands[1]?.command?.text).toBe('Try another message');
+    } finally {
+      await page.close();
+    }
+  });
+
   it.each(sizes)('keeps controls, updates and chat reachable at %i × %i', async (width, height) => {
     const page = await fixture(width!, height!);
     try {

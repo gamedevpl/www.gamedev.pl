@@ -47,6 +47,7 @@ function submitSlash(){
 draft.addEventListener('input',()=>{historyIndex=-1;renderSuggestions();});
 draft.addEventListener('keydown',event=>{
   if(event.isComposing)return;
+  if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)&&!event.altKey&&!event.shiftKey){event.preventDefault();if(!event.repeat)el('composer').requestSubmit();return;}
   if(event.key==='Tab'&&!el('command-suggestions').hidden){const first=el('command-suggestions').querySelector('button');if(first){event.preventDefault();first.click();}return;}
   const entries=state?.history??[];
   if(event.key==='ArrowUp'&&draft.selectionStart===0&&draft.selectionEnd===0&&entries.length){event.preventDefault();if(historyIndex<0){historyDraft=draft.value;historyIndex=entries.length;}historyIndex=Math.max(0,historyIndex-1);draft.value=entries[historyIndex];draft.setSelectionRange(0,0);}
