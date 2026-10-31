@@ -3,6 +3,7 @@ import { sessionDiff, type SessionDiff } from './session-diff.js';
 import type { Steer } from './live-agent.js';
 import { cleanDraftText, editDraft, type DraftAction } from './draft-edit.js';
 import type { Delivery } from './session-delivery.js';
+import { createSessionSender, markUndelivered } from './session-send.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
 
@@ -111,7 +112,6 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
   let steer: Steer | undefined;
   let closed = false;
   let stopping = false;
-  let nextDelivery = 1;
 
   const emit = (): void => {
     for (const listener of listeners) {
@@ -174,65 +174,27 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     return true;
   };
 
-  // `shown`: transcript form of `text`, attachments collapsed.
-  const sendToAgent = async (send: Steer, text: string, shown: string): Promise<boolean> => {
-    state = { ...state, sending: true, sendStatus: 'Sending to the active agent…' };
-    emit();
-    const typed = splitEvidence(text).text.trim();
-    try {
-      const receipt = await send(text);
-      const status: Delivery['status'] = receipt?.status ?? 'received';
-      const id = nextDelivery++;
-      const line = `› [${status === 'received' ? 'sent to active agent' : 'message to agent'}] ${shown}`;
-      savedLines = [...savedLines, line].slice(-200);
-      history.push(typed);
+  const sendToAgent = createSessionSender({
+    get: () => state,
+    set: (next) => {
+      state = next;
+    },
+    emit,
+    save: (lines) => {
+      savedLines = [...savedLines, ...lines].slice(-200);
+    },
+    remember: (text, resetIndex) => {
+      history.push(text);
       if (history.length > 50) history.shift();
+      if (resetIndex) histIndex = history.length;
+    },
+    clearFollowup: (text) => {
       if (followupDraft.trim() === text) followupDraft = '';
-      state = {
-        ...state,
-        lines: [...state.lines, line],
-        deliveries: [...state.deliveries, { id, text: shown, status }].slice(-50),
-        sendStatus: status === 'received' ? 'Accepted by the agent' : 'Waiting for the agent; check delivery status.',
-        ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
-      };
-      if (!state.draft) undo = [];
-      if (receipt?.status === 'pending') {
-        void receipt.confirmation.then(
-          () => updateDelivery(id, 'received'),
-          () => updateDelivery(id, 'unconfirmed'),
-        );
-      }
-      return true;
-    } catch (error) {
-      const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
-      const line = `› [delivery not confirmed] ${shown}`;
-      savedLines = [...savedLines, line, status].slice(-200);
-      history.push(typed);
-      if (history.length > 50) history.shift();
-      histIndex = history.length;
-      state = { ...state, lines: [...state.lines, line, status], sendStatus: status };
-      return false;
-    } finally {
-      state = { ...state, sending: false };
-      emit();
-    }
-  };
-
-  const updateDelivery = (id: number, status: Delivery['status']) => {
-    const delivery = state.deliveries.find((item) => item.id === id);
-    if (!delivery || delivery.status !== 'pending') return;
-    state = {
-      ...state,
-      deliveries: state.deliveries.map((item) => (item.id === id ? { ...item, status } : item)),
-      sendStatus:
-        state.deliveries.at(-1)?.id === id
-          ? status === 'received'
-            ? 'Accepted by the agent'
-            : 'Delivery not confirmed; the message may be queued.'
-          : state.sendStatus,
-    };
-    emit();
-  };
+    },
+    clearUndo: () => {
+      undo = [];
+    },
+  });
 
   return {
     setSteering(send) {
@@ -281,9 +243,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       state = {
         ...state,
         queued: [],
-        deliveries: state.deliveries.map((item) =>
-          item.status === 'pending' || item.status === 'queued' ? { ...item, status: 'unconfirmed' } : item,
-        ),
+        deliveries: markUndelivered(state.deliveries),
       };
       emit();
       onBusyCancel?.();
@@ -361,11 +321,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
         localTask,
         sendStatus: '',
         taskId: state.taskId + 1,
-        deliveries: localTask
-          ? state.deliveries
-          : state.deliveries.map((item) =>
-              item.status === 'pending' || item.status === 'queued' ? { ...item, status: 'unconfirmed' } : item,
-            ),
+        deliveries: localTask ? state.deliveries : markUndelivered(state.deliveries),
       };
       emit();
     },
