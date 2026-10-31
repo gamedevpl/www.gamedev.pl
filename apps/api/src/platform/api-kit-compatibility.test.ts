@@ -79,6 +79,19 @@ describe('published Kit input and isolation', () => {
     await expect(apiKitStarter(tarball, current, digest)).rejects.toThrow(/sidecar/);
     await expect(apiKitStarter(tarball, previous, sha256(tarball))).rejects.toThrow(/identity/);
   });
+  it('extracts legacy templates/game as starter files when starters directory is absent', async () => {
+    const tarball = await writeTarGz([
+      { path: 'gamedevpl-creator-kit/kit.json', content: Buffer.from(JSON.stringify({ engineRef: older })) },
+      { path: 'gamedevpl-creator-kit/templates/game/GAME.json', content: Buffer.from('{}') },
+      { path: 'gamedevpl-creator-kit/templates/game/game.ts', content: Buffer.from('game') },
+      { path: 'gamedevpl-creator-kit/tools/unsafe.js', content: Buffer.from('throw 1') },
+    ]);
+    const extracted = await apiKitStarter(tarball, older, sha256(tarball));
+    expect(Object.keys(extracted).sort()).toEqual([
+      'starters/block-cascade/GAME.json',
+      'starters/block-cascade/game.ts',
+    ]);
+  });
   it('gives candidate execution no network, host source, credentials or socket', () => {
     const args = apiKitContainerArgs(`sha256:${digest}`, '/input', '/output');
     expect(args).toEqual(
