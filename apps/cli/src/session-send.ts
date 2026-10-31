@@ -16,7 +16,13 @@ export function createSessionSender(input: {
   const updateDelivery = (id: number, status: Delivery['status']) => {
     const state = input.get();
     const delivery = state.deliveries.find((item) => item.id === id);
-    if (!delivery || delivery.status !== 'pending') return;
+    if (
+      !delivery ||
+      (delivery.status !== 'pending' &&
+        delivery.status !== 'queued' &&
+        !(delivery.status === 'unconfirmed' && status === 'received'))
+    )
+      return;
     input.set({
       ...state,
       deliveries: state.deliveries.map((item) => (item.id === id ? { ...item, status } : item)),
@@ -50,7 +56,7 @@ export function createSessionSender(input: {
         ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
       });
       if (!input.get().draft) input.clearUndo();
-      if (receipt?.status === 'pending') {
+      if (receipt) {
         void receipt.confirmation.then(
           () => updateDelivery(id, 'received'),
           () => updateDelivery(id, 'unconfirmed'),

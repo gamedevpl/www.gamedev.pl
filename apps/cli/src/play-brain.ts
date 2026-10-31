@@ -334,7 +334,7 @@ export async function startPlayBrain(input: {
     });
     retargetPresence = presence.retarget;
     ws.onLocalTask?.(name);
-    const steer = steering.send(agent);
+    const steer = steering.send(agent, signal);
     ws.onSteering?.(steer);
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
