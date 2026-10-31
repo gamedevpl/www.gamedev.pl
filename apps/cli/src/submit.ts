@@ -13,8 +13,8 @@ import {
 } from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
-import { mkdirSync, existsSync, lstatSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   inspectGame,
   ignoredGameFiles,
@@ -60,6 +60,7 @@ type DeliverReply = {
   buildId?: string;
   rejected?: string;
   category?: string;
+  retryAfterSeconds?: number;
   error?: string;
   message?: string;
 };
@@ -76,10 +77,14 @@ function refusalError(delivered: DeliverReply): CliError | null {
     );
   }
   if (delivered.rejected === 'moderation_unavailable') {
+    const wait =
+      typeof delivered.retryAfterSeconds === 'number' && delivered.retryAfterSeconds > 0
+        ? ` Retry in about ${delivered.retryAfterSeconds} seconds.`
+        : '';
     return new CliError(
-      'Delivery paused: the content check could not run. Local files are unchanged.',
+      'Delivery paused: the platform content check is down, not your game. Local files are unchanged.',
       EXIT_REFUSED,
-      'Staged files are kept — retry in a moment.',
+      `Staged files are kept.${wait || ' Retry in a moment.'}`,
     );
   }
   return null;
@@ -122,6 +127,57 @@ function mapHttpError(error: unknown): never {
   throw error instanceof CliError ? error : new CliError(message, EXIT_REFUSED);
 }
 
+function readEngineRef(path: string): string | null {
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf8')) as { engineRef?: unknown };
+    const ref = typeof value.engineRef === 'string' ? value.engineRef : '';
+    return /^[a-f0-9]{40}$/i.test(ref) ? ref : null;
+  } catch {
+    return null;
+  }
+}
+
+function localKitRef(dest: string): string | null {
+  const sourcePin = join(dest, 'gamedev-kit.json');
+  if (existsSync(sourcePin)) return readEngineRef(sourcePin);
+  return readEngineRef(kitPath(dest, 'gamedev.lock'));
+}
+
+// Server typechecks the round pin, or current when unpinned.
+async function warnIfKitStale(input: {
+  api: ApiClient;
+  slug: string;
+  dest: string;
+  warn?: (line: string) => void;
+}): Promise<void> {
+  if (!input.warn) return;
+  const local = localKitRef(input.dest);
+  if (!local) return;
+  try {
+    const pending = input.api
+      .request<{ engineRef?: unknown; typecheckEngineRef?: unknown }>(
+        'GET',
+        `/api/me/studio/games/${input.slug}/workspace?kitOnly=true`,
+      )
+      .catch(() => null);
+    const lock = await Promise.race([pending, new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000))]);
+    const hex = (value: unknown) => (typeof value === 'string' && /^[a-f0-9]{7,64}$/i.test(value) ? value : '');
+    const current = hex(lock?.engineRef);
+    const target = hex(lock?.typecheckEngineRef) || current;
+    if (!target || target.toLowerCase() === local.toLowerCase()) return;
+    const short = (ref: string) => ref.slice(0, 12);
+    const follow =
+      current && target.toLowerCase() === current.toLowerCase()
+        ? ' Update before sending: gamedevpl kit update'
+        : ' This round keeps that Kit until it closes.';
+    input.warn(
+      `Warning: this checkout pins GameKit ${short(local)}, but the platform typechecks ${short(target)}. A local pass can still be refused.${follow}`,
+    );
+  } catch {
+    // A kit probe must not block delivery.
+  }
+}
+
 async function submitGameUnlocked(input: {
   api: ApiClient;
   slug: string;
@@ -134,6 +190,8 @@ async function submitGameUnlocked(input: {
   interactive?: boolean;
   run?: Parameters<typeof runLadder>[0]['run'];
   onProgress?: (message: string) => void;
+  // Spinner overwrites its row, so warnings use this.
+  warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {
   const progress = deliveryProgress(input.onProgress);
@@ -164,6 +222,7 @@ async function submitGameUnlocked(input: {
     const refused = syncRefuse(first.sync, 'submit');
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
+  await warnIfKitStale(input);
   const sourceHash = verificationSourceHash(input.dest, input.slug);
   const verification = {
     cwd: input.dest,

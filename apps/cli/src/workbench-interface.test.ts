@@ -371,6 +371,34 @@ it('dismisses a settled action across updates and remounts without hiding new or
   await vi.waitFor(() => expect(doc.querySelector('.gc-failed')?.textContent).toContain('New delivery'));
 });
 
+it('shows action approval once and restores unrelated questions on the next poll', async () => {
+  const { doc, dom, state } = fixture();
+  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
+  const next = {
+    ...state,
+    mode: 'pick',
+    approvalPending: true,
+    question: 'Deliver racer',
+    choices: [
+      { label: 'Approve', value: 'Approve' },
+      { label: 'Reject', value: 'Reject' },
+    ],
+    agent: { actions: [{ status: 'pending', summary: 'Deliver racer' }] },
+  };
+  const render = (value: unknown) => dom.window.eval('render(' + JSON.stringify(value) + ')');
+  render(next);
+  expect(doc.getElementById('question')!.hidden).toBe(true);
+  expect(doc.getElementById('choices')!.hidden).toBe(true);
+  expect(doc.getElementById('destination')!.textContent).toBe('Review the pending action above');
+  render({ ...next, agent: { actions: [] } });
+  expect(doc.getElementById('question')!.hidden).toBe(false);
+  expect(doc.getElementById('choices')!.hidden).toBe(false);
+  expect(doc.getElementById('choices')!.textContent).toBe('ApproveReject');
+  render({ ...next, question: 'Choose a color', promptId: 2, choices: [{ label: 'Red', value: 'Red' }] });
+  expect(doc.getElementById('question')!.hidden).toBe(false);
+  expect(doc.getElementById('choices')!.textContent).toBe('Red');
+});
+
 it('embeds only the two WOFF2 font weights used by Play', () => {
   expect(PLAY_STYLE.match(/@font-face/g)).toHaveLength(2);
   expect(PLAY_STYLE).not.toMatch(/font-weight:300|format\(["']?woff["']?\)/);

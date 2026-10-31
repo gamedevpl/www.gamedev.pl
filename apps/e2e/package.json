@@ -7,7 +7,7 @@
   "scripts": {
     "pree2e": "node ../cli/scripts/build-play-ui.mjs",
     "e2e": "vitest run",
-    "e2e:hermetic": "node ../cli/scripts/build-play-ui.mjs && vitest run src/frame-document.test.ts src/editor-sensing.test.ts src/editor-dock-geometry.test.ts src/play-telemetry.test.ts src/cli-diff-view.test.ts src/studio-journal.test.ts",
+    "e2e:hermetic": "node ../cli/scripts/build-play-ui.mjs && vitest run src/frame-document.test.ts src/editor-sensing.test.ts src/editor-dock-geometry.test.ts src/play-telemetry.test.ts src/cli-diff-view.test.ts src/studio-journal.test.ts src/game-artifact-gate.test.ts src/kit-browser-archive.test.ts",
     "e2e:framed-local": "bash scripts/with-local-site.sh vitest run src/framed-play.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "e2e:play-code": "vitest run --config vitest.play-code.config.ts"

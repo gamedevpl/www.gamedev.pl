@@ -1,0 +1,15 @@
+name: Set up API Kit verification container
+description: Allow sandboxed Chromium user namespaces in the isolated verifier.
+runs:
+  using: composite
+  steps:
+    - name: Allow the verifier container to use Chromium's sandbox
+      shell: bash
+      run: |
+        set -euo pipefail
+        RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
+        if [ "$RESTRICT" != 1 ]; then exit 0; fi
+        printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile api-kit-verifier flags=(unconfined) {\n  userns,\n}\n' \
+          | sudo tee /etc/apparmor.d/api-kit-verifier
+        sudo apparmor_parser -r /etc/apparmor.d/api-kit-verifier
+        echo 'API_KIT_APPARMOR_PROFILE=api-kit-verifier' >> "$GITHUB_ENV"

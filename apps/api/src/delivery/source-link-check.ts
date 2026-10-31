@@ -1,4 +1,7 @@
 import { posix } from 'node:path';
+import { collectExports, type ExportInfo } from './source-export-names.js';
+
+export { collectExports };
 
 // Cross-file symbol link check; prefer false negatives.
 
@@ -14,10 +17,6 @@ export type SourceLinkFinding = {
 };
 
 const RELATIVE_IMPORT_RE = /^\s*import\s+(?:type\s+)?([\s\S]*?)\s+from\s+['"](\.[^'"]+)['"]\s*;?\s*$/gm;
-const EXPORT_NAMED_RE =
-  /^\s*export\s+(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
-const EXPORT_LIST_RE = /^\s*export\s*\{([^}]+)\}/gm;
-const EXPORT_DEFAULT_RE = /^\s*export\s+default\b/m;
 const MAX_GROUPED_FINDINGS = 8;
 const MAX_ERROR_BYTES = 800;
 // Cap bindings scanned per file for pathological sources.
@@ -158,46 +157,6 @@ export function parseRelativeImports(source: string): ParsedImport[] {
     out.push({ names, hasDefault, isNamespace: false, isTypeOnly, path });
   }
   return out;
-}
-
-type ExportInfo = {
-  named: Set<string>;
-  hasDefault: boolean;
-  // Opaque barrel — skip symbol checks on importers.
-  reexportsAll: boolean;
-};
-
-// Collect export names from a module source.
-export function collectExports(source: string): ExportInfo {
-  const text = stripComments(source);
-  const named = new Set<string>();
-  let hasDefault = EXPORT_DEFAULT_RE.test(text);
-  const reexportsAll = /^\s*export\s*\*\s+(?:as\s+[A-Za-z_$][\w$]*\s+)?from\s+/m.test(text);
-
-  EXPORT_NAMED_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = EXPORT_NAMED_RE.exec(text)) !== null) {
-    named.add(m[1]!);
-  }
-
-  EXPORT_LIST_RE.lastIndex = 0;
-  while ((m = EXPORT_LIST_RE.exec(text)) !== null) {
-    for (const part of m[1]!.split(',')) {
-      const bit = part.trim().replace(/^type\s+/, '');
-      if (!bit) continue;
-      const asMatch = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/.exec(bit);
-      if (asMatch) {
-        // Importers see the exported name, not local.
-        named.add(asMatch[2]!);
-        continue;
-      }
-      if (/^[A-Za-z_$][\w$]*$/.test(bit)) named.add(bit);
-    }
-  }
-
-  if (named.has('default')) hasDefault = true;
-
-  return { named, hasDefault, reexportsAll };
 }
 
 function dirnamePosix(path: string): string {

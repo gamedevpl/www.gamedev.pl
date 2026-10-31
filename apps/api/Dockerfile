@@ -50,6 +50,9 @@ RUN npm ci --ignore-scripts
 # imports real values from it (ticket minting, schema parsing), so it must be built first.
 # One list, in package.json, is the fix that survives the next package.
 RUN npm run build
+ARG PLATFORM_SOURCE_SHA=
+RUN case "$PLATFORM_SOURCE_SHA" in '') ;; *) test "${#PLATFORM_SOURCE_SHA}" = 40 && echo "$PLATFORM_SOURCE_SHA" | grep -Eq '^[0-9a-fA-F]{40}$' ;; esac \
+ && printf '%s\n' "$PLATFORM_SOURCE_SHA" > /app/apps/api/dist/build-sha.txt
 
 # ---- runtime: prod deps only + built output ----
 FROM node:22-slim AS runtime

@@ -102,7 +102,13 @@ push URL and branch commit again before executing. It pushes that immutable comm
 to the same branch, without force, tags, mirror mode or submodule pushes. Multiple
 push URLs and changed destinations or branch commits require a new request. Stop
 cancels the process group, and a timeout or cancellation reports uncertainty: inspect
-the remote before retrying. Existing Git hooks still run. This action never commits
+the remote before retrying. Pushes run in a temporary bare repository with hooks
+disabled, using the approved URL and the checkout's object database. Checkout-local
+configuration, including SSH commands, credential helpers, receive-pack overrides and
+includes, is not used for the push. The host's global Git credentials and SSH agent
+remain available. Only SSH and HTTPS transports are allowed; local paths and custom
+remote helpers are refused. Checkout-specific Git LFS hooks therefore do not run;
+repositories that need them must push through the creator's own terminal. This action never commits
 files or publishes on gamedev.pl, and requires approval even in Auto or YOLO.
 
 This affects creator-funnel question 4: `cli_step` events `brain_turn` and

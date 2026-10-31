@@ -78,7 +78,7 @@ function gameKey(generation = 1) {
     slug: SLUG,
     creatorUid: OWNER,
     keyGeneration: generation,
-    now: Date.parse('2026-08-01T12:00:00.000Z'),
+    now: Date.now(),
   });
 }
 
@@ -87,7 +87,7 @@ async function creatorHeaders(store: InMemoryStore): Promise<Record<string, stri
   const key = mintCreatorAgentKey(secret, {
     creatorUid: OWNER,
     keyGeneration: 1,
-    now: Date.parse('2026-08-01T12:00:00.000Z'),
+    now: Date.now(),
   });
   return { authorization: `Bearer ${key}` };
 }
@@ -191,7 +191,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 
@@ -232,7 +232,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 
@@ -256,7 +256,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 
@@ -296,7 +296,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 
@@ -323,7 +323,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 

@@ -50,6 +50,12 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
+      - name: Validate workflow syntax
+        run: |
+          curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tgz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck= -pyflakes=
       - run: npm run lint
       # A change to the shipped CLI must move apps/cli/CHANGELOG.md (see
       # .claude/skills/cli-release/SKILL.md). Diffing needs the PR's file list, which
@@ -118,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build the image
-        run: docker build -f apps/api/Dockerfile -t gamedev-app:ci .
+        run: docker build -f apps/api/Dockerfile --build-arg "PLATFORM_SOURCE_SHA=${{ github.sha }}" -t gamedev-app:ci .
       - name: Boot it and check health
         run: |
           set -euo pipefail
@@ -134,6 +140,7 @@ jobs:
             gamedev-app:ci
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:8080/api/health > /tmp/health.json 2>/dev/null; then
+              test "$(jq -r .buildSha /tmp/health.json)" = "${{ github.sha }}"
               echo "healthy after ${i}s: $(cat /tmp/health.json)"
               exit 0
             fi
@@ -196,28 +203,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build:packages
-      # Same install and hand-off as deploy.yml's browser gate. A missing binary fails
-      # here: without E2E_CHROMIUM_PATH the suites skip and the job passes on nothing.
-      - name: Install Chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
-        run: |
-          npx playwright install --with-deps chromium
-          BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
-          if [ -z "$BIN" ]; then
-            echo "::error::no chromium binary under $PLAYWRIGHT_BROWSERS_PATH"
-            exit 1
-          fi
-          echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
-      # The fixtures load hostile frames, so keep Chromium's sandbox on (see deploy.yml).
-      - name: Let Chromium use its sandbox
-        run: |
-          RESTRICT=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || echo 0)
-          if [ "$RESTRICT" != "1" ]; then exit 0; fi
-          PROFILE=/etc/apparmor.d/e2e-chromium
-          printf 'abi <abi/4.0>,\ninclude <tunables/global>\n\nprofile e2e-chromium "%s" flags=(unconfined) {\n  userns,\n}\n' \
-            "$E2E_CHROMIUM_PATH" | sudo tee "$PROFILE"
-          sudo apparmor_parser -r "$PROFILE"
+      - uses: ./.github/actions/setup-artifact-browser
       - run: npm run e2e:hermetic -w @gamedevpl/e2e
       - run: npm run prebuild -w @gamedevpl/cli
       - run: npm run e2e:play-code -w @gamedevpl/e2e
@@ -226,3 +212,14 @@ jobs:
       # deploy.yml's browser gate, after merge; this catches them before.
       - run: npm run build -w @gamedevpl/web
       - run: npm run e2e:framed-local -w @gamedevpl/e2e
+      - uses: ./.github/actions/setup-api-kit-container
+      - name: Build and exercise the API compatibility container
+        run: |
+          set -euo pipefail
+          CONTEXT=$(mktemp -d)
+          git archive HEAD | tar -x -C "$CONTEXT"
+          git rev-parse HEAD > "$CONTEXT/api-ref.txt"
+          docker build -f "$CONTEXT/infra/api-kit-verifier.Dockerfile" \
+            --iidfile "$RUNNER_TEMP/api-kit-image" "$CONTEXT"
+          node --import tsx apps/api/scripts/check-api-kit-container.ts \
+            "$(cat "$RUNNER_TEMP/api-kit-image")" "$(git rev-parse HEAD)"

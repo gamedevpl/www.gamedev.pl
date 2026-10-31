@@ -1,104 +1,60 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PNG } from 'pngjs';
 import { VARIANT_WIDTHS } from '../platform/image-variants.js';
-import { publishSnapshot } from './game-snapshot-publish.js';
-import type { GameSnapshotWriter, SnapshotGame, SnapshotMedia, SnapshotPointer } from './game-snapshot.js';
-import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';
-
-const ref = 'main';
-
-function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): CatalogGameEntry {
-  return {
-    slug,
-    title: slug,
-    genre: 'arcade',
-    controls: 'arrows',
-    status: 'published',
-    media: null,
-    multiplayer: null,
-    ...overrides,
-  };
-}
-
-function gameSources(overrides: Partial<GameSources> = {}): GameSources {
-  return {
-    indexHtml: '<canvas id="game"></canvas>',
-    gameJs: 'console.log("play")',
-    styleCss: 'body{margin:0}',
-    title: null,
-    ...overrides,
-  };
-}
-
-function createClientStub(params: {
-  catalog: CatalogGameEntry[];
-  sourcesBySlug?: Record<string, GameSources | null>;
-  mediaBySlug?: Record<string, Uint8Array | null>;
-}) {
-  const getCatalog = vi.fn(async () => params.catalog);
-  const getGameSources = vi.fn(async (_ref: string, slug: string) =>
-    params.sourcesBySlug ? (params.sourcesBySlug[slug] ?? null) : gameSources(),
-  );
-  const getGameMedia = vi.fn(async (_ref: string, slug: string) =>
-    params.mediaBySlug ? (params.mediaBySlug[slug] ?? null) : new Uint8Array([1, 2, 3]),
-  );
-  const client = {
-    getCatalog,
-    getGameSources,
-    getGameMedia,
-  } as unknown as GitHubClient;
-  return { client, getCatalog, getGameSources, getGameMedia };
-}
-
-function createWriterSpy() {
-  const order: string[] = [];
-  const games = new Map<string, SnapshotGame>();
-  const media = new Map<string, SnapshotMedia>();
-  let catalog: CatalogGameEntry[] | null = null;
-  let pointer: SnapshotPointer | null = null;
-
-  const writer: GameSnapshotWriter = {
-    async putCatalog(_id, entries) {
-      order.push('catalog');
-      catalog = entries;
-    },
-    async putGame(_id, game) {
-      order.push(`game:${game.slug}`);
-      games.set(game.slug, game);
-    },
-    async putMedia(_id, slug, filename, value, width) {
-      const key = width === undefined ? `${slug}/${filename}` : `${slug}/w${width}/${filename}`;
-      order.push(`media:${key}`);
-      media.set(key, value);
-    },
-    async putPointer(value) {
-      order.push('pointer');
-      pointer = value;
-    },
-  };
-
-  return {
-    writer,
-    order,
-    games,
-    media,
-    get catalog() {
-      return catalog;
-    },
-    get pointer() {
-      return pointer;
-    },
-  };
-}
-
-const fixedNow = () => new Date('2026-07-27T10:15:00.000Z');
+import { publishSnapshot, type PublishSnapshotOptions } from './game-snapshot-publish.js';
+import { gameHtmlHash, type VerifyGameArtifact } from './game-artifact.js';
+import {
+  ref,
+  browserProof,
+  fixedNow,
+  catalogEntry,
+  gameSources,
+  createClientStub,
+  createWriterSpy,
+} from './game-snapshot-publish.fixture.js';
 
 describe('publishSnapshot', () => {
+  it('refuses publication without an executable browser gate', async () => {
+    const { client } = createClientStub({ catalog: [catalogEntry('broken')] });
+    const spy = createWriterSpy();
+    await expect(publishSnapshot({ client, writer: spy.writer, ref } as PublishSnapshotOptions)).rejects.toThrow(
+      'requires a browser gate',
+    );
+    expect(spy.order).toEqual([]);
+  });
+
+  it('keeps the previous pointer when any final game document cannot boot', async () => {
+    const { client } = createClientStub({ catalog: [catalogEntry('working'), catalogEntry('broken')] });
+    const spy = createWriterSpy();
+    const verifyGame: VerifyGameArtifact = async (game) => {
+      if (game.slug === 'broken') throw new Error('require is not defined');
+      return browserProof(game);
+    };
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, verifyGame });
+    expect(result.failures).toEqual([{ slug: 'broken', reason: 'require is not defined' }]);
+    expect(spy.pointer).toBeNull();
+    expect(spy.games.has('broken')).toBe(false);
+  });
+
+  it.each(['html', 'engine', 'frames'])('rejects browser evidence for different %s', async (mismatch) => {
+    const { client } = createClientStub({ catalog: [catalogEntry('pilot')] });
+    const spy = createWriterSpy();
+    const verifyGame: VerifyGameArtifact = async (game) => ({
+      engineRef: mismatch === 'engine' ? 'another-engine' : game.engineRef,
+      htmlSha256: gameHtmlHash(mismatch === 'html' ? 'another-document' : game.html),
+      frames: mismatch === 'frames' ? 0 : 6,
+    });
+    const result = await publishSnapshot({ client, writer: spy.writer, ref, verifyGame });
+    expect(result.failures).toHaveLength(1);
+    expect(spy.pointer).toBeNull();
+    expect(spy.games.size).toBe(0);
+  });
+
   it('bakes each published game into a self-contained document', async () => {
     const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(1);
     const baked = spy.games.get('bubble-pop');
@@ -110,7 +66,7 @@ describe('publishSnapshot', () => {
     const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     const html = spy.games.get('bubble-pop')?.html ?? '';
     // Baking must not quietly drop the network lockdown or the AI Act art. 50(2)
@@ -126,7 +82,7 @@ describe('publishSnapshot', () => {
     });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(spy.games.get('a')?.title).toBe('Spec Title');
     expect(spy.games.get('b')?.title).toBe('b');
@@ -138,7 +94,7 @@ describe('publishSnapshot', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(1);
     expect(spy.games.has('gone')).toBe(false);
@@ -155,7 +111,7 @@ describe('publishSnapshot', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.mediaFiles).toBe(2);
     expect(spy.media.get('bubble-pop/opening.png')?.contentType).toBe('image/png');
@@ -170,7 +126,7 @@ describe('publishSnapshot', () => {
     });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     // Until the pointer moves a half-written snapshot is invisible, so publishing
     // is atomic and the site keeps serving the previous snapshot throughout.
@@ -184,7 +140,14 @@ describe('publishSnapshot', () => {
     const { client } = createClientStub({ catalog: [catalogEntry('bubble-pop')] });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, commitSha: 'cafe1234', now: fixedNow });
+    const result = await publishSnapshot({
+      verifyGame: browserProof,
+      client,
+      writer: spy.writer,
+      ref,
+      commitSha: 'cafe1234',
+      now: fixedNow,
+    });
 
     expect(spy.pointer).toEqual({
       snapshotId: result.snapshotId,
@@ -203,7 +166,7 @@ describe('publishSnapshot failure handling', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(1);
     expect(result.failures).toEqual([{ slug: 'broken', reason: 'game sources not found on ref' }]);
@@ -221,7 +184,7 @@ describe('publishSnapshot failure handling', () => {
     });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     // Catalog membership is the games repo's decision, not this job's. The
     // objects are written for debugging, but the pointer stays put so failed
@@ -238,7 +201,7 @@ describe('publishSnapshot failure handling', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(0);
     expect(result.failures[0]?.slug).toBe('empty');
@@ -254,7 +217,7 @@ describe('publishSnapshot failure handling', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(1);
     expect(result.mediaFiles).toBe(0);
@@ -266,7 +229,7 @@ describe('publishSnapshot failure handling', () => {
     const { client } = createClientStub({ catalog: [] });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(0);
     expect(spy.catalog).toEqual([]);
@@ -303,7 +266,7 @@ describe('publishSnapshot media variants', () => {
     });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(spy.media.has('bubble-pop/opening.png')).toBe(true);
     for (const width of VARIANT_WIDTHS) {
@@ -322,7 +285,7 @@ describe('publishSnapshot media variants', () => {
     });
     const spy = createWriterSpy();
 
-    await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(spy.media.has('bubble-pop/gameplay.mp4')).toBe(true);
     for (const width of VARIANT_WIDTHS) {
@@ -340,7 +303,7 @@ describe('publishSnapshot media variants', () => {
     });
     const spy = createWriterSpy();
 
-    const result = await publishSnapshot({ client, writer: spy.writer, ref, now: fixedNow });
+    const result = await publishSnapshot({ verifyGame: browserProof, client, writer: spy.writer, ref, now: fixedNow });
 
     expect(result.published).toBe(1);
     expect(spy.media.has('bubble-pop/opening.png')).toBe(true);

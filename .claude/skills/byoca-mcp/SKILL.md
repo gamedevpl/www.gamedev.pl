@@ -20,7 +20,10 @@ Local Play's `game_git_push` proposes a host action for an explicitly requested
 source-repository push. `gamedevpl:` remotes keep their existing platform Git delivery flow.
 It requires approval even in Auto/YOLO, validates the configured push URL
 and immutable branch commit again, and uses host Git/SSH without relaxing the
-agent's shell sandbox. It never opens a round or publishes on gamedev.pl.
+agent's shell sandbox. Pushes use isolated Git metadata and disable hooks;
+checkout-local executable configuration never runs with host credentials. Only SSH
+and HTTPS are supported; repositories needing pre-push hooks use the creator's
+terminal. It never opens a round or publishes on gamedev.pl.
 
 Local CLI delegation uses a separate, task-scoped `gamedevpl_local` MCP server.
 Its `preview_status`, `capture_game` and `capture_status` tools capture the current
@@ -156,6 +159,13 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    - **`preview_failed` / `red`:** do **not** stop at `stage_source_file` / `show_round`.
      Honour `warnings.code=must_fix_gate`, fix, then `submit_sources` again on the same
      key. Staging alone leaves the creator card on the refused delivery.
+   - A manual Studio delivery has no dispatched agent session. Its current-round green
+     preview moves to `ready_for_review` without waiting for an agent to finish or call
+     `end`; the owner can then seal it. A pending or red gate still blocks readiness,
+     and sealing never bypasses operator approval to publish. Cover the no-dispatch
+     case when changing preview completion: agent-only fixtures miss this path.
+     Pin both observed version fields in the closing transaction, including absence:
+     a replacement delivery can change versions before its activity timestamp advances.
 5. Only call `get_gate_verdict` once when an already-available verdict would change
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`

@@ -117,6 +117,38 @@ against the build configuration before attributing their outcome.
 
 ## Run the project's real gate
 
+Shared GameKit changes must be checked through each consuming assembler. The games
+repo's browser gate and local Play can pass while the API emits broken JavaScript.
+Run the real API assembler with core and dependencies from the candidate engine SHA,
+then execute its output in the production iframe sandbox and require startup and
+advancing frames. Bind results to both repository SHAs and the tested artifact bytes.
+Check snapshot and Kit promotion separately: a website deploy gate does not run when
+only those pointers change. HTTP 200 and successful HTML generation do not prove boot.
+Check the reverse release boundary too: a new API must execute artifacts using
+every published Kit it still accepts, including older same-major sidecars. Recheck
+that window before promoting the identified candidate revision, not an implicit latest.
+For gate repairs, demonstrate that the historical broken candidate is rejected before
+promotion and the corrected candidate passes. Distinguish a local gate attestation
+from an independently executed CI check; neither substitutes for artifact execution.
+
+Treat build credentials as an execution-boundary concern too. An empty environment
+and a different Unix user do not remove cloud metadata access or readable host
+credential files. Execute candidate toolchains with networking disabled and only
+their required inputs mounted read-only; keep publisher storage credentials and
+the container-runtime socket outside that environment. Test isolation with dummy
+host files and environment values, blocked metadata addresses and attempted source
+writes, alongside working and deliberately broken artifact checks.
+Exercise a restrictive host umask too. Git exports and staged JSON can inherit
+owner-only modes; normalize image source and input readability for the container UID.
+Keep private-engine compiler output out of public deployment logs, including errors.
+Exercise the real shell step with failing verification and assert traffic stays unchanged.
+AppArmor-restricted runners need a named userns profile for the container too;
+granting it to a downloaded host Chromium does not cover the container binary.
+Filtered Git fetches can still load every blob when archiving a commit with a
+pathspec. Archive the shared subtree itself and assert unrelated game blobs stay
+absent from the local object database. Filtering HTTP archive entries saves memory,
+not the network transfer of the complete games repository.
+
 Game renderer changes can invalidate standalone test fixtures. Install the GameKit stub
 before dynamically importing modules that read it at initialization, and include the
 renderer context's canvas when testing pixel scale. Match geometry assertions to the
@@ -224,6 +256,13 @@ Run scoped CLI suites with `npm run test -w @gamedevpl/cli -- <files>` or from
 Play lifetime fixtures resolve `../../node_modules` from that directory; running
 them from the monorepo root makes child processes look for `/node_modules/tsx`
 and produces startup timeouts unrelated to the product change.
+
+Host Git actions must be tested against checkout-controlled hooks, SSH commands,
+credential helpers, receive-pack overrides and includes. A successful host SSH
+fixture alone does not establish isolation. Run the attack fixtures on the original
+implementation too. Keep push metadata separate from the checkout's configuration,
+disable hooks, and refuse custom helpers and local transports that execute receiver
+code on the host. Exercise linked worktrees and both Git object formats.
 
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
 

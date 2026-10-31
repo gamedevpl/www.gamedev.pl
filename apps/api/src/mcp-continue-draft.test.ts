@@ -69,7 +69,7 @@ async function creatorHeaders(store: InMemoryStore): Promise<Record<string, stri
   const key = mintCreatorAgentKey(secret, {
     creatorUid: OWNER,
     keyGeneration: 1,
-    now: Date.parse('2026-08-01T12:00:00.000Z'),
+    now: Date.now(),
   });
   return { authorization: `Bearer ${key}` };
 }
@@ -410,7 +410,7 @@ describe('MCP continue_draft', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 
@@ -432,7 +432,7 @@ describe('MCP continue_draft', () => {
     const creatorKey = mintCreatorAgentKey(secret, {
       creatorUid: OWNER,
       keyGeneration: 1,
-      now: Date.parse('2026-08-01T12:00:00.000Z'),
+      now: Date.now(),
     });
     app = await createApp(store);
 

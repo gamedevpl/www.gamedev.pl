@@ -191,6 +191,9 @@ SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
 # Its own caller identity: the Pub/Sub push subscription, not the scheduler.
 SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
 SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
+# The remoteCapture lane revokes this member on this job; unset disarms it.
+REMOTE_CAPTURE_JOB="${REMOTE_CAPTURE_JOB:-}"
+REMOTE_CAPTURE_EXECUTOR="${REMOTE_CAPTURE_EXECUTOR:-}"
 # The private ops console (/api/internal/ops/*): fixed audience, identity-only SA.
 OPS_CONSOLE_AUDIENCE="${OPS_CONSOLE_AUDIENCE:-https://www.gamedev.pl/api/internal/ops}"
 OPS_CONSOLE_SA="${OPS_CONSOLE_SA:-ops-console@${PROJECT_ID}.iam.gserviceaccount.com}"
@@ -233,8 +236,13 @@ echo "==> Building image via Cloud Build: ${IMAGE}"
 # then dials an origin that no longer serves /api/mp/ws.
 # ANDROID_SHA256_CERT_FINGERPRINTS may itself contain commas (it is a comma-joined
 # list), so it uses "^;^" to pick a substitutions delimiter that value cannot contain.
+SOURCE_SHA=$(git -C "$REPO_ROOT" rev-parse HEAD)
+if [ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]; then
+  echo "Commit source changes before building a versioned production image." >&2
+  exit 1
+fi
 gcloud builds submit "$REPO_ROOT" --config "$REPO_ROOT/infra/cloudbuild.yaml" \
-  --substitutions "^;^_IMAGE=${IMAGE};_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID};_APPLE_SERVICES_ID=${APPLE_SERVICES_ID};_MP_RELAY_URL=${MP_RELAY_URL};_IOS_TEAM_ID=${IOS_TEAM_ID};_IOS_BUNDLE_ID=${IOS_BUNDLE_ID};_ANDROID_PACKAGE_NAME=${ANDROID_PACKAGE_NAME};_ANDROID_SHA256_CERT_FINGERPRINTS=${ANDROID_SHA256_CERT_FINGERPRINTS}" \
+  --substitutions "^;^_IMAGE=${IMAGE};_SOURCE_SHA=${SOURCE_SHA};_GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID};_APPLE_SERVICES_ID=${APPLE_SERVICES_ID};_MP_RELAY_URL=${MP_RELAY_URL};_IOS_TEAM_ID=${IOS_TEAM_ID};_IOS_BUNDLE_ID=${IOS_BUNDLE_ID};_ANDROID_PACKAGE_NAME=${ANDROID_PACKAGE_NAME};_ANDROID_SHA256_CERT_FINGERPRINTS=${ANDROID_SHA256_CERT_FINGERPRINTS}" \
   --project "$PROJECT_ID"
 
 # Wire whichever secrets exist into one --set-secrets list (multiple --set-secrets
@@ -534,6 +542,12 @@ fi
 if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
   ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
 fi
+if [ -n "$REMOTE_CAPTURE_JOB" ]; then
+  ENV_VARS="${ENV_VARS}|REMOTE_CAPTURE_JOB=${REMOTE_CAPTURE_JOB}"
+fi
+if [ -n "$REMOTE_CAPTURE_EXECUTOR" ]; then
+  ENV_VARS="${ENV_VARS}|REMOTE_CAPTURE_EXECUTOR=${REMOTE_CAPTURE_EXECUTOR}"
+fi
 if [ -n "$OPS_CONSOLE_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|OPS_CONSOLE_AUDIENCE=${OPS_CONSOLE_AUDIENCE}"
 fi
@@ -587,12 +601,17 @@ fi
 # a seed may take up to ten minutes to generate plus a typecheck, and the default 300s
 # would cut it off. Same threading rule as the flags above: both supported deploy paths
 # carry these, or neither should.
-echo "==> Deploying to Cloud Run (scale-to-zero, request-scoped CPU, max ${MAX_INSTANCES} instance(s))"
+echo "==> Deploying an unpromoted candidate (max ${MAX_INSTANCES} instance(s))"
+COMPAT_REVISION_SUFFIX="compat-${SOURCE_SHA:0:12}-$(date +%s)"
+COMPAT_TAG="api-compat-${SOURCE_SHA:0:12}"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
   --project "$PROJECT_ID" \
   --platform managed \
+  --no-traffic \
+  --tag "$COMPAT_TAG" \
+  --revision-suffix "$COMPAT_REVISION_SUFFIX" \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances "$MAX_INSTANCES" \
@@ -603,6 +622,20 @@ gcloud run deploy "$SERVICE" \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
+
+COMPAT_CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
+  --format=json | jq -er --arg tag "$COMPAT_TAG" '.status.traffic[] | select(.tag==$tag) | .url')
+COMPAT_RECEIPT=$(mktemp)
+trap 'rm -f "$COMPAT_RECEIPT"' EXIT
+npm --prefix "$REPO_ROOT" run build:packages
+node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" \
+  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
+  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" --recheck \
+  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
+  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+gcloud run services update-traffic "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
+  --to-revisions "${SERVICE}-${COMPAT_REVISION_SUFFIX}=100" --remove-tags "$COMPAT_TAG"
 
 echo "==> Done. The app (web + API) is live at:"
 gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \

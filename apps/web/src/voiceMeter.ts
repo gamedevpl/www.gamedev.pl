@@ -3,6 +3,7 @@ import { isGameFrameNavigatedAway, isFromGameFrame, postToGameFrame } from './fr
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { setCaptureAudioSession } from './audioSession.js';
+import { frameLevel, mediaSupported, micConstraints, nextMic, useMicDevice } from './micInput.js';
 export type VoiceMeterShellStatus = 'unsupported' | 'idle' | 'pending' | 'live' | 'denied';
 
 export type VoiceMeterGameMessage = { t: 'voice:hello' } | { t: 'voice:stop' };
@@ -22,19 +23,11 @@ export function parseVoiceMeterMessage(raw: unknown): VoiceMeterGameMessage | nu
   return null;
 }
 
-function mediaSupported(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    !!navigator.mediaDevices &&
-    typeof navigator.mediaDevices.getUserMedia === 'function' &&
-    !!(window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
-  );
-}
-
 export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement | null>) {
   const frameDocument = useFrameDocument(frameRef);
   const [available, setAvailable] = useState(false);
   const [status, setStatus] = useState<VoiceMeterShellStatus>(() => (mediaSupported() ? 'idle' : 'unsupported'));
+  const { device, canSwitch, heard: micHeard, clear: micClear } = useMicDevice();
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -87,89 +80,95 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
 
   const stopMic = useCallback(() => {
     teardown();
+    micClear();
     if (statusRef.current === 'unsupported') return;
     publishStatus('idle');
-  }, [publishStatus, teardown]);
+  }, [micClear, publishStatus, teardown]);
 
   const pumpLevels = useCallback(() => {
     const analyser = analyserRef.current;
     const timeDomain = timeDomainRef.current;
     if (!analyser || !timeDomain || statusRef.current !== 'live') return;
-    analyser.getByteTimeDomainData(timeDomain as Uint8Array<ArrayBuffer>);
-    let sum = 0;
-    for (let i = 0; i < timeDomain.length; i++) {
-      const v = (timeDomain[i]! - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / timeDomain.length);
-    const boosted = Math.min(1, rms * 4);
+    const boosted = frameLevel(analyser, timeDomain);
     // Light shell-side smoothing; the kit applies its own smoothing on top.
     levelRef.current = levelRef.current * 0.55 + boosted * 0.45;
     postToGame({ t: 'voice:level', value: levelRef.current });
     rafRef.current = requestAnimationFrame(pumpLevels);
   }, [postToGame]);
 
-  const startMic = useCallback(() => {
-    if (!availableRef.current || isGameFrameNavigatedAway(frameRef.current)) return;
-    if (statusRef.current === 'live' || statusRef.current === 'pending' || statusRef.current === 'unsupported') {
-      return;
-    }
-    if (!mediaSupported()) {
-      publishStatus('unsupported');
-      return;
-    }
+  const startMic = useCallback(
+    (deviceId?: string) => {
+      if (!availableRef.current || isGameFrameNavigatedAway(frameRef.current)) return;
+      if (statusRef.current === 'live' || statusRef.current === 'pending' || statusRef.current === 'unsupported') {
+        return;
+      }
+      if (!mediaSupported()) {
+        publishStatus('unsupported');
+        return;
+      }
 
-    const AC =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    setCaptureAudioSession();
-    if (!contextRef.current) contextRef.current = new AC();
-    if (contextRef.current.state === 'suspended') void contextRef.current.resume();
+      const AC =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      setCaptureAudioSession();
+      if (!contextRef.current) contextRef.current = new AC();
+      if (contextRef.current.state === 'suspended') void contextRef.current.resume();
 
-    const generation = ++acquisition.current;
-    publishStatus('pending');
-    void navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
-      .then((mediaStream) => {
-        if (
-          generation !== acquisition.current ||
-          statusRef.current !== 'pending' ||
-          document.hidden ||
-          !availableRef.current ||
-          isGameFrameNavigatedAway(frameRef.current)
-        ) {
-          for (const track of mediaStream.getTracks()) track.stop();
-          if (generation === acquisition.current && document.hidden) stopMic();
-          return;
-        }
-        streamRef.current = mediaStream;
-        const context = contextRef.current;
-        if (!context) {
-          for (const track of mediaStream.getTracks()) track.stop();
-          publishStatus('unsupported');
-          return;
-        }
-        const source = context.createMediaStreamSource(mediaStream);
-        const analyser = context.createAnalyser();
-        analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.4;
-        analyserRef.current = analyser;
-        timeDomainRef.current = new Uint8Array(analyser.fftSize);
-        source.connect(analyser);
-        if (context.state === 'suspended') void context.resume();
-        publishStatus('live');
-        rafRef.current = requestAnimationFrame(pumpLevels);
-      })
-      .catch(() => {
-        if (generation !== acquisition.current) return;
-        teardown();
-        publishStatus('denied');
-      });
-  }, [frameRef, publishStatus, pumpLevels, stopMic, teardown]);
+      const generation = ++acquisition.current;
+      publishStatus('pending');
+      void navigator.mediaDevices
+        .getUserMedia(micConstraints(deviceId))
+        .then((mediaStream) => {
+          if (
+            generation !== acquisition.current ||
+            statusRef.current !== 'pending' ||
+            document.hidden ||
+            !availableRef.current ||
+            isGameFrameNavigatedAway(frameRef.current)
+          ) {
+            for (const track of mediaStream.getTracks()) track.stop();
+            if (generation === acquisition.current && document.hidden) stopMic();
+            return;
+          }
+          streamRef.current = mediaStream;
+          const context = contextRef.current;
+          if (!context) {
+            for (const track of mediaStream.getTracks()) track.stop();
+            publishStatus('unsupported');
+            return;
+          }
+          const source = context.createMediaStreamSource(mediaStream);
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 1024;
+          analyser.smoothingTimeConstant = 0.4;
+          analyserRef.current = analyser;
+          timeDomainRef.current = new Uint8Array(analyser.fftSize);
+          source.connect(analyser);
+          if (context.state === 'suspended') void context.resume();
+          publishStatus('live');
+          micHeard(mediaStream);
+          rafRef.current = requestAnimationFrame(pumpLevels);
+        })
+        .catch(() => {
+          if (generation !== acquisition.current) return;
+          teardown();
+          publishStatus('denied');
+        });
+    },
+    [frameRef, micHeard, publishStatus, pumpLevels, stopMic, teardown],
+  );
 
   const toggle = useCallback(() => {
     if (statusRef.current === 'live' || statusRef.current === 'pending') stopMic();
     else startMic();
   }, [startMic, stopMic]);
+
+  const switchMic = useCallback(async () => {
+    const next = statusRef.current === 'live' ? await nextMic(streamRef.current) : null;
+    if (!next || statusRef.current !== 'live') return;
+    teardown();
+    statusRef.current = 'idle';
+    startMic(next);
+  }, [startMic, teardown]);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +221,9 @@ export function useVoiceMeterBridge(frameRef: MutableRefObject<HTMLIFrameElement
     available,
     status,
     live: status === 'live',
+    device,
+    canSwitch,
+    switchMic,
     toggle,
     stop: stopMic,
   };

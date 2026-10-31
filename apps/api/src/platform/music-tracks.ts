@@ -79,8 +79,8 @@ export function parseGameMusicTracks(source: string, label = 'game music.json'):
     if (typeof track.bpm !== 'number' || !Number.isFinite(track.bpm) || track.bpm < 40 || track.bpm > 240) {
       throw new Error(`${label}: ${name}.bpm must be between 40 and 240`);
     }
-    if (typeof track.steps !== 'number' || !Number.isInteger(track.steps) || track.steps < 8 || track.steps > 64) {
-      throw new Error(`${label}: ${name}.steps must be an integer from 8 to 64`);
+    if (typeof track.steps !== 'number' || !Number.isInteger(track.steps) || track.steps < 8 || track.steps > 256) {
+      throw new Error(`${label}: ${name}.steps must be an integer from 8 to 256`);
     }
     if (
       track.gain !== undefined &&

@@ -1,15 +1,4 @@
-/**
- * The target N1 module map for `apps/api/src`, per the north-star-architecture.md plan
- * (private gamedevpl/www.gamedev.pl-ops repo -- see AGENTS.md) Phase 0/3.
- *
- * Phase 3 physically moves files into these directories and flips the boundary rule from
- * warn to error, module by module. Phase 0 only needs the *assignment* -- which bucket each
- * file already belongs to by its current name and purpose -- so cross-bucket imports are
- * visible in review before any file moves. `platform` (composition root, auth, shared
- * primitives, the Store) is a real bucket like any other and is listed explicitly below,
- * same as every domain file; a name with no entry at all is genuinely unclassified and the
- * boundary rule warns about that too, rather than quietly trusting it as platform.
- */
+// Maps API files to their enforced module boundaries.
 
 /** Doc order: platform, creation, agent-surface, delivery, catalog, community, realtime, telemetry, notifications. */
 export const MODULE_BUCKETS = [
@@ -46,6 +35,10 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'api-kit-compatibility': 'platform',
+  'api-kit-input': 'platform',
+  'api-kit-retention': 'platform',
+  'build-info': 'platform',
   'mcp-managed-context-tools': 'agent-surface',
   'erase-creator-attachments': 'platform',
   'creator-playtest-attachment': 'platform',
@@ -175,6 +168,7 @@ const FILE_BUCKET = {
   // Anthropic client factory beside genai. No relative imports at all.
   'genai-anthropic': 'platform',
   'moderation-metrics': 'platform',
+  'moderation-outage-log': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
   'frame-performance': 'platform',
@@ -592,6 +586,7 @@ const FILE_BUCKET = {
   // sources at gate time -- delivery-domain checks that had drifted into creation/.
   'version-verdict': 'delivery',
   'source-link-check': 'delivery',
+  'source-export-names': 'delivery',
   'ts-any-scan': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play
@@ -615,6 +610,9 @@ const FILE_BUCKET = {
   'bake-media': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
+  'game-snapshot-publish.fixture': 'catalog',
+  'game-artifact': 'catalog',
+  'game-artifact-browser': 'catalog',
   'media-object-choice': 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',

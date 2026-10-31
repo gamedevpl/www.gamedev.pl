@@ -214,6 +214,9 @@
     "soundOn": "Dźwięk: Wł.",
     "soundOff": "Dźwięk: Wył.",
     "micOn": "Mikrofon: Wł.",
+    "micOnDevice": "Mikrofon: {{device}}",
+    "micSwitch": "Słuchaj przez inny mikrofon",
+    "micSwitchShort": "Zmień",
     "micOff": "Mikrofon: Wył.",
     "micPending": "Mikrofon: …",
     "micDenied": "Mikrofon: Odmowa",
@@ -573,7 +576,7 @@
         "commandBack": "Wróć do wątku"
       },
       "deliverContentRejected": "Nie opublikowano — tekst w SPEC.md lub GAME.json nie nadaje się do publikacji. Popraw tytuł, opis albo instrukcję i opublikuj ponownie. Twój kod nie był czytany.",
-      "deliverModerationUnavailable": "Nie opublikowano — sprawdzenie treści nie mogło się teraz wykonać. Twoje pliki są zapisane; spróbuj za chwilę."
+      "deliverModerationUnavailable": "Nie opublikowano — sprawdzanie treści nie działa po stronie platformy, nie z powodu Twojej gry. Pliki są zapisane; spróbuj za około minutę."
     },
     "editor": {
       "loading": "Wczytywanie edytora…",

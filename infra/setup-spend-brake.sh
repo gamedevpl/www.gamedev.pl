@@ -225,5 +225,16 @@ topic — a budget that only emails is not a brake:
     --format='table(displayName, notificationsRule.pubsubTopic)'
 
 The lanes a budget may name are the keys of PAUSEABLE in spend-brake.ts: creation,
-editing, chat, tabComplete, search, gate, seeding, managed, video, media, anonymous.
+editing, chat, tabComplete, search, gate, seeding, managed, video, media, anonymous,
+remoteCapture.
+
+remoteCapture is the GPU capture job agents launch with their own identity, so no
+flag stops it: the brake removes REMOTE_CAPTURE_EXECUTOR from the IAM policy of
+REMOTE_CAPTURE_JOB (projects/P/locations/R/jobs/J). The service account needs to
+manage that one job's policy, granted on the job, not the project:
+
+  gcloud run jobs add-iam-policy-binding JOB --region REGION \\
+    --member=serviceAccount:SERVICE_SA --role=roles/run.admin
+
+Resuming is granting the executor binding back by hand.
 EOF

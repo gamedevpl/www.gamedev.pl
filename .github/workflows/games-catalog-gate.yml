@@ -450,15 +450,23 @@ jobs:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
+          gate_failed=0
+          run_stage() {
+            "$QUIET" "$@" || gate_failed=1
+          }
           # The observer emits a SHA-bound attestation only after the full gate.
-          "$QUIET" npm run check:pr -- --full
+          run_stage npm run check:pr -- --full
           if [ "${{ needs.resolve.outputs.catalog_agent_play }}" = 1 ]; then
-            "$QUIET" npm run agent-play
+            run_stage npm run agent-play
           fi
           if [ "${{ needs.resolve.outputs.catalog_playtest }}" = all ]; then
-            "$QUIET" npm run playtest -- --all
+            run_stage npm run playtest -- --all
           else
-            "$QUIET" npm run playtest -- --suite default
+            run_stage npm run playtest -- --suite default
+          fi
+          if [ "$gate_failed" -ne 0 ]; then
+            echo "::error title=Games full gate failed::One or more gate checks failed."
+            exit 1
           fi
 
       - name: Print verified full gate attestation
@@ -475,32 +483,40 @@ jobs:
           NARROW_CONFORMANCE: ${{ needs.resolve.outputs.narrow_conformance }}
         run: |
           set -euo pipefail
-          "$QUIET" npm run check:no-js
-          "$QUIET" npm run check:gfx
-          "$QUIET" npm run check:ios
-          "$QUIET" npm run audio:check
-          "$QUIET" npm run audio:plan-check
-          "$QUIET" npm run typecheck
+          gate_failed=0
+          run_stage() {
+            "$QUIET" "$@" || gate_failed=1
+          }
+          run_stage npm run check:no-js
+          run_stage npm run check:gfx
+          run_stage npm run check:ios
+          run_stage npm run audio:check
+          run_stage npm run audio:plan-check
+          run_stage npm run typecheck
           if [ -n "${SLUGS// /}" ] && [ "$NARROW_CONFORMANCE" = 1 ]; then
-            GAME_TEST_SLUGS="$SLUGS" "$QUIET" npm run test
+            GAME_TEST_SLUGS="$SLUGS" run_stage npm run test
           else
-            "$QUIET" npm run test
+            run_stage npm run test
           fi
-          "$QUIET" npm run validate
+          run_stage npm run validate
           if [ -n "${SLUGS// /}" ]; then
-            "$QUIET" npm run smoke -- $SLUGS
-            "$QUIET" npm run trace -- -j 4 $SLUGS
-            "$QUIET" npm run build -- $SLUGS
-            "$QUIET" npm run accept -- $SLUGS
-            "$QUIET" npm run agent-play -- -j 2 $SLUGS
-            "$QUIET" npm run agency -- --strict -j 4 $SLUGS
-            "$QUIET" npm run playtest -- $SLUGS
+            run_stage npm run smoke -- $SLUGS
+            run_stage npm run trace -- -j 4 $SLUGS
+            run_stage npm run build -- $SLUGS
+            run_stage npm run accept -- $SLUGS
+            run_stage npm run agent-play -- -j 2 $SLUGS
+            run_stage npm run agency -- --strict -j 4 $SLUGS
+            run_stage npm run playtest -- $SLUGS
             need_webgl=$(node --import tsx -e '
               import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
               const touched = process.argv.slice(1);
               process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
             ' $SLUGS)
-            if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
+            if [ "$need_webgl" = 1 ]; then run_stage npm run check:webgl; fi
+          fi
+          if [ "$gate_failed" -ne 0 ]; then
+            echo "::error title=Games static gate failed::One or more gate checks failed."
+            exit 1
           fi
 
       - name: Run the scoped games gate
@@ -511,27 +527,35 @@ jobs:
           SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
-          "$QUIET" npm run check:no-js
-          "$QUIET" npm run check:gfx
-          "$QUIET" npm run check:ios
-          "$QUIET" npm run audio:check
-          "$QUIET" npm run audio:plan-check
-          GAME_TEST_SLUGS="$SLUGS" "$QUIET" npm run test:conformance
-          "$QUIET" npm run typecheck
-          "$QUIET" npm run validate -- $SLUGS
-          "$QUIET" npm run smoke -- $SLUGS
-          "$QUIET" npm run trace -- -j 4 $SLUGS
-          "$QUIET" npm run build -- $SLUGS
-          "$QUIET" npm run accept -- $SLUGS
-          "$QUIET" npm run agent-play -- -j 2 $SLUGS
-          "$QUIET" npm run agency -- --strict -j 4 $SLUGS
-          "$QUIET" npm run playtest -- $SLUGS
+          gate_failed=0
+          run_stage() {
+            "$QUIET" "$@" || gate_failed=1
+          }
+          run_stage npm run check:no-js
+          run_stage npm run check:gfx
+          run_stage npm run check:ios
+          run_stage npm run audio:check
+          run_stage npm run audio:plan-check
+          GAME_TEST_SLUGS="$SLUGS" run_stage npm run test:conformance
+          run_stage npm run typecheck
+          run_stage npm run validate -- $SLUGS
+          run_stage npm run smoke -- $SLUGS
+          run_stage npm run trace -- -j 4 $SLUGS
+          run_stage npm run build -- $SLUGS
+          run_stage npm run accept -- $SLUGS
+          run_stage npm run agent-play -- -j 2 $SLUGS
+          run_stage npm run agency -- --strict -j 4 $SLUGS
+          run_stage npm run playtest -- $SLUGS
           need_webgl=$(node --import tsx -e '
             import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
             const touched = process.argv.slice(1);
             process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
           ' $SLUGS)
-          if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
+          if [ "$need_webgl" = 1 ]; then run_stage npm run check:webgl; fi
+          if [ "$gate_failed" -ne 0 ]; then
+            echo "::error title=Games scoped gate failed::One or more gate checks failed."
+            exit 1
+          fi
 
   # Overlaps catalog-gate (needs: resolve, not catalog-gate). A red gate still
   # pays this sweep; cancel-in-progress makes that rare.

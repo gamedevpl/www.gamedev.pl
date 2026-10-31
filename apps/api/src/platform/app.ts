@@ -1,4 +1,5 @@
 import { createCreatorPerformanceReader } from '../creation/creator-performance.js';
+import { BUILD_SHA } from './build-info.js';
 import { registerCreatorPerformanceRoute } from '../creation/creator-performance-route.js';
 import { createReviewPreviewLoader } from './review-preview-loader.js';
 import { registerErrorHandler } from './error-handler.js';
@@ -48,7 +49,7 @@ import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
-import { registerSpendBrakeRoutes } from './spend-brake.js';
+import { registerSpendBrakeRoutes, type SpendBrakeRoutesOptions } from './spend-brake.js';
 import type { CreatorCodeRoutesOptions } from '../creation/creator-code.js';
 import { registerCodeEditorRoutes } from '../creation/code-completion-routes.js';
 import { createKitFileStore } from '../agent-surface/kit-files.js';
@@ -206,7 +207,7 @@ export interface BuildAppOptions {
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
   > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
   // Seam for the spend brake; OIDC-or-deny-all from env.
-  spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier };
+  spendBrakeRoutes?: Omit<SpendBrakeRoutesOptions, 'store'>;
   opsConsole?: { verifier?: InternalAuthVerifier };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
@@ -373,19 +374,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     return app;
   }
 
-  // Apple sign-in also needs a Services ID baked into the client.
   app.get('/api/health', async () => ({
     status: 'ok',
+    buildSha: BUILD_SHA,
     provider: 'mock',
     privateBeta: !(await openToVisitors()),
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
     publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
   }));
 
-  // Where a delivered game is stored, and what verifies it. Resolved once and shared by
-  // every registration that needs them: three copies of these expressions is three ways
-  // for delivery, publishing and the health sweep to end up pointed at different buckets
-  // or different gates.
+  // Resolve delivery storage and verification once for all route registrations.
   const gamesStoreBucket = process.env.GAMES_STORE_BUCKET?.trim();
   const gamesStore =
     options.submissionRoutes?.agentChannel?.gamesStore ??
@@ -1042,11 +1040,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     eraseMemoryStore: options.accountDeletionRoutes?.eraseMemoryStore ?? createCreatorMemoryEraserFromEnv(process.env),
   });
   // An alert can pause a lane itself.
-  await registerSpendBrakeRoutes(app, {
-    store,
-    internalAuthVerifier:
-      options.spendBrakeRoutes?.internalAuthVerifier ?? createInternalAuthVerifierFromEnv(process.env, 'spendBrake'),
-  });
+  await registerSpendBrakeRoutes(app, { store, ...options.spendBrakeRoutes });
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
   // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,

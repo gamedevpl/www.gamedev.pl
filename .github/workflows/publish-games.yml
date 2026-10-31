@@ -92,7 +92,7 @@ jobs:
 
   publish:
     needs: validate-games
-    if: github.event_name != 'repository_dispatch' || github.event.action == 'games-published'
+    if: ${{ !cancelled() && (github.event_name != 'repository_dispatch' || github.event.action == 'games-published') }}
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: 'gamedevpl'
@@ -112,6 +112,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build:packages
+
+      - uses: ./.github/actions/setup-artifact-browser
 
       - name: Resolve games-repo ref
         env:
@@ -146,7 +148,7 @@ jobs:
           echo "SNAPSHOT_SHA=${VALIDATED_SHA}" >> "$GITHUB_ENV"
 
       - name: Authenticate to GCP via Workload Identity Federation
-        if: ${{ github.event.inputs.dry_run != 'true' }}
+        if: ${{ github.event.inputs.dry_run != 'true' && needs.validate-games.result == 'success' }}
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
@@ -158,6 +160,7 @@ jobs:
           # games repo. The default GITHUB_TOKEN cannot read another repository.
           GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
           GAMES_PUBLISHED_REF: ${{ env.SNAPSHOT_REF }}
+          GATE_RESULT: ${{ needs.validate-games.result }}
         run: |
           if [ -z "$GAMES_REPO_TOKEN" ]; then
             echo "Error: GAMES_REPO_TOKEN secret is required to read the games repo"
@@ -168,26 +171,30 @@ jobs:
           if [ -n "${SNAPSHOT_SHA:-}" ]; then
             ARGS+=(--commit-sha "$SNAPSHOT_SHA")
           fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ] || [ "$GATE_RESULT" != "success" ]; then
             ARGS+=(--dry-run)
           fi
 
           # Bake errors can quote game source; keep them out of this public log.
-          .github/scripts/quiet-step.sh npm run snapshot:publish -- "${ARGS[@]}"
+          bake_failed=0
+          .github/scripts/quiet-step.sh npm run snapshot:publish -- "${ARGS[@]}" || bake_failed=1
+
+          if [ "$bake_failed" -ne 0 ] || [ "$GATE_RESULT" != "success" ]; then
+            if [ "$GATE_RESULT" != "success" ]; then
+              echo "::error title=Games catalog gate failed::Gate validation failed before publish."
+            fi
+            if [ "$bake_failed" -ne 0 ]; then
+              echo "::error title=Snapshot bake failed::One or more games failed to bake."
+            fi
+            exit 1
+          fi
 
       - name: Verify the live site serves the new snapshot
-        if: ${{ github.event.inputs.dry_run != 'true' }}
+        if: ${{ github.event.inputs.dry_run != 'true' && needs.validate-games.result == 'success' }}
         env:
           GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
         run: |
-          # A green publish that the site cannot read is the failure mode worth
-          # catching here: the bucket is written by this job but read by Cloud Run
-          # under a different identity, so permissions can be wrong in one
-          # direction only. Serving falls back to GitHub either way, which is
-          # precisely why this would otherwise go unnoticed.
-          #
-          # Catalog/play are behind the closed-beta wall, so this needs the CI
-          # bearer token. Without it we can only warn — anonymous probes 401 by design.
+          # Runtime verification precedes promotion; this probes serving availability.
           BASE_URL="https://www.gamedev.pl"
           if [ -z "$GAMEDEV_ACCESS_TOKEN" ]; then
             echo "::warning::GAMEDEV_ACCESS_TOKEN not set — skipping post-publish catalog/play verify (wall requires a session)"
@@ -210,4 +217,4 @@ jobs:
             echo "Error: /api/games/${PLAY_SLUG} returned ${STATUS_CODE} after publish"
             exit 1
           fi
-          echo "Play route healthy after publish (${PLAY_SLUG})."
+          echo "Play route available after publish (${PLAY_SLUG}); runtime verified before promotion."

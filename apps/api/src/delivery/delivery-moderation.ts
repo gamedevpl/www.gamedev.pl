@@ -7,7 +7,12 @@ import { deliveredProseFields } from './delivered-prose.js';
 export interface ProseRefusal {
   rejected: 'content_rejected' | 'moderation_unavailable';
   category: RejectCategory;
+  // Set only when the checker could not run.
+  retryAfterSeconds?: number;
 }
+
+// Stops a creator hammering a checker that just failed.
+export const MODERATION_UNAVAILABLE_RETRY_AFTER_SECONDS = 60;
 
 export interface DeliveryModerationGate {
   refuse(input: {
@@ -59,10 +64,14 @@ export function createDeliveryModerationGate(options: {
             ...(verdict.unavailable ? { unavailable: true } : {}),
           });
         }
-        return {
-          rejected: rejection.error === 'moderation_unavailable' ? 'moderation_unavailable' : 'content_rejected',
-          category: rejection.category,
-        };
+        if (rejection.error === 'moderation_unavailable') {
+          return {
+            rejected: 'moderation_unavailable',
+            category: rejection.category,
+            retryAfterSeconds: MODERATION_UNAVAILABLE_RETRY_AFTER_SECONDS,
+          };
+        }
+        return { rejected: 'content_rejected', category: rejection.category };
       }
 
       if (passed.size >= PROSE_PASS_MAX) {

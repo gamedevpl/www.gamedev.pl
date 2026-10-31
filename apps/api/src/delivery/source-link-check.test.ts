@@ -26,6 +26,48 @@ describe('source-link-check', () => {
     expect(check('EDITOR.ts', '../../other-game/editor-def.ts', kit)).toHaveLength(1);
   });
 
+  it('sees every declarator in one export statement', () => {
+    const info = collectExports(
+      `export const TURN = -0.2, CT = Math.cos(TURN), ST = Math.sin(TURN);\nexport const PREP_T = 60, BREAK_T = 40, WAVE_MAX = 70, COUNTER_T = 150;\n`,
+    );
+    for (const name of ['TURN', 'CT', 'ST', 'PREP_T', 'BREAK_T', 'WAVE_MAX', 'COUNTER_T']) {
+      expect(info.named.has(name)).toBe(true);
+    }
+    expect(info.reexportsAll).toBe(false);
+  });
+
+  it('accepts an import of a later declarator in the same statement', () => {
+    const files = sourceFilesToMap([
+      { path: 'game/city.ts', content: `import { B } from './townplan.js';\nexport const used = B;\n` },
+      { path: 'game/townplan.ts', content: `export const A = 1, B = 2;\n` },
+    ]);
+    expect(findUnresolvedSourceLinks(files)).toEqual([]);
+  });
+
+  it('collects each export form an importer can name', () => {
+    const info = collectExports(`
+      export { a, b as c };
+      export { x } from './y.ts';
+      export * as ns from './barrel.ts';
+      export function spawn() {}
+      export class Unit {}
+      export type Round = { lane: number };
+      export interface Lane { n: number }
+      export enum Side { Left }
+      export default class Game {}
+      export const { a: renamed, b } = obj;
+      const local = 1;
+      export { local as publicName };
+    `);
+    for (const name of ['a', 'c', 'x', 'ns', 'spawn', 'Unit', 'Round', 'Lane', 'Side', 'renamed', 'b', 'publicName']) {
+      expect(info.named.has(name), name).toBe(true);
+    }
+    expect(info.hasDefault).toBe(true);
+    expect(info.reexportsAll).toBe(false);
+    const star = collectExports(`export * from './other.js';`);
+    expect(star.reexportsAll).toBe(true);
+  });
+
   it('collects named exports, default, renames, and export *', () => {
     const info = collectExports(`
       export const WIN_SCORE = 10;

@@ -9,9 +9,22 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Play agents push committed branches through an approved host action when their shell sandbox blocks SSH (#2028).
+- Play agents push committed branches through an approved SSH/HTTPS host action when their shell sandbox blocks SSH, without running checkout Git hooks or executable configuration (#2028).
+
+## 0.62.2 — 2026-10-31
+
+### Fixed
+
+- `gamedevpl push` says when a delivery was paused because the platform content check is down, instead of showing only `internal` (#2048).
+- `gamedevpl push` warns before sending when this checkout's GameKit pin is not the Kit the platform will typecheck, and mentions `gamedevpl kit update` only when that Kit is current (#2048).
+
+## 0.62.1 — 2026-10-28
+
+### Fixed
+
 - Play arranges pasted images and other attachments in compact cards with consistent previews, readable file details and separate resend and remove controls (#2026).
 - Play explains why a code update cannot use HMR when the running game also cannot transfer its state (#2023).
+- Play shows delivery approval once in the browser, keeping Approve/Reject on the action card and preserving terminal approval (#2025).
 - Play shows pasted images as clickable thumbnails in agent conversation history instead of raw attachment metadata (#2021).
 - Play keeps the agent's latest status update visible while it runs tools with steps collapsed (#2027).
 

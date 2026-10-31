@@ -6,6 +6,16 @@ import { ZodError } from 'zod';
 const RETRYABLE =
   /429|RESOURCE_EXHAUSTED|\b50[0234]\b|INTERNAL|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
 
+// A spent balance does not recover inside this budget.
+const BILLING_EXHAUSTED =
+  /no credits remaining|insufficient[_\s-]?quota|billing_hard_limit|exceeded your current quota/i;
+
+export function isBillingExhausted(err: unknown): boolean {
+  const name = err instanceof Error ? err.name : '';
+  const message = err instanceof Error ? err.message : String(err);
+  return BILLING_EXHAUSTED.test(`${name} ${message}`);
+}
+
 export function isRetryableVertexError(err: unknown): boolean {
   // Unparseable or off-schema JSON is one bad sample: draw again.
   if (err instanceof SyntaxError || err instanceof ZodError) return true;
@@ -73,6 +83,14 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
       return await options.attempt(model, budget);
     } catch (err) {
       lastError = err;
+      // Same account will refuse again. The other vendor still gets one try.
+      if (isBillingExhausted(err)) {
+        if (options.fallbackModel && index < 2) {
+          skipRetry = true;
+          continue;
+        }
+        break;
+      }
       if (!isRetryableVertexError(err)) break;
       // Waiting out a slow primary twice starves the stand-in.
       if (index === 0 && options.fallbackModel && isTimeout(err)) skipRetry = true;

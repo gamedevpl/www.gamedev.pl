@@ -10,7 +10,7 @@ export interface TransitionGuard {
   activityAt?: number;
   roundGeneration?: number;
   // The latest dispatch ref, so a replacement round is never closed.
-  dispatchRef?: string;
+  dispatchRef?: string | null;
   deliveredVersion?: string;
   previewVersion?: string;
 }
@@ -26,7 +26,7 @@ export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boole
   if (guard.roundGeneration !== undefined && (sub.roundGeneration ?? 1) !== guard.roundGeneration) return false;
   if ('deliveredVersion' in guard && sub.deliveredVersion !== guard.deliveredVersion) return false;
   if ('previewVersion' in guard && sub.previewVersion !== guard.previewVersion) return false;
-  return guard.dispatchRef === undefined || sub.dispatch?.refs.at(-1) === guard.dispatchRef;
+  return guard.dispatchRef === undefined || (sub.dispatch?.refs.at(-1) ?? null) === guard.dispatchRef;
 }
 
 // Fields a closed round clears -- signals belong to the round that ended.

@@ -58,6 +58,53 @@ function fixture() {
   return { dest, slug, api, stdout, stderr, messages, reply, io: { stdout: stdout.io, stderr: stderr.io } };
 }
 
+async function pushWithKit(lock: { engineRef?: string; typecheckEngineRef?: string }) {
+  const f = fixture();
+  const local = 'a'.repeat(40);
+  writeFileSync(join(f.dest, 'gamedev.lock'), JSON.stringify({ engineRef: local }));
+  writeFileSync(join(f.dest, 'check.cjs'), 'process.exit(0)\n');
+  writeFileSync(
+    join(f.dest, 'package.json'),
+    JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node check.cjs' } }),
+  );
+  const previous = f.reply;
+  f.api.request = async <T>(_method: string, path: string, body?: unknown) => {
+    if (path.endsWith('/workspace?kitOnly=true')) return lock as T;
+    return previous(path, body) as T;
+  };
+  await submitCommand({ delivery: { ...f, publish: false }, io: f.io, asJson: false });
+  return f.stderr.read();
+}
+
+it('warns about a stale GameKit pin before sending', async () => {
+  const current = 'b'.repeat(40);
+  const err = await pushWithKit({ engineRef: current });
+  const warning = err.indexOf('gamedevpl kit update');
+  const sending = err.indexOf('[7/8] Sending preview');
+  expect(warning).toBeGreaterThan(-1);
+  expect(err).toContain('a'.repeat(12));
+  expect(err).toContain(current.slice(0, 12));
+  expect(sending).toBeGreaterThan(warning);
+});
+
+it('stays quiet when the checkout matches the round pin', async () => {
+  const err = await pushWithKit({ engineRef: 'b'.repeat(40), typecheckEngineRef: 'a'.repeat(40) });
+  expect(err).not.toContain('Warning:');
+  expect(err).not.toContain('gamedevpl kit update');
+  expect(err).toContain('[7/8] Sending preview');
+});
+
+it('names the round pin and skips kit update when that pin is not current', async () => {
+  const pinned = 'c'.repeat(40);
+  const err = await pushWithKit({ engineRef: 'b'.repeat(40), typecheckEngineRef: pinned });
+  const warning = err.indexOf(pinned.slice(0, 12));
+  const sending = err.indexOf('[7/8] Sending preview');
+  expect(warning).toBeGreaterThan(-1);
+  expect(err).toContain('This round keeps that Kit until it closes.');
+  expect(err).not.toContain('gamedevpl kit update');
+  expect(sending).toBeGreaterThan(warning);
+});
+
 it.each([false, true])('numbers delivery stages during real local checks (publish=%s)', async (publish) => {
   const f = fixture();
   writeFileSync(join(f.dest, 'check.cjs'), 'setTimeout(() => process.exit(0), 1200)\n');

@@ -8,23 +8,12 @@ import {
 } from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { bakeMediaCopies } from './bake-media.js';
-
-/**
- * Bakes every published game into the snapshot bucket.
- *
- * This is the one place the expensive work still happens — the same GitHub reads
- * and esbuild bundle the play route used to do per request — and it deliberately
- * reuses `assemblePublishedGameHtml` rather than the games repo's own `tools/build.ts`.
- * That assembler is where the restrictive CSP, the AI Act art. 50(2) provenance
- * meta and the credential scan are applied, so baking through it keeps one
- * authoritative definition of "what a served game is". A second implementation on
- * the games-repo side would be a serve-time policy that could drift out of the
- * repo that owns the policy.
- */
+import { verifyGameArtifact, type VerifyGameArtifact } from './game-artifact.js';
 
 export interface PublishSnapshotOptions {
   client: GitHubClient;
   writer: GameSnapshotWriter;
+  verifyGame: VerifyGameArtifact;
   /** Games-repo ref to bake from. */
   ref: string;
   /** Recorded in the pointer for traceability; not used to address objects. */
@@ -60,6 +49,7 @@ const DEFAULT_CONCURRENCY = 4;
 
 export async function publishSnapshot(options: PublishSnapshotOptions): Promise<PublishSnapshotResult> {
   const { client, writer, ref } = options;
+  if (typeof options.verifyGame !== 'function') throw new Error('Snapshot publication requires a browser gate');
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => {});
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
@@ -77,7 +67,15 @@ export async function publishSnapshot(options: PublishSnapshotOptions): Promise<
 
   await mapWithConcurrency(published, concurrency, async (entry) => {
     try {
-      const written = await bakeGame({ client, writer, ref, snapshotId, entry });
+      const written = await bakeGame({
+        client,
+        writer,
+        ref,
+        snapshotId,
+        entry,
+        verifyGame: options.verifyGame,
+        engineRef: options.commitSha ?? ref,
+      });
       publishedCount += 1;
       mediaFiles += written.mediaFiles;
       log(`  ✓ ${entry.slug} (${written.mediaFiles} media)`);
@@ -125,6 +123,8 @@ async function bakeGame(args: {
   ref: string;
   snapshotId: string;
   entry: CatalogGameEntry;
+  verifyGame: VerifyGameArtifact;
+  engineRef: string;
 }): Promise<{ mediaFiles: number }> {
   const { client, writer, ref, snapshotId, entry } = args;
 
@@ -132,6 +132,7 @@ async function bakeGame(args: {
   if (!game) {
     throw new Error('game sources not found on ref');
   }
+  await verifyGameArtifact({ ...game, engineRef: args.engineRef }, args.verifyGame);
   await writer.putGame(snapshotId, game);
 
   const mediaNames = [

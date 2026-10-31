@@ -9,12 +9,17 @@ import { createJobReconciler } from './job-reconciler.js';
 const AT = '2026-09-26T12:00:00.000Z';
 type AgentState = 'in_progress' | 'completed' | 'idle' | 'timed_out' | 'failed';
 
-async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0, ledger = true, backend = 'managed') {
+async function setup(
+  previewGate: { green: boolean } | null,
+  observeQuietMs = 0,
+  ledger = true,
+  backend: string | null = 'managed',
+) {
   const store = new InMemoryStore();
   await store.createSubmission(9, 'g:owner', 'Preview game');
   await store.setSubmissionSlug(9, 'preview-game');
-  await store.recordDispatch(9, { backend, ref: 'session-1', workspace: 'ws-1' });
-  if (ledger)
+  if (backend) await store.recordDispatch(9, { backend, ref: 'session-1', workspace: 'ws-1' });
+  if (ledger && backend)
     await store.recordJobCost(9, { kind: 'agent_session', at: AT, by: 'managed', ref: 'session-1', credits: 1 });
   await store.recordJobTransition(9, { to: 'building', at: AT, by: 'agent', reason: 'task_in_progress' });
   await store.setSubmissionPreviewVersion(9, 'v1');
@@ -40,7 +45,7 @@ async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0,
     now: () => Date.parse(AT) + 5 * 60_000,
     observeQuietMs,
     maxDeliveryNudges: 1,
-    backendForRecord: async () => ({ name: 'managed', observe }) as unknown as AgentBackend,
+    backendForRecord: async () => (backend ? ({ name: backend, observe } as unknown as AgentBackend) : undefined),
     releaseWorkspace: async () => {},
     resumeBuild,
     acknowledgeBuilderHandoff,
@@ -54,6 +59,68 @@ async function setup(previewGate: { green: boolean } | null, observeQuietMs = 0,
   };
   return { store, agent, gate, observe, resumeBuild, acknowledgeBuilderHandoff, poll, reconciler };
 }
+
+describe('a manually delivered preview without an agent session', () => {
+  it('becomes owner-sealable after its gate passes without dispatching an agent', async () => {
+    const { store, observe, resumeBuild, poll } = await setup({ green: true }, 0, false, null);
+    expect(await poll()).toMatchObject({ to: 'ready_for_review', reason: 'preview_gate_green' });
+    const after = (await store.getSubmission(9))!;
+    expect(after.dispatch).toBeUndefined();
+    expect(after.deliveredVersion).toBeUndefined();
+    expect(sealRefusal(after)).toBeNull();
+    expect(await poll()).toBeNull();
+    expect((await store.getSubmission(9))?.roundGeneration).toBe(after.roundGeneration);
+    expect(await store.claimSeal(9, AT)).not.toBeNull();
+    expect(observe).not.toHaveBeenCalled();
+    expect(resumeBuild).not.toHaveBeenCalled();
+  });
+
+  it('waits for the pending preview gate before becoming sealable', async () => {
+    const { store, gate, poll } = await setup(null, 0, false, null);
+    expect(await poll()).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+    gate.current = { green: true };
+    await poll();
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('keeps a failed preview out of review until a repaired delivery passes', async () => {
+    const { store, gate, poll } = await setup({ green: false }, 0, false, null);
+    expect(await poll()).toMatchObject({ to: 'needs_changes', reason: 'gate_red' });
+    expect(sealRefusal((await store.getSubmission(9))!)).toBe('not_reviewable');
+    await store.recordJobTransition(9, { to: 'building', at: AT, by: 'creator', reason: 'channel_signal' });
+    await store.setSubmissionPreviewVersion(9, 'v2');
+    await store.incrementRoundDeliveryCount(9);
+    gate.current = { green: true };
+    expect(await poll()).toMatchObject({ to: 'ready_for_review', reason: 'preview_gate_green' });
+    expect(sealRefusal((await store.getSubmission(9))!)).toBeNull();
+  });
+
+  it('refuses to close a newer round from an older green preview', async () => {
+    const { store, reconciler } = await setup({ green: true }, 0, false, null);
+    const evaluated = (await store.getSubmission(9))!;
+    await store.bumpRoundGeneration(9);
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it('does not close a manual round after an agent joins it', async () => {
+    const { store, reconciler } = await setup({ green: true }, 0, false, null);
+    const evaluated = (await store.getSubmission(9))!;
+    await store.recordDispatch(9, { backend: 'self', ref: 'self:9' });
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+
+  it.each(['preview', 'publish'] as const)('does not close over a replacement %s delivery', async (mode) => {
+    const { store, reconciler } = await setup({ green: true }, 0, false, null);
+    const evaluated = (await store.getSubmission(9))!;
+    if (mode === 'preview') await store.setSubmissionPreviewVersion(9, 'v2');
+    else await store.setSubmissionDeliveredVersion(9, 'v1');
+    expect(await reconciler.reconcileGateVerdict(evaluated)).toBeNull();
+    expect((await store.getSubmission(9))?.state).toBe('building');
+  });
+});
 
 describe('a finished session that delivered only a preview', () => {
   it('is not publish readiness while its preview gate is still pending', async () => {
@@ -211,6 +278,16 @@ describe.each<[string, () => Store]>([
   ['InMemoryStore', () => new InMemoryStore()],
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
 ])('%s round-scoped transition guard', (_name, makeStore) => {
+  it('requires an undispatched round when the dispatch guard is null', async () => {
+    const store = makeStore();
+    await store.createSubmission(4, 'g:owner', 'Manual');
+    const close = { to: 'ready_for_review' as const, at: AT, by: 'gate' as const, reason: 'preview_gate_green' };
+    await store.recordDispatch(4, { backend: 'self', ref: 'self:4' });
+    expect(await store.recordJobTransition(4, close, { dispatchRef: null })).toBe(false);
+    await store.createSubmission(5, 'g:owner', 'Undispatched');
+    expect(await store.recordJobTransition(5, close, { dispatchRef: null })).toBe(true);
+  });
+
   it('refuses a close for another generation or dispatch ref', async () => {
     const store = makeStore();
     await store.createSubmission(4, 'g:owner', 'Guarded');

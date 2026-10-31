@@ -684,7 +684,10 @@ When you ask a Play agent to push a source-repository commit, it proposes `game_
 the conversation. Approve the remote, branch and commit there; the CLI host uses
 your usual Git credentials and SSH agent. This works with the agent sandbox
 enabled and requires approval in every permission mode. The action refuses force
-pushes and changed branches or destinations. It does not publish on gamedev.pl.
+pushes and changed branches or destinations. Pushes support SSH and HTTPS, disable
+Git hooks and ignore checkout-local executable Git configuration. Your host Git
+credentials remain available. If your repository needs a pre-push hook (such as Git
+LFS), push from your own terminal. It does not publish on gamedev.pl.
 `gamedevpl:` remotes keep their existing platform Git delivery flow.
 
 ### Creator Kit updates

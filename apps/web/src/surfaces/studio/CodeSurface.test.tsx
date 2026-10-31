@@ -858,7 +858,7 @@ describe('CodeSurface', () => {
 
   it.each([
     ['content_rejected', /not publishable here/i],
-    ['moderation_unavailable', /could not run just now/i],
+    ['moderation_unavailable', /platform content check is down, not your game/i],
   ])('says which refusal a %s delivery hit', async (rejected, expected) => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({
