@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - `gamedevpl push` says when a delivery was paused because the platform content check is down, instead of showing only `internal`.
+- `gamedevpl push` warns before sending when this checkout's GameKit pin is not the platform's current Kit, and tells you to run `gamedevpl kit update`.
 
 ## 0.62.1 — 2026-10-28
 

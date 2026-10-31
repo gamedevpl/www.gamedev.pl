@@ -58,6 +58,31 @@ function fixture() {
   return { dest, slug, api, stdout, stderr, messages, reply, io: { stdout: stdout.io, stderr: stderr.io } };
 }
 
+it('warns about a stale GameKit pin before sending', async () => {
+  const f = fixture();
+  const local = 'a'.repeat(40);
+  const current = 'b'.repeat(40);
+  writeFileSync(join(f.dest, 'gamedev.lock'), JSON.stringify({ engineRef: local }));
+  writeFileSync(join(f.dest, 'check.cjs'), 'process.exit(0)\n');
+  writeFileSync(
+    join(f.dest, 'package.json'),
+    JSON.stringify({ scripts: { typecheck: 'node check.cjs', 'check:static': 'node check.cjs' } }),
+  );
+  const previous = f.reply;
+  f.api.request = async <T>(_method: string, path: string, body?: unknown) => {
+    if (path.endsWith('/workspace?kitOnly=true')) return { engineRef: current } as T;
+    return previous(path, body) as T;
+  };
+  await submitCommand({ delivery: { ...f, publish: false }, io: f.io, asJson: false });
+  const err = f.stderr.read();
+  const warning = err.indexOf('gamedevpl kit update');
+  const sending = err.indexOf('[7/8] Sending preview');
+  expect(warning).toBeGreaterThan(-1);
+  expect(err).toContain(local.slice(0, 12));
+  expect(err).toContain(current.slice(0, 12));
+  expect(sending).toBeGreaterThan(warning);
+});
+
 it.each([false, true])('numbers delivery stages during real local checks (publish=%s)', async (publish) => {
   const f = fixture();
   writeFileSync(join(f.dest, 'check.cjs'), 'setTimeout(() => process.exit(0), 1200)\n');

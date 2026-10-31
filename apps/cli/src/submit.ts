@@ -13,8 +13,8 @@ import {
 } from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
-import { mkdirSync, existsSync, lstatSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   inspectGame,
   ignoredGameFiles,
@@ -127,6 +127,48 @@ function mapHttpError(error: unknown): never {
   throw error instanceof CliError ? error : new CliError(message, EXIT_REFUSED);
 }
 
+function readEngineRef(path: string): string | null {
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf8')) as { engineRef?: unknown };
+    const ref = typeof value.engineRef === 'string' ? value.engineRef : '';
+    return /^[a-f0-9]{40}$/i.test(ref) ? ref : null;
+  } catch {
+    return null;
+  }
+}
+
+function localKitRef(dest: string): string | null {
+  const sourcePin = join(dest, 'gamedev-kit.json');
+  if (existsSync(sourcePin)) return readEngineRef(sourcePin);
+  return readEngineRef(kitPath(dest, 'gamedev.lock'));
+}
+
+// The server typechecks the round pin (current Kit when the round is unpinned), not this checkout.
+async function warnIfKitStale(input: {
+  api: ApiClient;
+  slug: string;
+  dest: string;
+  warn?: (line: string) => void;
+}): Promise<void> {
+  if (!input.warn) return;
+  const local = localKitRef(input.dest);
+  if (!local) return;
+  try {
+    const pending = input.api
+      .request<{ engineRef?: unknown }>('GET', `/api/me/studio/games/${input.slug}/workspace?kitOnly=true`)
+      .catch(() => null);
+    const lock = await Promise.race([pending, new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000))]);
+    const current = typeof lock?.engineRef === 'string' ? lock.engineRef : '';
+    if (!/^[a-f0-9]{7,64}$/i.test(current) || current.toLowerCase() === local.toLowerCase()) return;
+    const short = (ref: string) => ref.slice(0, 12);
+    input.warn(
+      `Warning: this checkout pins GameKit ${short(local)}, but the platform typechecks ${short(current)}. A local pass can still be refused. Update before sending: gamedevpl kit update`,
+    );
+  } catch {
+    // A kit probe must not block delivery.
+  }
+}
+
 async function submitGameUnlocked(input: {
   api: ApiClient;
   slug: string;
@@ -139,6 +181,8 @@ async function submitGameUnlocked(input: {
   interactive?: boolean;
   run?: Parameters<typeof runLadder>[0]['run'];
   onProgress?: (message: string) => void;
+  // Durable line. The progress spinner replaces its own row, so a warning there disappears.
+  warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {
   const progress = deliveryProgress(input.onProgress);
@@ -169,6 +213,7 @@ async function submitGameUnlocked(input: {
     const refused = syncRefuse(first.sync, 'submit');
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
+  await warnIfKitStale(input);
   const sourceHash = verificationSourceHash(input.dest, input.slug);
   const verification = {
     cwd: input.dest,
