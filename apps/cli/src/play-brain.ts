@@ -37,6 +37,8 @@ import { playBrainInstructions } from './play-brain-instructions.js';
 import { playPushBridge, playTurnWriter } from './play-git-push.js';
 import { reconcileRemotePush } from './git-remote-main.js';
 import { gitPushActionSummary } from './play-git-host.js';
+import { playBrainPresence, roundWithPresence } from './play-brain-presence.js';
+import { mirrorPlayBrain } from './play-brain-mirror.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
@@ -54,7 +56,7 @@ type Prompt = (choices: string[], question: string, signal?: AbortSignal) => Pro
 export type PlayBrain = {
   agent: AppAgent;
   // One creator message, until the agent idles and nothing awaits the creator.
-  turn(text: string): Promise<void>;
+  turn(text: string, options?: { retry?: boolean }): Promise<void>;
   close(): Promise<void>;
 };
 const APPROVE = 'Approve';
@@ -106,6 +108,8 @@ export async function startPlayBrain(input: {
   agents?: (root: string, permissions?: AgentTask['permissions']) => CodingAgent[];
   // The workshop's stale/conflict preflight; tests replace it.
   ready?: () => Promise<boolean>;
+  openRound?: (request: string, signal: AbortSignal) => Promise<string>;
+  trackPresence?: typeof localActivity;
 }): Promise<PlayBrain | undefined> {
   const { ws, write } = input;
   const gameRoot = gameSourceRoot(ws.root, ws.slug);
@@ -172,6 +176,7 @@ export async function startPlayBrain(input: {
   const live = liveGameAppTools(preview, () => AbortSignal.any([lifetime.signal, turnAbort.signal]), gameRoot);
   // Re-enters the turn's writer lock so deliveries never block themselves.
   let inTurn: (<T>(run: () => Promise<T>) => Promise<T>) | undefined;
+  let retargetPresence: (() => Promise<void>) | undefined;
   const pushBridge = playPushBridge(env, ws.root, ws.slug, (remote, srcRef) => {
     if (!inTurn) throw Error('The Play turn has ended.');
     return inTurn(() => reconcileRemotePush({ api: input.api, cwd: ws.root, slug: ws.slug, remote, srcRef }));
@@ -198,6 +203,7 @@ export async function startPlayBrain(input: {
         api: input.api,
         telemetry: ws.telemetry,
         token: ws.token,
+        openRound: input.openRound ? roundWithPresence(ws, input.openRound, () => retargetPresence?.()) : undefined,
         slug: ws.slug,
         root: ws.root,
         run: ws.run,
@@ -230,7 +236,7 @@ export async function startPlayBrain(input: {
     autoApprove: (request) => decideApproval(permission(), request),
   });
   bound.handle = createAppAgentHandler(agent, { basePath: '/agent' });
-  const unmirror = mirror(agent, write, input.activity);
+  const unmirror = mirrorPlayBrain(agent, write, input.activity);
   const settled = (state: AppAgentState) =>
     state.session?.status !== 'running' &&
     !state.session?.queued.length &&
@@ -303,7 +309,7 @@ export async function startPlayBrain(input: {
     }
   };
 
-  const unlockedTurn = async (text: string): Promise<void> => {
+  const unlockedTurn = async (text: string, retry = false): Promise<void> => {
     turnAbort = new AbortController();
     captureBudget.used = 0;
     const signal = turnAbort.signal;
@@ -316,18 +322,24 @@ export async function startPlayBrain(input: {
       },
       { once: true },
     );
-    const before = localGameFiles(ws.root, ws.slug);
-    const presence = local ? localActivity(ws.activityApi, ws.token, name) : undefined;
+    const before =
+      retry && ws.failedTask?.source === 'play-brain' ? ws.failedTask.before : localGameFiles(ws.root, ws.slug);
+    const presence = playBrainPresence({
+      ws,
+      agent: name,
+      signal,
+      track: input.trackPresence ?? (local ? localActivity : undefined),
+    });
+    retargetPresence = presence.retarget;
     ws.onLocalTask?.(name);
     const steer = async (message: string) => agent.send(message);
     ws.onSteering?.(steer);
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
-    let ok = false;
     // Answered or green; otherwise /retry resumes it, as in the workshop.
     let finished = false;
     try {
-      presence?.phase('editing');
+      presence.phase('editing');
       ws.telemetry?.record('brain_turn', { adapter: name });
       ws.telemetry?.record('delegate_used', { adapter: name });
       agent.send(text);
@@ -354,14 +366,14 @@ export async function startPlayBrain(input: {
           finished = true;
           return;
         }
-        presence?.phase('verifying');
+        presence.phase('verifying');
         // No steering while verifying: checks and delivery would not wait.
         ws.onSteering?.(undefined);
         const result = await runLadderAsync({ cwd: ws.root, slug: ws.slug, run: ws.run, abort: signal });
         if (signal.aborted) return;
         if (result.ok) {
           write('✓ static ladder green');
-          ok = finished = true;
+          finished = true;
           break;
         }
         write(`verify failed at ${result.stage}`);
@@ -374,7 +386,7 @@ export async function startPlayBrain(input: {
         }
         repairs++;
         write(`Sending validation errors back to ${name} — repair ${repairs}/${MAX_LOCAL_REPAIRS}. Ctrl+C stops.`);
-        presence?.phase('editing');
+        presence.phase('editing');
         ws.onSteering?.(steer);
         agent.notify(
           [
@@ -397,16 +409,17 @@ export async function startPlayBrain(input: {
       if (!proposed) await offerSubmit({ api: input.api, ws, write });
     } finally {
       live.close();
+      retargetPresence = undefined;
       ws.onSteering?.(undefined);
       ws.onLocalTask?.('');
       // Keep the writer lock until the stopped agent and actions exit.
       if (signal.aborted) await quiet();
       if (ws.abort.current === turnAbort) ws.abort.current = null;
-      await presence?.finish(signal.aborted ? 'stopped' : ok ? 'ready' : 'failed');
+      await presence.finish(signal.aborted ? 'stopped' : finished ? 'ready' : 'failed');
       if (signal.aborted) write(`${name} stopped — the tree keeps whatever it wrote; /diff to see`);
       if (finished) delete ws.failedTask;
       else {
-        ws.failedTask = { request: text, agent: name, before };
+        ws.failedTask = { request: text, agent: name, before, source: 'play-brain' };
         if (!ws.unattended) write(`Task saved locally — /retry resumes it with ${name}; /diff shows partial edits.`);
       }
     }
@@ -414,7 +427,7 @@ export async function startPlayBrain(input: {
 
   return {
     agent,
-    async turn(text) {
+    async turn(text, options) {
       if (!(await (input.ready ?? (() => readyToEdit({ api: input.api, ws, write })))())) return;
       // One checkout writer at a time, as in the workshop.
       await withCheckoutWriter(ws.root, async () => {
@@ -422,7 +435,7 @@ export async function startPlayBrain(input: {
         inTurn = writer.run;
         pushBridge.start(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
         try {
-          await unlockedTurn(text);
+          await unlockedTurn(text, options?.retry);
         } finally {
           await pushBridge.finish();
           await writer.finish();
@@ -462,36 +475,4 @@ export function withRunSettings(
     });
   };
   return Object.assign(Object.create(agent) as CodingAgent, { run });
-}
-
-// The agent's conversation as session lines for terminal and browser.
-function mirror(agent: AppAgent, write: (line: string) => void, activity: (text: string) => void): () => void {
-  const shown = new Map<number, number>();
-  let busy = false;
-  return agent.subscribe((state) => {
-    const running = state.session?.status === 'running';
-    if (running !== busy) {
-      busy = running;
-      activity(running ? `${state.agent} is working — Ctrl+C stops it` : '');
-    }
-    for (const turn of state.session?.turns ?? []) {
-      const from = shown.get(turn.id) ?? 0;
-      const ended = turn.endedAt !== undefined;
-      let index = from;
-      for (; index < turn.entries.length; index++) {
-        const entry = turn.entries[index]!;
-        const last = index === turn.entries.length - 1;
-        if (last && !ended && ((entry.kind === 'text' && entry.streaming) || (entry.kind === 'tool' && !entry.done)))
-          break;
-        if (entry.kind === 'text' && entry.text.trim()) write(entry.text.trim());
-        else if (entry.kind === 'tool') write(`  · ${toolLabel(entry.name)}${entry.isError ? ' (failed)' : ''}`);
-        else if (entry.kind === 'error') write(`! ${entry.message}`);
-      }
-      shown.set(turn.id, index);
-    }
-  });
-}
-
-function toolLabel(name: string): string {
-  return name.replace(/^mcp__gamedevpl__/, '');
 }

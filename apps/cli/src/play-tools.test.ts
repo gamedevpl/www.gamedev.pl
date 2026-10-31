@@ -76,6 +76,15 @@ describe('playAppTools', () => {
     ]);
   });
 
+  it('uses the published-game round handler and forwards task cancellation', async () => {
+    const controller = new AbortController();
+    const openRound = vi.fn(async () => 'A self-built improvement round is open.');
+    const { tool, calls } = tools({ openRound, abort: () => controller.signal });
+    expect(await tool('game_round').run({ request: ' fix the jump ' })).toContain('improvement round is open');
+    expect(openRound).toHaveBeenCalledWith('fix the jump', controller.signal);
+    expect(calls).toEqual([]);
+  });
+
   it('reports green and red checks', async () => {
     let status = 0;
     const run = () => ({ status, stderr: status ? 'src/main.ts(3,1): error TS2304' : '' });

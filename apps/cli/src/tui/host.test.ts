@@ -11,6 +11,8 @@ import type { TuiSession } from './session.js';
 import { startPlayBrain } from '../play-brain.js';
 import type { Workshop } from '../workshop.js';
 
+let promptText = 'add ramps';
+let promptAnswers: string[] = [];
 vi.mock('ink', () => ({ render: vi.fn(() => ({ unmount: vi.fn() })) }));
 vi.mock('./app.js', () => ({ ReplApp: () => null }));
 vi.mock('../main.js', () => ({ reportInstall: vi.fn() }));
@@ -20,6 +22,7 @@ vi.mock('../update-notice.js', () => ({ startUpdateNotice: () => vi.fn() }));
 vi.mock('./round-watch.js', () => ({ createRoundWatch: () => ({ poke: vi.fn(), stop: vi.fn() }) }));
 vi.mock('../repl.js', () => ({ handleReplLine: vi.fn(), replBanner: () => '' }));
 vi.mock('../play-brain.js', () => ({
+  BRAIN_AGENTS: ['claude', 'codex', 'copilot'],
   brainAgent: (ws: { selectedAgent?: string }) => ws.selectedAgent ?? 'claude',
   brainRequested: () => true,
   startPlayBrain: vi.fn(),
@@ -30,13 +33,15 @@ vi.mock('./session.js', async (original) => {
     ...actual,
     createTuiSession: (...args: Parameters<typeof actual.createTuiSession>) => ({
       ...actual.createTuiSession(...args),
-      prompt: async () => 'add ramps',
+      prompt: async () => promptAnswers.shift() ?? promptText,
     }),
   };
 });
 const homes: string[] = [];
 afterEach(() => {
   vi.clearAllMocks();
+  promptText = 'add ramps';
+  promptAnswers = [];
   homes.splice(0).forEach((home) => rmSync(home, { recursive: true, force: true }));
 });
 
@@ -155,6 +160,219 @@ it.each([
   });
   expect(startPlayBrain).not.toHaveBeenCalled();
   expect(vi.mocked(handleReplLine).mock.calls[1]![0]).toMatchObject({ line: 'add ramps', token: 'live' });
+});
+
+it('sends a published local Play request to the local agent without opening a round', async () => {
+  promptText = 'Pograj w tę grę i opisz, co się dzieje';
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'platform',
+    adapters: [{ name: 'claude' }],
+  } as Workshop;
+  const stop = new AbortController();
+  const brain = {
+    agent: {},
+    turn: vi.fn(async () => stop.abort()),
+    close: vi.fn(async () => {}),
+  };
+  vi.mocked(startPlayBrain).mockResolvedValueOnce(brain as unknown as Awaited<ReturnType<typeof startPlayBrain>>);
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live'
+      ? { status: 'published', slug: 'airtime', builder: 'platform' }
+      : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+    shutdownSignal: stop.signal,
+  });
+  expect(brain.turn).toHaveBeenCalledWith(promptText);
+  expect(startPlayBrain).toHaveBeenCalledWith(expect.objectContaining({ openRound: expect.any(Function) }));
+  expect(request.mock.calls.some(([method]) => method === 'POST')).toBe(false);
+  expect(handleReplLine).toHaveBeenCalledTimes(2);
+});
+
+it('asks which installed agent to use for a published game and keeps that selection', async () => {
+  promptAnswers = ['Pograj w tę grę', 'codex'];
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'platform',
+    adapters: [{ name: 'claude' }, { name: 'codex' }, { name: 'other' }],
+  } as Workshop;
+  const stop = new AbortController();
+  const brain = { agent: {}, turn: vi.fn(async () => stop.abort()), close: vi.fn(async () => {}) };
+  vi.mocked(startPlayBrain).mockResolvedValueOnce(brain as unknown as Awaited<ReturnType<typeof startPlayBrain>>);
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live' ? { status: 'published', slug: 'airtime' } : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+    shutdownSignal: stop.signal,
+  });
+  expect(workshop.selectedAgent).toBe('codex');
+  expect(brain.turn).toHaveBeenCalledWith('Pograj w tę grę');
+});
+
+it('does not launch an agent when the published-game selection is cancelled', async () => {
+  promptAnswers = ['Pograj', 'Cancel', '/quit'];
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'platform',
+    adapters: [{ name: 'claude' }, { name: 'codex' }],
+  } as Workshop;
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' })
+    .mockResolvedValueOnce({ next: 'quit' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live' ? { status: 'published', slug: 'airtime' } : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+  });
+  expect(startPlayBrain).not.toHaveBeenCalled();
+  expect(workshop.selectedAgent).toBeUndefined();
+});
+
+it('retries a failed published-game task through the same Play agent', async () => {
+  promptAnswers = ['Pograj', '/retry'];
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'platform',
+    adapters: [{ name: 'claude' }],
+  } as Workshop;
+  const stop = new AbortController();
+  const brain = {
+    agent: {},
+    turn: vi.fn(async (_text, options) => {
+      if (options?.retry) stop.abort();
+      else workshop.failedTask = { request: 'Pograj', agent: 'claude', before: [], source: 'play-brain' };
+    }),
+    close: vi.fn(async () => {}),
+  };
+  vi.mocked(startPlayBrain).mockResolvedValueOnce(brain as unknown as Awaited<ReturnType<typeof startPlayBrain>>);
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live' ? { status: 'published', slug: 'airtime' } : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+    shutdownSignal: stop.signal,
+  });
+  expect(brain.turn).toHaveBeenNthCalledWith(2, 'Pograj', { retry: true });
+  expect(handleReplLine).toHaveBeenCalledTimes(2);
+});
+
+it('refuses a local retry after the round switches to the platform', async () => {
+  promptAnswers = ['Pograj', '/retry', '/quit'];
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'self',
+    adapters: [{ name: 'claude' }],
+  } as Workshop;
+  let switched = false;
+  const brain = {
+    agent: {},
+    turn: vi.fn(async () => {
+      workshop.failedTask = { request: 'Pograj', agent: 'claude', before: [], source: 'play-brain' };
+      switched = true;
+    }),
+    close: vi.fn(async () => {}),
+  };
+  vi.mocked(startPlayBrain).mockResolvedValueOnce(brain as unknown as Awaited<ReturnType<typeof startPlayBrain>>);
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' })
+    .mockResolvedValueOnce({ next: 'quit' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live'
+      ? { status: switched ? 'building' : 'published', slug: 'airtime', builder: switched ? 'platform' : 'self' }
+      : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+  });
+  expect(brain.turn).toHaveBeenCalledTimes(1);
+});
+
+it('restarts the Play agent with published-round handling when the game ships', async () => {
+  const workshop = {
+    slug: 'airtime',
+    root: '/tmp/airtime',
+    token: 'live',
+    builder: 'self',
+    adapters: [{ name: 'claude' }],
+  } as Workshop;
+  const stop = new AbortController();
+  let published = false;
+  const first = { agent: {}, turn: vi.fn(async () => void (published = true)), close: vi.fn(async () => {}) };
+  const second = { agent: {}, turn: vi.fn(async () => stop.abort()), close: vi.fn(async () => {}) };
+  vi.mocked(startPlayBrain)
+    .mockResolvedValueOnce(first as unknown as Awaited<ReturnType<typeof startPlayBrain>>)
+    .mockResolvedValueOnce(second as unknown as Awaited<ReturnType<typeof startPlayBrain>>);
+  vi.mocked(handleReplLine)
+    .mockResolvedValueOnce({ next: 'continue', token: 'live', slug: 'airtime', workshop })
+    .mockResolvedValueOnce({ next: 'continue' });
+  const request = vi.fn(async (_method: string, path: string) =>
+    path === '/api/submissions/live'
+      ? { status: published ? 'published' : 'building', slug: 'airtime', builder: 'self' }
+      : { user: { uid: 'owner' } },
+  );
+  await runInkRepl({
+    api: { origin: 'https://published.test', request } as unknown as Parameters<typeof runInkRepl>[0]['api'],
+    env: { GAMEDEV_HISTORY: 'off' },
+    io: { stdin: process.stdin, stdout: process.stdout },
+    token: null,
+    initialLine: '/checkout airtime',
+    browserOnly: true,
+    shutdownSignal: stop.signal,
+  });
+  expect(first.close).toHaveBeenCalledOnce();
+  expect(startPlayBrain).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(startPlayBrain).mock.calls[1]![0]).toHaveProperty('openRound', expect.any(Function));
+  expect(second.turn).toHaveBeenCalledOnce();
 });
 
 it('starts a fresh Play agent when the creator picks another agent', async () => {

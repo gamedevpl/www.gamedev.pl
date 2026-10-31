@@ -48,7 +48,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
-  failedTask?: { request: string; ack?: string; agent: string; before: TreeFile[] };
+  failedTask?: { request: string; ack?: string; agent: string; before: TreeFile[]; source?: 'play-brain' };
   onActivity?: (activity: string) => void;
   lastLog?: string;
   activityApi?: ApiClient;

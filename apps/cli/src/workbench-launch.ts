@@ -260,8 +260,28 @@ export function journalApi(api: ApiClient, journal: PlayJournal, save: () => voi
       try {
         const result = await api.request<T>(method, path, body, signal);
         journal.remote = { path, result };
+        const improvement = /^\/api\/submissions\/[^/?#]+\/improve$/.test(path);
+        if (improvement) {
+          const receipt = result && typeof result === 'object' ? (result as Record<string, unknown>) : {};
+          const reply =
+            receipt.ok === true && typeof receipt.reply === 'string' && !('token' in receipt) && !('slug' in receipt);
+          const round =
+            receipt.ok === true &&
+            !('reply' in receipt) &&
+            typeof receipt.token === 'string' &&
+            Boolean(receipt.token) &&
+            typeof receipt.slug === 'string' &&
+            Boolean(journal.slug) &&
+            receipt.slug === journal.slug;
+          if (!reply && !round) {
+            save();
+            throw Error(
+              'The improvement receipt is invalid or does not match this game. Check Studio before retrying.',
+            );
+          }
+        }
         if (
-          path === '/api/submissions' &&
+          (path === '/api/submissions' || improvement) &&
           result &&
           typeof result === 'object' &&
           'token' in result &&
