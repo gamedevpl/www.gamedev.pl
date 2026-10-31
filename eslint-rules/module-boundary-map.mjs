@@ -37,6 +37,7 @@ const DEFAULT_BUCKET = 'platform';
 const FILE_BUCKET = {
   'api-kit-compatibility': 'platform',
   'api-kit-input': 'platform',
+  'api-kit-retention': 'platform',
   'build-info': 'platform',
   'mcp-managed-context-tools': 'agent-surface',
   'erase-creator-attachments': 'platform',
