@@ -1,3 +1,5 @@
+import { parse, type ParserPlugin } from '@babel/parser';
+import type { Node } from '@babel/types';
 import { posix } from 'node:path';
 
 // Cross-file symbol link check; prefer false negatives.
@@ -14,10 +16,11 @@ export type SourceLinkFinding = {
 };
 
 const RELATIVE_IMPORT_RE = /^\s*import\s+(?:type\s+)?([\s\S]*?)\s+from\s+['"](\.[^'"]+)['"]\s*;?\s*$/gm;
-const EXPORT_NAMED_RE =
-  /^\s*export\s+(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
-const EXPORT_LIST_RE = /^\s*export\s*\{([^}]+)\}/gm;
-const EXPORT_DEFAULT_RE = /^\s*export\s+default\b/m;
+// Same syntax the build accepts. The first set that parses wins.
+const EXPORT_PARSER_PLUGINS: readonly ParserPlugin[][] = [
+  ['typescript', 'jsx', 'decorators-legacy'],
+  ['typescript', 'jsx', 'decorators'],
+];
 const MAX_GROUPED_FINDINGS = 8;
 const MAX_ERROR_BYTES = 800;
 // Cap bindings scanned per file for pathological sources.
@@ -167,36 +170,111 @@ type ExportInfo = {
   reexportsAll: boolean;
 };
 
-// Collect export names from a module source.
-export function collectExports(source: string): ExportInfo {
-  const text = stripComments(source);
-  const named = new Set<string>();
-  let hasDefault = EXPORT_DEFAULT_RE.test(text);
-  const reexportsAll = /^\s*export\s*\*\s+(?:as\s+[A-Za-z_$][\w$]*\s+)?from\s+/m.test(text);
+function exportedName(node: Node | null | undefined): string | null {
+  if (!node) return null;
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'StringLiteral') return node.value;
+  return null;
+}
 
-  EXPORT_NAMED_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = EXPORT_NAMED_RE.exec(text)) !== null) {
-    named.add(m[1]!);
+// Binding names, not pattern keys: `export const { a: b } = obj` exports `b`.
+function addBindings(id: Node | null | undefined, named: Set<string>): void {
+  if (!id) return;
+  switch (id.type) {
+    case 'Identifier':
+      named.add(id.name);
+      return;
+    case 'ObjectPattern':
+      for (const prop of id.properties) {
+        if (prop.type === 'RestElement') addBindings(prop.argument, named);
+        else if (prop.type === 'ObjectProperty') addBindings(prop.value, named);
+      }
+      return;
+    case 'ArrayPattern':
+      for (const element of id.elements) addBindings(element, named);
+      return;
+    case 'AssignmentPattern':
+      addBindings(id.left, named);
+      return;
+    case 'RestElement':
+      addBindings(id.argument, named);
+      return;
+    default:
+      return;
   }
+}
 
-  EXPORT_LIST_RE.lastIndex = 0;
-  while ((m = EXPORT_LIST_RE.exec(text)) !== null) {
-    for (const part of m[1]!.split(',')) {
-      const bit = part.trim().replace(/^type\s+/, '');
-      if (!bit) continue;
-      const asMatch = /^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/.exec(bit);
-      if (asMatch) {
-        // Importers see the exported name, not local.
-        named.add(asMatch[2]!);
+function addDeclarationName(declaration: Node, named: Set<string>): void {
+  switch (declaration.type) {
+    case 'FunctionDeclaration':
+    case 'ClassDeclaration':
+    case 'TSTypeAliasDeclaration':
+    case 'TSInterfaceDeclaration':
+    case 'TSEnumDeclaration':
+    case 'TSDeclareFunction':
+      if (declaration.id?.type === 'Identifier') named.add(declaration.id.name);
+      return;
+    case 'VariableDeclaration':
+      for (const declarator of declaration.declarations) addBindings(declarator.id, named);
+      return;
+    case 'TSModuleDeclaration':
+      if (declaration.id.type === 'Identifier') named.add(declaration.id.name);
+      return;
+    default:
+      return;
+  }
+}
+
+// Collect export names from a module source. A regex only saw the first declarator.
+export function collectExports(source: string): ExportInfo {
+  const named = new Set<string>();
+  let hasDefault = false;
+  let reexportsAll = false;
+  let ast: ReturnType<typeof parse> | null = null;
+  for (const plugins of EXPORT_PARSER_PLUGINS) {
+    try {
+      ast = parse(source, { sourceType: 'module', plugins: [...plugins], errorRecovery: true });
+      break;
+    } catch {
+      ast = null;
+    }
+  }
+  // Unreadable source must not become a false "does not export".
+  if (!ast) return { named, hasDefault, reexportsAll: true };
+
+  for (const statement of ast.program.body) {
+    if (statement.type === 'ExportDefaultDeclaration') {
+      hasDefault = true;
+      continue;
+    }
+    if (statement.type === 'TSExportAssignment') {
+      hasDefault = true;
+      continue;
+    }
+    if (statement.type === 'ExportAllDeclaration') {
+      // `export * as ns` is an ExportNamespaceSpecifier, not this node.
+      reexportsAll = true;
+      continue;
+    }
+    if (statement.type !== 'ExportNamedDeclaration') continue;
+    if (statement.declaration) addDeclarationName(statement.declaration, named);
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === 'ExportNamespaceSpecifier') {
+        const name = exportedName(specifier.exported);
+        if (name) named.add(name);
         continue;
       }
-      if (/^[A-Za-z_$][\w$]*$/.test(bit)) named.add(bit);
+      if (specifier.type !== 'ExportSpecifier') continue;
+      const name = exportedName(specifier.exported);
+      if (!name || name === 'default') hasDefault = true;
+      else named.add(name);
     }
   }
 
+  // A recovered syntax error can drop a later export. Missing locals are not that.
+  const structural = (ast.errors ?? []).some((error) => !/is not defined/i.test(error.message));
+  if (structural) reexportsAll = true;
   if (named.has('default')) hasDefault = true;
-
   return { named, hasDefault, reexportsAll };
 }
 
