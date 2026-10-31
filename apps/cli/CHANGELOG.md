@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.62.2 — 2026-10-31
+
 ### Fixed
 
 - `gamedevpl push` says when a delivery was paused because the platform content check is down, instead of showing only `internal` (#2048).
