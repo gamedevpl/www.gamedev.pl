@@ -18,15 +18,44 @@ export function apiKitPlan(registryRaw: string, sidecars: Record<string, string>
       throw new Error('Supported Kit has no immutable sidecar');
     }
   }
-  const kits = Object.entries(sidecars)
+  const pinned = new Set([registry.current, registry.previous].filter((ref): ref is string => ref !== null));
+  const byVersion = new Map<string, { engineRef: string; sha256: string; packedAt?: string }>();
+  const parsedSupported = Object.entries(sidecars)
     .sort(([a], [b]) => a.localeCompare(b))
     .flatMap(([engineRef, raw]) => {
       if (!/^[a-f0-9]{40}$/.test(engineRef)) throw new Error('Kit sidecar has no immutable engine identity');
       const sidecar = parseKitSidecar(raw);
       return isKitEngineRefSupported(engineRef, registry, sidecar.version)
-        ? [{ engineRef, sha256: sidecar.sha256 }]
+        ? [{ engineRef, sha256: sidecar.sha256, version: sidecar.version, packedAt: sidecar.packedAt }]
         : [];
     });
+
+  for (const item of parsedSupported) {
+    if (!item.version) {
+      pinned.add(item.engineRef);
+      continue;
+    }
+    const existing = byVersion.get(item.version);
+    if (!existing) {
+      byVersion.set(item.version, item);
+    } else {
+      const existingDate = existing.packedAt ?? '';
+      const itemDate = item.packedAt ?? '';
+      if (itemDate > existingDate || (itemDate === existingDate && item.engineRef > existing.engineRef)) {
+        byVersion.set(item.version, item);
+      }
+    }
+  }
+
+  const selectedRefs = new Set(pinned);
+  for (const item of byVersion.values()) {
+    selectedRefs.add(item.engineRef);
+  }
+
+  const kits = parsedSupported
+    .filter((item) => selectedRefs.has(item.engineRef))
+    .map(({ engineRef, sha256 }) => ({ engineRef, sha256 }));
+
   return { registrySha256: sha256(registryRaw), kits };
 }
 

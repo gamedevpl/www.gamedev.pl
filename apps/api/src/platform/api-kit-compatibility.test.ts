@@ -33,6 +33,18 @@ describe('API deployment compatibility window', () => {
     const plan = apiKitPlan(registry.replace('1.11.2', 'invalid'), sidecars);
     expect(plan.kits.map((kit) => kit.engineRef)).toEqual([current, previous]);
   });
+  it('deduplicates historical same-major Kits by version keeping the latest', () => {
+    const older1 = '1'.repeat(40);
+    const older2 = '2'.repeat(40);
+    const sidecarsWithDuplicates = {
+      [current]: sidecar('1.11.2'),
+      [previous]: sidecar('1.11.1'),
+      [older1]: JSON.stringify({ version: '1.0.0', sha256: digest, packedAt: '2026-08-14T00:00:00Z' }),
+      [older2]: JSON.stringify({ version: '1.0.0', sha256: digest, packedAt: '2026-08-15T00:00:00Z' }),
+    };
+    const plan = apiKitPlan(registry, sidecarsWithDuplicates);
+    expect(plan.kits.map((k) => k.engineRef)).toEqual([older2, current, previous].sort());
+  });
   it('rejects pointer changes, changed bytes and newly accepted older Kits', () => {
     const plan = apiKitPlan(registry, sidecars);
     for (const next of [
