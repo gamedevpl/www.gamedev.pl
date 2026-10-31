@@ -334,7 +334,8 @@ export async function startPlayBrain(input: {
     });
     retargetPresence = presence.retarget;
     ws.onLocalTask?.(name);
-    const steer = steering.send(agent, signal);
+    const steeringEnd = new AbortController();
+    const steer = steering.send(agent, AbortSignal.any([signal, steeringEnd.signal]));
     ws.onSteering?.(steer);
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
@@ -413,6 +414,7 @@ export async function startPlayBrain(input: {
       live.close();
       retargetPresence = undefined;
       ws.onSteering?.(undefined);
+      steeringEnd.abort();
       ws.onLocalTask?.('');
       // Keep the writer lock until the stopped agent and actions exit.
       if (signal.aborted) await quiet();
