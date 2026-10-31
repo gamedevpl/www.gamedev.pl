@@ -52,6 +52,7 @@ rl.on('line', line => {
         abort() {},
         steer: () => new Promise<void>((resolve, reject) => callbacks.push({ resolve, reject })),
         async *[Symbol.asyncIterator]() {
+          yield* [];
           await new Promise(() => {});
         },
       }),

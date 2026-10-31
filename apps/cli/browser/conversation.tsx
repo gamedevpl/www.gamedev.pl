@@ -265,7 +265,7 @@ function AgentConversation({
       approve: (id, decision) => call({ kind: 'approval', id, decision }),
       changes: () => Promise.reject(new Error('Play delivers edits itself; use /diff.')),
     };
-  }, [state, error, dismissed]);
+  }, [state, error]);
   const finished = state.actions.filter(
     (action) =>
       action.status !== 'pending' &&
