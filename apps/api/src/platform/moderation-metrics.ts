@@ -61,6 +61,12 @@ export const MODERATION_REJECTED_MSG = 'moderation rejected';
 // Separate message: the burst alert must not count outages.
 export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
 
+// Credits or a hard quota are gone. Not a transient 429. The outage alert matches this.
+export const MODERATION_BILLING_EXHAUSTED_MSG = 'moderation billing exhausted';
+
+// Prefix of the fail-closed console line. The outage alert matches this text.
+export const MODERATION_FAILED_CLOSED_PREFIX = 'Moderation failed or timed out';
+
 export interface ModerationRejection {
   surface: ModerationSurface;
   /** Absent on unauthenticated surfaces (the contact form). Never an email. */

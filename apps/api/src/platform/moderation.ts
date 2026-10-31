@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createOpenAiClient, createVertexClient } from './genai.js';
-import { callWithVertexResilience } from './vertex-resilience.js';
+import { callWithVertexResilience, isBillingExhausted } from './vertex-resilience.js';
+import { MODERATION_BILLING_EXHAUSTED_MSG, MODERATION_FAILED_CLOSED_PREFIX } from './moderation-metrics.js';
 import {
   CATEGORY_TERMS,
   MAX_URLS_IN_TEXT,
@@ -298,15 +299,35 @@ export class VertexChecker implements ContentChecker {
           // Per attempt: a retry is another billed call.
           this.options.onPaidCall?.();
         },
-        attempt: (model, timeoutMs) => this.callVertex(text, model, timeoutMs),
+        attempt: async (model, timeoutMs) => {
+          try {
+            return await this.callVertex(text, model, timeoutMs);
+          } catch (err) {
+            if (isBillingExhausted(err)) {
+              const provider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
+              // One JSON line so Cloud Logging can promote severity and msg.
+              console.error(
+                JSON.stringify({
+                  severity: 'ERROR',
+                  message: MODERATION_BILLING_EXHAUSTED_MSG,
+                  msg: MODERATION_BILLING_EXHAUSTED_MSG,
+                  provider,
+                }),
+              );
+            }
+            throw err;
+          }
+        },
       });
       const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
       const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
       this.writeCachedVerdict(key, verdict, now);
       return verdict;
     } catch (err) {
-      // Fail closed, never cached. Names the provider: triage starts there.
-      console.warn(`Moderation failed or timed out on ${lastProvider}, failing closed:`, err);
+      // Fail closed, never cached. A spent balance was already logged at error.
+      if (!isBillingExhausted(err)) {
+        console.warn(`${MODERATION_FAILED_CLOSED_PREFIX} on ${lastProvider}, failing closed:`, err);
+      }
     }
 
     return { allowed: false, category: 'other', unavailable: true };

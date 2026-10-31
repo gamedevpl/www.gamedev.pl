@@ -4,7 +4,13 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
-import { logModerationRejection, MODERATION_REJECTED_MSG, MODERATION_UNAVAILABLE_MSG } from './moderation-metrics.js';
+import {
+  logModerationRejection,
+  MODERATION_BILLING_EXHAUSTED_MSG,
+  MODERATION_FAILED_CLOSED_PREFIX,
+  MODERATION_REJECTED_MSG,
+  MODERATION_UNAVAILABLE_MSG,
+} from './moderation-metrics.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -186,6 +192,19 @@ describe('the alert that reads these logs', () => {
     const policy = script.slice(script.indexOf('A14 moderation rejection burst'));
     expect(policy).toContain('logging.googleapis.com/user/moderation_rejections');
     expect(policy.slice(0, 800)).toContain('service_name');
+  });
+
+  it('pages on an outage separately from a rejection burst', () => {
+    expect(script).toContain(MODERATION_UNAVAILABLE_MSG);
+    expect(script).toContain(MODERATION_BILLING_EXHAUSTED_MSG);
+    expect(script).toContain(MODERATION_FAILED_CLOSED_PREFIX);
+    expect(script).toContain('moderation_unavailable');
+    const policy = script.slice(script.indexOf('A35 moderation unavailable'));
+    expect(policy.slice(0, 1400)).toContain('logging.googleapis.com/user/moderation_unavailable');
+    expect(policy.slice(0, 1400)).toContain('service_name');
+    expect(policy.slice(0, 1400)).toContain('"alignmentPeriod": "600s"');
+    expect(policy.slice(0, 1400)).toContain('"thresholdValue": 2');
+    expect(policy.slice(0, 1600)).toContain('"${CHANNEL_NAME}"');
   });
 });
 

@@ -323,6 +323,15 @@ ensure_log_metric moderation_rejections \
   'Content rejected by moderation, any surface. Backs alert A14.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"moderation rejected\""
 
+# Moderation could not decide (credits, 429/5xx, timeout). Separate from A14 on purpose:
+# an outage is not a burst of rejections. One failed check can emit two lines — the
+# checker text and jsonPayload.msg="moderation unavailable" — so the >2 threshold
+# counts lines, and two stuck deliveries can page. Message strings are the contract
+# with apps/api/src/platform/moderation-metrics.ts and moderation.ts.
+ensure_log_metric moderation_unavailable \
+  'Moderation could not decide (credits, timeout, or provider error). Backs alert A35.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND (jsonPayload.msg=\"moderation unavailable\" OR jsonPayload.msg=\"moderation billing exhausted\" OR textPayload:\"Moderation failed or timed out\" OR textPayload:\"moderation billing exhausted\" OR jsonPayload.message:\"Moderation failed or timed out\" OR jsonPayload.message:\"moderation billing exhausted\")"
+
 # knowledge_query calls (KQ-10). The message string is the contract with
 # apps/api/src/knowledge-metrics.ts, asserted from both sides by knowledge-metrics.test.ts.
 # Backs A26 below: a cost-runaway guard on the SEARCH_ADD_ON_LLM generative add-on, which is
@@ -595,6 +604,43 @@ cat > "${POLICY_DIR}/a14.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "Content moderation is rejecting far more than organic traffic explains — someone is probing the walls, or a checker regression is rejecting valid input. Both matter and they look identical from here, so check which: Logs Explorer, jsonPayload.msg=\"moderation rejected\", group by jsonPayload.moderation.uid and .category. One uid across many categories is a person testing limits; many uids in one category is a false-positive regression in the deny-list. Triage: ops repo runbooks/moderation-burst.md",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A35 — moderation could not decide. Not an abuse burst.
+#
+# A14 counts refusals of text. This counts the checker failing closed: no credits,
+# a timeout, or a provider error. The 2026-10-30 outage was "no credits remaining"
+# on the OpenAI stand-in and showed up as HTTP 500s, not as rejections. Threshold
+# is >2 matching lines in 10 minutes (fires at 3). Each failed check can log both
+# the checker line and "moderation unavailable", so two stuck deliveries can page.
+# Apply with the primary service run. Until an operator runs this script the policy
+# is scripted, not live.
+cat > "${POLICY_DIR}/a35.json" <<EOF
+{
+  "displayName": "A35 moderation unavailable",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "moderation failing closed",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/moderation_unavailable\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 2,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Moderation is failing closed on ${PRIMARY_SERVICE} — creators are blocked and it is not their text. Look for jsonPayload.msg=\"moderation billing exhausted\" (credits or hard quota; not a short 429) and textPayload:\"Moderation failed or timed out\" (the other provider errors). Do not open the wall. Triage: ops repo runbooks/moderation-burst.md",
     "mimeType": "text/markdown"
   }
 }
@@ -1402,6 +1448,13 @@ echo "    That same query is the standing answer to 'is anyone probing us'. Grou
 echo "    jsonPayload.moderation.uid and .category: one uid across many categories is a"
 echo "    person testing the walls; many uids in one category is the deny-list rejecting"
 echo "    something legitimate, which is the more expensive of the two to leave alone."
+echo ""
+echo "    A35 is the outage, not the burst. It counts lines, and one failed check can"
+echo "    emit two (the checker line and moderation unavailable), so >2 in 10 min can"
+echo "    be two stuck deliveries. Confirm the filter matches real lines:"
+echo "      gcloud logging read \\"
+echo "        'resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND (jsonPayload.msg=\"moderation unavailable\" OR jsonPayload.msg=\"moderation billing exhausted\" OR textPayload:\"Moderation failed or timed out\")' \\"
+echo "        --project ${PROJECT_ID} --limit 20 --freshness 7d"
 echo ""
 echo "    A24/A25 (Vertex volume) watch Google-published metrics rather than our logs, so"
 echo "    there is no filter to typo — but there is a threshold to calibrate, and a"
