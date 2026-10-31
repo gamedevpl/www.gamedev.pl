@@ -56,4 +56,28 @@ describe('selectKitsToPrune', () => {
     });
     expect(result.prune).toContain(recent);
   });
+
+  it('preserves unparseable candidates lacking version or packedAt', () => {
+    const corrupt1 = '1'.repeat(40);
+    const corrupt2 = '2'.repeat(40);
+    const corrupt3 = '3'.repeat(40);
+    const result = selectKitsToPrune({
+      current,
+      previous,
+      sidecars: {
+        ...sidecars,
+        [corrupt1]: { engineRef: corrupt1 },
+        [corrupt2]: { engineRef: corrupt2, version: '1.2.0' },
+        [corrupt3]: { engineRef: corrupt3, packedAt: '2026-08-01T00:00:00Z' },
+      },
+      retentionDays: 14,
+      now,
+    });
+    expect(result.keep.has(corrupt1)).toBe(true);
+    expect(result.keep.has(corrupt2)).toBe(true);
+    expect(result.keep.has(corrupt3)).toBe(true);
+    expect(result.prune).not.toContain(corrupt1);
+    expect(result.prune).not.toContain(corrupt2);
+    expect(result.prune).not.toContain(corrupt3);
+  });
 });

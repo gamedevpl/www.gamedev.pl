@@ -24,12 +24,20 @@ export function selectKitsToPrune(options: {
   if (options.current) keep.add(options.current);
   if (options.previous) keep.add(options.previous);
 
+  // Preserve unparseable candidates without version or packedAt
+  for (const candidate of Object.values(options.sidecars)) {
+    if (!candidate.version || !candidate.packedAt) {
+      keep.add(candidate.engineRef);
+    }
+  }
+
   // Preserve latest kit per minor line as archetype.
   const latestByMinor = new Map<string, KitCandidate>();
   for (const candidate of Object.values(options.sidecars)) {
     const v = candidate.version;
-    const parts = v ? v.split('.') : null;
-    const minorKey = parts && parts.length >= 2 ? `${parts[0]}.${parts[1]}` : (v ?? 'unknown');
+    if (!v) continue;
+    const parts = v.split('.');
+    const minorKey = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : v;
     const existing = latestByMinor.get(minorKey);
     const date = candidate.packedAt ?? '';
     const existingDate = existing?.packedAt ?? '';
