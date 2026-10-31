@@ -16,7 +16,8 @@ import type { AdapterRunInput } from './headless-agent.js';
 import { evidenceImages } from './workbench-evidence.js';
 
 type RpcValue = Record<string, unknown>;
-export type Steer = (text: string) => Promise<void>;
+export type SteerReceipt = { status: 'queued' } | { status: 'pending'; confirmation: Promise<void> };
+export type Steer = (text: string) => Promise<void | SteerReceipt>;
 
 const ACK_TIMEOUT_MS = 30_000;
 const CODEX_SANDBOXES = ['workspace-write', 'read-only', 'danger-full-access'];

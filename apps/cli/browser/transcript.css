@@ -160,6 +160,38 @@
   display: block;
   margin-top: 8px;
 }
+#conversation.play-agent .play-deliveries,
+#conversation.play-agent .play-finished-actions {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 25%;
+  overflow: auto;
+  border-top: 1px solid var(--panel-border);
+  padding: 5px 14px;
+  font-size: 12px;
+}
+.play-deliveries summary,
+.play-finished-actions summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.play-deliveries ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.play-deliveries li small {
+  display: block;
+  color: var(--muted);
+}
+.play-finished-action {
+  margin: 6px 0;
+}
+.play-finished-action pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 12em;
+  overflow: auto;
+}
 #conversation.play-agent .play-agent-progress {
   --_mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --_code-bg: var(--panel-card);

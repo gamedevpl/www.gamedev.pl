@@ -25,7 +25,7 @@ addEventListener('message',event=>{
 addEventListener('keydown',event=>document.body.dataset.key=event.key);
 </script>`;
 
-async function fixture(width: number, height: number, agent = false) {
+async function fixture(width: number, height: number, agent = false, actions = false) {
   const page = await browser.newPage({ viewport: { width, height } });
   let updateReady = false;
   page.on('pageerror', (error) => console.error(error));
@@ -46,7 +46,12 @@ async function fixture(width: number, height: number, agent = false) {
       localTask: '',
       question: '',
       choices: [],
-      lines: ['› Sprawdź układ na telefonie.', '◆ Gotowe do kolejnej zmiany.'],
+      lines: [
+        '› Sprawdź układ na telefonie.',
+        '◆ Gotowe do kolejnej zmiany.',
+        ...(actions ? ['› [message to agent] Dodaj salto.'] : []),
+      ],
+      deliveries: actions ? [{ id: 1, text: 'Dodaj salto.', status: 'pending' }] : [],
       live: [],
       queued: [],
       history: [],
@@ -61,7 +66,27 @@ async function fixture(width: number, height: number, agent = false) {
               modes: ['use'],
               agent: 'claude',
               agents: [],
-              actions: [],
+              actions: actions
+                ? [
+                    {
+                      id: 'failed',
+                      kind: 'tool',
+                      summary: 'Push master to origin git@github.com:example/airtime.git',
+                      status: 'failed',
+                      createdAt: 1,
+                      tool: { name: 'game_git_push', args: { branch: 'master' } },
+                      result: 'Connection refused',
+                    },
+                    {
+                      id: 'pending',
+                      kind: 'tool',
+                      summary: 'Publish this game?',
+                      status: 'pending',
+                      createdAt: 2,
+                      tool: { name: 'game_publish', args: { slug: 'layout' } },
+                    },
+                  ]
+                : [],
               links: [],
               view: null,
               navigation: null,
@@ -81,6 +106,7 @@ async function fixture(width: number, height: number, agent = false) {
                     prompt: 'Popraw sterowanie.',
                     startedAt: Date.now(),
                     entries: [
+                      ...(actions ? [{ kind: 'input', text: 'Dodaj salto.' }] : []),
                       {
                         kind: 'tool',
                         name: 'AskUserQuestion',
@@ -397,6 +423,38 @@ describe.skipIf(!prerequisite.ok)('CLI Play browser layout', () => {
       await visibleInside(page, '#send', 1280, 720);
       if (process.env.CLI_PLAY_LAYOUT_SCREENSHOTS)
         await page.screenshot({ path: `${process.env.CLI_PLAY_LAYOUT_SCREENSHOTS}/play-agent-chat.png` });
+    } finally {
+      await page.close();
+    }
+  });
+
+  it.each([
+    [1280, 720],
+    [390, 667],
+  ])('keeps failed actions compact and pending approvals accessible at %i × %i', async (width, height) => {
+    const page = await fixture(width!, height!, true, true);
+    try {
+      await page.locator('#edit').click();
+      await page.locator('.play-finished-actions').waitFor({ state: 'visible' });
+      expect(await page.locator('.play-finished-actions summary').first().textContent()).toContain('1 failed');
+      expect(await page.locator('.play-finished-actions').getAttribute('open')).toBeNull();
+      expect(await page.locator('.play-deliveries summary').textContent()).toContain('1 awaiting agent');
+      expect(await page.locator('.play-action-details').getAttribute('open')).toBeNull();
+      expect(await page.locator('.gc-steer').count()).toBe(1);
+      expect(await page.locator('.play-agent-log').textContent()).not.toContain('[message to agent]');
+      if (process.env.CLI_PLAY_LAYOUT_SCREENSHOTS)
+        await page.screenshot({ path: `${process.env.CLI_PLAY_LAYOUT_SCREENSHOTS}/play-actions-${width}.png` });
+      await page.locator('.play-finished-actions > summary').click();
+      await page.locator('.play-finished-action > summary').click();
+      expect(await page.locator('.play-finished-action pre').textContent()).toContain('Connection refused');
+      await visibleInside(page, '#send', width!, height!);
+      await page.locator('.play-finished-actions > summary').click();
+      await page.locator('.gc-app-action.gc-pending button', { hasText: 'Approve' }).scrollIntoViewIfNeeded();
+      const approval = await box(page, '.gc-app-action.gc-pending .gc-primary');
+      const scroll = await box(page, '.gc-scroll');
+      expect(approval.y).toBeGreaterThanOrEqual(scroll.y);
+      expect(approval.y + approval.height).toBeLessThanOrEqual(scroll.y + scroll.height + 1);
+      await visibleInside(page, '#send', width!, height!);
     } finally {
       await page.close();
     }
