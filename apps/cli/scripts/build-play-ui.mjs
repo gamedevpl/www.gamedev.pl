@@ -17,6 +17,12 @@ const shared = {
     {
       name: 'play-prompt-renderer',
       setup(build) {
+        build.onLoad({ filter: /genaicode[/\\]dist[/\\]react[/\\]agent-chat\.js$/ }, async ({ path }) => {
+          const source = await readFile(path, 'utf8');
+          const needle = 'Sent while working';
+          if (source.split(needle).length !== 2) throw new Error('Update Play steering label for genaicode');
+          return { contents: source.replace(needle, 'Message while working'), loader: 'js', resolveDir: dirname(path) };
+        });
         build.onLoad({ filter: /genaicode[/\\]dist[/\\]react[/\\]app-agent-chat\.js$/ }, async ({ path }) => {
           const source = await readFile(path, 'utf8');
           const needle = 'const typed = userText(text);';

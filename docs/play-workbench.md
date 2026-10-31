@@ -86,6 +86,14 @@ The composer names the session assistant as the initial recipient; builder selec
 happens in the existing execution flow. During a local task it labels follow-ups as
 queued for the assistant after that task. Opening Chat does not start an agent.
 Use Cmd+Enter on macOS or Ctrl+Enter to send; Enter inserts a new line.
+
+Messages sent while the agent is working show their delivery status below the conversation.
+“Waiting for the agent” means Play submitted the message but has not received the agent's
+acknowledgement. Claude may take it between tool calls, so a long-running command can delay
+this. “Received by the agent” confirms the agent process took the message, not that the model
+followed it. A queued or unconfirmed message may be discarded when the task stops; check its
+outcome before sending it again. Finished actions are folded below the conversation, including
+their errors; actions that need approval remain visible in the conversation.
 Commands are searchable and typing `/` offers the server's supported action map;
 Tab completes a suggestion. Prompt history is shared with the terminal. Up recalls
 history at the start of the composer; the history button also supports touch access.

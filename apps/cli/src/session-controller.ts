@@ -2,6 +2,8 @@ import { shownPrompt, splitEvidence } from './workbench-evidence.js';
 import { sessionDiff, type SessionDiff } from './session-diff.js';
 import type { Steer } from './live-agent.js';
 import { cleanDraftText, editDraft, type DraftAction } from './draft-edit.js';
+import type { Delivery } from './session-delivery.js';
+import { createSessionSender, markUndelivered } from './session-send.js';
 export type SessionHistory = { lines: string[]; prompts: string[]; conversationId?: string };
 export type SessionMode = 'prompt' | 'pick' | 'busy';
 
@@ -26,6 +28,7 @@ export type SessionState = {
   canSteer: boolean;
   sending: boolean;
   sendStatus: string;
+  deliveries: Delivery[];
   promptId: number;
   taskId: number;
   approvalPending: boolean;
@@ -92,6 +95,7 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     canSteer: false,
     sending: false,
     sendStatus: '',
+    deliveries: [],
     promptId: 0,
     taskId: 0,
     approvalPending: false,
@@ -170,40 +174,27 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     return true;
   };
 
-  // `shown`: transcript form of `text`, attachments collapsed.
-  const sendToAgent = async (send: Steer, text: string, shown: string): Promise<boolean> => {
-    state = { ...state, sending: true, sendStatus: 'Sending to the active agent…' };
-    emit();
-    const typed = splitEvidence(text).text.trim();
-    try {
-      await send(text);
-      const line = `› [sent to active agent] ${shown}`;
-      savedLines = [...savedLines, line].slice(-200);
-      history.push(typed);
+  const sendToAgent = createSessionSender({
+    get: () => state,
+    set: (next) => {
+      state = next;
+    },
+    emit,
+    save: (lines) => {
+      savedLines = [...savedLines, ...lines].slice(-200);
+    },
+    remember: (text, resetIndex) => {
+      history.push(text);
       if (history.length > 50) history.shift();
+      if (resetIndex) histIndex = history.length;
+    },
+    clearFollowup: (text) => {
       if (followupDraft.trim() === text) followupDraft = '';
-      state = {
-        ...state,
-        lines: [...state.lines, line],
-        sendStatus: 'Accepted by the agent',
-        ...(state.draft.trim() === text ? { draft: '', draftCursor: 0 } : {}),
-      };
-      if (!state.draft) undo = [];
-      return true;
-    } catch (error) {
-      const status = `${error instanceof Error ? error.message : 'Sending failed.'} Message saved in history.`;
-      const line = `› [delivery not confirmed] ${shown}`;
-      savedLines = [...savedLines, line, status].slice(-200);
-      history.push(typed);
-      if (history.length > 50) history.shift();
-      histIndex = history.length;
-      state = { ...state, lines: [...state.lines, line, status], sendStatus: status };
-      return false;
-    } finally {
-      state = { ...state, sending: false };
-      emit();
-    }
-  };
+    },
+    clearUndo: () => {
+      undo = [];
+    },
+  });
 
   return {
     setSteering(send) {
@@ -249,7 +240,11 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
       )
         return false;
       stopping = true;
-      state = { ...state, queued: [] };
+      state = {
+        ...state,
+        queued: [],
+        deliveries: markUndelivered(state.deliveries),
+      };
       emit();
       onBusyCancel?.();
       return true;
@@ -321,7 +316,13 @@ export function createSessionController(banner: string, onBusyCancel?: () => voi
     },
     setLocalTask(localTask) {
       stopping = false;
-      state = { ...state, localTask, sendStatus: '', taskId: state.taskId + 1 };
+      state = {
+        ...state,
+        localTask,
+        sendStatus: '',
+        taskId: state.taskId + 1,
+        deliveries: localTask ? state.deliveries : markUndelivered(state.deliveries),
+      };
       emit();
     },
     setLive(live) {

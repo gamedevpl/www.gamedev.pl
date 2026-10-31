@@ -56,7 +56,7 @@ function render(next) {
   el('identity').textContent = state.identity;
   el('game-name').textContent = state.identity || 'gamedev.pl';
   el('destination').textContent = actionQuestion ? 'Review the pending action above' : state.question || state.choices.length ? 'Answering the current question' : state.agent ? 'To: ' + state.agent.agent + ' · edits, checks and asks before delivery' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
-  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent}}));
+  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent,deliveries:state.deliveries||[]}}));
   el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';
@@ -90,7 +90,7 @@ async function deliver() {
     if(pending!==attempt)return;
     if (result.status === 'accepted') {
       if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? (pending.steer ? 'Sent to the working agent' : 'Queued after the current task') + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
+      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? (pending.steer ? (state?.agent ? 'Message submitted; see delivery status above' : 'Accepted by the agent') : 'Queued after the current task; stopping will discard it') + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
     } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {

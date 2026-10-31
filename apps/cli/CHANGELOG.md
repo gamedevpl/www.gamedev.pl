@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play shows whether messages sent during an agent task are awaiting confirmation, received, or may have been lost, and keeps finished actions compact (#2060).
+
 ## 0.63.0 — 2026-10-31
 
 ### Added

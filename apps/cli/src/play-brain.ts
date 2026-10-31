@@ -39,6 +39,7 @@ import { reconcileRemotePush } from './git-remote-main.js';
 import { gitPushActionSummary } from './play-git-host.js';
 import { playBrainPresence, roundWithPresence } from './play-brain-presence.js';
 import { mirrorPlayBrain } from './play-brain-mirror.js';
+import { trackPlaySteering } from './play-brain-steering.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
@@ -194,6 +195,7 @@ export async function startPlayBrain(input: {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
   });
+  const steering = trackPlaySteering();
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: playBrainInstructions(ws),
@@ -227,7 +229,7 @@ export async function startPlayBrain(input: {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
       const configured = withRunSettings(make, ws.env, permission);
-      return configured ? [configured] : [];
+      return configured ? [steering.wrap(configured)] : [];
     },
     agent: name,
     serverName: 'gamedevpl',
@@ -332,7 +334,8 @@ export async function startPlayBrain(input: {
     });
     retargetPresence = presence.retarget;
     ws.onLocalTask?.(name);
-    const steer = async (message: string) => agent.send(message);
+    const steeringEnd = new AbortController();
+    const steer = steering.send(agent, AbortSignal.any([signal, steeringEnd.signal]));
     ws.onSteering?.(steer);
     const actionsBefore = new Set(agent.get().actions.map((action) => action.id));
     let repairs = 0;
@@ -411,6 +414,7 @@ export async function startPlayBrain(input: {
       live.close();
       retargetPresence = undefined;
       ws.onSteering?.(undefined);
+      steeringEnd.abort();
       ws.onLocalTask?.('');
       // Keep the writer lock until the stopped agent and actions exit.
       if (signal.aborted) await quiet();

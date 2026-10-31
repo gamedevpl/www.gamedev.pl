@@ -406,18 +406,19 @@ it('dismisses a settled action across updates and remounts without hiding new or
     );
   update(agent);
   await vi.waitFor(() => expect(doc.querySelector('[aria-label="Dismiss Old delivery"]')).not.toBeNull());
-  expect(doc.querySelectorAll('.play-dismiss-action')).toHaveLength(1);
+  expect(doc.querySelectorAll('.play-finished-action')).toHaveLength(1);
+  expect(doc.querySelector('.play-finished-actions')?.hasAttribute('open')).toBe(false);
   (doc.querySelector('[aria-label="Dismiss Old delivery"]') as HTMLButtonElement).click();
-  await vi.waitFor(() => expect(doc.querySelector('.gc-failed')).toBeNull());
+  await vi.waitFor(() => expect(doc.querySelector('.play-finished-action')).toBeNull());
   expect(doc.querySelector('.gc-pending')?.textContent).toContain('Awaiting decision');
   expect(doc.querySelector('.gc-running')?.textContent).toContain('Still running');
   update(null);
   await vi.waitFor(() => expect(doc.querySelector('.play-agent')).toBeNull());
   update(agent);
   await vi.waitFor(() => expect(doc.querySelector('.gc-pending')).not.toBeNull());
-  expect(doc.querySelector('.gc-failed')).toBeNull();
+  expect(doc.querySelector('.play-finished-action')).toBeNull();
   update({ ...agent, actions: [{ ...agent.actions[0], createdAt: 200, summary: 'New delivery' }] });
-  await vi.waitFor(() => expect(doc.querySelector('.gc-failed')?.textContent).toContain('New delivery'));
+  await vi.waitFor(() => expect(doc.querySelector('.play-finished-action')?.textContent).toContain('New delivery'));
 });
 
 it('shows action approval once and restores unrelated questions on the next poll', async () => {

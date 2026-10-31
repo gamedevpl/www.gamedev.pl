@@ -1,13 +1,15 @@
 import { PlayAgentChat, renderEvidencePrompt } from './evidence-prompt.js';
 import { agentTranscriptLine } from '../src/transcript-line.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { userText, useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
+import { useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
 import { codeApi } from './code-api.js';
 import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
 import { DiffFlyout } from './diff-flyout.js';
 import { showAgentQuestions } from './agent-questions.js';
 import { AgentProgress } from './agent-progress.js';
+import type { Delivery } from '../src/session-delivery.js';
+import { playLines } from './play-lines.js';
 
 type Snapshot = {
   lines: string[];
@@ -16,6 +18,7 @@ type Snapshot = {
   workspace?: { mode: string };
   // Set while the Play agent (GAMEDEVPL_BRAIN=app-agent) takes messages.
   agent?: AppAgentState;
+  deliveries?: Delivery[];
 };
 
 export function Conversation() {
@@ -24,6 +27,7 @@ export function Conversation() {
   const [diffs, setDiffs] = useState<SessionDiffInfo[]>([]);
   const [selected, setSelected] = useState<SessionDiffInfo | null>(null);
   const [agent, setAgent] = useState<AppAgentState | null>(null);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const readDiff = useRef<Snapshot['readDiff']>();
   const loadDiff = useCallback(
     (id: number) => (readDiff.current ? readDiff.current(id) : Promise.reject(new Error('Diff unavailable'))),
@@ -39,6 +43,7 @@ export function Conversation() {
       setLines((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
       setDiffs(data.diffs ?? []);
       setAgent(data.agent ?? null);
+      setDeliveries(data.deliveries ?? []);
       readDiff.current = data.readDiff;
       const latest = data.diffs?.at(-1);
       if (latest && latest.id > latestDiff.current) {
@@ -61,9 +66,10 @@ export function Conversation() {
       <>
         <AgentConversation
           state={agent}
-          log={sessionMessages(playLines(lines, agent), diffs)}
+          log={sessionMessages(playLines(lines, agent, deliveries), diffs)}
           diffs={diffs}
           openDiff={setSelected}
+          deliveries={deliveries}
         />
         <DiffFlyout diff={selected} read={loadDiff} close={() => setSelected(null)} />
       </>
@@ -113,25 +119,6 @@ function sessionMessages(lines: string[], diffs: SessionDiffInfo[]): SessionMess
   }
   flush();
   return messages;
-}
-
-// Session lines the agent chat lacks: slash commands, checks, delivery.
-function playLines(lines: string[], state: AppAgentState): string[] {
-  const turns = [...state.history, ...(state.session?.turns ?? [])];
-  const prompts = new Set(turns.map((turn) => userText(turn.prompt).trim()));
-  const texts = new Set(
-    turns.flatMap((turn) =>
-      turn.entries.flatMap((entry) =>
-        entry.kind === 'text' ? [entry.text.trim()] : entry.kind === 'error' ? [`! ${entry.message}`] : [],
-      ),
-    ),
-  );
-  return lines.filter(
-    (line) =>
-      !line.startsWith('  · ') &&
-      !texts.has(line.trim()) &&
-      !(line.startsWith('› ') && prompts.has(line.slice(2).trim())),
-  );
 }
 
 function SessionMessages({
@@ -204,11 +191,13 @@ function AgentConversation({
   log,
   diffs,
   openDiff,
+  deliveries,
 }: {
   state: AppAgentState;
   log: SessionMessage[];
   diffs: SessionDiffInfo[];
   openDiff: (diff: SessionDiffInfo) => void;
+  deliveries: Delivery[];
 }) {
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>(() => {
@@ -240,12 +229,7 @@ function AgentConversation({
     return {
       state: {
         ...showAgentQuestions(state),
-        actions: state.actions.filter(
-          (action) =>
-            action.status === 'pending' ||
-            action.status === 'running' ||
-            !dismissed.includes(`${action.id}:${action.createdAt}`),
-        ),
+        actions: state.actions.filter((action) => action.status === 'pending' || action.status === 'running'),
       },
       error,
       send(text) {
@@ -262,7 +246,22 @@ function AgentConversation({
       approve: (id, decision) => call({ kind: 'approval', id, decision }),
       changes: () => Promise.reject(new Error('Play delivers edits itself; use /diff.')),
     };
-  }, [state, error, dismissed]);
+  }, [state, error]);
+  const finished = state.actions.filter(
+    (action) =>
+      action.status !== 'pending' &&
+      action.status !== 'running' &&
+      !dismissed.includes(`${action.id}:${action.createdAt}`),
+  );
+  const failed = finished.filter((action) => action.status === 'failed').length;
+  const labels: Record<Delivery['status'], string> = {
+    pending: 'Waiting for the agent',
+    received: 'Received by the agent',
+    queued: 'Queued; stopping may discard it',
+    unconfirmed: 'Delivery not confirmed',
+  };
+  const unconfirmed = deliveries.filter((item) => item.status === 'unconfirmed').length;
+  const waiting = deliveries.filter((item) => item.status === 'pending' || item.status === 'queued').length;
   return (
     <div id="conversation" className="play-agent" aria-label="Conversation">
       <PlayAgentChat
@@ -271,28 +270,13 @@ function AgentConversation({
         foldSteps
         theme="dark"
         renderAction={(action) =>
-          action.status === 'pending' || action.status === 'running' ? undefined : (
-            <>
-              {action.kind === 'commit' ? (
-                <pre>{action.commit?.message}</pre>
-              ) : (
-                <>
-                  <code>{action.tool?.name}</code>
-                  {action.tool && Object.keys(action.tool.args).length > 0 && (
-                    <pre>{JSON.stringify(action.tool.args, null, 2)}</pre>
-                  )}
-                </>
-              )}
-              <button
-                type="button"
-                className="gc-btn play-dismiss-action"
-                onClick={() => dismiss(`${action.id}:${action.createdAt}`)}
-                aria-label={`Dismiss ${action.summary}`}
-              >
-                Dismiss
-              </button>
-            </>
-          )
+          action.kind === 'tool' && action.tool ? (
+            <details className="play-action-details">
+              <summary>Details</summary>
+              <code>{action.tool.name}</code>
+              {Object.keys(action.tool.args).length > 0 && <pre>{JSON.stringify(action.tool.args, null, 2)}</pre>}
+            </details>
+          ) : undefined
         }
         emptyState={
           <div className="conversation-welcome">
@@ -301,6 +285,47 @@ function AgentConversation({
           </div>
         }
       />
+      {deliveries.length > 0 && (
+        <details className="play-deliveries" aria-label="Message delivery">
+          <summary>
+            {unconfirmed ? `${unconfirmed} unconfirmed · ` : ''}
+            {waiting ? `${waiting} awaiting agent · ` : ''}
+            {!unconfirmed && !waiting ? 'Received by agent · ' : ''}
+            {deliveries.length} {deliveries.length === 1 ? 'message' : 'messages'}
+          </summary>
+          <ul>
+            {deliveries.map((item) => (
+              <li key={item.id}>
+                <span>{item.text}</span>
+                <small>{labels[item.status]}</small>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {finished.length > 0 && (
+        <details className="play-finished-actions">
+          <summary>
+            {failed ? `${failed} failed · ` : ''}
+            {finished.length} completed {finished.length === 1 ? 'action' : 'actions'}
+          </summary>
+          {finished.map((action) => (
+            <details className="play-finished-action" key={`${action.id}:${action.createdAt}`}>
+              <summary>
+                {action.summary} · {action.status}
+              </summary>
+              {action.result && <pre>{action.result}</pre>}
+              <button
+                type="button"
+                onClick={() => dismiss(`${action.id}:${action.createdAt}`)}
+                aria-label={`Dismiss ${action.summary}`}
+              >
+                Dismiss
+              </button>
+            </details>
+          ))}
+        </details>
+      )}
       <AgentProgress state={state} />
       {log.length > 0 && (
         // Folded, so only the agent chat scrolls.
