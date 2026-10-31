@@ -24,8 +24,14 @@ import { sessionBrowserHost } from '../session-browser-host.js';
 import { historyStore } from './history.js';
 import { bufferTerminalInput } from './input-frame.js';
 import { startPlayOutput } from '../play-output.js';
-import { brainAgent, startPlayBrain, type PlayBrain } from '../play-brain.js';
+import { brainAgent, startPlayBrain } from '../play-brain.js';
 import { brainChoice, brainRequested } from '../play-brain-choice.js';
+import {
+  publishedBrainOptions,
+  retryPlayBrain,
+  selectPublishedPlayAgent,
+  type RunningPlayBrain,
+} from '../play-brain-routing.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -135,7 +141,7 @@ export async function runInkRepl(input: {
     () => brain?.started?.agent,
   );
   // GAMEDEVPL_BRAIN=app-agent: a genaicode app-agent takes self-builder messages.
-  let brain: { workshop: Workshop; name?: string; started?: PlayBrain } | undefined;
+  let brain: RunningPlayBrain | undefined;
   const closeBrain = async (): Promise<void> => {
     const closing = brain?.started;
     brain = undefined;
@@ -208,7 +214,6 @@ export async function runInkRepl(input: {
     if (input.shutdownSignal?.aborted) return EXIT_GREEN;
     if (studio.status === 'rejected') throw studio.reason;
     if (studio.value) token = studio.value;
-
     if (input.browserOnly && !uid && input.login && !input.checkout) {
       const answer = await session.prompt(['Sign in', 'Continue offline'], 'Sign in to create or deliver games');
       if (answer === 'Sign in') {
@@ -329,29 +334,54 @@ export async function runInkRepl(input: {
         }
         continue;
       }
+      if (line.trim() === '/retry' && workshop?.failedTask?.source === 'play-brain') {
+        await retryPlayBrain(input.api, workshop, brain, Boolean(input.browserOnly)).then(
+          saveHistory,
+          (error: unknown) => session.writeLine(formatError(error)),
+        );
+        continue;
+      }
       if (
         brainRequested(input.env) &&
-        workshop?.builder === 'self' &&
+        workshop &&
         line.trim() &&
         !/^[!/]/.test(line.trimStart()) &&
         !session.get().question
       ) {
         if (brain && (brain.workshop !== workshop || brain.name !== brainAgent(workshop))) await closeBrain();
         try {
-          // Published games or a Studio builder switch go to the workshop below.
+          // Terminal publication and platform builder changes use the workshop.
           const status = token ? await getStatus(input.api, token) : undefined;
-          const toWorkshop = status?.status === 'published' || (!!status?.builder && status.builder !== 'self');
+          const published = Boolean(input.browserOnly && status?.status === 'published');
+          if (published && brain && !brain.published) await closeBrain();
+          if (published && !brain && !(await selectPublishedPlayAgent(workshop, session.prompt, session.writeLine)))
+            continue;
+          const toWorkshop =
+            !published &&
+            (status?.status === 'published' ||
+              workshop.builder !== 'self' ||
+              (!!status?.builder && status.builder !== 'self'));
           if (!toWorkshop && !brain) {
             session.setActivity('Starting the Play agent');
             brain = {
               workshop,
               name: brainAgent(workshop),
+              published,
               started: await startPlayBrain({
                 api: input.api,
                 ws: workshop,
                 prompt: session.prompt,
                 write: (text) => session.writeLine(text),
                 activity: (text) => session.setActivity(text),
+                ...(published
+                  ? publishedBrainOptions(input.api, workshop, session.writeLine, (next) => {
+                      token = next;
+                      delete pendingExecution.current;
+                      session.setLive([]);
+                      watch?.poke();
+                      input.onCheckpoint?.({ token, slug, checkout: { root: workshop!.root, slug: workshop!.slug } });
+                    })
+                  : {}),
               }),
             };
             session.setActivity('');

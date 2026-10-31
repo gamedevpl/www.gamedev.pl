@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- In local Play for a published game, your local agent can play and inspect the running game, and opens an improvement round before editing.
+
 ## 0.62.3 — 2026-10-31
 
 ### Fixed

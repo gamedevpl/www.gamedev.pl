@@ -205,6 +205,15 @@ describe('play brain', () => {
     expect(t.picks).toEqual([]);
   });
 
+  it('gives the agent the live-game MCP tools without opening a round for a play request', async () => {
+    const t = setup([async (task) => await callTool(task, 'game_observe')]);
+    const brain = await t.start();
+    await brain.turn('Play the current game and report what happens');
+    expect(t.tasks).toHaveLength(1);
+    expect(t.lines.join('\n')).toMatch(/workbench|preview|available|connection/i);
+    expect(t.tasks[0]!.prompt).toContain('requests to observe or play the running game need no round');
+  });
+
   it.skipIf(process.platform === 'win32')(
     'places the script channel inside the task workspace and removes it after the turn',
     async () => {
@@ -482,5 +491,8 @@ describe('play brain', () => {
     expect(t.lines).not.toContain('✓ static ladder green');
     expect(t.picks).toEqual([]);
     expect(t.ws.failedTask).toMatchObject({ request: 'make the snake faster' });
+    await brain.turn('make the snake faster', { retry: true });
+    expect(t.lines).toContain('✓ static ladder green');
+    expect(t.ws.failedTask).toBeUndefined();
   });
 });

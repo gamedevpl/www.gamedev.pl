@@ -268,6 +268,16 @@ tools. No additional model, browser installation or platform round is needed to
 observe. Ask the agent to look at the problem, then ask it to take control when
 you want it to reproduce the behavior.
 
+In a published game's local checkout, an installed Play-capable agent handles
+requests directly, including requests to play or inspect the current tab. These
+do not open a new platform round. Before changing the game, the agent is instructed
+to request a self-built improvement round and leave sources unchanged if the
+platform refuses. `--brain repl` retains the workshop instead.
+When several supported agents are installed, Play asks which one to use; the
+selection stays for the session. The checkout synchronization preflight still
+applies to play-only tasks; with agent chat open, its refusal may appear in the
+collapsed Session output.
+
 `game_observe` reads the game already running in your Play tab: the rendered build
 revision, current frame, GameKit snapshot/observation, UI targets, recent diagnostics
 and a screenshot. It does not pause or restart the game. While you play, these reads

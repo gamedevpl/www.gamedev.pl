@@ -15,6 +15,7 @@ import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 import { PHONE_PAGE } from './workbench-phone-page.js';
 import { WORKBENCH_GAME_BRIDGE } from './workbench-game-bridge.js';
 import { Script } from 'node:vm';
+import { playRound } from './play-round.js';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -89,6 +90,63 @@ it('keeps attachment retries idempotent and does not use media to answer choices
 });
 describe('durable mutation boundary', () => {
   const journal = (): PlayJournal => ({ version: 1, instance: 'test', cwd: '/tmp' });
+  it('persists an improvement receipt before clearing the pending mutation', async () => {
+    const state = journal();
+    state.slug = 'airtime';
+    const saves: PlayJournal[] = [];
+    const api = journalApi(
+      {
+        origin: 'https://example.test',
+        request: vi.fn().mockResolvedValue({ ok: true, token: 'new', slug: 'airtime' }),
+      } as unknown as ApiClient,
+      state,
+      () => saves.push(structuredClone(state)),
+    );
+    await api.request('POST', '/api/submissions/old/improve', { feedback: 'fix', builder: 'self' });
+    expect(saves.at(-1)).toMatchObject({ token: 'new', slug: 'airtime' });
+    expect(saves.at(-1)?.pending).toBeUndefined();
+    expect(saves.at(-1)?.remote).toMatchObject({ path: '/api/submissions/old/improve' });
+  });
+  it('retains an ambiguous improvement receipt without replacing the game identity', async () => {
+    const state = { ...journal(), token: 'old', slug: 'airtime' };
+    const ws = { token: 'old', slug: 'airtime', builder: 'platform' } as Workshop;
+    const api = journalApi(
+      {
+        origin: 'https://example.test',
+        request: vi.fn(async (method: string) =>
+          method === 'GET' ? { status: 'published' } : { ok: true, token: 'other-token', slug: 'other' },
+        ),
+      } as unknown as ApiClient,
+      state,
+      vi.fn(),
+    );
+    await expect(playRound(api, ws, vi.fn())('fix')).rejects.toThrow('does not match');
+    expect(state).toMatchObject({ token: 'old', slug: 'airtime', pending: { path: '/api/submissions/old/improve' } });
+    expect(state.remote).toMatchObject({ result: { token: 'other-token', slug: 'other' } });
+    expect(ws.token).toBe('old');
+  });
+  it.each([null, {}, { ok: true }, { ok: true, reply: 12 }, { ok: true, token: 'new' }])(
+    'keeps the pending improvement when the receipt is ambiguous: %j',
+    async (receipt) => {
+      const state = { ...journal(), token: 'old', slug: 'airtime' };
+      const api = journalApi({ request: vi.fn().mockResolvedValue(receipt) } as unknown as ApiClient, state, vi.fn());
+      await expect(api.request('POST', '/api/submissions/old/improve', {})).rejects.toThrow('receipt is invalid');
+      expect(state).toMatchObject({ token: 'old', slug: 'airtime', pending: { path: '/api/submissions/old/improve' } });
+    },
+  );
+  it('accepts a valid conversational answer without changing the round identity', async () => {
+    const state = { ...journal(), token: 'old', slug: 'airtime' };
+    const api = journalApi(
+      { request: vi.fn().mockResolvedValue({ ok: true, reply: 'Which part?' }) } as unknown as ApiClient,
+      state,
+      vi.fn(),
+    );
+    await expect(api.request('POST', '/api/submissions/old/improve', {})).resolves.toMatchObject({
+      reply: 'Which part?',
+    });
+    expect(state).toMatchObject({ token: 'old', slug: 'airtime' });
+    expect(state.pending).toBeUndefined();
+  });
   it('never replays an unknown create, including after reconstructing the client', async () => {
     const request = vi.fn().mockRejectedValueOnce(Error('Response lost')).mockResolvedValue({ status: 'building' });
     const raw = { origin: 'https://example.test', request, requestBytes: vi.fn() } as ApiClient;

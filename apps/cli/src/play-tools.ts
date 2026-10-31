@@ -20,6 +20,7 @@ export type PlayToolsInput = {
   api: ApiClient;
   // The submission token of the open round.
   token: string;
+  openRound?: (request: string, signal: AbortSignal) => Promise<string>;
   slug: string;
   root: string;
   run?: VerifyRun;
@@ -87,6 +88,7 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
         required: ['request'],
       },
       run: async ({ request }) => {
+        if (input.openRound) return input.openRound(String(request ?? '').trim(), input.abort());
         const result = await postTurn(input.api, input.token, String(request ?? '').trim());
         return result.kind === 'reply'
           ? `The platform answered instead of opening a round:\n${result.text}`
