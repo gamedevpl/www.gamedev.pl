@@ -127,7 +127,7 @@ export function PlayShell() {
             <button id="history-open" type="button" title="Prompt history" aria-label="Prompt history">
               <Icon name="clock" />
             </button>
-            <button id="send" className="primary" type="submit" disabled>
+            <button id="send" className="primary" type="submit" title="Send (Cmd/Ctrl+Enter)" disabled>
               Send
             </button>
           </div>
