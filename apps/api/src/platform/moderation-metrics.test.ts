@@ -278,8 +278,7 @@ describe('pino methods stay on their logger', () => {
     .map((name) => name.split(sep).join('/'))
     .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'));
 
-  // A method copied off a pino logger (`{ warn: log.warn }`, `const warn = log.warn`)
-  // throws TypeError: this[writeSym] is not a function. Calls and .bind/.call are fine.
+  // Copied pino methods throw unless they stay bound.
   const DETACHED =
     /(?:^|[^.\w])((?:[\w$.]+\.)?(?:log|logger))\.(info|warn|error|debug|fatal|trace)\b(?!\s*(?:\(|\.bind|\.call|\?\.|\s*!==|\s*===|\s*!=|\s*==))/;
 

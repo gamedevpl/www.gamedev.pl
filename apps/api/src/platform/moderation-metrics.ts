@@ -61,10 +61,10 @@ export const MODERATION_REJECTED_MSG = 'moderation rejected';
 // Separate message: the burst alert must not count outages.
 export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
 
-// Credits or a hard quota are gone. Not a transient 429. The outage alert matches this.
+// Credits gone, not a short 429. The outage alert matches this.
 export const MODERATION_BILLING_EXHAUSTED_MSG = 'moderation billing exhausted';
 
-// Prefix of the fail-closed console line. The outage alert matches this text.
+// Fail-closed console prefix. The outage alert matches this text.
 export const MODERATION_FAILED_CLOSED_PREFIX = 'Moderation failed or timed out';
 
 export interface ModerationRejection {
@@ -81,10 +81,6 @@ export interface ModerationRejection {
  * Record one rejection. Severity is `warn`, not `error`: a working deny-list rejecting
  * something is the system succeeding, and putting it at `error` would train the operator
  * to ignore errors — the exact habit that made the first alert catalog worthless.
- *
- * A logging failure must not become the HTTP response. Pino methods throw when `this`
- * is not the logger (`const warn = log.warn`), and that throw used to turn a controlled
- * refusal into a 500 the creator only saw as `internal`.
  */
 export function logModerationRejection(log: ModerationLogger, rejection: ModerationRejection): void {
   const payload = {

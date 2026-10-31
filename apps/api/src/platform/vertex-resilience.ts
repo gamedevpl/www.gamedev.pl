@@ -6,7 +6,7 @@ import { ZodError } from 'zod';
 const RETRYABLE =
   /429|RESOURCE_EXHAUSTED|\b50[0234]\b|INTERNAL|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
 
-// A spent balance does not recover inside this budget. A short 429 still does.
+// A spent balance does not recover inside this budget.
 const BILLING_EXHAUSTED =
   /no credits remaining|insufficient[_\s-]?quota|billing_hard_limit|exceeded your current quota/i;
 

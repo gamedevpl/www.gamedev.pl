@@ -7,11 +7,11 @@ import { deliveredProseFields } from './delivered-prose.js';
 export interface ProseRefusal {
   rejected: 'content_rejected' | 'moderation_unavailable';
   category: RejectCategory;
-  // Set only when the checker could not run. A credit outage is not a short 429.
+  // Set only when the checker could not run.
   retryAfterSeconds?: number;
 }
 
-// Long enough that a creator does not hammer a checker that just failed closed.
+// Stops a creator hammering a checker that just failed.
 export const MODERATION_UNAVAILABLE_RETRY_AFTER_SECONDS = 60;
 
 export interface DeliveryModerationGate {

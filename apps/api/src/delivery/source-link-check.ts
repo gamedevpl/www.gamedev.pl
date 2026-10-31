@@ -225,7 +225,7 @@ function addDeclarationName(declaration: Node, named: Set<string>): void {
   }
 }
 
-// Collect export names from a module source. A regex only saw the first declarator.
+// Collect every export name, including later declarators.
 export function collectExports(source: string): ExportInfo {
   const named = new Set<string>();
   let hasDefault = false;
@@ -271,7 +271,7 @@ export function collectExports(source: string): ExportInfo {
     }
   }
 
-  // A recovered syntax error can drop a later export. Missing locals are not that.
+  // Recovered syntax errors can hide a later export.
   const structural = (ast.errors ?? []).some((error) => !/is not defined/i.test(error.message));
   if (structural) reexportsAll = true;
   if (named.has('default')) hasDefault = true;

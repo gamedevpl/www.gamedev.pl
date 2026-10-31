@@ -80,7 +80,7 @@ export type SourceDeliveryRejected = {
   gateCapacity?: 'paused' | 'daily_cap';
   // Category of the refused text; never which words tripped it.
   category?: RejectCategory;
-  // Present when the content check could not run. Not a judgment of the prose.
+  // Set when the content check could not run.
   retryAfterSeconds?: number;
 };
 
@@ -352,9 +352,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       // Abuse concentrates on a person, so it must name the current one.
       const moderatedUid = await gameOwnerUid(options.store, record);
       // After every cap, so a flood cannot buy itself an inference call.
-      // Bind warn: copying `log.warn` off the logger makes pino throw.
       const moderationLog = options.log;
-      const moderationWarn = moderationLog?.warn;
+      const moderationWarn = moderationLog?.warn; // Copying log.warn drops pino this.
       const proseRefusal = await proseGate.refuse({
         files: input.files,
         uid: moderatedUid,
