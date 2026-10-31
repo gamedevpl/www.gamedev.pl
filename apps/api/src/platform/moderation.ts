@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
-import { createOpenAiClient, createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createOpenAiClient, createVertexClient } from './genai.js';
 import { callWithVertexResilience } from './vertex-resilience.js';
 import {
   CATEGORY_TERMS,
@@ -244,13 +244,6 @@ export class VertexChecker implements ContentChecker {
         defaultRegion: 'global',
         model: model ?? this.options.model,
         defaultModel: 'gemini-3.8-flash',
-        // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
-        // Google provider computes its own thinkingConfig from `request.thinking` whenever a
-        // request calls `.json()`, and that computed value — MINIMAL when `.thinking()` was
-        // never called — unconditionally overwrites whatever thinkingConfig is set here.
-        generationConfig: {
-          responseMimeType: 'application/json',
-        } as VertexGenerationConfig,
       });
     this.clients.set(key, built);
     return built;

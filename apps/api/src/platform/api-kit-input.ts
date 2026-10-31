@@ -10,6 +10,7 @@ export async function apiKitStarter(
 ): Promise<Record<string, string>> {
   if (sha256(tarball) !== digest) throw new Error('Published Kit archive does not match its sidecar');
   const files: Record<string, string> = {};
+  const legacyTemplates: Record<string, string> = {};
   const prefix = 'gamedevpl-creator-kit/';
   const stream = Readable.from(tarball).pipe(createGunzip());
   let identity: string | undefined;
@@ -20,19 +21,25 @@ export async function apiKitStarter(
       if (name === 'kit.json') {
         identity = (JSON.parse(Buffer.from(entry.bytes).toString('utf8')) as { engineRef?: string }).engineRef;
       }
-      if (name.startsWith('starters/block-cascade/')) files[name] = Buffer.from(entry.bytes).toString('base64');
+      if (name.startsWith('starters/block-cascade/')) {
+        files[name] = Buffer.from(entry.bytes).toString('base64');
+      } else if (name.startsWith('templates/game/')) {
+        const remapped = `starters/block-cascade/${name.slice('templates/game/'.length)}`;
+        legacyTemplates[remapped] = Buffer.from(entry.bytes).toString('base64');
+      }
     }
   } finally {
     stream.destroy();
   }
+  const result = Object.keys(files).length > 0 ? files : legacyTemplates;
   if (
     identity !== engineRef ||
-    !files['starters/block-cascade/GAME.json'] ||
-    !files['starters/block-cascade/game.ts']
+    !result['starters/block-cascade/GAME.json'] ||
+    !result['starters/block-cascade/game.ts']
   ) {
     throw new Error('Published Kit has no matching identity or starter');
   }
-  return files;
+  return result;
 }
 
 export function apiKitContainerArgs(
