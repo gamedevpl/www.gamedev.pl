@@ -127,6 +127,47 @@ rl.on('line', line => {
     agent.close();
   });
 
+  it('confirms a rejected steer only after its queued retry finishes', async () => {
+    const finish: Array<(result: AgentResult) => void> = [];
+    const tracker = trackPlaySteering();
+    const driver: CodingAgent = {
+      name: 'claude',
+      command: 'fake',
+      capabilities: { resume: true, steer: true },
+      run: () => {
+        const result = new Promise<AgentResult>((resolve) => finish.push(resolve));
+        return {
+          result,
+          abort() {},
+          steer: async () => {
+            throw new Error('turn ended');
+          },
+          async *[Symbol.asyncIterator]() {
+            await result;
+            yield* [];
+          },
+        };
+      },
+    };
+    const agent = createAgentSession({ agent: tracker.wrap(driver), cwd: process.cwd() });
+    const stop = new AbortController();
+    const play = createSessionController('');
+    const success: AgentResult = { status: 'completed', ok: true, exitCode: 0, signal: null, sessionId: 'session' };
+    agent.send('initial');
+    play.setLocalTask('claude');
+    play.setSteering(tracker.send(asApp(agent), stop.signal));
+    await play.steerInput('follow-up', play.get().taskId);
+    await vi.waitFor(() => expect(agent.get().queued).toEqual(['follow-up']));
+    expect(play.get().deliveries[0]?.status).toBe('pending');
+    finish[0]!(success);
+    await vi.waitFor(() => expect(finish).toHaveLength(2));
+    finish[1]!(success);
+    await vi.waitFor(() => expect(play.get().deliveries[0]?.status).toBe('received'));
+    stop.abort();
+    play.close();
+    agent.close();
+  });
+
   it('marks queued messages unconfirmed when stopped and accepts a later real receipt', async () => {
     let resolve!: () => void;
     const play = createSessionController('');
