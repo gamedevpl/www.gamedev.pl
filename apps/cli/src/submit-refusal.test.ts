@@ -35,7 +35,7 @@ describe('a delivery refused for its prose', () => {
     {
       rejected: 'moderation_unavailable',
       category: undefined,
-      message: /content check could not run/,
+      message: /platform content check is down, not your game/,
       next: /Staged files are kept/,
     },
   ])('explains a $rejected delivery and leaves the checkout alone', async (row) => {

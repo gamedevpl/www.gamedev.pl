@@ -75,18 +75,37 @@ export interface ModerationRejection {
  * Record one rejection. Severity is `warn`, not `error`: a working deny-list rejecting
  * something is the system succeeding, and putting it at `error` would train the operator
  * to ignore errors — the exact habit that made the first alert catalog worthless.
+ *
+ * A logging failure must not become the HTTP response. Pino methods throw when `this`
+ * is not the logger (`const warn = log.warn`), and that throw used to turn a controlled
+ * refusal into a 500 the creator only saw as `internal`.
  */
 export function logModerationRejection(log: ModerationLogger, rejection: ModerationRejection): void {
-  log.warn(
-    {
-      moderation: {
-        surface: rejection.surface,
-        // Recorded rather than omitted: a filter grouping by category needs every entry to
-        // carry one, and an absent field silently drops the row out of the breakdown.
-        category: rejection.category ?? 'other',
-        uid: rejection.uid ?? 'anonymous',
-      },
+  const payload = {
+    moderation: {
+      surface: rejection.surface,
+      // Recorded rather than omitted: a filter grouping by category needs every entry to
+      // carry one, and an absent field silently drops the row out of the breakdown.
+      category: rejection.category ?? 'other',
+      uid: rejection.uid ?? 'anonymous',
     },
-    rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG,
-  );
+  };
+  const message = rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG;
+  try {
+    log.warn(payload, message);
+  } catch (error) {
+    reportModerationMetricFailure(log, error);
+  }
+}
+
+function reportModerationMetricFailure(log: ModerationLogger, error: unknown): void {
+  const detail = { err: error };
+  const message = 'moderation metric log failed';
+  try {
+    const errorLog = (log as { error?: (context: object, message: string) => void }).error;
+    if (typeof errorLog === 'function') errorLog.call(log, detail, message);
+    else console.error(message, error);
+  } catch {
+    console.error(message, error);
+  }
 }

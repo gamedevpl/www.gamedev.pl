@@ -60,6 +60,7 @@ type DeliverReply = {
   buildId?: string;
   rejected?: string;
   category?: string;
+  retryAfterSeconds?: number;
   error?: string;
   message?: string;
 };
@@ -76,10 +77,14 @@ function refusalError(delivered: DeliverReply): CliError | null {
     );
   }
   if (delivered.rejected === 'moderation_unavailable') {
+    const wait =
+      typeof delivered.retryAfterSeconds === 'number' && delivered.retryAfterSeconds > 0
+        ? ` Retry in about ${delivered.retryAfterSeconds} seconds.`
+        : '';
     return new CliError(
-      'Delivery paused: the content check could not run. Local files are unchanged.',
+      'Delivery paused: the platform content check is down, not your game. Local files are unchanged.',
       EXIT_REFUSED,
-      'Staged files are kept — retry in a moment.',
+      `Staged files are kept.${wait || ' Retry in a moment.'}`,
     );
   }
   return null;

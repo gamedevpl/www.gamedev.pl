@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
+import { Writable } from 'node:stream';
 import { gzipSync } from 'node:zlib';
+import pino from 'pino';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
@@ -10,6 +12,14 @@ import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore, type SourceFile } from '../platform/store.js';
 import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
 import type { SourceDeliveryService } from '../delivery/source-delivery.js';
+import { createSourceDeliveryService } from '../delivery/source-delivery.js';
+import { VertexChecker } from '../platform/moderation.js';
+import { parseSpecTitle } from '../catalog/github-client.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from './typecheck-preflight.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const submissionTokenSecret = 'test-submission-secret';
@@ -1101,6 +1111,77 @@ describe('the Code surface routes (creator-code.ts)', () => {
   });
 
   describe('POST /api/me/studio/games/:slug/sources/deliver', () => {
+    it('returns a moderation refusal when the model errors, instead of 500', async () => {
+      const lines: string[] = [];
+      const log = pino(
+        { level: 'warn' },
+        new Writable({
+          write(chunk, _encoding, callback) {
+            lines.push(chunk.toString());
+            callback();
+          },
+        }),
+      );
+      const sourceDelivery = createSourceDeliveryService({
+        store,
+        gamesStore: games,
+        log,
+        contentChecker: new VertexChecker({
+          retryDelayMs: 0,
+          timeoutMs: 1_000,
+          vertexFetcher: async () => {
+            const error = new Error('429 You have no credits remaining');
+            error.name = 'RateLimitError';
+            throw error;
+          },
+        }),
+        onSourcesDelivered: async () => ({ buildId: 'b1' }),
+        parseSpecTitle,
+        runTypecheckPreflight,
+        sharedSourcesFromKitTree,
+        typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+      });
+
+      await withApp(
+        async (app) => {
+          const stage = (path: string, content: string) =>
+            games.putStagedSourceFile({
+              slug: 'sky-dodge',
+              jobId: 10,
+              roundGeneration: 1,
+              path,
+              content,
+              stagedBy: 'owner',
+            });
+          await stage('SPEC.md', '---\ntitle: Sky Dodge\n---\nDodge the sky.');
+          await stage(
+            'GAME.json',
+            JSON.stringify({
+              title: { en: 'Sky Dodge', pl: 'Unik' },
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+            }),
+          );
+          await stage('game.ts', 'export const boot = () => {};');
+
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/deliver',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { mode: 'preview', attestation: true },
+          });
+
+          expect(res.statusCode).not.toBe(500);
+          expect(res.json()).toMatchObject({
+            accepted: false,
+            rejected: 'moderation_unavailable',
+            retryAfterSeconds: 60,
+          });
+          expect(lines.join('')).toContain('moderation unavailable');
+        },
+        { sourceDelivery, games },
+      );
+    });
+
     it('refuses without the IP attestation', async () =>
       withApp(async (app) => {
         const res = await app.inject({

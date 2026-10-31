@@ -567,7 +567,7 @@
         "commandBack": "Back to thread"
       },
       "deliverContentRejected": "Not published — the wording in SPEC.md or GAME.json is not publishable here. Rewrite the title, description or how-to-play and publish again. Your code was not read.",
-      "deliverModerationUnavailable": "Not published — the content check could not run just now. Your files are saved; try again in a moment."
+      "deliverModerationUnavailable": "Not published — the platform content check is down, not your game. Your files are saved; try again in about a minute."
     },
     "editor": {
       "loading": "Loading the editor…",
