@@ -143,7 +143,7 @@ function localKitRef(dest: string): string | null {
   return readEngineRef(kitPath(dest, 'gamedev.lock'));
 }
 
-// The server typechecks the round pin (current Kit when the round is unpinned), not this checkout.
+// Server typechecks the round pin, or current when unpinned.
 async function warnIfKitStale(input: {
   api: ApiClient;
   slug: string;
@@ -155,14 +155,23 @@ async function warnIfKitStale(input: {
   if (!local) return;
   try {
     const pending = input.api
-      .request<{ engineRef?: unknown }>('GET', `/api/me/studio/games/${input.slug}/workspace?kitOnly=true`)
+      .request<{ engineRef?: unknown; typecheckEngineRef?: unknown }>(
+        'GET',
+        `/api/me/studio/games/${input.slug}/workspace?kitOnly=true`,
+      )
       .catch(() => null);
     const lock = await Promise.race([pending, new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000))]);
-    const current = typeof lock?.engineRef === 'string' ? lock.engineRef : '';
-    if (!/^[a-f0-9]{7,64}$/i.test(current) || current.toLowerCase() === local.toLowerCase()) return;
+    const hex = (value: unknown) => (typeof value === 'string' && /^[a-f0-9]{7,64}$/i.test(value) ? value : '');
+    const current = hex(lock?.engineRef);
+    const target = hex(lock?.typecheckEngineRef) || current;
+    if (!target || target.toLowerCase() === local.toLowerCase()) return;
     const short = (ref: string) => ref.slice(0, 12);
+    const follow =
+      current && target.toLowerCase() === current.toLowerCase()
+        ? ' Update before sending: gamedevpl kit update'
+        : ' This round keeps that Kit until it closes.';
     input.warn(
-      `Warning: this checkout pins GameKit ${short(local)}, but the platform typechecks ${short(current)}. A local pass can still be refused. Update before sending: gamedevpl kit update`,
+      `Warning: this checkout pins GameKit ${short(local)}, but the platform typechecks ${short(target)}. A local pass can still be refused.${follow}`,
     );
   } catch {
     // A kit probe must not block delivery.
@@ -181,7 +190,7 @@ async function submitGameUnlocked(input: {
   interactive?: boolean;
   run?: Parameters<typeof runLadder>[0]['run'];
   onProgress?: (message: string) => void;
-  // Durable line. The progress spinner replaces its own row, so a warning there disappears.
+  // Spinner overwrites its row, so warnings use this.
   warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {

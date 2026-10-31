@@ -37,9 +37,20 @@ import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/
 import { listAuthorizedRoundsForSlug } from '../platform/slug-ownership.js';
 import { buildSpecStub } from './spec-stub.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
-import type { Store } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
 import { isPublished } from '../platform/publication-state.js';
+import { isActiveBuildRound, resolveJobState } from './job-state.js';
+
+// Active rounds typecheck their pin. A closed round uses current.
+function typecheckKitRef(record: SubmissionRecord, current: string): string {
+  const pinned = record.roundKitEngineRef ?? '';
+  const state = resolveJobState(record) ?? 'queued';
+  if (/^[a-f0-9]{7,64}$/i.test(pinned) && isActiveBuildRound({ state, transitions: record.transitions })) {
+    return pinned;
+  }
+  return current;
+}
 
 /**
  * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -497,7 +508,11 @@ export async function registerCreatorStudioRoutes(
           kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
           issuedAt: new Date(now()).toISOString(),
         };
-        if (kitOnly) return reply.header('cache-control', 'private, no-store').send(lock);
+        if (kitOnly) {
+          return reply
+            .header('cache-control', 'private, no-store')
+            .send({ ...lock, typecheckEngineRef: typecheckKitRef(tip, engineRef) });
+        }
 
         // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
         // retains, so an over-large or corrupt scaffold would already have been inflated
