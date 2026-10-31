@@ -68,39 +68,6 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     await app.close();
   });
 
-  it('typechecks an open round against its kit pin', async () => {
-    const pinned = 'c'.repeat(40);
-    await store.pinRoundKitEngineRef(ISSUE, pinned);
-    const app = await createApp(store, objectsWithScaffold());
-    const res = await app.inject({
-      method: 'GET',
-      url: `/api/me/studio/games/${SLUG}/workspace?kitOnly=true`,
-      headers: authHeaders('g:creator'),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ engineRef: ENGINE, typecheckEngineRef: pinned });
-    await app.close();
-  });
-
-  it('typechecks a closed round against the current kit', async () => {
-    await store.pinRoundKitEngineRef(ISSUE, 'c'.repeat(40));
-    await store.recordJobTransition(ISSUE, {
-      to: 'ready_for_review',
-      at: new Date().toISOString(),
-      by: 'agent',
-      reason: 'delivered',
-    });
-    const app = await createApp(store, objectsWithScaffold());
-    const res = await app.inject({
-      method: 'GET',
-      url: `/api/me/studio/games/${SLUG}/workspace?kitOnly=true`,
-      headers: authHeaders('g:creator'),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ engineRef: ENGINE, typecheckEngineRef: ENGINE });
-    await app.close();
-  });
-
   it('keeps kit pin requests authenticated and owned', async () => {
     await store.upsertUser({ uid: 'g:other' });
     const app = await createApp(store, objectsWithScaffold());

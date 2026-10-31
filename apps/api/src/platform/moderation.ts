@@ -3,7 +3,8 @@ import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createOpenAiClient, createVertexClient } from './genai.js';
 import { callWithVertexResilience, isBillingExhausted } from './vertex-resilience.js';
-import { MODERATION_BILLING_EXHAUSTED_MSG, MODERATION_FAILED_CLOSED_PREFIX } from './moderation-metrics.js';
+import { MODERATION_FAILED_CLOSED_PREFIX } from './moderation-metrics.js';
+import { logModerationBillingExhausted } from './moderation-outage-log.js';
 import {
   CATEGORY_TERMS,
   MAX_URLS_IN_TEXT,
@@ -304,16 +305,7 @@ export class VertexChecker implements ContentChecker {
             return await this.callVertex(text, model, timeoutMs);
           } catch (err) {
             if (isBillingExhausted(err)) {
-              const provider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
-              // One JSON line so Cloud Logging can promote severity and msg.
-              console.error(
-                JSON.stringify({
-                  severity: 'ERROR',
-                  message: MODERATION_BILLING_EXHAUSTED_MSG,
-                  msg: MODERATION_BILLING_EXHAUSTED_MSG,
-                  provider,
-                }),
-              );
+              logModerationBillingExhausted(model ? `${this.fallbackProvider}/${model}` : 'vertex');
             }
             throw err;
           }

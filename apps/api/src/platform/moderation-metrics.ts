@@ -61,11 +61,7 @@ export const MODERATION_REJECTED_MSG = 'moderation rejected';
 // Separate message: the burst alert must not count outages.
 export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
 
-// Credits gone, not a short 429. The outage alert matches this.
-export const MODERATION_BILLING_EXHAUSTED_MSG = 'moderation billing exhausted';
-
-// Fail-closed console prefix. The outage alert matches this text.
-export const MODERATION_FAILED_CLOSED_PREFIX = 'Moderation failed or timed out';
+export { MODERATION_BILLING_EXHAUSTED_MSG, MODERATION_FAILED_CLOSED_PREFIX } from './moderation-outage-log.js';
 
 export interface ModerationRejection {
   surface: ModerationSurface;
@@ -92,22 +88,9 @@ export function logModerationRejection(log: ModerationLogger, rejection: Moderat
       uid: rejection.uid ?? 'anonymous',
     },
   };
-  const message = rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG;
   try {
-    log.warn(payload, message);
+    log.warn(payload, rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG);
   } catch (error) {
-    reportModerationMetricFailure(log, error);
-  }
-}
-
-function reportModerationMetricFailure(log: ModerationLogger, error: unknown): void {
-  const detail = { err: error };
-  const message = 'moderation metric log failed';
-  try {
-    const errorLog = (log as { error?: (context: object, message: string) => void }).error;
-    if (typeof errorLog === 'function') errorLog.call(log, detail, message);
-    else console.error(message, error);
-  } catch {
-    console.error(message, error);
+    console.error('moderation metric log failed', error);
   }
 }
