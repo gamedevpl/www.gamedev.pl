@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.63.0 — 2026-10-31
+
 ### Added
 
 - Send messages in Play with Cmd+Enter or Ctrl+Enter; Enter adds a new line.
