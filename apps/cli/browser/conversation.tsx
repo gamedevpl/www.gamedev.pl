@@ -1,7 +1,7 @@
 import { PlayAgentChat, renderEvidencePrompt } from './evidence-prompt.js';
 import { agentTranscriptLine } from '../src/transcript-line.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { userText, useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
+import { useFollowScroll, type AppAgentClient, type AppAgentState } from 'genaicode/react';
 import { codeApi } from './code-api.js';
 import { headline, RichText, TranscriptLines } from './transcript-view.js';
 import type { SessionDiff, SessionDiffInfo } from '../src/session-diff.js';
@@ -9,6 +9,7 @@ import { DiffFlyout } from './diff-flyout.js';
 import { showAgentQuestions } from './agent-questions.js';
 import { AgentProgress } from './agent-progress.js';
 import type { Delivery } from '../src/session-delivery.js';
+import { playLines } from './play-lines.js';
 
 type Snapshot = {
   lines: string[];
@@ -65,7 +66,7 @@ export function Conversation() {
       <>
         <AgentConversation
           state={agent}
-          log={sessionMessages(playLines(lines, agent), diffs)}
+          log={sessionMessages(playLines(lines, agent, deliveries), diffs)}
           diffs={diffs}
           openDiff={setSelected}
           deliveries={deliveries}
@@ -118,26 +119,6 @@ function sessionMessages(lines: string[], diffs: SessionDiffInfo[]): SessionMess
   }
   flush();
   return messages;
-}
-
-// Session lines the agent chat lacks: slash commands, checks, delivery.
-function playLines(lines: string[], state: AppAgentState): string[] {
-  const turns = [...state.history, ...(state.session?.turns ?? [])];
-  const prompts = new Set(turns.map((turn) => userText(turn.prompt).trim()));
-  const texts = new Set(
-    turns.flatMap((turn) =>
-      turn.entries.flatMap((entry) =>
-        entry.kind === 'text' ? [entry.text.trim()] : entry.kind === 'error' ? [`! ${entry.message}`] : [],
-      ),
-    ),
-  );
-  return lines.filter(
-    (line) =>
-      !line.startsWith('  · ') &&
-      !/^› \[(?:sent to active agent|message to agent)\]/.test(line) &&
-      !texts.has(line.trim()) &&
-      !(line.startsWith('› ') && prompts.has(line.slice(2).trim())),
-  );
 }
 
 function SessionMessages({
