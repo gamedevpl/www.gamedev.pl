@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play agents push committed branches through an approved SSH/HTTPS host action when their shell sandbox blocks SSH, without running checkout Git hooks or executable configuration (#2028).
+
 ## 0.62.2 — 2026-10-31
 
 ### Fixed

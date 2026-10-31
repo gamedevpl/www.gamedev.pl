@@ -9,6 +9,7 @@ import { formatSubmitLines, submitGame } from './submit.js';
 import { postTurn } from './turn.js';
 import type { CliTelemetry } from './telemetry.js';
 import { runLadderAsync } from './verify.js';
+import { playGitPushTool } from './play-git-host.js';
 
 type VerifyRun = NonNullable<Parameters<typeof runLadderAsync>[0]['run']>;
 
@@ -30,7 +31,7 @@ export type PlayToolsInput = {
   write: (line: string) => void;
   fetch?: typeof fetch;
   pollMs?: number;
-  // Runs delivery in the turn's writer lock; tool calls arrive outside.
+  // Runs host writes in the turn's lock; calls arrive outside.
   writer?: <T>(run: () => Promise<T>) => Promise<T>;
   telemetry?: CliTelemetry;
 };
@@ -75,6 +76,7 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
     return formatSubmitLines(result, input.slug).join('\n');
   };
   return [
+    playGitPushTool(input),
     {
       name: 'game_round',
       description:

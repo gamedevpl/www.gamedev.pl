@@ -12,6 +12,7 @@ export function playBrainInstructions(ws: Workshop): string {
     'After your edits call `game_verify` and fix what it reports. Use `game_capture` to look at visual changes before you say they work.',
     'When the checks are green and the game changed, call `game_submit` to deliver a preview; the creator approves it. Call `game_publish` only when the creator asked to publish.',
     'Questions about the game need no round: answer them from the files.',
+    'Commit or push only when the user asks you to. For source-repository Git pushes use game_git_push: it asks for approval in Play and runs Git on the CLI host with the creator’s normal SSH access. Inspect the configured push URL, branch and full commit SHA first. Do not retry blocked SSH through the shell or ask the creator to run the push manually when this tool is available. A source-repository push needs no game_round or gamedev.pl publication. For gamedevpl: remotes keep the existing platform Git delivery flow; game_git_push does not handle those remotes.',
     LIVE_GAME_INSTRUCTIONS,
   ].join('\n');
 }

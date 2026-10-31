@@ -257,6 +257,13 @@ Play lifetime fixtures resolve `../../node_modules` from that directory; running
 them from the monorepo root makes child processes look for `/node_modules/tsx`
 and produces startup timeouts unrelated to the product change.
 
+Host Git actions must be tested against checkout-controlled hooks, SSH commands,
+credential helpers, receive-pack overrides and includes. A successful host SSH
+fixture alone does not establish isolation. Run the attack fixtures on the original
+implementation too. Keep push metadata separate from the checkout's configuration,
+disable hooks, and refuse custom helpers and local transports that execute receiver
+code on the host. Exercise linked worktrees and both Git object formats.
+
 Whatever the project's definition of green is — run all of it, in the isolated checkout:
 
 ```bash

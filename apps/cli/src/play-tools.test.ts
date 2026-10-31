@@ -40,6 +40,7 @@ describe('playAppTools', () => {
   it('serves the delivery steps as write tools and the rest as read tools', () => {
     const { list } = tools();
     expect(list.map((tool) => [tool.name, tool.write === true])).toEqual([
+      ['game_git_push', true],
       ['game_round', false],
       ['game_kit_update', true],
       ['game_verify', false],

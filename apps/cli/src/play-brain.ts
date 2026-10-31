@@ -36,6 +36,7 @@ import { liveGameAppTools } from './live-game-app-tools.js';
 import { playBrainInstructions } from './play-brain-instructions.js';
 import { playPushBridge, playTurnWriter } from './play-git-push.js';
 import { reconcileRemotePush } from './git-remote-main.js';
+import { gitPushActionSummary } from './play-git-host.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
 export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
@@ -296,7 +297,7 @@ export async function startPlayBrain(input: {
     for (const action of state.actions.filter((candidate) => candidate.status === 'pending')) {
       const open = () =>
         agent.get().actions.some((candidate) => candidate.id === action.id && candidate.status === 'pending');
-      const choice = await ask([APPROVE, REJECT], action.summary, open, signal);
+      const choice = await ask([APPROVE, REJECT], gitPushActionSummary(action), open, signal);
       if (choice === undefined || !open()) continue;
       agent.decide(action.id, choice === APPROVE ? 'approve' : 'reject');
     }

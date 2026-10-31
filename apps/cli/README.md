@@ -678,6 +678,18 @@ emits its session ID, the CLI shows it with a resume command. Resume only after 
 current task finishes. The task panel names the active agent and reports tool activity;
 the CLI runs the checkout validation after the agent exits and retains error details.
 
+### Git pushes
+
+When you ask a Play agent to push a source-repository commit, it proposes `game_git_push` in
+the conversation. Approve the remote, branch and commit there; the CLI host uses
+your usual Git credentials and SSH agent. This works with the agent sandbox
+enabled and requires approval in every permission mode. The action refuses force
+pushes and changed branches or destinations. Pushes support SSH and HTTPS, disable
+Git hooks and ignore checkout-local executable Git configuration. Your host Git
+credentials remain available. If your repository needs a pre-push hook (such as Git
+LFS), push from your own terminal. It does not publish on gamedev.pl.
+`gamedevpl:` remotes keep their existing platform Git delivery flow.
+
 ### Creator Kit updates
 
 Opening a game checkout in the TUI checks the currently published Creator Kit and
