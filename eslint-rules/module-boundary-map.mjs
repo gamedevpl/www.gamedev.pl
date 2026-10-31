@@ -168,6 +168,7 @@ const FILE_BUCKET = {
   // Anthropic client factory beside genai. No relative imports at all.
   'genai-anthropic': 'platform',
   'moderation-metrics': 'platform',
+  'moderation-outage-log': 'platform',
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
   'frame-performance': 'platform',
@@ -585,6 +586,7 @@ const FILE_BUCKET = {
   // sources at gate time -- delivery-domain checks that had drifted into creation/.
   'version-verdict': 'delivery',
   'source-link-check': 'delivery',
+  'source-export-names': 'delivery',
   'ts-any-scan': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play

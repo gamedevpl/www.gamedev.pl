@@ -96,7 +96,11 @@ describe('delivered prose moderation', () => {
 
     const result = await deliver(service);
 
-    expect(result).toMatchObject({ accepted: false, rejected: 'moderation_unavailable' });
+    expect(result).toMatchObject({
+      accepted: false,
+      rejected: 'moderation_unavailable',
+      retryAfterSeconds: 60,
+    });
     expect(putCandidateSources).not.toHaveBeenCalled();
     expect(log.warn).toHaveBeenCalledWith(expect.anything(), 'moderation unavailable');
   });

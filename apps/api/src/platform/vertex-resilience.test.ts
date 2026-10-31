@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { callWithVertexResilience, isRetryableVertexError } from './vertex-resilience.js';
+import { callWithVertexResilience, isBillingExhausted, isRetryableVertexError } from './vertex-resilience.js';
 
 const capacity = () => new Error('429 Resource exhausted');
 
@@ -34,6 +34,40 @@ describe('surviving a moment of no capacity', () => {
 
     expect(value).toBe('ok');
     expect(models).toEqual([undefined, undefined]);
+  });
+
+  it('does not retry an account that has no credits, and still asks the stand-in', async () => {
+    const models: (string | undefined)[] = [];
+    const value = await callWithVertexResilience({
+      timeoutMs: 200,
+      retryDelayMs: 0,
+      fallbackModel: 'stand-in',
+      attempt: async (model) => {
+        models.push(model);
+        if (model === undefined) throw new Error('RateLimitError: 429 You have no credits remaining');
+        return 'from-stand-in';
+      },
+    });
+
+    expect(value).toBe('from-stand-in');
+    expect(models).toEqual([undefined, 'stand-in']);
+    expect(isBillingExhausted(new Error('429 You have no credits remaining'))).toBe(true);
+    expect(isBillingExhausted(new Error('429 Resource exhausted'))).toBe(false);
+  });
+
+  it('does not retry a spent account when there is no stand-in', async () => {
+    const models: (string | undefined)[] = [];
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 200,
+        retryDelayMs: 0,
+        attempt: async (model) => {
+          models.push(model);
+          throw new Error('insufficient_quota');
+        },
+      }),
+    ).rejects.toThrow(/insufficient_quota/);
+    expect(models).toEqual([undefined]);
   });
 
   it('reaches the stand-in only after the primary has had two goes', async () => {

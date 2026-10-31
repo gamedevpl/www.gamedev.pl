@@ -19,6 +19,11 @@ export async function submitCommand(input: {
       ...input.delivery,
       abort: controller.signal,
       onProgress: progress.stage,
+      warn: input.asJson
+        ? undefined
+        : (message) => {
+            input.io.stderr.write(`\r\u001b[2K${message}\n`);
+          },
     });
   } finally {
     progress.stop();

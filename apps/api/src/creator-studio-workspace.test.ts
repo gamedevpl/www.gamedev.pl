@@ -58,7 +58,12 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('private, no-store');
-    expect(res.json()).toMatchObject({ slug: SLUG, engineRef: ENGINE, kitSha256: SHA });
+    expect(res.json()).toMatchObject({
+      slug: SLUG,
+      engineRef: ENGINE,
+      kitSha256: SHA,
+      typecheckEngineRef: ENGINE,
+    });
     expect(res.json().kitUrl).toBeTruthy();
     await app.close();
   });

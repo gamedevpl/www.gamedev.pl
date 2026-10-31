@@ -61,6 +61,8 @@ export const MODERATION_REJECTED_MSG = 'moderation rejected';
 // Separate message: the burst alert must not count outages.
 export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
 
+export { MODERATION_BILLING_EXHAUSTED_MSG, MODERATION_FAILED_CLOSED_PREFIX } from './moderation-outage-log.js';
+
 export interface ModerationRejection {
   surface: ModerationSurface;
   /** Absent on unauthenticated surfaces (the contact form). Never an email. */
@@ -77,16 +79,18 @@ export interface ModerationRejection {
  * to ignore errors — the exact habit that made the first alert catalog worthless.
  */
 export function logModerationRejection(log: ModerationLogger, rejection: ModerationRejection): void {
-  log.warn(
-    {
-      moderation: {
-        surface: rejection.surface,
-        // Recorded rather than omitted: a filter grouping by category needs every entry to
-        // carry one, and an absent field silently drops the row out of the breakdown.
-        category: rejection.category ?? 'other',
-        uid: rejection.uid ?? 'anonymous',
-      },
+  const payload = {
+    moderation: {
+      surface: rejection.surface,
+      // Recorded rather than omitted: a filter grouping by category needs every entry to
+      // carry one, and an absent field silently drops the row out of the breakdown.
+      category: rejection.category ?? 'other',
+      uid: rejection.uid ?? 'anonymous',
     },
-    rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG,
-  );
+  };
+  try {
+    log.warn(payload, rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG);
+  } catch (error) {
+    console.error('moderation metric log failed', error);
+  }
 }
