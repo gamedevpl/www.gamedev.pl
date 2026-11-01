@@ -120,6 +120,13 @@ describe('CodeSurface explorer', () => {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  async function rowAction(path: string, label: string) {
+    const trigger = `[data-path="${path}"] .code-surface-tree-menu-trigger`;
+    const item = `[role="menuitem"][aria-label="${label}"]`;
+    await act(async () => container.querySelector<HTMLButtonElement>(trigger)!.click());
+    await act(async () => document.querySelector<HTMLButtonElement>(item)!.click());
+  }
+
   it('creates an empty folder in the tree after naming it', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor([{ path: 'game.ts', content: 'export {};\n' }]));
     await render();
@@ -178,12 +185,7 @@ describe('CodeSurface explorer', () => {
         ]),
       );
     await render();
-    const move = [
-      ...container.querySelectorAll<HTMLButtonElement>('[data-path="game.ts"] .code-surface-tree-row-action'),
-    ][0]!;
-    await act(async () => {
-      move.click();
-    });
+    await rowAction('game.ts', 'Move game.ts');
     const input = document.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
     await act(async () => {
       setInput(input, 'entities/boot.ts');
@@ -248,9 +250,7 @@ describe('CodeSurface explorer', () => {
       .mockRejectedValueOnce(new Error('quota'));
     await render();
     const before = mocked.fetchCodeSurfaceSources.mock.calls.length;
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-path="entities"] .code-surface-file-option-delete')!.click();
-    });
+    await rowAction('entities', 'Delete folder entities');
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
