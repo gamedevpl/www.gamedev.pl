@@ -1,4 +1,13 @@
-import type { CSSProperties, DragEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { buildSourceTree, type TreeFile, type TreeNode } from './codeSurfaceTreeModel.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import './code-surface-explorer.css';
@@ -56,6 +65,160 @@ function ToolButton(props: {
 }
 
 type TreeLabels = { t: (key: string, options?: Record<string, string>) => string };
+
+type RowMenuProps = {
+  busy: boolean;
+  menuLabel: string;
+  moveLabel: string;
+  moveAria: string;
+  deleteLabel: string;
+  deleteAria: string;
+  onMove: () => void;
+  onDelete: () => void;
+};
+
+function placeRowMenu(trigger: HTMLElement, menu: HTMLElement) {
+  const margin = 8;
+  const triggerRect = trigger.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  let top = triggerRect.bottom + 4;
+  if (top + menuRect.height > window.innerHeight - margin) top = triggerRect.top - 4 - menuRect.height;
+  if (top < margin) top = margin;
+  let left = triggerRect.right - menuRect.width;
+  if (left < margin) left = margin;
+  const maxLeft = window.innerWidth - margin - menuRect.width;
+  if (left > maxLeft) left = Math.max(margin, maxLeft);
+  menu.style.top = `${Math.round(top)}px`;
+  menu.style.left = `${Math.round(left)}px`;
+}
+
+function RowMenu(props: RowMenuProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (props.busy) setOpen(false);
+  }, [props.busy]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+    const place = () => placeRowMenu(trigger, menu);
+    place();
+    menu.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [open]);
+
+  function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return;
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    if (items.length === 0) return;
+    event.preventDefault();
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'Home') {
+      items[0]?.focus();
+      return;
+    }
+    if (event.key === 'End') {
+      items[items.length - 1]?.focus();
+      return;
+    }
+    const delta = event.key === 'ArrowDown' ? 1 : -1;
+    const next = index === -1 ? 0 : (index + delta + items.length) % items.length;
+    items[next]?.focus();
+  }
+
+  function choose(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <span className={`code-surface-tree-actions${open ? ' is-open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="code-surface-tree-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={props.menuLabel}
+        title={props.menuLabel}
+        disabled={props.busy}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="code-surface-tree-kebab" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+      </button>
+      {open
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="code-surface-tree-menu"
+              role="menu"
+              aria-label={props.menuLabel}
+              onKeyDown={onMenuKeyDown}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="code-surface-tree-menu-item"
+                aria-label={props.moveAria}
+                onClick={() => choose(props.onMove)}
+              >
+                <PixelIcon name="arrowRight" size={12} />
+                <span>{props.moveLabel}</span>
+              </button>
+              <div className="code-surface-tree-menu-sep" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="code-surface-tree-menu-item is-danger"
+                aria-label={props.deleteAria}
+                onClick={() => choose(props.onDelete)}
+              >
+                <PixelIcon name="trash" size={13} />
+                <span>{props.deleteLabel}</span>
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
 
 export function CodeSurfaceExplorerTreeView(props: CodeSurfaceExplorerTreeProps & TreeLabels) {
   const { t } = props;
@@ -174,28 +337,16 @@ function FileRow(
         {active && props.variant === 'sheet' ? <PixelIcon name="check" size={13} /> : null}
       </button>
       {props.editable ? (
-        <span className="code-surface-tree-actions">
-          <button
-            type="button"
-            className="code-surface-tree-row-action"
-            title={t('studioPanel.code.tree.move')}
-            aria-label={t('studioPanel.code.tree.moveItem', { path: props.node.path })}
-            disabled={props.busy}
-            onClick={() => props.onMoveFile(props.node.path)}
-          >
-            <PixelIcon name="arrowRight" size={12} />
-          </button>
-          <button
-            type="button"
-            className="code-surface-file-option-delete"
-            title={t('studioPanel.code.filePickerDelete', { path: props.node.path })}
-            aria-label={t('studioPanel.code.filePickerDelete', { path: props.node.path })}
-            disabled={props.busy}
-            onClick={() => props.onDeleteFile(props.node.path)}
-          >
-            <PixelIcon name="trash" size={13} />
-          </button>
-        </span>
+        <RowMenu
+          busy={props.busy}
+          menuLabel={t('studioPanel.code.tree.rowMenu', { path: props.node.path })}
+          moveLabel={t('studioPanel.code.tree.move')}
+          moveAria={t('studioPanel.code.tree.moveItem', { path: props.node.path })}
+          deleteLabel={t('studioPanel.code.tree.delete')}
+          deleteAria={t('studioPanel.code.filePickerDelete', { path: props.node.path })}
+          onMove={() => props.onMoveFile(props.node.path)}
+          onDelete={() => props.onDeleteFile(props.node.path)}
+        />
       ) : null}
     </div>
   );
@@ -249,28 +400,16 @@ function FolderRow(
         <span className="code-surface-tree-folder-name">{props.node.name}/</span>
       </button>
       {props.editable ? (
-        <span className="code-surface-tree-actions">
-          <button
-            type="button"
-            className="code-surface-tree-row-action"
-            title={t('studioPanel.code.tree.move')}
-            aria-label={t('studioPanel.code.tree.moveItem', { path: props.node.path })}
-            disabled={props.busy}
-            onClick={() => props.onMoveFolder(props.node.path)}
-          >
-            <PixelIcon name="arrowRight" size={12} />
-          </button>
-          <button
-            type="button"
-            className="code-surface-file-option-delete"
-            title={t('studioPanel.code.tree.deleteFolder', { path: props.node.path })}
-            aria-label={t('studioPanel.code.tree.deleteFolder', { path: props.node.path })}
-            disabled={props.busy}
-            onClick={() => props.onDeleteFolder(props.node.path)}
-          >
-            <PixelIcon name="trash" size={13} />
-          </button>
-        </span>
+        <RowMenu
+          busy={props.busy}
+          menuLabel={t('studioPanel.code.tree.rowMenu', { path: props.node.path })}
+          moveLabel={t('studioPanel.code.tree.move')}
+          moveAria={t('studioPanel.code.tree.moveItem', { path: props.node.path })}
+          deleteLabel={t('studioPanel.code.tree.delete')}
+          deleteAria={t('studioPanel.code.tree.deleteFolder', { path: props.node.path })}
+          onMove={() => props.onMoveFolder(props.node.path)}
+          onDelete={() => props.onDeleteFolder(props.node.path)}
+        />
       ) : null}
     </div>
   );

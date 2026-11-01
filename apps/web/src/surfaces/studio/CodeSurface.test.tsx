@@ -145,6 +145,13 @@ describe('CodeSurface', () => {
     });
   }
 
+  async function chooseRowAction(path: string, ariaLabel: string) {
+    const trigger = container.querySelector<HTMLButtonElement>(`[data-path="${path}"] .code-surface-tree-menu-trigger`);
+    await act(async () => trigger!.click());
+    const item = document.querySelector<HTMLButtonElement>(`[role="menuitem"][aria-label="${ariaLabel}"]`);
+    await act(async () => item!.click());
+  }
+
   function typeInto(textarea: HTMLTextAreaElement, value: string) {
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
     setter.call(textarea, value);
@@ -281,13 +288,14 @@ describe('CodeSurface', () => {
       container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
     });
 
-    const deleteBtn = () =>
-      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
-        .find((option) => option.closest('[data-path]')?.getAttribute('data-path') === 'src/main.ts')
-        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
-
+    expect(container.querySelector('.code-surface-file-option-delete')).toBeNull();
     await act(async () => {
-      deleteBtn()!.click();
+      container.querySelector<HTMLButtonElement>('[data-path="src/main.ts"] .code-surface-tree-menu-trigger')!.click();
+    });
+    expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="code-tree-confirm-dialog"]')).toBeNull();
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[role="menuitem"][aria-label="Delete src/main.ts"]')!.click();
     });
     expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
     expect(document.querySelector('[data-testid="code-tree-confirm-dialog"]')).not.toBeNull();
@@ -328,13 +336,7 @@ describe('CodeSurface', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
     });
-    const deleteBtn = () =>
-      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
-        .find((option) => option.closest('[data-path]')?.getAttribute('data-path') === 'src/main.ts')
-        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
-    await act(async () => {
-      deleteBtn()!.click();
-    });
+    await chooseRowAction('src/main.ts', 'Delete src/main.ts');
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
@@ -375,13 +377,7 @@ describe('CodeSurface', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
     });
-    const deleteBtn = () =>
-      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
-        .find((option) => option.textContent?.includes('game.ts'))
-        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
-    await act(async () => {
-      deleteBtn()!.click();
-    });
+    await chooseRowAction('game.ts', 'Delete game.ts');
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();

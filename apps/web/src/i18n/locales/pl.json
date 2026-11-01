@@ -443,6 +443,7 @@
         "uploadFile": "Wgraj pliki",
         "uploadFolder": "Wgraj folder",
         "uploadArchive": "Wgraj zip lub tar.gz",
+        "rowMenu": "Akcje dla {{path}}",
         "move": "Przenieś",
         "moveItem": "Przenieś {{path}}",
         "delete": "Usuń",

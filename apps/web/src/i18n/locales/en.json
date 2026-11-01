@@ -441,6 +441,7 @@
         "uploadFile": "Upload files",
         "uploadFolder": "Upload a folder",
         "uploadArchive": "Upload zip or tar.gz",
+        "rowMenu": "Actions for {{path}}",
         "move": "Move",
         "moveItem": "Move {{path}}",
         "delete": "Delete",
