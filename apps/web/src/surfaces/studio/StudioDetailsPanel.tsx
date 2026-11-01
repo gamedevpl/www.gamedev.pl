@@ -123,15 +123,13 @@ export function DetailsPanel({
   }
 
   const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
-  // A handoff round is live under mediaToken while game reads published.
-  const inHandoffRound = Boolean(mediaToken && mediaToken !== game.token);
-  const showProgress = showConnect || inHandoffRound;
+  const showBuild = game.lastKnownStatus !== 'abandoned';
   // Workspace gets its own pane: behind the keys icon it was undiscoverable.
   const panes: DetailsPaneDef[] = [
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
-    ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
+    ...(showBuild ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
     { id: 'media', icon: 'image', labelKey: 'studioPanel.rail.media' },
     // No slug means no sources yet, and the route would refuse it.
     ...(game.slug && game.lastKnownStatus !== 'abandoned'
@@ -204,6 +202,11 @@ export function DetailsPanel({
                 <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
                   <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
                 </button>
+                {showBuild ? (
+                  <button type="button" className="secondary-btn" onClick={() => onPaneChange('build')}>
+                    <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
+                  </button>
+                ) : null}
                 {!publishedJob && game.lastKnownStatus !== 'abandoned' && isOwner ? (
                   <div className="studio-abandon-block">
                     {abandonArmed && !catalogLive ? (
@@ -281,7 +284,7 @@ export function DetailsPanel({
         ) : null}
 
         {activePane === 'build' ? (
-          showProgress ? (
+          showBuild ? (
             <StudioDetailsBuildProgress
               token={shotToken}
               emptyLabel={t('studioPanel.rail.buildEmpty')}
