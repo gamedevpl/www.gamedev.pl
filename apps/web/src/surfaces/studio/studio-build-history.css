@@ -152,6 +152,15 @@
   border-radius: 4px;
 }
 
+.studio-build-history-active-stage {
+  font-weight: 600;
+  color: var(--turquoise, #00e4ac);
+  background: rgba(0, 228, 172, 0.12);
+  border: 1px solid rgba(0, 228, 172, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 .studio-build-history-failure-guidance {
   display: flex;
   flex-direction: column;

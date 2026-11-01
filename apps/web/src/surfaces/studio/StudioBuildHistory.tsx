@@ -7,9 +7,11 @@ import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
 import {
+  formatActiveStageBadge,
   formatBuildFailureGuidance,
   formatBuildHistoryVerdict,
   formatFailedStageBadge,
+  formatLiveBannerText,
   mergeBuildHistory,
   resolveBuildHistoryLiveKey,
 } from './studioBuildHistoryModel.js';
@@ -123,7 +125,7 @@ export function StudioBuildHistory({
     <div className="studio-build-history" data-testid="studio-build-history">
       <div className={`studio-build-history-live${live ? ' is-live' : ''}`}>
         <span className="live-dot" aria-hidden="true" />
-        <span>{t(`studioPanel.buildHistory.${liveKey}`)}</span>
+        <span>{formatLiveBannerText(t, status, liveKey)}</span>
       </div>
       <div className="studio-build-history-header">
         <h3 className="studio-rail-section-title">{t('studioPanel.buildHistory.title')}</h3>
@@ -157,7 +159,7 @@ export function StudioBuildHistory({
             Boolean(onSelectPreviewVersion) &&
             (build.verdict !== 'pending' || deliveredPreview(status)?.version === build.version);
           const isReverting = revertingVersion === build.version;
-          const failedStageBadge = formatFailedStageBadge(t, build);
+          const stageBadge = formatFailedStageBadge(t, build) ?? formatActiveStageBadge(t, status, build);
           const failureGuidance = formatBuildFailureGuidance(t, build);
 
           return (
@@ -170,23 +172,17 @@ export function StudioBuildHistory({
                 onClick={() => toggleExpand(build.version)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggleExpand(build.version);
-                  }
-                }}
+                onKeyDown={(e) =>
+                  (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleExpand(build.version))
+                }
                 aria-expanded={isExpanded}
               >
                 <span
                   className={`studio-build-history-dot${live && index === 0 && build.verdict === 'pending' ? ' is-live' : ''}`}
                   aria-hidden="true"
                 >
-                  {build.verdict === 'green' ? (
-                    <PixelIcon name="check" size={10} />
-                  ) : build.verdict === 'red' ? (
-                    <PixelIcon name="close" size={10} />
-                  ) : null}
+                  {build.verdict === 'green' && <PixelIcon name="check" size={10} />}
+                  {build.verdict === 'red' && <PixelIcon name="close" size={10} />}
                 </span>
                 <span className="studio-build-history-mode">{t(`studioPanel.buildHistory.mode.${build.mode}`)}</span>
                 {playingVersion === build.version ? (
@@ -207,9 +203,12 @@ export function StudioBuildHistory({
                     <span className="studio-build-history-version-tag">
                       {t('studioPanel.buildHistory.versionLabel', { version: build.version })}
                     </span>
-                    {failedStageBadge ? (
-                      <span className="studio-build-history-failed-stage" data-testid="build-failed-stage">
-                        {failedStageBadge}
+                    {stageBadge ? (
+                      <span
+                        className={`studio-build-history-${build.verdict === 'red' ? 'failed' : 'active'}-stage`}
+                        data-testid={build.verdict === 'red' ? 'build-failed-stage' : 'build-active-stage'}
+                      >
+                        {stageBadge}
                       </span>
                     ) : null}
                     {build.authorship ? (

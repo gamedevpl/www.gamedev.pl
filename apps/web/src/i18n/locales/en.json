@@ -709,6 +709,7 @@
       "versionLabel": "Version {{version}}",
       "playing": "Playing",
       "failedStageLabel": "Failed check: {{stage}} ({{id}})",
+      "activeStageLabel": "Current check: {{stage}}",
       "failureNextStep": "What to do: Open Chat and ask the agent to fix the checks, edit & publish again from Code, or revert to an earlier passed build below.",
       "failureReason": {
         "default": "Automatic verification checks failed for this version, so it was not published.",

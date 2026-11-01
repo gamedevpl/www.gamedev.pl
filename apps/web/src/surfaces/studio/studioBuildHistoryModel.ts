@@ -18,6 +18,12 @@ export function formatBuildHistoryVerdict(
   }
   const verdict = buildHistoryVerdict(status, build);
   const base = t(`studioPanel.buildHistory.verdict.${verdict}`);
+  if (verdict === 'pending' && isCurrentBuild(status, build) && status.gateProgress?.stage) {
+    const stage = t(`studioPanel.buildHistory.stage.${status.gateProgress.stage}`, {
+      defaultValue: status.gateProgress.stage,
+    });
+    return `${base} · ${stage}`;
+  }
   if (verdict === 'red' && build.failedStage) {
     const stage = t(`studioPanel.buildHistory.stage.${build.failedStage}`, { defaultValue: build.failedStage });
     return `${base} · ${stage}`;
@@ -32,6 +38,39 @@ export function formatFailedStageBadge(
   if (build.verdict !== 'red' || !build.failedStage) return null;
   const stage = t(`studioPanel.buildHistory.stage.${build.failedStage}`, { defaultValue: build.failedStage });
   return t('studioPanel.buildHistory.failedStageLabel', { stage, id: build.failedStage });
+}
+
+export function formatActiveStageBadge(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  status: SubmissionStatus,
+  build: RecentBuild,
+): string | null {
+  if (build.verdict !== 'pending' || !isCurrentBuild(status, build) || !status.gateProgress?.stage) return null;
+  const stage = t(`studioPanel.buildHistory.stage.${status.gateProgress.stage}`, {
+    defaultValue: status.gateProgress.stage,
+  });
+  const gate = status.gateProgress;
+  const step =
+    typeof gate.index === 'number' && typeof gate.total === 'number' ? ` (${gate.index + 1}/${gate.total})` : '';
+  return `${t('studioPanel.buildHistory.activeStageLabel', { stage, id: gate.stage })}${step}`;
+}
+
+export function formatLiveBannerText(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  status: SubmissionStatus,
+  liveKey: string,
+): string {
+  const base = t(`studioPanel.buildHistory.${liveKey}`);
+  if ((liveKey === 'live' || liveKey === 'livePlaying') && status.gateProgress?.stage) {
+    const stage = t(`studioPanel.buildHistory.stage.${status.gateProgress.stage}`, {
+      defaultValue: status.gateProgress.stage,
+    });
+    const gate = status.gateProgress;
+    const step =
+      typeof gate.index === 'number' && typeof gate.total === 'number' ? ` (${gate.index + 1}/${gate.total})` : '';
+    return `${base} · ${stage}${step}`;
+  }
+  return base;
 }
 
 export function formatBuildFailureGuidance(

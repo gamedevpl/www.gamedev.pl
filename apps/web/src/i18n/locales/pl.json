@@ -717,6 +717,7 @@
       "versionLabel": "Wersja {{version}}",
       "playing": "Grasz",
       "failedStageLabel": "Niezaliczony test: {{stage}} ({{id}})",
+      "activeStageLabel": "Bieżący test: {{stage}}",
       "failureNextStep": "Co dalej: Otwórz Czat i poproś agenta o naprawę testów, popraw kod w zakładce Code i opublikuj ponownie albo przywróć starszy zaliczony build poniżej.",
       "failureReason": {
         "default": "Automatyczne testy weryfikacyjne dla tej wersji nie przeszły, więc nie została opublikowana.",

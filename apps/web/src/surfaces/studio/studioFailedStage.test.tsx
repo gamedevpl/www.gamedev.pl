@@ -99,4 +99,34 @@ describe('failed check visibility in Studio build bar and history', () => {
     expect(guidance).toContain('Automatic verification checks failed for this version');
     expect(guidance).toContain('What to do: Open Chat and ask the agent to fix the checks');
   });
+
+  it('surfaces active gate stage in the build history verdict, live banner, and details badge', async () => {
+    const running = {
+      status: 'building',
+      slug: 'airtime',
+      gateProgress: { lane: 'publish', stage: 'installing', index: 1, total: 12, at: new Date().toISOString() },
+      recentBuilds: [
+        {
+          version: 'v20261101T195604376Z-60964d713dfa',
+          createdAt: new Date().toISOString(),
+          mode: 'publish',
+          verdict: 'pending',
+        },
+      ],
+    } as unknown as SubmissionStatus;
+    const host = await render(<StudioBuildHistory status={running} />);
+
+    expect(host.querySelector('.studio-build-history-live')?.textContent).toBe(
+      'Checking your latest changes now · Installing (2/12)',
+    );
+    expect(host.querySelector('.studio-build-history-verdict')?.textContent).toBe('Checking… · Installing');
+
+    await act(async () => {
+      host.querySelector<HTMLElement>('.studio-build-history-summary')?.click();
+    });
+
+    expect(host.querySelector('[data-testid="build-active-stage"]')?.textContent).toBe(
+      'Current check: Installing (2/12)',
+    );
+  });
 });
