@@ -1,6 +1,7 @@
 import type { RecentBuild } from '@gamedevpl/contract';
 import { stagesForLane } from './gate-progress.js';
 import type { VersionManifest } from './games-store.js';
+import { resolveFailedStage } from './version-verdict.js';
 
 export type { RecentBuild } from '@gamedevpl/contract';
 
@@ -21,10 +22,10 @@ export function toRecentBuild(manifest: VersionManifest): RecentBuild {
   const crash = verdictSource ? undefined : manifest.gateCrash;
   const lane = mode === 'preview' ? 'preview' : 'publish';
   const stages = stagesForLane(lane);
-  // Only a red verdict carries a position.
-  const failedStage = verdictSource && !verdictSource.green ? verdictSource.failedStage : crash?.failedStage;
+  const failedStage = resolveFailedStage(verdictSource, crash);
   const failedIndex = failedStage ? stages.indexOf(failedStage) : -1;
   const finishedInMs = spanMs(manifest.createdAt, verdictSource?.ranAt);
+  const report = verdictSource && !verdictSource.green ? verdictSource.report : undefined;
   return {
     version: manifest.version,
     createdAt: manifest.createdAt,
@@ -40,6 +41,7 @@ export function toRecentBuild(manifest: VersionManifest): RecentBuild {
     ...(manifest.summary ? { summary: manifest.summary } : {}),
     ...(manifest.sourceFiles ? { fileCount: manifest.sourceFiles.length } : {}),
     ...(manifest.jobId ? { jobId: manifest.jobId } : {}),
+    ...(report ? { report } : {}),
   };
 }
 

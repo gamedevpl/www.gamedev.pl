@@ -94,22 +94,16 @@ export function buildBarModel(
     const total = latest.total ?? null;
     const fraction =
       total && typeof latest.failedIndex === 'number' ? Math.min(1, (latest.failedIndex + 1) / total) : 1;
+    const baseKey = latest.status === 'timed_out' ? 'timedOut' : latest.status === 'crashed' ? 'crashed' : 'failed';
+    const stage = !latest.status && latest.failedStage ? t(`studioPanel.buildHistory.stage.${latest.failedStage}`) : '';
     return {
       state: 'red',
       fraction,
-      label: t(
-        `studioPanel.buildBar.${latest.status === 'timed_out' ? 'timedOut' : latest.status === 'crashed' ? 'crashed' : 'failed'}`,
-      ),
+      label: stage ? `${t('studioPanel.buildBar.failed')}: ${stage}` : t(`studioPanel.buildBar.${baseKey}`),
       etaMinutes: null,
       ...tags,
     };
   }
 
-  return {
-    state: 'green',
-    fraction: 1,
-    label: t('studioPanel.buildBar.passed'),
-    etaMinutes: null,
-    ...tags,
-  };
+  return { state: 'green', fraction: 1, label: t('studioPanel.buildBar.passed'), etaMinutes: null, ...tags };
 }

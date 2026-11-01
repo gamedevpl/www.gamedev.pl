@@ -681,6 +681,7 @@
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
       "livePlaying": "Sprawdzamy Twój najnowszy build — możesz już w niego grać",
       "waiting": "Zmiany zapisane; oczekiwanie na weryfikację",
+      "failedIdle": "Ostatni build nie przeszedł weryfikacji — rozwiń go poniżej, aby zobaczyć szczegóły i co zrobić dalej",
       "idle": "Żaden build nie jest teraz uruchomiony",
       "title": "Ostatnie buildy",
       "mode": {
@@ -714,7 +715,41 @@
       "fileCount_many": "{{count}} plików źródłowych",
       "fileCount_other": "{{count}} plików źródłowych",
       "versionLabel": "Wersja {{version}}",
-      "playing": "Grasz"
+      "playing": "Grasz",
+      "failedStageLabel": "Niezaliczony test: {{stage}} ({{id}})",
+      "failureNextStep": "Co dalej: Otwórz Czat i poproś agenta o naprawę testów, popraw kod w zakładce Code i opublikuj ponownie albo przywróć starszy zaliczony build poniżej.",
+      "failureReason": {
+        "default": "Automatyczne testy weryfikacyjne dla tej wersji nie przeszły, więc nie została opublikowana.",
+        "kit_outdated": "Gra korzysta ze starszego kontraktu kit i wymaga odświeżenia przed publikacją.",
+        "timed_out": "Weryfikacja przekroczyła limit czasu przed ukończeniem wszystkich testów.",
+        "crashed": "Weryfikacja została przerwana przed ukończeniem.",
+        "preparing": "Przygotowanie środowiska weryfikacyjnego nie powiodło się.",
+        "installing": "Instalacja zależności projektu nie powiodła się.",
+        "typecheck": "TypeScript zgłosił błędy typów lub kompilacji w kodzie gry.",
+        "smoke": "Gra zgłosiła błąd wykonania lub nie uruchomiła się w teście dymnym (smoke test).",
+        "build": "Budowanie paczki produkcyjnej gry nie powiodło się.",
+        "trace": "Gra wyrenderowała lub zachowała się inaczej niż w zapisanym śladzie referencyjnym (trace).",
+        "capture": "Nagrywanie multimediów lub zrzutów ekranu gry nie powiodło się.",
+        "validate": "Metadane gry lub wymagane pliki katalogowe nie przeszły walidacji.",
+        "accept": "Testy akceptacyjne zbudowanej gry nie przeszły.",
+        "agent-play": "Automatyczny gracz testowy nie zdołał ukończyć poprawnej rozgrywki.",
+        "agency": "Wejścia gracza nie wpłynęły mierzalnie na wynik rozgrywki w teście sprawczości (agency).",
+        "playtest": "Automatyczny playtest zgłosił problem z rozgrywką."
+      },
+      "stage": {
+        "preparing": "Przygotowanie",
+        "installing": "Instalacja",
+        "typecheck": "Typy",
+        "smoke": "Test dymny",
+        "build": "Budowanie",
+        "trace": "Ślad zachowania",
+        "capture": "Nagrywanie",
+        "validate": "Walidacja",
+        "accept": "Akceptacja",
+        "agent-play": "Rozgrywka agenta",
+        "agency": "Agency",
+        "playtest": "Playtest"
+      }
     },
     "buildBar": {
       "timedOut": "Przekroczono czas buildu",

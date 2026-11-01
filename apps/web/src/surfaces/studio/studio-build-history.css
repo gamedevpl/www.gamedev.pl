@@ -143,6 +143,56 @@
   border-radius: 4px;
 }
 
+.studio-build-history-failed-stage {
+  font-weight: 600;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.studio-build-history-failure-guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(248, 113, 113, 0.1);
+  border-left: 2px solid #f87171;
+}
+
+.studio-build-history-failure-reason,
+.studio-build-history-failure-next {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.studio-build-history-failure-reason {
+  color: var(--text);
+}
+
+.studio-build-history-failure-next {
+  color: var(--muted);
+}
+
+.studio-build-history-report {
+  margin: 0;
+  padding: 8px;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 2px solid #f87171;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .studio-build-history-authorship {
   color: var(--muted);
   font-style: italic;

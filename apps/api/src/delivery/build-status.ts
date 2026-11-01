@@ -42,10 +42,7 @@ function withoutGateReport(
 
 // Verdict is state; the changelog prose is not.
 function withoutAuthoredDetail(build: RecentBuild): RecentBuild {
-  const { summary, authorship, fileCount, ...rest } = build;
-  void summary;
-  void authorship;
-  void fileCount;
+  const { summary, authorship, fileCount, report, ...rest } = build;
   return rest;
 }
 

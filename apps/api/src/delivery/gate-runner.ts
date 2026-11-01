@@ -286,7 +286,13 @@ export async function runGate(
     // harness that does it is not in their sandbox. Same remedy, and the same limit:
     // deriving the golden only settles what the game *does*, and every stage after
     // still has to pass on its own.
-    if (!previewRun && !healthRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
+    const browserAuthored =
+      manifest.origin === 'editor' ||
+      manifest.origin === 'seal' ||
+      manifest.authorship === 'owner' ||
+      manifest.authorship === 'mixed';
+    if (!previewRun && !healthRun && browserAuthored) {
+      await reportProgress('trace');
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {

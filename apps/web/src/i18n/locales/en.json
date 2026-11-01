@@ -675,6 +675,7 @@
       "live": "Checking your latest changes now",
       "livePlaying": "Checking your latest build — you can already play it",
       "waiting": "Changes saved; awaiting verification",
+      "failedIdle": "Latest build failed verification — expand it below for details and next steps",
       "idle": "No build is running right now",
       "title": "Recent builds",
       "mode": {
@@ -706,7 +707,41 @@
       "fileCount_one": "{{count}} source file",
       "fileCount_other": "{{count}} source files",
       "versionLabel": "Version {{version}}",
-      "playing": "Playing"
+      "playing": "Playing",
+      "failedStageLabel": "Failed check: {{stage}} ({{id}})",
+      "failureNextStep": "What to do: Open Chat and ask the agent to fix the checks, edit & publish again from Code, or revert to an earlier passed build below.",
+      "failureReason": {
+        "default": "Automatic verification checks failed for this version, so it was not published.",
+        "kit_outdated": "This game uses an older kit contract and needs a refresh before publishing.",
+        "timed_out": "Verification exceeded the time limit before all checks finished.",
+        "crashed": "Verification was interrupted before finishing.",
+        "preparing": "Preparing the verification workspace failed.",
+        "installing": "Installing workspace dependencies failed.",
+        "typecheck": "TypeScript reported type or compilation errors in the game code.",
+        "smoke": "The game threw a runtime error or failed to boot during the smoke test.",
+        "build": "Bundling the game for production failed.",
+        "trace": "The game rendered or behaved differently than its recorded baseline trace.",
+        "capture": "Recording preview media or screenshots for the game failed.",
+        "validate": "Game metadata or required catalog files did not pass validation.",
+        "accept": "Acceptance checks on the built game did not pass.",
+        "agent-play": "The automated test player could not complete a valid playthrough.",
+        "agency": "Player inputs did not measurably affect the game outcome in the agency check.",
+        "playtest": "The automated playtest check reported an issue."
+      },
+      "stage": {
+        "preparing": "Preparing",
+        "installing": "Installing",
+        "typecheck": "Typecheck",
+        "smoke": "Smoke test",
+        "build": "Build",
+        "trace": "Behaviour trace",
+        "capture": "Capture",
+        "validate": "Validate",
+        "accept": "Acceptance",
+        "agent-play": "Agent play",
+        "agency": "Agency",
+        "playtest": "Playtest"
+      }
     },
     "buildBar": {
       "timedOut": "Build timed out",

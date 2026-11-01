@@ -834,7 +834,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const files = validateSourceUpload(
         candidateFiles,
         mode === 'proposal' ? 'publish' : mode,
-        input.origin === 'seal',
+        input.origin === 'seal' || input.authorship === 'owner' || input.authorship === 'mixed',
         input.requireCompiledEditor === true,
         input.kitSharedPaths ?? copiedCandidateKitLookup(input.origin, mode),
       );

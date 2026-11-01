@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { createGateStageBannerParser, parseGateStageBanner } from './gate-progress.js';
 import { toRecentBuild } from './recent-builds.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import type { VersionManifest } from './games-store.js';
@@ -121,5 +122,34 @@ describe('toRecentBuild', () => {
       summary: 'Added sound effects',
       fileCount: 3,
     });
+  });
+
+  it('extracts failedStage from check:game report and includes report on red builds', () => {
+    const report = '=== trace (airtime) FAILED in 9.6s ===\nFAIL trace airtime\nFAILED at trace after 9.6s.';
+    const m = manifest({
+      deliveryMode: 'publish',
+      gate: { green: false, ranAt: RAN_AT, failedStage: 'installing', report },
+    });
+
+    expect(toRecentBuild(m)).toMatchObject({
+      verdict: 'red',
+      failedStage: 'trace',
+      failedIndex: 5,
+      total: 12,
+      report,
+    });
+  });
+
+  it('parses scheduled check:game start and finish banners in order', () => {
+    expect(parseGateStageBanner('start typecheck (airtime)\n')).toBe('typecheck');
+    expect(parseGateStageBanner('=== trace (airtime) FAILED in 9.6s ===\n')).toBe('trace');
+
+    const seen: string[] = [];
+    const feed = createGateStageBannerParser((stage) => seen.push(stage));
+    feed('start typecheck (airtime)\n=== typecheck (airtime) ok in 0.9s ===\n');
+    feed('start smoke (airtime)\n=== smoke (airtime) ok in 1.3s ===\n');
+    feed('start build (airtime)\n=== build (airtime) ok in 0.9s ===\n');
+    feed('start trace (airtime)\n=== trace (airtime) FAILED in 9.6s ===\n');
+    expect(seen).toEqual(['typecheck', 'smoke', 'build', 'trace']);
   });
 });

@@ -152,6 +152,8 @@ export interface RecentBuild {
   fileCount?: number;
   // Producing job, used to attach the changelog.
   jobId?: number;
+  // Gate log tail on red; stripped for non-members.
+  report?: string;
 }
 
 // Whether platform can be picked now; absent means no opinion.

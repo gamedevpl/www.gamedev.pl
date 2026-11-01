@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isAwaitingVerification, isBuildLive, newestBuildIsCurrentRound } from '../../buildLive.js';
+import { isBuildLive, newestBuildIsCurrentRound } from '../../buildLive.js';
 import { deliveredPreview } from '../../studioPreviewDelivery.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
-import { buildHistoryVerdict, mergeBuildHistory } from './studioBuildHistoryModel.js';
+import {
+  formatBuildFailureGuidance,
+  formatBuildHistoryVerdict,
+  formatFailedStageBadge,
+  mergeBuildHistory,
+  resolveBuildHistoryLiveKey,
+} from './studioBuildHistoryModel.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 import './studio-build-history.css';
 import './studio-credentials.css';
@@ -53,9 +59,7 @@ export function StudioBuildHistory({
   }, [status.slug]);
 
   const live = isBuildLive(status);
-  const playingPending = Boolean(playingVersion) && head?.verdict === 'pending' && head.version === playingVersion;
-  const waiting = isAwaitingVerification(status, head);
-  const liveKey = live ? (playingPending ? 'livePlaying' : 'live') : waiting ? 'waiting' : 'idle';
+  const liveKey = resolveBuildHistoryLiveKey(status, head, playingVersion);
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
@@ -85,22 +89,14 @@ export function StudioBuildHistory({
 
   const handleRevert = async (build: RecentBuild) => {
     const slug = status.slug;
-    if (!slug) return;
-    const confirmMessage = t('studioPanel.buildHistory.revertConfirm', { version: build.version });
-    if (!window.confirm(confirmMessage)) return;
-
+    if (!slug || !window.confirm(t('studioPanel.buildHistory.revertConfirm', { version: build.version }))) return;
     setRevertingVersion(build.version);
     setRevertError(null);
     setRevertSuccess(null);
-
     try {
       const outcome = await revertGameVersion(slug, build.version);
       setRevertSuccess(t('studioPanel.buildHistory.revertSuccess', { version: build.version }));
-      onReverted?.({
-        version: build.version,
-        token: outcome.token,
-        roundOpened: outcome.roundOpened,
-      });
+      onReverted?.({ version: build.version, token: outcome.token, roundOpened: outcome.roundOpened });
     } catch (err) {
       setRevertError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -141,37 +137,28 @@ export function StudioBuildHistory({
         ) : null}
       </div>
 
-      {revertSuccess ? (
+      {revertSuccess || sealSuccess ? (
         <div className="studio-build-history-alert is-success" role="status">
-          {revertSuccess}
+          {revertSuccess ?? t('statusView.seal.sent')}
         </div>
       ) : null}
-      {revertError ? (
+      {revertError || sealError ? (
         <div className="studio-build-history-alert is-error" role="alert">
-          {revertError}
-        </div>
-      ) : null}
-      {sealSuccess ? (
-        <div className="studio-build-history-alert is-success" role="status">
-          {t('statusView.seal.sent')}
-        </div>
-      ) : null}
-      {sealError ? (
-        <div className="studio-build-history-alert is-error" role="alert">
-          {sealError}
+          {revertError ?? sealError}
         </div>
       ) : null}
 
       <ul className="studio-build-history-list">
         {showLiveRoundRow ? <StudioLiveRoundRow status={status} emptyLabel={t('studioPanel.rail.buildEmpty')} /> : null}
         {displayedBuilds.map((build, index) => {
-          const verdict = buildHistoryVerdict(status, build);
           const isExpanded = expandedBuildVersion === build.version;
           const isPreviewing = activePreviewVersion === build.version;
           const canPreview =
             Boolean(onSelectPreviewVersion) &&
             (build.verdict !== 'pending' || deliveredPreview(status)?.version === build.version);
           const isReverting = revertingVersion === build.version;
+          const failedStageBadge = formatFailedStageBadge(t, build);
+          const failureGuidance = formatBuildFailureGuidance(t, build);
 
           return (
             <li
@@ -205,13 +192,7 @@ export function StudioBuildHistory({
                 {playingVersion === build.version ? (
                   <span className="studio-build-history-playing">▶ {t('studioPanel.buildHistory.playing')}</span>
                 ) : null}
-                <span className="studio-build-history-verdict">
-                  {build.status === 'kit_outdated'
-                    ? t('studioPanel.buildHistory.kitOutdated')
-                    : build.status === 'timed_out' || build.status === 'crashed'
-                      ? t(`studioPanel.buildHistory.${build.status === 'timed_out' ? 'timedOut' : 'crashed'}`)
-                      : t(`studioPanel.buildHistory.verdict.${verdict}`)}
-                </span>
+                <span className="studio-build-history-verdict">{formatBuildHistoryVerdict(t, status, build)}</span>
                 <time className="studio-build-history-time" dateTime={build.createdAt}>
                   {formatRelativeTime(build.createdAt, i18n.language)}
                 </time>
@@ -226,6 +207,11 @@ export function StudioBuildHistory({
                     <span className="studio-build-history-version-tag">
                       {t('studioPanel.buildHistory.versionLabel', { version: build.version })}
                     </span>
+                    {failedStageBadge ? (
+                      <span className="studio-build-history-failed-stage" data-testid="build-failed-stage">
+                        {failedStageBadge}
+                      </span>
+                    ) : null}
                     {build.authorship ? (
                       <span className="studio-build-history-authorship">
                         {t(`studioPanel.buildHistory.authorship.${build.authorship}`)}
@@ -242,6 +228,19 @@ export function StudioBuildHistory({
                     <div className="studio-build-history-changelog">
                       <p className="studio-build-history-changelog-text">{build.summary}</p>
                     </div>
+                  ) : null}
+
+                  {failureGuidance ? (
+                    <div className="studio-build-history-failure-guidance" data-testid="build-failure-guidance">
+                      <p className="studio-build-history-failure-reason">{failureGuidance.reason}</p>
+                      <p className="studio-build-history-failure-next">{failureGuidance.nextStep}</p>
+                    </div>
+                  ) : null}
+
+                  {build.verdict === 'red' && build.report ? (
+                    <pre className="studio-build-history-report" data-testid="build-failure-report">
+                      {build.report}
+                    </pre>
                   ) : null}
 
                   <div className="studio-build-history-actions">
