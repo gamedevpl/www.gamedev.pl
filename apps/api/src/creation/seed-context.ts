@@ -1,7 +1,7 @@
 import { fetchGamesRepoArchive, type GamesRepoArchive } from '../platform/games-repo-archive.js';
 import { ArchiveLimitError } from '../platform/tar.js';
 
-export const SEED_SCAFFOLD_SLUG = 'block-cascade';
+export const SEED_SCAFFOLD_SLUG = 'rook-rush';
 
 export const MAX_SEED_CONTEXT_BYTES = 32 * 1024 * 1024;
 export const MAX_SEED_CONTEXT_FILE_BYTES = 2 * 1024 * 1024;
@@ -87,17 +87,17 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
   function listGameFiles(root: string): string[] {
     const prefix = `${root}/`;
     const top = GAME_TOP_LEVEL_FILES.map((name) => `${prefix}${name}`).filter((path) => index.read(path) !== null);
-    // Modules sorted so the same game always renders identically — a prompt that varies
-    // run to run makes every comparison between runs meaningless.
     const modules = index.paths
       .filter((path) => path.startsWith(`${prefix}game/`) && path.endsWith('.ts'))
       .sort((a, b) => a.localeCompare(b));
     return [...top, ...modules];
   }
 
-  function renderTree(root: string, label: string, budget: { remaining: number }): string {
+  function renderTree(root: string, label: string, budget: { remaining: number }, priority: string[] = []): string {
     const chunks: string[] = [];
-    for (const filePath of listGameFiles(root)) {
+    const files = listGameFiles(root);
+    const first = priority.map((name) => `${root}/${name}`).filter((name) => files.includes(name));
+    for (const filePath of [...first, ...files.filter((name) => !first.includes(name))]) {
       const content = index.read(filePath);
       if (content === null) continue;
       const bytes = Buffer.byteLength(content, 'utf8');
@@ -110,9 +110,14 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
 
   return {
     catalogIndex: published.map((entry) => `${entry.slug} — ${entry.title} — ${entry.genre}`).join('\n'),
-    // Same gate as references: a withdrawn game must not shape a new draft.
+    // Withdrawn games must not shape new drafts.
     scaffold: slugs.has(SEED_SCAFFOLD_SLUG)
-      ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET })
+      ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }, [
+          'GAME.json',
+          'game.ts',
+          'game/boot.ts',
+          'game/behavior.ts',
+        ])
       : '',
     kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
@@ -170,9 +175,7 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     });
 
-    // Materialized once into a synchronous index: the renderer walks it per dispatch,
-    // and awaiting a read per file inside a prompt builder would be a lot of ceremony
-    // for bytes that are already in memory.
+    // A synchronous index avoids repeated archive reads during prompt generation.
     const paths = archive.listPaths();
     const contents = new Map<string, string>();
     for (const path of paths) {
@@ -206,8 +209,6 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
 
       inFlight = download()
         .then((context) => {
-          // Only a usable context is cached. Caching a null would turn one bad fetch into
-          // ten minutes of unseeded builds for no reason.
           if (!context) return failed();
           failures = 0;
           cached = { context, expiresAt: Date.now() + ttlMs };

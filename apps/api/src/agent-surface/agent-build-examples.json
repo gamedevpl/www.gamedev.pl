@@ -1,5 +1,12 @@
 [
   {
+    "slug": "rook-rush",
+    "title": "Rook Rush",
+    "genre": "arcade",
+    "modules": ["input", "drawing", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "HMR-ready game structure: retained boot services, replaceable simulation/HUD and managed theme updates."
+  },
+  {
     "slug": "block-cascade",
     "title": "Block Cascade",
     "genre": "puzzle",
