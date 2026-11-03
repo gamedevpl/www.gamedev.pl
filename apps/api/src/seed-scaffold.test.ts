@@ -49,6 +49,25 @@ describe('seed scaffold', () => {
     expect(buildSeedContext(indexOf(withoutScaffold))!.scaffold).toBe('');
   });
 
+  it('keeps the hot contract and callbacks when other scaffold files fill the budget', () => {
+    const root = `games/${SEED_SCAFFOLD_SLUG}`;
+    const files = {
+      ...FILES,
+      [`${root}/SPEC.md`]: 's'.repeat(7_900),
+      [`${root}/EDITOR.json`]: 'e'.repeat(7_900),
+      [`${root}/GAME.json`]: JSON.stringify({ hot: { protocol: 1, behavior: 'game/behavior.ts' } }),
+      [`${root}/game.ts`]: "export { default } from './game/boot.ts';",
+      [`${root}/game/boot.ts`]: 'export default function boot(builder) { return builder.init(() => ({score: 0})); }',
+      [`${root}/game/behavior.ts`]: 'export default { update() {}, render() {}, snapshot(state) { return state; } };',
+    };
+    const context = buildSeedContext(indexOf(files))!;
+    for (const file of ['GAME.json', 'game.ts', 'game/boot.ts', 'game/behavior.ts']) {
+      expect(context.scaffold).toContain(`--- games/<slug>/${file} ---\n${files[`${root}/${file}`]}`);
+    }
+    expect(context.scaffold).not.toContain('s'.repeat(7_900));
+    expect(context.scaffold).not.toContain('e'.repeat(7_900));
+  });
+
   // Same gate as references: a withdrawn game cannot shape drafts.
   it('renders no scaffold when the scaffold game is not published', () => {
     const archived = {

@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play agents preserve HMR-ready game structure when editing gameplay and HUD, and verify the shown update before reporting success. (#2064)
+
 ## 0.63.1 — 2026-10-31
 
 ### Fixed

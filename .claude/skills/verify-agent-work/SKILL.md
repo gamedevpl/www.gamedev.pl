@@ -873,6 +873,11 @@ Rules that matter:
 
 ## Verify claims, don't relay them
 
+For Local Play HMR, create a fresh game through the shipped default path. Change
+its HUD and simulation and verify the shown revision, retained state and iframe.
+A hand-authored fixture with `GAME.json.hot` proves the opt-in runtime, but says
+nothing about whether new games or agent edits preserve that contract.
+
 If an agent reports "all tests pass" or "I verified X", reproduce it. Report what **you**
 observed, and say plainly when you couldn't check something — a known unknown is far more
 useful than an assumed pass.
