@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.64.0 — 2026-11-04
+
 ### Added
 
 - Antigravity (`agy` 1.5.0+) can drive Play in a self-built game, like Claude Code, Codex and Copilot (#2066).
