@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Antigravity (`agy` 1.5.0+) can drive Play in a self-built game, like Claude Code, Codex and Copilot (#2066).
+- Antigravity runs in Auto-approve by default (sandboxed, `--dangerously-skip-permissions`) and supports YOLO; Ask keeps the sandbox preset and terminal handoff (#2066).
+
 ## 0.63.2 — 2026-11-03
 
 ### Fixed

@@ -22,7 +22,7 @@ vi.mock('../update-notice.js', () => ({ startUpdateNotice: () => vi.fn() }));
 vi.mock('./round-watch.js', () => ({ createRoundWatch: () => ({ poke: vi.fn(), stop: vi.fn() }) }));
 vi.mock('../repl.js', () => ({ handleReplLine: vi.fn(), replBanner: () => '' }));
 vi.mock('../play-brain.js', () => ({
-  BRAIN_AGENTS: ['claude', 'codex', 'copilot'],
+  BRAIN_AGENTS: ['claude', 'codex', 'copilot', 'agy'],
   brainAgent: (ws: { selectedAgent?: string }) => ws.selectedAgent ?? 'claude',
   brainRequested: () => true,
   startPlayBrain: vi.fn(),

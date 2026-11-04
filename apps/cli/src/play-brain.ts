@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { realpathSync } from 'node:fs';
 import {
+  antigravity,
   claude,
   codex,
   copilot,
@@ -10,7 +11,13 @@ import {
   type ApprovalRequest,
   type CodingAgent,
 } from 'genaicode/agents';
-import { createAppAgent, createAppAgentHandler, type AppAgent, type AppAgentState } from 'genaicode/app-agent';
+import {
+  createAppAgent,
+  createAppAgentHandler,
+  type AppAgent,
+  type AppAgentState,
+  type AppTool,
+} from 'genaicode/app-agent';
 import type { ApiClient } from './api.js';
 import { readGameCapturePlan } from './capture-scenario.js';
 import { changedPaths, localGameFiles } from './checkout.js';
@@ -42,7 +49,7 @@ import { mirrorPlayBrain } from './play-brain-mirror.js';
 import { trackPlaySteering } from './play-brain-steering.js';
 
 // Agents that take per-run MCP servers, so get Play tools.
-export const BRAIN_AGENTS = ['claude', 'codex', 'copilot'] as const;
+export const BRAIN_AGENTS = ['claude', 'codex', 'copilot', 'agy'] as const;
 
 export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): string | undefined {
   const names = ws.adapters
@@ -97,7 +104,18 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
       allowTools: ['write', 'shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
       onlyTaskMcpServers: true,
     }),
+    // agy acp, in accept-edits and sandboxed unless a policy is set.
+    Object.assign(Object.create(antigravity()) as CodingAgent, { name: 'agy' }),
   ];
+}
+
+// agy adds toolSummary to MCP calls; strict Play tools reject it.
+export function withoutToolSummary(tools: AppTool[]): AppTool[] {
+  return tools.map((tool) => ({
+    ...tool,
+    run: ({ toolSummary: _summary, ...args }) => tool.run(args),
+    ...(tool.validate ? { validate: ({ toolSummary: _summary, ...args }) => tool.validate!(args) } : {}),
+  }));
 }
 
 export async function startPlayBrain(input: {
@@ -199,7 +217,7 @@ export async function startPlayBrain(input: {
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: playBrainInstructions(ws),
-    tools: [
+    tools: withoutToolSummary([
       ...live.tools,
       ...playAppTools({
         api: input.api,
@@ -223,7 +241,7 @@ export async function startPlayBrain(input: {
         write,
         writer: (run) => (inTurn ? inTurn(run) : withCheckoutWriter(ws.root, run)),
       }),
-    ],
+    ]),
     dev: { cwd: ws.root, commit: 'on-request', only: true },
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>

@@ -201,6 +201,7 @@ it.each([true, false])('configures agy before preparation and launch: confirm=%s
     env: { HOME: root },
     adapters: [spec],
     builder: 'self',
+    permissionMode: 'ask',
     pick: async (choices) => {
       expect(prepareWorkspace).not.toHaveBeenCalled();
       expect(runHeadlessAgent).not.toHaveBeenCalled();
@@ -222,6 +223,38 @@ it.each([true, false])('configures agy before preparation and launch: confirm=%s
     );
   }
   expect(ws.abort.current).toBeNull();
+});
+
+it('runs agy in Auto-approve without touching its settings', async () => {
+  const { existsSync } = await import('node:fs');
+  const { loadAdapters } = await import('./adapters.js');
+  const { runHeadlessAgent } = await import('./headless-agent.js');
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-agy-auto-'));
+  roots.push(root);
+  const spec = loadAdapters().adapters.find((item) => item.name === 'agy')!;
+  const pick = vi.fn();
+  const ws: Workshop = {
+    root,
+    slug: 'robot',
+    token: '',
+    env: { HOME: root },
+    adapters: [spec],
+    builder: 'self',
+    permissionMode: 'auto',
+    pick,
+    abort: { current: null },
+    run: () => ({ status: 0, stderr: '' }),
+  };
+  await runLocalBuild({ ws, spec, brief: 'edit game', write: () => {} });
+  expect(pick).not.toHaveBeenCalled();
+  expect(existsSync(join(root, '.gemini/antigravity-cli/settings.json'))).toBe(false);
+  expect(runHeadlessAgent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      spec: expect.objectContaining({
+        headless: expect.arrayContaining(['--sandbox', '--dangerously-skip-permissions', '--print']),
+      }),
+    }),
+  );
 });
 
 it.each([false, true])('skips static success for a no-op: permission handoff=%s', async (handoff) => {

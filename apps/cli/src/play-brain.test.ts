@@ -19,6 +19,7 @@ vi.mock('genaicode/agents', async (original) => {
     claude: vi.fn(actual.claude),
     codex: vi.fn(actual.codex),
     copilot: vi.fn(actual.copilot),
+    antigravity: vi.fn(actual.antigravity),
   };
 });
 
@@ -184,6 +185,7 @@ describe('play brain', () => {
       'shell(git push:*)',
     ]);
     expect(codex.mock.calls.at(-1)?.[0]?.config?.['sandbox_workspace_write.network_access']).toBe(false);
+    expect(vi.mocked(agentDrivers.antigravity)).toHaveBeenCalled();
   });
 
   it('answers a question without checks or a delivery offer', async () => {
