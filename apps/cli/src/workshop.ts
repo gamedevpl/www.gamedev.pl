@@ -196,7 +196,7 @@ export async function runLocalBuild(input: {
   const permissionState = { mode };
   let authCheck: Promise<void> | undefined;
   try {
-    // Auto-approve and YOLO skip agy's prompts, so its permission preset is moot.
+    // Auto-approve and YOLO skip agy prompts; the preset is moot.
     if (mode === 'ask' && !(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
       authCheck = requireClaudeSubscription({

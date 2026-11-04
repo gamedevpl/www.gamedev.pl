@@ -104,12 +104,12 @@ function brainAgents(root: string, permissions?: AgentTask['permissions']): Codi
       allowTools: ['write', 'shell(git commit)', 'shell(git commit:*)', 'shell(git push)', 'shell(git push:*)'],
       onlyTaskMcpServers: true,
     }),
-    // agy acp; its own accept-edits mode and sandbox unless a policy is set.
+    // agy acp, in accept-edits and sandboxed unless a policy is set.
     Object.assign(Object.create(antigravity()) as CodingAgent, { name: 'agy' }),
   ];
 }
 
-// agy adds its own toolSummary argument to every MCP call; Play's tools are strict.
+// agy adds toolSummary to MCP calls; strict Play tools reject it.
 export function withoutToolSummary(tools: AppTool[]): AppTool[] {
   return tools.map((tool) => ({
     ...tool,
