@@ -830,11 +830,11 @@ in this CLI session use Auto too. To select it before starting a task, use
 
 ### Play agent
 
-When Claude Code, Codex or Copilot is installed, your own agent drives a self-built game: it gets Play's steps as tools (open a round, run the
+When Claude Code, Codex, Copilot or Antigravity (`agy`) is installed, your own agent drives a self-built game: it gets Play's steps as tools (open a round, run the
 checks, look at the live preview, deliver a preview or publish) and decides when to use
 them. The CLI still runs the checks after each edit and sends failures back to the agent
 up to two times. A delivery the agent proposes waits for your Approve, in the terminal or in
-the browser chat. It needs Claude Code, Codex or Copilot; other agents keep the workshop.
+the browser chat. It needs Claude Code, Codex, Copilot or agy 1.5.0+ (`agy acp`); other agents keep the workshop.
 Your agent subscription pays for the work. Without such an agent the workshop runs as
 before; `--brain repl` (or `GAMEDEVPL_BRAIN=repl`) keeps the workshop, and `--brain app-agent`
 says so when no agent can drive Play.
@@ -845,7 +845,11 @@ workspace, it tells you to finish active work and run `gamedevpl stop`, then
 
 ### Antigravity permissions
 
-Before a local Antigravity task starts, the interactive CLI offers to enable
+In Auto-approve (the default) the CLI runs agy with `--sandbox --dangerously-skip-permissions`,
+as it runs other agents with their sandboxed auto-approve flags; YOLO drops `--sandbox`.
+The rest of this section applies to Ask.
+
+Before a local Antigravity task starts in Ask, the interactive CLI offers to enable
 sandboxed headless execution. Confirming sets `enableTerminalSandbox: true` and
 `toolPermission: "proceed-in-sandbox"` in
 `~/.gemini/antigravity-cli/settings.json`. This is an **agy-wide setting**, shared
@@ -854,7 +858,7 @@ the previous file is backed up beside it, with the backup path printed after set
 
 Agy runs approved sandboxed commands without opening another terminal UI. Existing
 ask/deny rules still apply, as do any outside-sandbox exceptions you previously
-configured. The CLI does not add wildcard grants or `--dangerously-skip-permissions`.
+configured. In Ask the CLI does not add wildcard grants or `--dangerously-skip-permissions`.
 If agy still needs permission, you can resume the task interactively or return with
 local edits preserved. Network access and tools outside the sandbox may still need
 approval; enabling this preset does not grant unrestricted access.

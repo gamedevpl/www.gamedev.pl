@@ -49,8 +49,8 @@ it('keeps explicit Ask adapter flags and the creator prompt', () => {
 
 it('defaults to sandboxed Auto and uses Ask for unsupported agents', () => {
   expect(permissionMode()).toBe('auto');
-  for (const name of ['claude', 'codex', 'gemini']) expect(taskPermissionMode(spec(name))).toBe('auto');
-  for (const name of ['cursor', 'agy', 'muse']) expect(taskPermissionMode(spec(name))).toBe('ask');
+  for (const name of ['claude', 'codex', 'gemini', 'agy']) expect(taskPermissionMode(spec(name))).toBe('auto');
+  for (const name of ['cursor', 'muse']) expect(taskPermissionMode(spec(name))).toBe('ask');
   expect(taskPermissionMode({ ...spec('claude'), name: 'custom' })).toBe('ask');
   expect(permissionEnvironment()[PERMISSIONS_ENV]).toBe('');
   choosePermissionMode(undefined, permissionEnvironment());
@@ -75,13 +75,16 @@ it('translates Auto-approve and YOLO into each adapter’s flags', () => {
     spec: { headless: expect.arrayContaining(['yolo', '--sandbox']) },
     env: { GEMINI_SANDBOX: 'true' },
   });
+  expect(applyPermissionMode(spec('agy'), 'auto').spec.headless).toEqual(
+    expect.arrayContaining(['--sandbox', '--dangerously-skip-permissions']),
+  );
+  expect(applyPermissionMode(spec('agy'), 'yolo').spec.headless).not.toContain('--sandbox');
   // The yolo flags keep the adapter on its live session.
   expect(liveArgs(applyPermissionMode(spec('codex'), 'yolo').spec)).toContain('app-server');
 });
 
 it('refuses a mode the agent cannot honor instead of running another one', () => {
   expect(() => applyPermissionMode(spec('cursor'), 'auto')).toThrow(/cursor cannot run in Auto-approve/);
-  expect(() => applyPermissionMode(spec('agy'), 'yolo')).toThrow(/agy cannot run in YOLO/);
   expect(() => applyPermissionMode(spec('muse'), 'auto')).toThrow(/Muse has no sandbox/);
   expect(applyPermissionMode(spec('muse'), 'yolo').spec).toEqual(spec('muse'));
 });

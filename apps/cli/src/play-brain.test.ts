@@ -9,7 +9,7 @@ import type { AdapterSpec } from './adapters.js';
 import type { ApiClient } from './api.js';
 import { saveAgentSelection } from './agent-settings.js';
 import { writeGameFiles } from './checkout.js';
-import { brainAgent, decideApproval, startPlayBrain, type PlayBrain } from './play-brain.js';
+import { brainAgent, decideApproval, startPlayBrain, withoutToolSummary, type PlayBrain } from './play-brain.js';
 import type { Workshop } from './workshop.js';
 
 vi.mock('genaicode/agents', async (original) => {
@@ -19,6 +19,7 @@ vi.mock('genaicode/agents', async (original) => {
     claude: vi.fn(actual.claude),
     codex: vi.fn(actual.codex),
     copilot: vi.fn(actual.copilot),
+    antigravity: vi.fn(actual.antigravity),
   };
 });
 
@@ -152,6 +153,25 @@ describe('play brain', () => {
     expect(brainAgent({ adapters: [spec('muse'), spec('codex')], selectedAgent: 'muse' })).toBeUndefined();
     expect(brainAgent({ adapters: [spec('muse'), spec('codex')] })).toBe('codex');
     expect(brainAgent({ adapters: [spec('muse'), spec('gemini')] })).toBeUndefined();
+    expect(brainAgent({ adapters: [spec('muse'), spec('agy')] })).toBe('agy');
+  });
+
+  it('drops the toolSummary argument agy adds to every MCP call', async () => {
+    const seen: Record<string, unknown>[] = [];
+    const [tool] = withoutToolSummary([
+      {
+        name: 'strict',
+        description: 'strict',
+        validate: (args) => void seen.push(args),
+        run: (args) => {
+          seen.push(args);
+          return 'ok';
+        },
+      },
+    ]);
+    tool!.validate!({ toolSummary: 'Observe', x: 1 });
+    expect(await tool!.run({ toolSummary: 'Observe', x: 1 })).toBe('ok');
+    expect(seen).toEqual([{ x: 1 }, { x: 1 }]);
   });
 
   it('maps Ask, Auto-approve and YOLO onto the agent CLI prompts', () => {
@@ -184,6 +204,7 @@ describe('play brain', () => {
       'shell(git push:*)',
     ]);
     expect(codex.mock.calls.at(-1)?.[0]?.config?.['sandbox_workspace_write.network_access']).toBe(false);
+    expect(vi.mocked(agentDrivers.antigravity)).toHaveBeenCalled();
   });
 
   it('answers a question without checks or a delivery offer', async () => {
