@@ -36,7 +36,7 @@ export async function createGameArtifactBrowser(options: {
       ].flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]!]])),
     ),
   });
-  const timeout = options.timeoutMs ?? 30_000;
+  const timeout = options.timeoutMs ?? 60_000;
   const verify = async (artifact: GameArtifact) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: 'block' });
     try {
@@ -88,5 +88,11 @@ export async function createGameArtifactBrowser(options: {
       await context.close();
     }
   };
-  return { verify, close: () => browser.close() };
+  return {
+    verify: (artifact) =>
+      verify(artifact).catch((err) =>
+        err instanceof Error && err.message.includes('Timeout') ? verify(artifact) : Promise.reject(err),
+      ),
+    close: () => browser.close(),
+  };
 }
