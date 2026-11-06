@@ -71,8 +71,22 @@ The endpoint and creator-key Bearer contract come from this repository's existin
 MCP manifests and implementation. The skill is copied unchanged from the existing
 Claude plugin so its round guidance stays consistent.
 
-Antigravity CLI validation, credential-dialog behavior, MCP discovery and a real
-account read must be checked in Antigravity before calling this integration verified.
+The [maintainer's verification report](https://github.com/gamedevpl/www.gamedev.pl/pull/2070#issuecomment-6697655048)
+records these results with `agy 1.5.1`:
+
+- `agy plugin validate --strict` passed, with the expected note that variables must
+  be configured before enabling the plugin.
+- Installation in an isolated home directory discovered one skill and one MCP
+  server; the plugin remained disabled until credentials were configured.
+- The language server discovered the manifest, logo, starter prompts, skill and
+  namespaced MCP server `gamedev-pl_gamedevpl` with its credential placeholder.
+- A Streamable HTTP check against the local `buildApp` server completed
+  `initialize` → `notifications/initialized` → `tools/list` → `list_account_games`,
+  returning owned games without opening a round.
+
+These checks do not establish a production account read through the Antigravity UI
+or verify its credential dialog. Use the connection check above for your installation.
+CI guards the registry endpoint, Bearer placeholder, skill parity and frontmatter.
 No credentials, production games or rounds are included in the package.
 
 ## Maintenance

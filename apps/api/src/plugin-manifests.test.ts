@@ -192,7 +192,32 @@ describe('agent-plugins manifest', () => {
   });
 });
 
-// Both loaders read skills/<name>/SKILL.md, immediate children only.
+describe('Antigravity plugin', () => {
+  const mcp = readJson('listings/mcp/antigravity-plugin/mcp_config.json');
+  const registry = readJson('listings/mcp/official-registry/server.json');
+  const servers = mcp.mcpServers as Record<
+    string,
+    { url: string; headers: Record<string, string>; variables: Array<{ name: string }> }
+  >;
+
+  it('advertises only the registry endpoint', () => {
+    expect(Object.keys(servers)).toEqual(['gamedevpl']);
+    expect(servers.gamedevpl.url).toBe(registryEndpoint(registry));
+  });
+
+  it('ships a user-configured Bearer placeholder rather than a credential', () => {
+    expect(servers.gamedevpl.headers).toEqual({ Authorization: 'Bearer ${GAMEDEV_CREATOR_KEY}' });
+    expect(servers.gamedevpl.variables.map(({ name }) => name)).toEqual(['GAMEDEV_CREATOR_KEY']);
+  });
+
+  it('ships a byte-identical copy of the canonical gamedevpl skill', () => {
+    const canonical = readFileSync(join(repoRoot, 'listings/mcp/claude-plugin/skills/gamedevpl/SKILL.md'));
+    const copy = readFileSync(join(repoRoot, 'listings/mcp/antigravity-plugin/skills/gamedevpl/SKILL.md'));
+    expect(copy.equals(canonical)).toBe(true);
+  });
+});
+
+// All loaders read skills/<name>/SKILL.md, immediate children only.
 describe('plugin skills', () => {
   const skillsDir = join(repoRoot, 'listings/mcp/claude-plugin/skills');
 
@@ -221,7 +246,12 @@ describe('plugin skills', () => {
   // An unquoted `: ` opens a nested mapping; the skill is then skipped silently.
   // Hand-rolled: no YAML dependency here, and this is the shape that bit us.
   it('gives every skill frontmatter that a YAML parser will accept', () => {
-    for (const root of ['.claude/skills', 'skills', 'listings/mcp/claude-plugin/skills']) {
+    for (const root of [
+      '.claude/skills',
+      'skills',
+      'listings/mcp/claude-plugin/skills',
+      'listings/mcp/antigravity-plugin/skills',
+    ]) {
       const dir = join(repoRoot, root);
       for (const entry of readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory())) {
         const label = `${root}/${entry.name}`;

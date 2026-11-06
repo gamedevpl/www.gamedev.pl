@@ -49,9 +49,10 @@ channel at all. Revisit only if Gemini CLI adoption changes.
 ## Antigravity prototype
 
 [`antigravity-plugin/`](./antigravity-plugin/) is a local-install prototype with
-creator-key setup and the existing gamedevpl skill. It has not been verified in an
-Antigravity client or submitted to its Marketplace. See its README for installation
-and a read-only connection check.
+creator-key setup and the existing gamedevpl skill. The maintainer verified CLI
+validation, installation and language-server discovery with `agy 1.5.1`, plus a
+local MCP account read. It has not been submitted to the Marketplace. See its README
+for the verification report, remaining checks and installation instructions.
 
 ## What the server exposes
 
