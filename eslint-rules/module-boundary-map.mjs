@@ -705,6 +705,7 @@ const FILE_BUCKET = {
   'visit-proposals': 'telemetry',
   'visit-transfers': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
+  'bot-agent': 'telemetry',
   'creator-metrics': 'telemetry',
 
   // notifications

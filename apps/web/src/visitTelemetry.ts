@@ -660,6 +660,8 @@ export interface StartVisitTrackingOptions {
  */
 export function startVisitTracking(options: StartVisitTrackingOptions = {}): () => void {
   if (typeof window === 'undefined') return () => {};
+  // Automated browsers announce themselves; their visits are not visitors.
+  if (navigator.webdriver === true) return () => {};
 
   const clock = options.clock ?? (() => Date.now());
   let storage: Storage | null;

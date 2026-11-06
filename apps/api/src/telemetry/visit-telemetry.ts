@@ -31,6 +31,7 @@ import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store, VisitEvent } from '../platform/store.js';
 import { cliStepEventSchema, toCliVisitEvent } from './visit-cli-event.js';
 import { isVisitTelemetryRateLimited } from './visit-telemetry-limit.js';
+import { isBotUserAgent } from './bot-agent.js';
 
 const MAX_EVENTS_PER_REQUEST = 25;
 const MAX_EVENTS_PER_VISIT = 200;
@@ -188,6 +189,8 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
+    // Crawlers that run JS are not visitors; accepted so nothing retries.
+    if (isBotUserAgent(request.headers['user-agent'])) return reply.status(202).send({ accepted: 0 });
     if (!(await keepsVisit(parsed.data.visitId))) return reply.status(202).send({ accepted: 0 });
     const visit =
       visitCounts.get(parsed.data.visitId) ??
@@ -226,9 +229,11 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(202).send({ accepted: 0 });
     }
 
+    const signedIn = Boolean(request.user);
     const events: VisitEvent[] = acceptedInput.map((event) => {
       const base = {
         ...(isReviewer(request.user?.uid, options.reviewerUids, options.adminUids) ? { reviewer: true } : {}),
+        signedIn,
         visitId: parsed.data.visitId,
         at: eventTimeIso(event.msSinceStart),
         msSinceStart: event.msSinceStart,

@@ -28,6 +28,8 @@ export type TelemetryEventType =
 
 export interface TelemetryEvent {
   reviewer?: boolean;
+  /** Whether the flush carried a session. A cohort bit, never an identity. Absent on old rows. */
+  signedIn?: boolean;
   agentMode?: boolean;
   /**
    * Game identity: the games-repo slug.
@@ -93,6 +95,8 @@ export interface TelemetryEvent {
  */
 export interface VisitEvent {
   reviewer?: boolean;
+  /** Whether the flush carried a session. A cohort bit, never an identity. Absent on old rows. */
+  signedIn?: boolean;
   /** Per-tab uuid from `sessionStorage`. Dies with the tab; never a uid. */
   visitId: string;
   type:

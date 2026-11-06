@@ -59,7 +59,7 @@ describe('POST /api/telemetry', () => {
     const app = await appWith(store);
     await post(app, { slug: 'space-hop', sessionId, events: [{ type: 'game_opened' }] });
     const [event] = await store.listTelemetryEvents(today());
-    expect(Object.keys(event).sort()).toEqual(['at', 'sessionId', 'slug', 'type']);
+    expect(Object.keys(event).sort()).toEqual(['at', 'sessionId', 'signedIn', 'slug', 'type']);
     expect(JSON.stringify(event)).not.toContain('g:me');
     await app.close();
   });

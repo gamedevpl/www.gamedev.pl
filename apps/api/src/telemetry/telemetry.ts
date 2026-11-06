@@ -11,6 +11,7 @@ import { isReviewer } from '../platform/reviewer-role.js';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
+import { isBotUserAgent } from './bot-agent.js';
 
 /** Bounds one flush; the shell batches ~4 events per 15s, so this is generous. */
 const MAX_EVENTS_PER_REQUEST = 50;
@@ -171,6 +172,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
     if (isRateLimited(requestsByIp, request.clientIp, currentTime)) {
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
+    if (isBotUserAgent(request.headers['user-agent'])) return reply.status(202).send({ accepted: 0 });
 
     // Unknown slugs receive the same response as unavailable review candidates.
     const published = (await publishedSlugs?.isPublished(parsed.data.slug)) ?? false;
@@ -209,6 +211,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
     const events: TelemetryEvent[] = parsed.data.events.slice(0, room).map((event) => {
       const base = {
         ...(reviewer ? { reviewer: true } : {}),
+        signedIn: Boolean(request.user),
         ...(event.agentMode === undefined ? {} : { agentMode: event.agentMode }),
         slug: parsed.data.slug,
         sessionId: parsed.data.sessionId,

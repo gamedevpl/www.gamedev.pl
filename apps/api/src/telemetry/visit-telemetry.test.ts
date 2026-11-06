@@ -638,7 +638,7 @@ describe('POST /api/telemetry/visit under private beta', () => {
       method: 'POST',
       url: '/api/telemetry/visit',
       // No auth headers: this is the anonymous, pre-sign-in visitor the wall must
-      // never see, because request.user is never read by this route.
+      // never see. The route reads request.user only as the signedIn cohort bit.
       payload: {
         visitId,
         flushMsSinceStart: 0,
