@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "gamedevpl": {
+      "url": "https://www.gamedev.pl/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${GAMEDEV_CREATOR_KEY}"
+      },
+      "variables": [
+        {
+          "name": "GAMEDEV_CREATOR_KEY",
+          "title": "Gamedev.pl coding-agent key",
+          "description": "Paste only the key value, without Authorization: or Bearer. Generate it in account settings on gamedev.pl. Requires an approved creator account.",
+          "link": "https://www.gamedev.pl"
+        }
+      ]
+    }
+  }
+}

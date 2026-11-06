@@ -1,0 +1,21 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "gamedev-pl",
+  "displayName": "Gamedev.pl",
+  "version": "0.1.0",
+  "description": "Create and improve browser games on gamedev.pl. Connect your creator account, build with GameKit, and submit playable previews for verification.",
+  "logo": "assets/logo.png",
+  "suggestedPrompts": [
+    "List my games on gamedev.pl without opening a build round.",
+    "Create a browser game on gamedev.pl from my idea and deliver a preview.",
+    "Improve one of my existing gamedev.pl games."
+  ],
+  "author": {
+    "name": "gamedev.pl",
+    "url": "https://www.gamedev.pl"
+  },
+  "homepage": "https://www.gamedev.pl",
+  "repository": "https://github.com/gamedevpl/www.gamedev.pl",
+  "license": "GPL-3.0-only",
+  "keywords": ["games", "game-development", "browser-games", "mcp", "gamedev"]
+}

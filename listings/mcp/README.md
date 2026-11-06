@@ -46,6 +46,13 @@ dedicated repo because the manifest must sit at a repo root — too much standin
 for the reach that surface has today. The consumer Gemini app has no third-party MCP
 channel at all. Revisit only if Gemini CLI adoption changes.
 
+## Antigravity prototype
+
+[`antigravity-plugin/`](./antigravity-plugin/) is a local-install prototype with
+creator-key setup and the existing gamedevpl skill. It has not been verified in an
+Antigravity client or submitted to its Marketplace. See its README for installation
+and a read-only connection check.
+
 ## What the server exposes
 
 Every tool advertised to a connecting client, grouped by where it falls in a
