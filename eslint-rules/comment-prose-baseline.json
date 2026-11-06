@@ -283,7 +283,6 @@
     "apps/api/src/platform/verify-erase-signals.ts": 1140,
     "apps/api/src/platform/workspace-archive.test.ts": 98,
     "apps/api/src/platform/workspace-archive.ts": 847,
-    "apps/api/src/plugin-manifests.test.ts": 289,
     "apps/api/src/realtime/game-saves.test.ts": 91,
     "apps/api/src/realtime/game-saves.ts": 495,
     "apps/api/src/realtime/manifest-source.ts": 274,
