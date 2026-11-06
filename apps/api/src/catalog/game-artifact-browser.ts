@@ -20,6 +20,7 @@ export async function createGameArtifactBrowser(options: {
     chromiumSandbox: !options.noSandbox,
     env: Object.fromEntries(
       [
+        'HOME',
         'PATH',
         'LANG',
         'LC_ALL',

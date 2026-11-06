@@ -975,7 +975,7 @@ jobs:
     needs: deploy
     runs-on: ubuntu-latest
     # Usually ~4 min (slowest recent run 5); a hang must not hold the deploy queue.
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
@@ -1021,11 +1021,12 @@ jobs:
       # takes priority over every heuristic in findChromium().
       - name: Install Chromium
         # Usually under 30s (slowest recent run 87s); this is where the hang was.
-        timeout-minutes: 5
+        timeout-minutes: 10
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
         run: |
-          npx playwright install --with-deps chromium
+          VERSION=$(node -p "require('playwright-core/package.json').version")
+          npx --yes --package="playwright@$VERSION" playwright install --with-deps chromium
 
           BIN=$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -perm -u+x 2>/dev/null | sort | tail -1)
           if [ -z "$BIN" ]; then
