@@ -6,8 +6,6 @@ import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './agent-surface/mcp-install
 import { MCP_MANAGED_ONLY_TOOLS, MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './agent-surface/mcp-server.js';
 import { MCP_UI_APP_ONLY_TOOLS } from './agent-surface/mcp-ui.js';
 
-// Copy in several places drifts — the closed-beta clause already did.
-// Every manifest must match the registry and its endpoint.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
 
@@ -67,9 +65,6 @@ describe('.claude-plugin marketplace', () => {
     mcpServers?: Record<string, { url?: string; type?: string }>;
   }
 
-  // Both declarations point at the same endpoint, so neither can be updated alone.
-  // Compare whole entries rather than one field, and sort keys so the assertion does not
-  // depend on JSON insertion order or on there only ever being one server.
   it('keeps the marketplace entry and the plugin .mcp.json in agreement', () => {
     const inline = entry.mcpServers as Record<string, unknown>;
     const file = pluginMcp.mcpServers as Record<string, unknown>;
@@ -93,8 +88,6 @@ describe('.claude-plugin marketplace', () => {
     expect(plugin.description).toBe(registry.description);
   });
 
-  // 1.0.1 declared mcpServers only in the marketplace entry and exposed no tools.
-  // "Installs cleanly" and "exposes the server" turned out to be different things.
   it('ships an .mcp.json in the plugin root, which is where the loader looks', () => {
     const servers = pluginMcp.mcpServers as Record<string, { url?: string; type?: string }>;
     expect(servers.gamedevpl.url).toBe(registryEndpoint(registry));
@@ -118,34 +111,17 @@ describe('.claude-plugin marketplace', () => {
     }
   });
 
-  // Discovery walks the plugin root; `.claude/` holds internal tooling.
-  // Rooting the plugin at its own directory is what keeps them apart.
   it('roots the plugin away from the repository root, so discovery cannot reach .claude/', () => {
     expect(entry.source).toBe('./listings/mcp/claude-plugin');
     expect(entry.source).not.toBe('./');
     expect(entry.source).not.toBe('.');
   });
 
-  /**
-   * Three version lines coincided at 1.0.1 and an earlier revision of this test asserted
-   * they must stay equal — which would have blocked the fix that required bumping one of
-   * them. They are independent artifacts:
-   *
-   *   - the registry `server.json` versions the MCP *server*, and is immutable once
-   *     published, so it moves only when the server itself changes;
-   *   - `.cursor-plugin/plugin.json` versions the Cursor plugin;
-   *   - the Claude plugin versions the Claude plugin, and had to ship 1.0.2 because
-   *     Claude uses that number to detect an update, and 1.0.1 was broken.
-   *
-   * Licence is a genuinely shared fact, so that one still has to agree.
-   */
   it('agrees with the Cursor manifest on licence, but versions independently', () => {
     const cursor = readJson('.cursor-plugin/plugin.json');
     expect(plugin.license).toBe(cursor.license);
   });
 
-  // These two declare the *same* artifact, so a bump in one without the other ships a
-  // plugin whose advertised version disagrees with itself.
   it('versions the plugin identically in its manifest and its marketplace entry', () => {
     expect(plugin.version).toBe(entry.version);
   });
@@ -169,7 +145,6 @@ describe('agent-plugins manifest', () => {
     expect(portable.license).toBe(plugin.license);
   });
 
-  // Version drift here ships an artifact that differs from what installs.
   it('versions in lockstep with the Claude manifest', () => {
     expect(portable.version).toBe(plugin.version);
   });
@@ -235,16 +210,12 @@ describe('plugin skills', () => {
     expect(skill).not.toMatch(/it wins|Warnings are instructions/); // informs, never outranks
   });
 
-  // skills.sh reads root, `skills/`, `.claude/skills/` — never inside the plugin.
-  // A stale root copy would teach the wrong loop and look fine here.
   it('publishes a byte-identical copy at the root skills/ the installers read', () => {
     const canonical = readFileSync(join(skillsDir, 'gamedevpl/SKILL.md'), 'utf8');
     const rootCopy = readFileSync(join(repoRoot, 'skills/gamedevpl/SKILL.md'), 'utf8');
     expect(rootCopy).toBe(canonical);
   });
 
-  // An unquoted `: ` opens a nested mapping; the skill is then skipped silently.
-  // Hand-rolled: no YAML dependency here, and this is the shape that bit us.
   it('gives every skill frontmatter that a YAML parser will accept', () => {
     for (const root of [
       '.claude/skills',
@@ -282,7 +253,6 @@ describe('the documented tool list', () => {
   const readme = readFileSync(join(repoRoot, 'listings/mcp/README.md'), 'utf8');
   const documented = [...readme.matchAll(/^\|\s*`([a-z_]+)`\s*\|/gm)].map((m) => m[1]);
 
-  // Hand-kept lists go stale.
   it('names exactly the tools a connecting client is offered', () => {
     const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
     expect([...documented, ...MCP_MANAGED_ONLY_TOOLS].sort()).toEqual([...advertised].sort());
