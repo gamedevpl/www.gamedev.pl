@@ -902,7 +902,7 @@ export function SubmissionStatusView({
                         ? null
                         : presenceThought(status)
                     }
-                    heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
+                    heartbeatAt={isAwaitingOwnAgent(status) && selfCopy !== 'quiet_agent' ? null : heartbeatAt}
                     active={false}
                   />
                 ) : null}

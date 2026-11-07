@@ -170,6 +170,19 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`
 
+### Studio silence during local work
+
+Studio cannot observe a connected agent's local edits, shell commands or browser tests.
+After 15 minutes without a build-channel signal, `quiet` means no recent updates;
+it does not establish that the agent disconnected or stopped. Resume copy and collapsed
+controls say this explicitly and offer continuation only if the agent has stopped.
+The thread retains the last signal's timestamp. First connection (`no_agent_yet`),
+explicit `end`, and completed gates keep their own copy and behavior.
+`BUILD_PROGRESS_GUIDANCE` is shared by the round sequence and `report_progress`'s
+description: updates around long steps and at natural checkpoints every few minutes
+keep the creator informed without fabricated timer heartbeats. Initialization also
+explains that local work needs progress reports to be visible in Studio.
+
 ### MCP tool surface
 
 `/api/mcp` advertises the focused build surface: creation/round control, brief/seed,

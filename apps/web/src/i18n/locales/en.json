@@ -926,7 +926,7 @@
       "endedTitle": "The agent finished this round.",
       "stall": {
         "ended": "No playable build landed this round — send a note in the thread to start another.",
-        "quiet": "The agent has been quiet for a while. It may still be working — bigger games take longer.",
+        "quiet": "No recent progress updates. The agent may still be coding or testing.",
         "awaiting_input": "The agent is waiting on you — answer in the thread to keep the build moving.",
         "no_agent_yet": "No agent has picked this round up yet — connect yours from the thread."
       }
@@ -1361,7 +1361,7 @@
       "awaiting_input": "The agent is waiting for your input — reply below to keep the build moving.",
       "not_dispatched": "The build hasn't been picked up by an agent yet. It's been waiting longer than expected — we're looking into it.",
       "quiet": "The agent has been quiet for a while. It may still be working — or you can send feedback below to start another round.",
-      "quietSelf": "Your coding agent has been quiet. We can't start it from here — paste the prompt below into your agent when you're ready, or send a note that it will pick up on its next run.",
+      "quietSelf": "Studio has not received a recent update. Your agent may still be working. If it has stopped, continue in your agent session with the prompt below.",
       "ended": "Your coding agent finished this round. Send feedback below to continue.",
       "endedSelf": "Your coding agent finished this round. Send a note below to continue with your agent.",
       "gate_not_started": "The game was delivered, but verification hasn't started yet. This is on our side — no action needed from you.",
@@ -2035,13 +2035,14 @@
       "error": "We couldn't rotate the key right now. Try again in a moment."
     },
     "resume": {
-      "title": "Continue with your agent",
-      "lead": "Your agent went quiet. Paste this prompt into the same session — or start a new one with your existing gamedev.pl connection.",
-      "kickoffTitle": "Continue prompt",
+      "title": "No recent progress updates",
+      "show": "Show agent options",
+      "lead": "Studio has not received a recent update. Your agent may still be coding or testing. If it has stopped, use the continue prompt below in your existing agent session.",
+      "kickoffTitle": "Continue if your agent has stopped",
       "kickoffHint": "This prompt carries only the game slug. Your MCP connection stays in the agent config.",
       "setupDetails": "Need to reconnect MCP?",
-      "openInstall": "Reconnect MCP in Details",
-      "waiting": "Waiting for your agent to check in again…"
+      "openInstall": "Agent connection details",
+      "waiting": "No recent updates — your agent may still be working."
     }
   },
   "workspaceCheckout": {
