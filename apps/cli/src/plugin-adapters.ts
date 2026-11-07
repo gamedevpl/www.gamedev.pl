@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { stripVTControlCharacters } from 'node:util';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -14,6 +15,19 @@ export const runPluginTool: PluginRunner = (command, args, env, cwd) => {
   if (command === 'muse' && args[0] === 'plugins')
     clientEnv.XDG_CONFIG_HOME = join(pluginLayout('muse', env).state, 'native-config');
   try {
+    if (command === 'gemini' && args[0] === 'extensions' && args[1] === 'list') {
+      const listed = spawnSync(command, args, {
+        env: clientEnv,
+        cwd,
+        encoding: 'utf8',
+        timeout: 120_000,
+        maxBuffer: 4_000_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      if (listed.error || listed.status !== 0) throw new Error('extension list failed');
+      return `${listed.stdout ?? ''}\n${listed.stderr ?? ''}`;
+    }
     const trustPrompt = command === 'gemini' && args[0] === 'extensions' && args[1] === 'install';
     return (
       execFileSync(command, args, {
@@ -154,12 +168,18 @@ export function nativePluginListing(target: PluginTarget, env: NodeJS.ProcessEnv
     env,
     cwd,
   );
-  if (target === 'gemini')
+  if (target === 'gemini') {
+    const clean = stripVTControlCharacters(text).trim();
+    const blocks = clean.split(/(?=^[✓✗]\s+\S+\s+\()/m).filter((block) => /^[✓✗]\s+/.test(block));
+    if (!blocks.length && !/^No extensions installed\.?$/i.test(clean))
+      throw new CliError('client returned an unknown extension list format; refusing to change it', EXIT_REFUSED);
+    const own = blocks.find((block) => new RegExp(`^[✓✗]\\s+${PLUGIN_NAME}\\s+\\(`).test(block));
     return {
       text,
-      registered: text.includes(PLUGIN_NAME),
-      disabled: /\bdisabled\b|enabled[^\n:]*:\s*false/i.test(text),
+      registered: own !== undefined,
+      disabled: own !== undefined && /^\s*Enabled[^\n:]*:\s*false\s*$/im.test(own),
     };
+  }
   const parsed = JSON.parse(text) as unknown;
   const rows = Array.isArray(parsed)
     ? parsed

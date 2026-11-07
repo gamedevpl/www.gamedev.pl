@@ -145,7 +145,9 @@ repo in the same session.
   Muse plugin management can normalize unrelated MCP settings when writing its
   review state: isolate those manager commands from the creator configuration,
   and merge only the owned authenticated MCP entry. A manifest inspection alone
-  does not prove that the account tools authenticate.
+  does not prove that the account tools authenticate. Gemini can emit its extension
+  inventory on stderr: capture both streams and scope enabled/disabled checks to
+  the owned extension, so a disabled neighbor cannot block its update.
 
 - **Check bundle size immediately after adding a runtime dependency.** Run
   `npm test -w @gamedevpl/cli -- src/bundle.test.ts` before the full gate. It runs

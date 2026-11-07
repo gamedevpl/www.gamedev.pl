@@ -105,7 +105,7 @@ it('isolates native Muse settings rewrites from the creator configuration', () =
   writeFileSync(layout.configs[0]!, original);
   writeFileSync(
     join(f.root, 'muse'),
-    `#!${process.execPath}\nimport fs from 'node:fs';\nconst dir=process.env.XDG_CONFIG_HOME+'/muse';\nfs.mkdirSync(dir,{recursive:true});\nfs.writeFileSync(dir+'/settings.json','{}');\n`,
+    `#!${process.execPath}\nconst fs = require('node:fs');\nconst dir=process.env.XDG_CONFIG_HOME+'/muse';\nfs.mkdirSync(dir,{recursive:true});\nfs.writeFileSync(dir+'/settings.json','{}');\n`,
     { mode: 0o700 },
   );
   runPluginTool('muse', ['plugins', 'remove', 'gamedevpl-cli'], env, f.root);

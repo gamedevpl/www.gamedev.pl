@@ -28,6 +28,10 @@ function fixture(target: PluginTarget) {
     if (args.includes('--help')) return 'install uninstall add remove';
     if (args.includes('list')) {
       if (args.includes('marketplace')) return '[]';
+      if (target === 'gemini')
+        return registered
+          ? `✓ ${PLUGIN_NAME} (1.0.0)\n Enabled (User): true\n Enabled (Workspace): true\n`
+          : 'No extensions installed.';
       return registered
         ? JSON.stringify([{ id: `${PLUGIN_NAME}@gamedevpl-cli-bundled`, name: PLUGIN_NAME, scope: 'user' }])
         : '[]';
