@@ -1,5 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, chmodSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  chmodSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+} from 'node:fs';
 import { PassThrough } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -58,27 +67,45 @@ it('offers a fresh standard checkout alongside a detected source repository', as
   expect(fetch.mock.calls.filter(([url]) => url.includes('/workspace'))).toHaveLength(1);
 });
 
-it('creates a standard checkout in cwd when the destination picker chooses dot', async () => {
-  const { api } = fixture();
-  const root = directory();
-  let count = 0;
-  const result = await connectSession({
-    api,
-    slug: 'sky',
-    cwd: root,
-    env: { PATH: '' },
-    pick: async (choices) => {
-      count++;
-      return count === 1 ? choices[0]! : choices.find((choice) => choice.startsWith('Current directory (.)'))!;
-    },
-    abort: { current: null },
-    write: () => {},
-  });
-  expect(result?.workshop?.root).toBe(root);
-  expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
-  expect(existsSync(join(root, 'sky'))).toBe(false);
-  expect(existsSync(join(root, '.git'))).toBe(false);
-});
+it.each(['empty', 'git directory', 'git file'])(
+  'creates a standard checkout in cwd containing %s when the destination picker chooses dot',
+  async (contents) => {
+    const { api } = fixture();
+    const root = directory();
+    const marker = join(root, '.git');
+    if (contents === 'git directory') execFileSync('git', ['init', '--quiet', '--template=', root]);
+    if (contents === 'git file') writeFileSync(marker, `gitdir: ${directory()}\n`);
+    const metadata = () =>
+      contents === 'git directory'
+        ? Object.fromEntries(
+            readdirSync(marker, { recursive: true, withFileTypes: true })
+              .filter((entry) => entry.isFile())
+              .map((entry) => [join(entry.parentPath, entry.name), readFileSync(join(entry.parentPath, entry.name))]),
+          )
+        : contents === 'git file'
+          ? readFileSync(marker)
+          : null;
+    const before = metadata();
+    let count = 0;
+    const result = await connectSession({
+      api,
+      slug: 'sky',
+      cwd: root,
+      env: { PATH: '' },
+      pick: async (choices) => {
+        count++;
+        return count === 1 ? choices[0]! : choices.find((choice) => choice.startsWith('Current directory (.)'))!;
+      },
+      abort: { current: null },
+      write: () => {},
+    });
+    expect(result?.workshop?.root).toBe(root);
+    expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+    expect(existsSync(join(root, 'sky'))).toBe(false);
+    expect(existsSync(marker)).toBe(contents !== 'empty');
+    expect(metadata()).toEqual(before);
+  },
+);
 
 it('cancels destination selection without downloading or writing files', async () => {
   const { api, fetch } = fixture();
@@ -145,9 +172,10 @@ it('refuses a fresh dot checkout into a detected project without accessing or re
   expect(readFileSync(join(root, 'mine.ts'), 'utf8')).toBe('local edits');
 });
 
-it('honors dot in the standalone checkout command', async () => {
+it.each([false, true])('honors dot in the standalone checkout command with existing Git: %s', async (git) => {
   const { fetch } = fixture();
   const root = directory();
+  if (git) execFileSync('git', ['init', '--quiet', '--template=', root]);
   vi.spyOn(process, 'cwd').mockReturnValue(root);
   vi.stubGlobal('fetch', fetch);
   const io = {
@@ -160,20 +188,24 @@ it('honors dot in the standalone checkout command', async () => {
   expect(existsSync(join(root, 'sky'))).toBe(false);
 });
 
-it('honors dot in the REPL checkout command and refuses an occupied dot destination', async () => {
-  const { api, fetch } = fixture();
-  const root = directory();
-  const input = { line: '/checkout sky .', api, token: null, cwd: root, env: { PATH: '' }, write: () => {} };
-  const opened = await handleReplLine(input);
-  expect(opened.workshop?.root).toBe(root);
-  expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
-  fetch.mockClear();
-  const messages: string[] = [];
-  const refused = await handleReplLine({ ...input, workshop: opened.workshop, write: (line) => messages.push(line) });
-  expect(refused.workshop).toBeUndefined();
-  expect(messages.join('\n')).toContain('not empty');
-  expect(fetch).not.toHaveBeenCalled();
-});
+it.each([false, true])(
+  'honors dot in the REPL checkout command and refuses an occupied dot destination with Git: %s',
+  async (git) => {
+    const { api, fetch } = fixture();
+    const root = directory();
+    if (git) execFileSync('git', ['init', '--quiet', '--template=', root]);
+    const input = { line: '/checkout sky .', api, token: null, cwd: root, env: { PATH: '' }, write: () => {} };
+    const opened = await handleReplLine(input);
+    expect(opened.workshop?.root).toBe(root);
+    expect(readFileSync(join(root, 'games/sky/SPEC.md'), 'utf8')).toBe('A game to build');
+    fetch.mockClear();
+    const messages: string[] = [];
+    const refused = await handleReplLine({ ...input, workshop: opened.workshop, write: (line) => messages.push(line) });
+    expect(refused.workshop).toBeUndefined();
+    expect(messages.join('\n')).toContain('not empty');
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);
 function fixture() {
   const source = directory();
   mkdirSync(join(source, 'games', 'sky'), { recursive: true });
@@ -287,12 +319,20 @@ describe('interactive game connection', () => {
     expect(readFileSync(join(other, '.gamedev-slug'), 'utf8')).toBe('other');
   });
 
-  it('refuses an occupied destination before downloading or modifying it', async () => {
-    const { api, fetch } = fixture();
-    const dest = directory();
-    writeFileSync(join(dest, 'mine.ts'), 'local edits');
-    await expect(checkoutGame({ api, slug: 'sky', dest })).rejects.toThrow('not empty');
-    expect(fetch).not.toHaveBeenCalled();
-    expect(readFileSync(join(dest, 'mine.ts'), 'utf8')).toBe('local edits');
-  });
+  it.each(['mine.ts', '.gitignore', 'src'])(
+    'refuses a destination containing .git and %s before downloading or modifying it',
+    async (entry) => {
+      const { api, fetch } = fixture();
+      const dest = directory();
+      execFileSync('git', ['init', '--quiet', '--template=', dest]);
+      const config = readFileSync(join(dest, '.git/config'));
+      if (entry === 'src') mkdirSync(join(dest, entry));
+      else writeFileSync(join(dest, entry), 'local edits');
+      await expect(checkoutGame({ api, slug: 'sky', dest })).rejects.toThrow('not empty');
+      expect(fetch).not.toHaveBeenCalled();
+      expect(readFileSync(join(dest, '.git/config'))).toEqual(config);
+      if (entry !== 'src') expect(readFileSync(join(dest, entry), 'utf8')).toBe('local edits');
+      else expect(readdirSync(join(dest, entry))).toEqual([]);
+    },
+  );
 });
