@@ -118,6 +118,25 @@ export function nativePluginCommands(
   ];
 }
 
+export function nativePluginListing(target: PluginTarget, env: NodeJS.ProcessEnv, cwd: string, run: PluginRunner) {
+  if (target === 'cursor' || target === 'opencode') return { text: '[]', registered: false };
+  const command = target === 'antigravity' ? 'agy' : target;
+  const text = run(command, target === 'gemini' ? ['extensions', 'list'] : ['plugin', 'list', '--json'], env, cwd);
+  if (target === 'gemini') return { text, registered: text.includes(PLUGIN_NAME) };
+  const parsed = JSON.parse(text) as unknown;
+  const rows = Array.isArray(parsed) ? parsed : (parsed as { installed?: unknown[] }).installed;
+  if (!Array.isArray(rows)) throw new CliError('client returned an unknown plugin list format', EXIT_REFUSED);
+  return {
+    text,
+    registered: rows.some(
+      (row: { name?: string; id?: string; pluginId?: string }) =>
+        row.name === PLUGIN_NAME ||
+        row.id === `${PLUGIN_NAME}@${PLUGIN_MARKET}` ||
+        row.pluginId === `${PLUGIN_NAME}@${PLUGIN_MARKET}`,
+    ),
+  };
+}
+
 export function preflightPlugin(target: PluginTarget, env: NodeJS.ProcessEnv, cwd: string, run: PluginRunner): void {
   if (target === 'cursor' || target === 'opencode') return;
   if (target === 'codex' && env.CODEX_HOME) {

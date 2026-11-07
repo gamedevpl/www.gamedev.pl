@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, isAbsolute, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { withCredentialLock } from './credential-lock.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { pluginFiles, PLUGIN_NAME, PLUGIN_MARKET, PLUGIN_TARGETS, type PluginTarget } from './plugin-packages.js';
-import { claimPluginPath, noSymlinks, pluginTrees, treeDigest, writePluginFile } from './plugin-files.js';
+import { claimPluginPath, noSymlinks, pluginTrees, treeDigest, treeSnapshot, writePluginFile } from './plugin-files.js';
 import {
   existingIntegration,
   nativePluginCommands,
+  nativePluginListing,
   pluginLayout,
   preflightPlugin,
   runPluginTool,
@@ -16,10 +17,11 @@ import {
 
 interface Receipt {
   version: 1;
-  phase: 'pending' | 'installed';
+  phase: 'pending' | 'installed' | 'uninstalling';
   sourceDigest: string;
   trees: Record<string, string>;
   marketplace?: boolean;
+  files?: Record<string, Record<string, string>>;
 }
 
 function readReceipt(file: string): Receipt | undefined {
@@ -28,7 +30,7 @@ function readReceipt(file: string): Receipt | undefined {
   const value = JSON.parse(readFileSync(file, 'utf8')) as Receipt;
   if (
     value.version !== 1 ||
-    !['pending', 'installed'].includes(value.phase) ||
+    !['pending', 'installed', 'uninstalling'].includes(value.phase) ||
     typeof value.sourceDigest !== 'string' ||
     !value.trees ||
     typeof value.trees !== 'object'
@@ -53,9 +55,25 @@ function unchanged(target: PluginTarget, env: NodeJS.ProcessEnv, receipt: Receip
   );
 }
 
+function recoverableUninstall(target: PluginTarget, env: NodeJS.ProcessEnv, receipt: Receipt): boolean {
+  if (receipt.phase !== 'uninstalling') return false;
+  const source = join(pluginLayout(target, env).state, 'source');
+  if (!existsSync(source) || treeDigest(source) !== receipt.sourceDigest) return false;
+  if (installedTrees(target, env).some((path) => !Object.hasOwn(receipt.trees, path))) return false;
+  return Object.keys(receipt.trees).every((path) => {
+    if (!existsSync(path)) return true;
+    const expected = receipt.files?.[path];
+    return (
+      expected !== undefined && Object.entries(treeSnapshot(path)).every(([file, hash]) => expected[file] === hash)
+    );
+  });
+}
+
 export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv) {
   const layout = pluginLayout(target, env);
   const receipt = readReceipt(join(layout.state, 'receipt.json'));
+  if (receipt?.phase === 'uninstalling')
+    return { target, status: recoverableUninstall(target, env, receipt) ? 'pending' : 'modified' };
   const removedByClient =
     receipt &&
     Object.keys(receipt.trees).length > 0 &&
@@ -166,6 +184,7 @@ export async function managePlugins(input: {
         receipt.phase = 'installed';
       } finally {
         receipt.trees = Object.fromEntries(installedTrees(target, input.env).map((path) => [path, treeDigest(path)]));
+        receipt.files = Object.fromEntries(Object.keys(receipt.trees).map((path) => [path, treeSnapshot(path)]));
         writePluginFile(receiptFile, JSON.stringify(receipt));
       }
       return {
@@ -176,23 +195,56 @@ export async function managePlugins(input: {
       };
     }
     const receipt = readReceipt(receiptFile)!;
+    const native = nativePluginListing(target, input.env, layout.state, run);
     if (receipt.marketplace) {
-      const listing = run(target, ['plugin', 'list', '--json'], input.env, layout.state);
+      const listing = native.text;
       const names = [...listing.matchAll(/"([^"\s]+)@gamedevpl-cli-bundled"/g)].map((match) => match[1]);
       if (names.some((name) => name !== PLUGIN_NAME))
         throw new CliError(
           'bundled marketplace has other plugins; refusing to remove shared configuration',
           EXIT_REFUSED,
         );
+      if (
+        target === 'claude' &&
+        (JSON.parse(listing) as Array<{ id?: string; scope?: string }>).some(
+          (plugin) => plugin.id === `${PLUGIN_NAME}@${PLUGIN_MARKET}` && plugin.scope && plugin.scope !== 'user',
+        )
+      )
+        throw new CliError(
+          'plugin is shared with another scope; refusing to remove shared configuration',
+          EXIT_REFUSED,
+        );
     }
-    if (installedTrees(target, input.env).length)
-      for (const [command, ...args] of plan.commands) run(command!, args, input.env, layout.state);
+    receipt.phase = 'uninstalling';
+    writePluginFile(receiptFile, JSON.stringify(receipt));
+    if (native.registered) for (const [command, ...args] of plan.commands) run(command!, args, input.env, layout.state);
     if (layout.direct) {
       noSymlinks(layout.direct);
       rmSync(layout.direct, { recursive: target === 'cursor', force: true });
     }
+    if (!layout.direct && Object.keys(receipt.trees).some((path) => existsSync(path))) {
+      if (nativePluginListing(target, input.env, layout.state, run).registered)
+        throw new CliError('native client retained the plugin; uninstall is pending and can be retried', EXIT_REFUSED);
+      if (!recoverableUninstall(target, input.env, receipt))
+        throw new CliError('native removal changed surviving files; refusing automatic cleanup', EXIT_REFUSED);
+      for (const path of Object.keys(receipt.trees)) {
+        const allowed = layout.roots.some((root) => {
+          const rel = relative(root, path);
+          return (
+            rel &&
+            !rel.startsWith('..') &&
+            !isAbsolute(rel) &&
+            rel.split(sep).some((part) => part.startsWith(PLUGIN_NAME))
+          );
+        });
+        if (!allowed) throw new CliError('invalid owned plugin path', EXIT_REFUSED);
+        noSymlinks(path);
+        rmSync(path, { recursive: true, force: true });
+      }
+    }
     receipt.phase = 'pending';
     receipt.trees = {};
+    receipt.files = {};
     writePluginFile(receiptFile, JSON.stringify(receipt));
     if (receipt.marketplace) {
       run(

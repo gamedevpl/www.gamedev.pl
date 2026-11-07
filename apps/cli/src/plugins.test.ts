@@ -19,20 +19,41 @@ function fixture(target: PluginTarget) {
   const env = { HOME: home, XDG_CONFIG_HOME: join(home, '.config') };
   const layout = pluginLayout(target, env);
   const calls: string[][] = [];
+  let registered = false;
   const run: PluginRunner = (command, args) => {
     calls.push([command, ...args]);
     if (args.includes('--help')) return 'install uninstall add remove';
-    if (args.includes('list')) return '[]';
+    if (args.includes('list')) {
+      if (args.includes('marketplace')) return '[]';
+      return registered
+        ? JSON.stringify([{ id: `${PLUGIN_NAME}@gamedevpl-cli-bundled`, name: PLUGIN_NAME, scope: 'user' }])
+        : '[]';
+    }
     if (args.includes('marketplace')) return 'ok';
     const installed = join(layout.roots[0]!, PLUGIN_NAME);
     const install = args.includes('install') || args.includes('add');
-    if (install) cpSync(join(layout.state, 'source/plugin'), installed, { recursive: true });
-    else rmSync(installed, { recursive: true, force: true });
+    if (install) {
+      cpSync(join(layout.state, 'source/plugin'), installed, { recursive: true });
+      registered = true;
+    } else {
+      rmSync(installed, { recursive: true, force: true });
+      registered = false;
+    }
     return 'ok';
   };
   const invoke = (action: string, flags: Record<string, boolean> = {}, runner = run) =>
     managePlugins({ args: [action, target], flags, env, cwd: home, run: runner });
-  return { home, env, layout, run, invoke, calls };
+  return {
+    home,
+    env,
+    layout,
+    run,
+    invoke,
+    calls,
+    forgetNative: () => {
+      registered = false;
+    },
+  };
 }
 
 describe('plugin lifecycle', () => {
@@ -162,6 +183,60 @@ describe('plugin lifecycle', () => {
     expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'pending' }] });
     expect(await f.invoke('uninstall')).toMatchObject({ status: 'absent', changed: true });
     expect(existsSync(join(f.layout.state, 'source'))).toBe(false);
+  });
+
+  it.each(['all', 'one'] as const)('recovers native uninstall failure after deleting %s files', async (deleted) => {
+    const f = fixture('copilot');
+    await f.invoke('install');
+    const root = join(f.layout.roots[0]!, PLUGIN_NAME);
+    let fail = true;
+    const run: PluginRunner = (...args) => {
+      if (fail && args[1][0] === 'plugin' && args[1][1] === 'uninstall') {
+        rmSync(deleted === 'all' ? root : join(root, 'skills/gamedevpl/SKILL.md'), { recursive: true });
+        throw new Error('native removal interrupted');
+      }
+      return f.run(...args);
+    };
+    await expect(f.invoke('uninstall', {}, run)).rejects.toThrow('native removal interrupted');
+    expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'pending' }] });
+    fail = false;
+    expect(await f.invoke('uninstall', {}, run)).toMatchObject({ status: 'absent', changed: true });
+  });
+
+  it('preserves a customized survivor of an interrupted uninstall', async () => {
+    const f = fixture('copilot');
+    await f.invoke('install');
+    const root = join(f.layout.roots[0]!, PLUGIN_NAME);
+    const run: PluginRunner = (...args) => {
+      if (args[1][1] === 'uninstall') {
+        rmSync(join(root, 'skills/gamedevpl/SKILL.md'));
+        throw new Error('interrupted');
+      }
+      return f.run(...args);
+    };
+    await expect(f.invoke('uninstall', {}, run)).rejects.toThrow('interrupted');
+    writeFileSync(join(root, 'README.md'), 'creator notes');
+    await expect(f.invoke('uninstall')).rejects.toThrow('changed outside');
+    expect(readFileSync(join(root, 'README.md'), 'utf8')).toBe('creator notes');
+  });
+
+  it('cleans unchanged owned cache remnants after the native registration is gone', async () => {
+    const f = fixture('copilot');
+    await f.invoke('install');
+    f.forgetNative();
+    expect(await f.invoke('uninstall')).toMatchObject({ status: 'absent', changed: true });
+    expect(existsSync(join(f.layout.roots[0]!, PLUGIN_NAME))).toBe(false);
+  });
+
+  it('preserves a plugin installation shared with a project scope', async () => {
+    const f = fixture('claude');
+    await f.invoke('install');
+    const run: PluginRunner = (...args) =>
+      args[1].includes('list')
+        ? JSON.stringify([{ id: 'gamedevpl-cli@gamedevpl-cli-bundled', scope: 'project' }])
+        : f.run(...args);
+    await expect(f.invoke('uninstall', {}, run)).rejects.toThrow('another scope');
+    expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'installed' }] });
   });
 
   it('refuses dangling symlinks before writing a plugin', async () => {

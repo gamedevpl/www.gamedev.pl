@@ -46,25 +46,31 @@ export function claimPluginPath(path: string, bytes?: Buffer): void {
   else mkdirSync(path, { mode: 0o700 });
 }
 
-export function treeDigest(path: string): string {
+export function treeSnapshot(path: string): Record<string, string> {
   noSymlinks(path);
-  const hash = createHash('sha256');
+  const entries: Record<string, string> = {};
   let count = 0;
   function visit(file: string, relative: string): void {
     if (++count > 1000) throw new CliError('plugin tree exceeds file limit', EXIT_REFUSED);
     const stat = lstatSync(file);
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()))
       throw new CliError('plugin tree contains a link or special file', EXIT_REFUSED);
-    hash.update(`${stat.isDirectory() ? 'directory' : 'file'}:${relative}\0`);
     if (stat.isDirectory()) {
+      entries[relative] = 'directory';
       for (const entry of readdirSync(file).sort()) visit(join(file, entry), `${relative}/${entry}`);
     } else {
       if (stat.size > 4_000_000) throw new CliError('plugin file exceeds size limit', EXIT_REFUSED);
-      hash.update(readFileSync(file));
+      entries[relative] = createHash('sha256').update(readFileSync(file)).digest('hex');
     }
   }
   visit(path, '');
-  return hash.digest('hex');
+  return entries;
+}
+
+export function treeDigest(path: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify(treeSnapshot(path)))
+    .digest('hex');
 }
 
 export function pluginTrees(roots: string[], names: string[]): string[] {
