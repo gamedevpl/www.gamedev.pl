@@ -20,6 +20,25 @@ function claudeDenials(line: string): boolean {
   }
 }
 
+function resetHint(resetsAt: number | undefined): string {
+  if (resetsAt === undefined) return '';
+  const minutes = Math.max(0, Math.round((resetsAt - Date.now()) / 60_000));
+  if (minutes < 60) return `, resets in ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `, resets in ${hours} h` : `, resets ${new Date(resetsAt).toLocaleDateString()}`;
+}
+
+// A plan limit close to running out, or already out.
+function limitLine(event: Extract<AgentEvent, { type: 'rate-limit' }>): string | undefined {
+  const { limit } = event;
+  if (limit.status === 'ok') return;
+  const name = limit.name ? `${limit.name} ` : '';
+  const used = limit.usedPercent === undefined ? '' : ` (${Math.round(limit.usedPercent)}% used)`;
+  if (limit.window === 'quota') return `${name}usage limit reached${resetHint(limit.resetsAt)}`;
+  const state = limit.status === 'exceeded' ? 'reached' : 'nearly used up';
+  return `${name}${limit.window} usage limit ${state}${used}${resetHint(limit.resetsAt)}`;
+}
+
 // Terminal lines for one run's events, prefixed with the adapter.
 export function createEventRenderer(adapter: string) {
   let buffered = '';
@@ -38,6 +57,7 @@ export function createEventRenderer(adapter: string) {
     return text.trim() || undefined;
   };
   const asked = new Map<string, string>();
+  const limits = new Set<string>();
   const text = (event: AgentEvent): string | undefined => {
     switch (event.type) {
       case 'session':
@@ -66,6 +86,19 @@ export function createEventRenderer(adapter: string) {
       case 'approval-resolved':
         if (!event.automatic) return;
         return `Permission ${event.decision === 'approve' ? 'auto-approved' : 'denied by policy'}: ${sanitizeEventPayload(asked.get(event.id) ?? event.id, 200)}`;
+      case 'rate-limit': {
+        const key = `${event.limit.name ?? ''}/${event.limit.window}/${event.limit.status}`;
+        if (limits.has(key)) return;
+        limits.add(key);
+        return limitLine(event);
+      }
+      case 'budget-warning': {
+        const { kind, used, limit } = event.warning;
+        const share = Math.round((used / limit) * 100);
+        return kind === 'tokens'
+          ? `Token budget ${share}% used (${used} of ${limit})`
+          : `Cost budget ${share}% used ($${used.toFixed(2)} of $${limit})`;
+      }
       case 'error':
         return event.message;
       case 'stderr':
