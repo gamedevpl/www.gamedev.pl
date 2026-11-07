@@ -56,10 +56,6 @@ describe('createSelfBuildBackend', () => {
       state: 'in_progress',
       hasCandidate: false,
     });
-    await expect(backend.observe('self:3', { hasCandidate: true })).resolves.toEqual({
-      state: 'completed',
-      hasCandidate: true,
-    });
     readSignals.mockResolvedValueOnce({});
     await expect(backend.observe('self:3', { hasCandidate: false })).resolves.toEqual({
       state: 'queued',

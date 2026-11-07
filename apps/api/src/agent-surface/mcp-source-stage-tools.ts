@@ -4,11 +4,11 @@ import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import {
   BATCH_PATH_SEPARATOR,
   batchUploadContract,
-  MANAGED_STAGE_UPLOAD_DESCRIPTION,
-  MANAGED_STAGE_UPLOAD_OUTPUT,
+  STAGE_UPLOAD_DESCRIPTION,
+  STAGE_UPLOAD_OUTPUT,
 } from './stage-upload-batch.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken } from './agent-upload-token.js';
-import { UPLOAD_REQUEST_PROPS, uploadRequest } from './upload-request.js';
+import { uploadRequest } from './upload-request.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
@@ -66,15 +66,11 @@ export interface SourceStageToolsDeps {
   now: () => number;
   // N1: delivery's deliverable-path vocabulary, applied here without importing it.
   assertDeliverableSourcePath: (path: string) => string;
-  // Managed: one contract per batch; public: one per path.
-  batchUploads?: (ctx: ToolContext) => boolean;
 }
 
 export interface SourceStageToolEntry {
   annotations: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
-  // A managed tools/list shows this instead.
-  managed?: { description: string; outputSchema: Record<string, unknown> };
   description: string;
   inputSchema: Record<string, unknown>;
   handler: ToolHandler;
@@ -86,52 +82,10 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
 
   return {
     stage_upload_url: {
-      managed: { description: MANAGED_STAGE_UPLOAD_DESCRIPTION, outputSchema: MANAGED_STAGE_UPLOAD_OUTPUT },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          url: { type: 'string' },
-          expiresAt: { type: 'string' },
-          expiresInSeconds: { type: 'number' },
-          path: { type: 'string' },
-          ...UPLOAD_REQUEST_PROPS,
-          maxBytes: { type: 'number' },
-          uploads: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                path: { type: 'string' },
-                url: { type: 'string' },
-                ...UPLOAD_REQUEST_PROPS,
-                expiresAt: { type: 'string' },
-                expiresInSeconds: { type: 'number' },
-                maxBytes: { type: 'number' },
-              },
-              required: ['path', 'url', 'method', 'headers', 'expiresAt', 'expiresInSeconds', 'maxBytes'],
-            },
-          },
-          rejected: {
-            type: 'array',
-            description: 'Paths in this batch that were refused, with why. The rest were minted.',
-            items: {
-              type: 'object',
-              properties: { path: { type: 'string' }, reason: { type: 'string' } },
-              required: ['path', 'reason'],
-            },
-          },
-        },
-      },
+      outputSchema: STAGE_UPLOAD_OUTPUT,
       // Not READS: each call mints a fresh nonce, so never idempotent.
       annotations: { title: 'Get stage upload URL(s)', ...WRITES },
-      description:
-        'Stage new or fully rewritten source file(s) when you can make HTTP uploads yourself. ' +
-        'Mints upload URLs in batch: `paths: ["file1.ts", "file2.ts", ...]` covers several files per call ' +
-        `(up to ${MAX_STAGE_UPLOAD_BATCH} paths per call; larger sets split into batches of ${MAX_STAGE_UPLOAD_BATCH}), cheaper than one call per file. \`path\` alone covers a single file. ` +
-        "Returns short-lived upload contracts as data (path, url, method, headers, maxBytes per file): PUT each file's bytes to its url with exactly its headers, using whatever HTTP client you have; the URL alone is not a credential, the Authorization header is. The file bytes never enter the model; the PUT applies the same " +
-        'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
-        'staging receipt only — read stop/pendingMessages from your other channel tools. Then submit_sources({ fromStaged: true, … }). ' +
-        'Use stage_source_file / patch_source_file when you have no shell.',
+      description: STAGE_UPLOAD_DESCRIPTION,
       inputSchema: {
         type: 'object',
         properties: {
@@ -228,31 +182,9 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           });
         }
 
-        if (deps.batchUploads?.(ctx)) {
-          const token = mint(validPaths.join(BATCH_PATH_SEPARATOR));
-          return toolOk({
-            batch: batchUploadContract(token, validPaths),
-            expiresAt,
-            expiresInSeconds: ttlSeconds,
-            ...(rejected.length ? { rejected } : {}),
-          });
-        }
-
-        const uploads = validPaths.map((path) => {
-          const token = mint(path);
-          const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}`;
-          return {
-            path,
-            url,
-            ...uploadRequest(token, 'text/plain; charset=utf-8'),
-            expiresAt,
-            expiresInSeconds: ttlSeconds,
-            maxBytes: 1_000_000,
-          };
-        });
-
+        const token = mint(validPaths.join(BATCH_PATH_SEPARATOR));
         return toolOk({
-          uploads,
+          batch: batchUploadContract(token, validPaths),
           expiresAt,
           expiresInSeconds: ttlSeconds,
           ...(rejected.length ? { rejected } : {}),
@@ -293,7 +225,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
       },
       description:
         'Upload ONE game source file into this round’s staging buffer (full rewrite) via inline content. ' +
-        'Use stage_upload_url (PUT each file to its returned url with its returned headers) when you can make HTTP uploads yourself — re-emitting file contents ' +
+        'Use stage_upload_url (one batch contract: PUT each file to batch.url?path=<path> with batch.headers) when you can make HTTP uploads yourself — re-emitting file contents ' +
         'as a tool argument burns output tokens. Use this tool for new files when you have no shell; ' +
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
         'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +

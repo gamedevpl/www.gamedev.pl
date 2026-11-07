@@ -3,7 +3,7 @@ import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import type { JobState, JobTransition } from '../../creation/job-state.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
-import type { AgentEndedBy, BuilderHandoff, ReceiptRound } from './rounds.js';
+import type { AgentEndedBy, BuilderHandoff, ReceiptRound, RoundClosed } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 import type { ManagedSessions } from './managed-session.js';
 
@@ -209,20 +209,14 @@ export interface SubmissionRecord {
    * of what a platform seed did, not the draft itself.
    */
   seedOutcome?: JobSeedOutcome;
-  /**
-   * Active build-channel token generation for this job.
-   *
-   * Round-scoped channel tokens HMAC over this value; closing a round bumps it
-   * transactionally with the state transition (see {@link transitionClosesRound}), so a
-   * copied token from an earlier round stops validating without a revocation list.
-   * Absent only on legacy jobs that have not yet closed a round under this model —
-   * those still accept the pre-generation token shape until the first close initializes
-   * the field. New jobs start at `1`.
-   */
+  // Channel-token generation; closing a round bumps it. Absent on legacy jobs.
   roundGeneration?: number;
 
   // Round a transition closed; its keys may still read that gate result.
   receiptRound?: ReceiptRound;
+
+  // Why the previous generation closed; kept after the receipt is cleared.
+  roundClosed?: RoundClosed;
 
   // The game's accessRevision when this round opened.
 

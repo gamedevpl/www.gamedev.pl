@@ -143,7 +143,10 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       const roundGeneration =
         input.undelivered && !revoked
           ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
-          : ((await store.bumpRoundGeneration(input.jobId)) ?? (record?.roundGeneration ?? 0) + 1);
+          : ((await store.bumpRoundGeneration(
+              input.jobId,
+              builder !== previousBuilder ? 'builder_handoff' : 'new_round',
+            )) ?? (record?.roundGeneration ?? 0) + 1);
       if (!input.undelivered && builder !== previousBuilder) {
         // Switch builder at the bump, so the old one cannot reopen.
         await store.setRoundBuilder(input.jobId, builder, {

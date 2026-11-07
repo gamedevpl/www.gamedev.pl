@@ -1,4 +1,4 @@
-// Managed sessions: one upload contract per stage_upload_url batch.
+// One upload contract per stage_upload_url batch, for every session.
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { uploadRequest, UPLOAD_REQUEST_PROPS } from './upload-request.js';
@@ -6,14 +6,17 @@ import { uploadRequest, UPLOAD_REQUEST_PROPS } from './upload-request.js';
 // Paths hold no newline, so one token binds the list.
 export const BATCH_PATH_SEPARATOR = '\n';
 
-export const MANAGED_STAGE_UPLOAD_DESCRIPTION =
-  'Mints one upload contract for every path in `paths` (up to 50 per call), as data: `batch.url`, ' +
-  '`batch.method`, `batch.headers` and `batch.paths`. PUT each file to `batch.url` with `?path=<its path>` ' +
-  'appended and exactly `batch.headers`; the same headers serve every listed path until expiresAt. ' +
-  'The URL alone is not a credential, the Authorization header is. Each PUT applies the same validation as ' +
-  'stage_source_file. `path` alone returns a single-file contract as `url`, `method` and `headers`.';
+export const STAGE_UPLOAD_DESCRIPTION =
+  'Stage new or fully rewritten source file(s) when you can make HTTP uploads yourself. ' +
+  'Mints ONE upload contract for every path in `paths` (up to 50 per call), as data: `batch.url`, ' +
+  '`batch.method`, `batch.headers` and `batch.paths`. Put the Authorization header in a shell variable or ' +
+  'file once, then PUT each file to `batch.url` with `?path=<its path>` appended and exactly `batch.headers`; ' +
+  'the same headers serve every listed path until expiresAt. The URL alone is not a credential, the ' +
+  'Authorization header is. Each PUT applies the same validation as stage_source_file and returns the staging ' +
+  'receipt only. `path` alone returns a single-file contract as `url`, `method` and `headers`. Then ' +
+  'submit_sources({ fromStaged: true, … }). Use stage_source_file / patch_source_file when you have no shell.';
 
-export const MANAGED_STAGE_UPLOAD_OUTPUT = {
+export const STAGE_UPLOAD_OUTPUT = {
   type: 'object',
   properties: {
     url: { type: 'string' },

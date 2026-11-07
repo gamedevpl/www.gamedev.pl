@@ -245,6 +245,7 @@ const FILE_BUCKET = {
   // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
   // node:crypto over a caller-supplied secret, with no agent-surface state at all.
   'agent-token': 'platform',
+  'round-closed': 'platform',
   'capability-revision': 'platform',
   'actor-uid': 'platform',
   // Slug minting and claim settlement. Pure aside from caller-supplied probes, and
@@ -463,6 +464,7 @@ const FILE_BUCKET = {
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
   'mcp-session-key': 'agent-surface',
+  'mcp-round-closed': 'agent-surface',
   'mcp-session-compact': 'agent-surface',
   'mcp-session-nudges': 'agent-surface',
   'mcp-debug-log': 'agent-surface',
@@ -504,6 +506,7 @@ const FILE_BUCKET = {
   'managed-provider-gemini': 'agent-surface',
   'managed-provider-openai': 'agent-surface',
   'self-build-backend': 'agent-surface',
+  'self-build-signals': 'agent-surface',
   'self-build-connect': 'agent-surface',
   'self-build-connect-routes': 'agent-surface',
   'creator-agent-key-routes': 'agent-surface',

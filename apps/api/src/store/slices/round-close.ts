@@ -1,5 +1,7 @@
 import { isActiveBuildRound, nextRoundGeneration, resolveJobState, type JobState } from '../../creation/job-state.js';
+import type { JobTransition } from '../../creation/job-state.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import type { RoundClosedReason } from '../records/rounds.js';
 import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 
 // A transition is refused unless every field given still matches the record.
@@ -27,6 +29,37 @@ export function guardHolds(sub: SubmissionRecord, guard: TransitionGuard): boole
   if ('deliveredVersion' in guard && sub.deliveredVersion !== guard.deliveredVersion) return false;
   if ('previewVersion' in guard && sub.previewVersion !== guard.previewVersion) return false;
   return guard.dispatchRef === undefined || (sub.dispatch?.refs.at(-1) ?? null) === guard.dispatchRef;
+}
+
+// Records why `closed`'s generation ended, for its now-stale keys.
+export function stampRoundClosed(
+  next: SubmissionRecord,
+  closed: Pick<SubmissionRecord, 'roundGeneration'>,
+  reason: RoundClosedReason,
+  at: string,
+  detail?: string,
+): void {
+  next.roundClosed = {
+    generation: closed.roundGeneration ?? 1,
+    reason,
+    at,
+    ...(detail ? { detail } : {}),
+  };
+}
+
+export function roundClosedReasonFor(transition: JobTransition): RoundClosedReason {
+  if (transition.by === 'creator') return 'creator_action';
+  if (transition.by === 'operator') return 'operator';
+  if (transition.to === 'ready_for_review') return transition.by === 'gate' ? 'gate_green' : 'session_finished';
+  if (transition.to === 'abandoned') return 'abandoned';
+  return transition.to === 'failed' ? 'session_failed' : 'session_finished';
+}
+
+// A transition closed `closed`'s round: clear, receipt and stamp the cause.
+export function closeRoundRecord(next: SubmissionRecord, closed: SubmissionRecord, transition: JobTransition): void {
+  clearRoundSignals(next);
+  stampReceiptRound(next, closed);
+  stampRoundClosed(next, closed, roundClosedReasonFor(transition), transition.at, transition.reason);
 }
 
 // Fields a closed round clears -- signals belong to the round that ended.
@@ -78,6 +111,7 @@ export function takeoverRecord(
     agentEndedAt: at,
     agentEndedBy: 'takeover',
   };
+  stampRoundClosed(next, sub, 'builder_handoff', at);
   // A takeover revokes the agent; its old key must not keep reading.
   delete next.receiptRound;
   return next;

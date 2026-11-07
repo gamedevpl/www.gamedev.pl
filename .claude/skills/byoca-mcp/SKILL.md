@@ -113,7 +113,7 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
      enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
-     PUT each file to its returned `url` with its returned `headers` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
+     PUT each file to `batch.url?path=<path>` with the one `batch.headers` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
@@ -381,11 +381,12 @@ as lost. The first `end` after a refused submit, with nothing this session deliv
 `end` is refused (`rejected: session_ended`). An `end` acknowledging a builder handoff is never
 refused. Public clients run both tools unchanged. `reference_unseen` is a warning only.
 
-**Managed stage uploads.** Under a managed opener, `stage_upload_url` with `paths` returns one
+**Batch stage uploads.** For every client, `stage_upload_url` with `paths` returns one
 contract, `batch: { url, method, headers, paths, maxBytes }`: one stage token whose signed path is
 the newline-joined list. Each PUT names its file with `?path=`, which must be listed
-(`stagePutPath`). A managed `tools/list` shows that shape (`managed` on the tool entry). Public
-clients keep one `uploads[]` entry per path, and a single-path token PUT without `?path=` as before.
+(`stagePutPath`). A single `path` still returns one token, PUT without `?path=` as before. The
+per-path `uploads[]` shape is gone: thirty ~400-char tokens per delivery cost agents 12k chars and
+led to 401s from mistyped tokens.
 
 **Managed kickoff context.** On a lane with a mounted workspace, the loader also reads the
 round's pending creator messages and the creator notes (`workspace-context.ts`). The kickoff then
