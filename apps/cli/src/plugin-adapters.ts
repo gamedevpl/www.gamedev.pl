@@ -8,11 +8,14 @@ import { PLUGIN_NAME, PLUGIN_MARKET, type PluginTarget } from './plugin-packages
 
 export type PluginRunner = (command: string, args: string[], env: NodeJS.ProcessEnv, cwd: string) => string;
 export const runPluginTool: PluginRunner = (command, args, env, cwd) => {
+  const clientEnv = { ...env };
+  delete clientEnv.GAMEDEV_TOKEN;
+  delete clientEnv.GAMEDEV_TOKEN_FILE;
   try {
     const trustPrompt = command === 'gemini' && args[0] === 'extensions' && args[1] === 'install';
     return (
       execFileSync(command, args, {
-        env,
+        env: clientEnv,
         cwd,
         encoding: 'utf8',
         timeout: 120_000,

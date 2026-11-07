@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { managePlugins } from './plugins.js';
-import { pluginLayout, type PluginRunner } from './plugin-adapters.js';
+import { pluginLayout, runPluginTool, type PluginRunner } from './plugin-adapters.js';
 import { PLUGIN_NAME, PLUGIN_TARGETS, type PluginTarget } from './plugin-packages.js';
 import { connectGame } from './connect.js';
 import type { ApiClient } from './api.js';
@@ -36,6 +36,24 @@ function fixture(target: PluginTarget) {
 }
 
 describe('plugin lifecycle', () => {
+  it('does not expose the CLI creator session to native plugin managers', () => {
+    const f = fixture('cursor');
+    const result = runPluginTool(
+      process.execPath,
+      [
+        '-e',
+        'process.stdout.write(JSON.stringify({token:process.env.GAMEDEV_TOKEN,file:process.env.GAMEDEV_TOKEN_FILE,marker:process.env.PLUGIN_TEST_MARKER}))',
+      ],
+      {
+        ...process.env,
+        GAMEDEV_TOKEN: 'fixture-creator-token',
+        GAMEDEV_TOKEN_FILE: 'fixture-private-file',
+        PLUGIN_TEST_MARKER: 'kept',
+      },
+      f.home,
+    );
+    expect(JSON.parse(result)).toEqual({ marker: 'kept' });
+  });
   it.each(['claude', 'codex', 'copilot'] as const)(
     'keeps temporary connect wiring independent of an installed %s plugin',
     async (target) => {
