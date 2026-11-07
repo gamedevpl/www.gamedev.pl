@@ -32,6 +32,7 @@ import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js'
 import { colorCheckoutLines } from './checkout-style.js';
 import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
+import { runPluginsCommand } from './plugins.js';
 import { submitCommand } from './submit-command.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
@@ -63,7 +64,6 @@ export function isGitRemoteHelper(argv: string[]): boolean {
   return true;
 }
 
-// Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
 async function runDelegateVerb(input: {
   telemetry?: CliTelemetry;
   api: ApiClient;
@@ -134,7 +134,6 @@ const TELEMETRY_VERBS = new Set([
   'create',
 ]);
 
-// One rung per install, so `installed` counts installs not runs.
 export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
   const report = takeInstallReport({ env, isTty });
   if (report) telemetry.record('installed', report);
@@ -232,6 +231,7 @@ export async function runCli(
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'plugins') return await runPluginsCommand(args, flags, env, io.stdout);
     if (verb === 'permissions') {
       await permissionsCommand({ args, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;

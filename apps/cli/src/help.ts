@@ -82,6 +82,7 @@ export function formatHelp(slash = false): string {
         `  ${CLI_BIN} stop [slug]            stop Play in this checkout; --all stops all`,
         `  ${CLI_BIN} --terminal           interactive conversation in the terminal`,
         `  ${CLI_BIN} --version            print the installed CLI version (-V)`,
+        `  ${CLI_BIN} plugins              install|uninstall <client>; status [client]; --dry-run previews changes`,
         `  ${CLI_BIN} play --preview       open the raw game preview`,
         `  ${CLI_BIN} play --list          list running local Play sessions`,
         `  ${CLI_BIN} play --stop --all    stop all local Play sessions`,
