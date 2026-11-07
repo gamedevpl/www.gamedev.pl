@@ -71,6 +71,7 @@ it('reports customized files without deleting them or exposing the configured ke
   writeFileSync(skill, 'creator customization');
   const result = await f.update();
   expect(result.ok).toBe(false);
+  expect(result.plugins[0]).toMatchObject({ skipped: 'modified', changed: false });
   expect(readFileSync(skill, 'utf8')).toBe('creator customization');
   expect(JSON.stringify(result)).not.toContain(f.env.GAMEDEV_CREATOR_KEY);
   await expect(f.configure()).rejects.toThrow('unchanged');
@@ -131,7 +132,7 @@ it('preserves a disabled native registration instead of reinstalling and enablin
   disabled = true;
   expect(await updatePlugins({ ...f, args: ['copilot'], run })).toMatchObject({
     ok: false,
-    plugins: [{ status: 'installed', error: expect.stringContaining('disabled') }],
+    plugins: [{ status: 'installed', skipped: 'disabled', changed: false, error: expect.stringContaining('disabled') }],
   });
   expect(removals).toBe(0);
   expect(JSON.parse(readFileSync(path, 'utf8')).packageVersion).toBe('0.0.1');

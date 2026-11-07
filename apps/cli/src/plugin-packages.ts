@@ -27,7 +27,7 @@ export function pluginFiles(target: PluginTarget, source: string): Record<string
         (target === 'vibe'
           ? 'Set GAMEDEV_CREATOR_KEY, then run gamedevpl plugins configure vibe to save its private key file.\n'
           : 'Set GAMEDEV_CREATOR_KEY in the agent environment or plugin settings.\n') +
-        `After updating the CLI, run gamedevpl plugins update ${target} to refresh this package.\n` +
+        `gamedevpl update refreshes this unchanged owned package too; gamedevpl plugins update ${target} retries it separately.\n` +
         'This installation does not start a round or change gamedevpl connect.\n',
     ),
   };

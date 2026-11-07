@@ -76,6 +76,12 @@ Older running versions update only the standalone binary: run the installed CLI'
 update once more from the game directory, or update the Creator Kit. A global version
 change alone does not prove that `npm exec -- gamedevpl` uses the new version.
 
+Plugin refresh after a CLI update must execute the newly installed bundle, whose
+assets and version match the download. Calling the running CLI's plugin updater
+would reinstall old packages. Updates started by 0.66.0 or earlier keep their
+original behavior; automatic plugin refresh starts after restarting into the new
+release. Verify the downloaded-version handoff and protected-installation skips.
+
 ## Local commands
 
 ```bash

@@ -12,6 +12,7 @@ import { historyCommand, historyTerminalFormat, isHistoryVerb } from './history-
 import { historyOutput } from './history-pager.js';
 import { localChangeCommand } from './local-change-command.js';
 import { gitCheckoutCommand } from './git-checkout.js';
+import { refreshInstalledPlugins, formatPluginRefresh } from './update-plugins.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdin?: { isTTY?: boolean }; stdout: NodeJS.WriteStream; stderr?: NodeJS.WriteStream };
@@ -168,6 +169,13 @@ export async function dispatchReadVerb(input: {
             onProgress: progress.stage,
           })
         : undefined;
+      progress.stage('Updating coding-agent plugins…');
+      const plugins = await refreshInstalledPlugins({
+        dest,
+        cwd: input.cwd ?? process.cwd(),
+        env: input.env ?? process.env,
+        stderr: io.stderr ?? (asJson ? undefined : io.stdout),
+      });
       if (input.env) noteInstallChannel(input.env, 'update');
       const previousVersion = input.runningVersion ?? CLI_VERSION;
       progress.stage('Loading release notes…');
@@ -176,18 +184,18 @@ export async function dispatchReadVerb(input: {
       emit(
         io,
         asJson,
-        { ...result, project, releaseNotes, plugins: { updated: false, updateCommand: 'gamedevpl plugins update' } },
+        { ...result, project, releaseNotes, plugins },
         (input.runningVersion
           ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
           : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
           (project ? `\nProject @gamedevpl/cli updated to ${project.version}; npm exec uses this version.` : '') +
-          `\nCoding-agent plugins are updated separately: gamedevpl plugins update. Customized and external installations are preserved.` +
+          `\n${formatPluginRefresh(plugins)}` +
           `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
       );
+      return plugins.ok ? EXIT_GREEN : EXIT_INPUT;
     } finally {
       progress.stop();
     }
-    return EXIT_GREEN;
   }
   return null;
 }

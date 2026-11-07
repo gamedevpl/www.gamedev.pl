@@ -65,8 +65,9 @@ Clients: `claude`, `codex`, `copilot`, `antigravity`, `cursor`, `gemini`, `openc
 `vibe`, and `muse`. Installation does not require CLI login. MCP access uses an
 approved creator's coding-agent key, with client-specific setup described in
 [the plugin guide](./apps/cli/README.md#coding-agent-plugins). `gamedevpl update`
-updates the CLI; `gamedevpl plugins update` separately refreshes eligible owned
-plugins. Customized and external installations are preserved.
+updates the CLI and its managed coding-agent plugins together. Customized,
+external, incomplete and disabled installations are preserved and reported.
+Use `gamedevpl plugins update [client]` to retry or refresh plugins separately.
 
 **MCP.** The server is remote and needs no install: point an MCP-capable client at
 `https://www.gamedev.pl/api/mcp` and sign in with OAuth. Claude users can install it as a
