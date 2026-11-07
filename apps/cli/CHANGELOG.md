@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.66.0 — 2026-11-07
+
 ### Added
 
 - Install and safely uninstall Muse Code and Mistral Vibe plugins; inspect package versions and explicitly refresh owned integrations with `gamedevpl plugins update` (#2076).
