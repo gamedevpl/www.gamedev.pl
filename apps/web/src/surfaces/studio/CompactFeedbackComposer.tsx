@@ -1,6 +1,8 @@
 import type { MutableRefObject, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
+import { JournalAttachmentControl, JournalAttachmentChip } from './StudioPlayJournal.js';
+import type { useJournalAttachment } from './studioPlayJournalHooks.js';
 import { SketchModal } from '../../SketchModal.js';
 import { MAX_COMPOSER_ATTACHMENTS, type ComposerAttachmentsApi } from './composerAttachments.js';
 
@@ -23,7 +25,7 @@ interface CompactFeedbackComposerProps {
   titleKey: string;
   attachmentsApi: ComposerAttachmentsApi;
   builderControls: ReactNode;
-  journalControl?: ReactNode;
+  journalAttachment?: ReturnType<typeof useJournalAttachment>;
   showStop: boolean;
   stopRequested: boolean;
   onStopAndSwitchToSelf: () => void;
@@ -49,7 +51,7 @@ export function CompactFeedbackComposer({
   titleKey,
   attachmentsApi,
   builderControls,
-  journalControl,
+  journalAttachment,
   showStop,
   stopRequested,
   onStopAndSwitchToSelf,
@@ -126,8 +128,9 @@ export function CompactFeedbackComposer({
         maxLength={2000}
         disabled={sending}
       />
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || journalAttachment?.attached) && (
         <div className="status-composer-attachments">
+          {journalAttachment ? <JournalAttachmentChip attachment={journalAttachment} disabled={sending} /> : null}
           {attachments.map((item) => (
             <div key={item.id} className="status-composer-attachment-chip">
               <img src={item.dataUrl} alt={item.name} className="status-composer-attachment-thumb" />
@@ -165,16 +168,25 @@ export function CompactFeedbackComposer({
               aria-label={t('hero.attachMenuAria')}
               aria-expanded={attachMenuOpen}
               aria-haspopup="menu"
-              disabled={sending || attachments.length >= MAX_COMPOSER_ATTACHMENTS}
+              disabled={sending}
             >
               <PixelIcon name="plus" size={15} />
             </button>
             {attachMenuOpen && !sending ? (
-              <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')} ref={attachPanelRef}>
+              <div
+                className="prompt-attach-menu"
+                role="menu"
+                aria-label={t('hero.attachMenu')}
+                ref={attachPanelRef}
+                onClick={(event) => {
+                  if (event.target instanceof Element && event.target.closest('button')) setAttachMenuOpen(false);
+                }}
+              >
                 <button
                   type="button"
                   className="prompt-attach-item"
                   role="menuitem"
+                  disabled={attachments.length >= MAX_COMPOSER_ATTACHMENTS}
                   onClick={() => {
                     setAttachMenuOpen(false);
                     fileInputRef.current?.click();
@@ -186,6 +198,7 @@ export function CompactFeedbackComposer({
                   type="button"
                   className="prompt-attach-item"
                   role="menuitem"
+                  disabled={attachments.length >= MAX_COMPOSER_ATTACHMENTS}
                   onClick={() => {
                     setAttachMenuOpen(false);
                     setIsSketchOpen(true);
@@ -193,6 +206,9 @@ export function CompactFeedbackComposer({
                 >
                   <PixelIcon name="palette" size={16} /> {t('hero.drawSketch')}
                 </button>
+                {journalAttachment ? (
+                  <JournalAttachmentControl compact attachment={journalAttachment} disabled={sending} />
+                ) : null}
               </div>
             ) : null}
             <input
@@ -209,7 +225,6 @@ export function CompactFeedbackComposer({
               }}
             />
           </div>
-          {journalControl}
           {builderControls}
         </div>
         <div className="status-composer-toolbar-right">
