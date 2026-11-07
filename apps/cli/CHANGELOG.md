@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.65.0 — 2026-11-07
+
 ### Added
 
 - Install, inspect and uninstall the Gamedev.pl integration for Claude Code, Codex, Copilot, Antigravity, Cursor, Gemini CLI and OpenCode with `gamedevpl plugins`, preserving existing connections and customized files (#2072).
