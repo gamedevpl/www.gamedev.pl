@@ -402,7 +402,7 @@ export function StudioConnectCard({
     return (
       <aside
         className="studio-connect is-collapsed"
-        aria-label={t('connect.collapsed.title')}
+        aria-label={isResume ? t('connect.resume.title') : t('connect.collapsed.title')}
         data-connect-mode={mode}
         data-testid="connect-collapsed"
       >
@@ -415,7 +415,7 @@ export function StudioConnectCard({
         )}
         <div className="studio-connect-collapsed-actions">
           <button type="button" className="studio-connect-show" onClick={showCard} data-testid="connect-show">
-            <PixelIcon name="expand" size={12} /> {t('connect.show')}
+            <PixelIcon name="expand" size={12} /> {isResume ? t('connect.resume.show') : t('connect.show')}
           </button>
           {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
             <SwitchToPlatformControl
