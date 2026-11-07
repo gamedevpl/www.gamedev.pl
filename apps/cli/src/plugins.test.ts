@@ -1,5 +1,8 @@
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { managePlugins } from './plugins.js';
@@ -176,6 +179,55 @@ describe('plugin lifecycle', () => {
     expect(existsSync(join(f.home, '.config'))).toBe(false);
   });
 
+  it.each([
+    ['copilot', false],
+    ['copilot', true],
+    ['gemini', false],
+    ['gemini', true],
+  ] as const)('recovers a killed %s installer while preserving customizations: %s', async (target, customized) => {
+    const f = fixture(target);
+    const script = join(f.home, 'killed.mts');
+    const sourceModule = new URL('./plugins.ts', import.meta.url).href;
+    writeFileSync(
+      script,
+      `
+      import {cpSync,writeFileSync} from 'node:fs';
+      import {managePlugins} from ${JSON.stringify(sourceModule)};
+      await managePlugins({args:['install',${JSON.stringify(target)}],flags:{},env:${JSON.stringify(f.env)},cwd:${JSON.stringify(f.home)},run:(_command,args)=>{
+        if(args.includes('--help'))return 'install uninstall';
+        if(args.includes('list'))return '[]';
+        cpSync(${JSON.stringify(join(f.layout.state, 'source/plugin'))},${JSON.stringify(join(f.layout.roots[0]!, PLUGIN_NAME))},{recursive:true});
+        ${target === 'gemini' ? `writeFileSync(${JSON.stringify(join(f.layout.roots[0]!, PLUGIN_NAME, '.gemini-extension-install.json'))}, ${JSON.stringify(JSON.stringify({ source: join(f.layout.state, 'source/plugin'), type: 'local' }))});` : ''}
+        process.kill(process.pid,'SIGKILL');
+        return '';
+      }});
+    `,
+    );
+    const require = createRequire(import.meta.url);
+    const killed = spawnSync(process.execPath, ['--import', pathToFileURL(require.resolve('tsx')).href, script], {
+      cwd: f.home,
+      env: { ...process.env, HOME: f.home },
+      timeout: 15_000,
+      encoding: 'utf8',
+    });
+    expect(killed.signal, killed.stderr).toBe('SIGKILL');
+    const receipt = JSON.parse(readFileSync(join(f.layout.state, 'receipt.json'), 'utf8'));
+    expect(receipt.phase).toBe('pending');
+    expect(receipt.trees).toEqual({});
+    const plugin = join(f.layout.roots[0]!, PLUGIN_NAME);
+    if (customized) {
+      writeFileSync(join(plugin, 'notes.txt'), 'creator notes');
+      expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'modified' }] });
+      await expect(f.invoke('uninstall')).rejects.toThrow('changed outside');
+      expect(readFileSync(join(plugin, 'notes.txt'), 'utf8')).toBe('creator notes');
+    } else {
+      expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'pending' }] });
+      await f.invoke('uninstall');
+      expect(existsSync(plugin)).toBe(false);
+      expect(existsSync(join(f.layout.state, 'source'))).toBe(false);
+    }
+  });
+
   it('cleans owned sources after the native client already removed its plugin', async () => {
     const f = fixture('copilot');
     await f.invoke('install');
@@ -256,6 +308,18 @@ describe('plugin lifecycle', () => {
         ? JSON.stringify([{ id: 'gamedevpl-cli@gamedevpl-cli-bundled', scope: 'project' }])
         : f.run(...args);
     await expect(f.invoke('uninstall', {}, run)).rejects.toThrow('another scope');
+    expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'installed' }] });
+  });
+
+  it.each(['claude', 'codex'] as const)('preserves a repointed %s marketplace during uninstall', async (target) => {
+    const f = fixture(target);
+    await f.invoke('install');
+    const run: PluginRunner = (...args) => {
+      if (args[1].includes('marketplace') && args[1].includes('list'))
+        return JSON.stringify([{ name: 'gamedevpl-cli-bundled', path: '/someone/else', root: '/someone/else' }]);
+      return f.run(...args);
+    };
+    await expect(f.invoke('uninstall', {}, run)).rejects.toThrow('no longer points');
     expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'installed' }] });
   });
 

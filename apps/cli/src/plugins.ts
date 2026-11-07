@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { withCredentialLock } from './credential-lock.js';
@@ -9,6 +10,7 @@ import {
   existingIntegration,
   nativePluginCommands,
   nativePluginListing,
+  ownedMarketplace,
   pluginLayout,
   preflightPlugin,
   runPluginTool,
@@ -23,6 +25,7 @@ interface Receipt {
   marketplace?: boolean;
   files?: Record<string, Record<string, string>>;
   uninstallStartedAt?: number;
+  installId?: string;
 }
 
 function readReceipt(file: string): Receipt | undefined {
@@ -86,9 +89,47 @@ function recoverableUninstall(target: PluginTarget, env: NodeJS.ProcessEnv, rece
   });
 }
 
+function pendingInstallTrees(target: PluginTarget, env: NodeJS.ProcessEnv, receipt: Receipt): string[] | undefined {
+  if (receipt.phase !== 'pending' || Object.keys(receipt.trees).length || !receipt.installId) return;
+  const layout = pluginLayout(target, env);
+  const source = join(layout.state, 'source');
+  if (!existsSync(source) || treeDigest(source) !== receipt.sourceDigest) return;
+  const roots = layout.direct
+    ? existsSync(layout.direct)
+      ? [layout.direct]
+      : []
+    : pluginTrees(layout.roots, [PLUGIN_NAME], { owner: receipt.installId });
+  const expected = treeSnapshot(join(source, 'plugin'));
+  const valid = roots.every((root) => {
+    const actual = treeSnapshot(root);
+    if (target === 'opencode') return actual[''] === expected['/index.mjs'];
+    if (!layout.direct && actual['/.gamedevpl-install.json'] !== expected['/.gamedevpl-install.json']) return false;
+    return Object.entries(actual).every(([file, hash]) => {
+      if (expected[file] === hash) return true;
+      if (target !== 'gemini' || file !== '/.gemini-extension-install.json') return false;
+      const metadata = JSON.parse(readFileSync(join(root, '.gemini-extension-install.json'), 'utf8')) as Record<
+        string,
+        unknown
+      >;
+      return (
+        Object.keys(metadata).sort().join(',') === 'source,type' &&
+        metadata.type === 'local' &&
+        metadata.source === join(source, 'plugin')
+      );
+    });
+  });
+  return valid ? roots : undefined;
+}
+
 export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv) {
   const layout = pluginLayout(target, env);
   const receipt = readReceipt(join(layout.state, 'receipt.json'));
+  if (
+    receipt?.phase === 'pending' &&
+    !Object.keys(receipt.trees).length &&
+    pendingInstallTrees(target, env, receipt) !== undefined
+  )
+    return { target, status: 'pending' };
   if (receipt?.phase === 'uninstalling')
     return { target, status: recoverableUninstall(target, env, receipt) ? 'pending' : 'modified' };
   const removedByClient =
@@ -172,10 +213,21 @@ export async function managePlugins(input: {
         if (listing.includes(PLUGIN_MARKET))
           throw new CliError('bundled marketplace already exists outside this installer', EXIT_REFUSED);
       }
-      const files = pluginFiles(target, join(source, 'plugin'));
+      const installId = randomUUID();
+      const files: Record<string, Buffer> = {
+        ...pluginFiles(target, join(source, 'plugin')),
+        'plugin/.gamedevpl-install.json': Buffer.from(JSON.stringify({ id: installId })),
+      };
       claimPluginPath(source);
       for (const [path, bytes] of Object.entries(files)) writePluginFile(join(source, path), bytes);
-      const receipt: Receipt = { version: 1, phase: 'pending', sourceDigest: treeDigest(source), trees: {} };
+      const receipt: Receipt = {
+        version: 1,
+        phase: 'pending',
+        sourceDigest: treeDigest(source),
+        trees: {},
+        installId,
+        marketplace: target === 'claude' || target === 'codex',
+      };
       writePluginFile(receiptFile, JSON.stringify(receipt));
       try {
         if (target === 'cursor') {
@@ -212,8 +264,15 @@ export async function managePlugins(input: {
       };
     }
     const receipt = readReceipt(receiptFile)!;
+    const recovered = pendingInstallTrees(target, input.env, receipt);
+    if (recovered) {
+      receipt.trees = Object.fromEntries(recovered.map((path) => [path, treeDigest(path)]));
+      receipt.files = Object.fromEntries(recovered.map((path) => [path, treeSnapshot(path)]));
+      writePluginFile(receiptFile, JSON.stringify(receipt));
+    }
     const native = nativePluginListing(target, input.env, layout.state, run);
     if (receipt.marketplace) {
+      ownedMarketplace(target, source, input.env, layout.state, run);
       const listing = native.text;
       const names = [...listing.matchAll(/"([^"\s]+)@gamedevpl-cli-bundled"/g)].map((match) => match[1]);
       if (names.some((name) => name !== PLUGIN_NAME))
@@ -264,7 +323,7 @@ export async function managePlugins(input: {
     receipt.trees = {};
     receipt.files = {};
     writePluginFile(receiptFile, JSON.stringify(receipt));
-    if (receipt.marketplace) {
+    if (receipt.marketplace && ownedMarketplace(target, source, input.env, layout.state, run)) {
       run(
         target,
         ['plugin', 'marketplace', 'remove', PLUGIN_MARKET, ...(target === 'claude' ? ['--scope', 'user'] : [])],

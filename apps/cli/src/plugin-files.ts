@@ -9,7 +9,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve, parse } from 'node:path';
+import { basename, dirname, join, resolve, parse } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export function noSymlinks(path: string): void {
@@ -73,7 +73,11 @@ export function treeDigest(path: string): string {
     .digest('hex');
 }
 
-export function pluginTrees(roots: string[], names: string[]): string[] {
+export function pluginTrees(
+  roots: string[],
+  names: string[],
+  options: { slots?: boolean; owner?: string } = {},
+): string[] {
   const found: string[] = [];
   let visited = 0;
   function visit(path: string, depth: number): void {
@@ -81,6 +85,22 @@ export function pluginTrees(roots: string[], names: string[]): string[] {
     if (++visited > 3000) throw new CliError('plugin directory scan exceeds limit', EXIT_REFUSED);
     noSymlinks(path);
     if (!lstatSync(path).isDirectory()) return;
+    const marker = join(path, '.gamedevpl-install.json');
+    if (options.owner && existsSync(marker)) {
+      noSymlinks(marker);
+      try {
+        if ((JSON.parse(readFileSync(marker, 'utf8')) as { id?: string }).id === options.owner) {
+          found.push(path);
+          return;
+        }
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+      }
+    }
+    if (options.slots && names.includes(basename(path)) && readdirSync(path).length) {
+      found.push(path);
+      return;
+    }
     for (const name of [
       'plugin.json',
       '.claude-plugin/plugin.json',

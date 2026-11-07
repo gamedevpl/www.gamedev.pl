@@ -71,7 +71,7 @@ export function pluginLayout(target: PluginTarget, env: NodeJS.ProcessEnv) {
 export function existingIntegration(target: PluginTarget, env: NodeJS.ProcessEnv): boolean {
   const layout = pluginLayout(target, env);
   if (layout.direct && existsSync(layout.direct)) return true;
-  if (pluginTrees(layout.roots, [PLUGIN_NAME, 'gamedev-pl', 'gamedevpl']).length) return true;
+  if (pluginTrees(layout.roots, [PLUGIN_NAME, 'gamedev-pl', 'gamedevpl'], { slots: true }).length) return true;
   for (const file of layout.configs) {
     noSymlinks(file);
     if (!existsSync(file)) continue;
@@ -135,6 +135,24 @@ export function nativePluginListing(target: PluginTarget, env: NodeJS.ProcessEnv
         row.pluginId === `${PLUGIN_NAME}@${PLUGIN_MARKET}`,
     ),
   };
+}
+
+export function ownedMarketplace(
+  target: PluginTarget,
+  source: string,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  run: PluginRunner,
+): boolean {
+  const parsed = JSON.parse(run(target, ['plugin', 'marketplace', 'list', '--json'], env, cwd));
+  const rows = Array.isArray(parsed) ? parsed : parsed?.marketplaces;
+  if (!Array.isArray(rows)) throw new CliError('client returned an unknown marketplace list format', EXIT_REFUSED);
+  const entry = rows.find((row: { name?: string }) => row.name === PLUGIN_MARKET);
+  if (!entry) return false;
+  const path = target === 'claude' ? entry.path : entry.root;
+  if (typeof path !== 'string' || resolve(path) !== resolve(source))
+    throw new CliError('marketplace no longer points at this installation; refusing to change it', EXIT_REFUSED);
+  return true;
 }
 
 export function preflightPlugin(target: PluginTarget, env: NodeJS.ProcessEnv, cwd: string, run: PluginRunner): void {
