@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `connect` and `checkout` accept a destination containing only `.git`, preserving the existing Git metadata.
+
 ## 0.66.0 — 2026-11-07
 
 ### Added

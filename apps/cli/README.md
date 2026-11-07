@@ -255,6 +255,9 @@ separate `gamedevpl_cli` name so temporary round wiring remains independent.
 
 ## Working copy
 
+`connect` and `checkout` accept an empty destination or one containing only `.git`
+(a directory or a worktree file). Existing Git metadata is preserved.
+
 `gamedevpl checkout <slug>` writes `.gamedev-slug` and `.gamedev-base.json` (the platform
 version the copy was taken from). `diff`, `pull`, and `submit` share that three-way
 model:
