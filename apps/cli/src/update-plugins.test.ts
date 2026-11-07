@@ -31,7 +31,7 @@ it('runs the downloaded CLI with its own version and the same creator home and c
 });
 
 it('treats protected installations as successful skips while retaining their reasons', async () => {
-  const rows = ['modified', 'pending', 'disabled'].map((skipped) => ({
+  const rows = ['modified', 'pending', 'disabled', 'removed'].map((skipped) => ({
     target: skipped,
     status: 'installed',
     skipped,

@@ -83,6 +83,9 @@ original behavior; automatic plugin refresh starts after restarting into the new
 release. Verify the downloaded-version handoff and protected-installation skips.
 Update and progress fixtures must emit the child's JSON report, not an empty script.
 Retain installer errors even when failed reinstalls leave the plugin absent.
+Gemini uninstall deletes all enablement overrides, including other workspaces.
+Check the owned extension's negative rules before reinstalling; preserve them.
+Preserve retained native caches when the client no longer registers the plugin.
 
 ## Local commands
 

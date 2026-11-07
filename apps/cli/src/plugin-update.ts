@@ -54,6 +54,16 @@ export async function updatePlugins(input: {
         pluginLayout(target, input.env).home,
         input.run ?? runPluginTool,
       );
+      if (!native.registered && !['cursor', 'opencode', 'vibe'].includes(target)) {
+        ok = false;
+        plugins.push({
+          ...state,
+          changed: false,
+          skipped: 'removed',
+          error: 'Client no longer lists this plugin; preserved. Uninstall and install explicitly to restore it.',
+        });
+        continue;
+      }
       if (native.disabled) {
         ok = false;
         plugins.push({

@@ -11,7 +11,7 @@ type PluginRow = {
   error?: string;
 };
 export type PluginRefresh = { ok: boolean; updated: boolean; plugins: PluginRow[]; error?: string };
-const PRESERVED = new Set(['modified', 'pending', 'disabled']);
+const PRESERVED = new Set(['modified', 'pending', 'disabled', 'removed']);
 
 export async function refreshInstalledPlugins(input: {
   dest: string;

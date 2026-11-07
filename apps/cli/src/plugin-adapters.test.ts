@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -8,7 +8,8 @@ const enabled =
   '\u001b[32m✓\u001b[39m gamedevpl-cli (1.0.0)\n Path: /owned/package\n Enabled (User): true\n Enabled (Workspace): true\n';
 const unrelated =
   '✗ unrelated (1.0.0)\n Path: /unrelated/package\n Enabled (User): false\n Enabled (Workspace): false\n';
-const listing = (text: string) => nativePluginListing('gemini', {}, '/unused', () => text);
+const listing = (text: string) =>
+  nativePluginListing('gemini', { HOME: '/unused/gdpl-scope-test' }, '/unused', () => text);
 
 it.each([enabled + '\n' + unrelated, unrelated + '\n' + enabled])(
   'updates an enabled Gemini extension independently of another disabled extension: %s',
@@ -46,6 +47,33 @@ it('reads the real Gemini CLI output channel without dropping its stderr invento
       registered: true,
       disabled: false,
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('preserves Gemini disablement rules for other workspaces without blocking disabled peers', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-gemini-scope-'));
+  const dir = join(root, '.gemini/extensions');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'extension-enablement.json');
+  try {
+    for (const own of [false, true]) {
+      const content = JSON.stringify({
+        unrelated: { overrides: ['!/*'] },
+        'gamedevpl-cli': { overrides: own ? ['/*', '!/another/workspace/*'] : ['/*'] },
+      });
+      writeFileSync(file, content);
+      expect(nativePluginListing('gemini', { HOME: root }, root, () => enabled + unrelated)).toMatchObject({
+        registered: true,
+        disabled: own,
+      });
+      expect(readFileSync(file, 'utf8')).toBe(content);
+    }
+    for (const value of [{ overrides: null }, null, false]) {
+      writeFileSync(file, JSON.stringify({ 'gamedevpl-cli': value }));
+      expect(() => nativePluginListing('gemini', { HOME: root }, root, () => enabled)).toThrow('unknown Gemini');
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

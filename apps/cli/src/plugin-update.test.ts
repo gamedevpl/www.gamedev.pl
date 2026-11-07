@@ -137,3 +137,31 @@ it('preserves a disabled native registration instead of reinstalling and enablin
   expect(removals).toBe(0);
   expect(JSON.parse(readFileSync(path, 'utf8')).packageVersion).toBe('0.0.1');
 });
+
+it('preserves cached files after the creator removes the plugin in the native client', async () => {
+  const f = fixture();
+  const layout = pluginLayout('copilot', f.env);
+  let registered = true;
+  let removals = 0;
+  const run = (_command: string, args: string[]) => {
+    if (args.includes('--help')) return 'install uninstall';
+    if (args.includes('list')) return JSON.stringify(registered ? [{ name: 'gamedevpl-cli' }] : []);
+    if (args.includes('install'))
+      cpSync(join(layout.state, 'source/plugin'), join(layout.roots[0]!, 'gamedevpl-cli'), { recursive: true });
+    else removals++;
+    return '';
+  };
+  await managePlugins({ ...f, args: ['install', 'copilot'], run });
+  const path = join(layout.state, 'receipt.json');
+  const receipt = JSON.parse(readFileSync(path, 'utf8'));
+  receipt.packageVersion = '0.0.1';
+  writeFileSync(path, JSON.stringify(receipt));
+  const before = readFileSync(path, 'utf8');
+  registered = false;
+  expect(await updatePlugins({ ...f, args: ['copilot'], run })).toMatchObject({
+    ok: false,
+    plugins: [{ skipped: 'removed', changed: false }],
+  });
+  expect(removals).toBe(0);
+  expect(readFileSync(path, 'utf8')).toBe(before);
+});
