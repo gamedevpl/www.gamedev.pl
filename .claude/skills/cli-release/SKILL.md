@@ -81,6 +81,8 @@ assets and version match the download. Calling the running CLI's plugin updater
 would reinstall old packages. Updates started by 0.66.0 or earlier keep their
 original behavior; automatic plugin refresh starts after restarting into the new
 release. Verify the downloaded-version handoff and protected-installation skips.
+Update and progress fixtures must emit the child's JSON report, not an empty script.
+Retain installer errors even when failed reinstalls leave the plugin absent.
 
 ## Local commands
 

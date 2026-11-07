@@ -69,7 +69,7 @@ export async function refreshInstalledPlugins(input: {
 export function formatPluginRefresh(result: PluginRefresh): string {
   if (result.error) return result.error;
   const lines = result.plugins
-    .filter((row) => row.status !== 'absent')
+    .filter((row) => row.status !== 'absent' || row.error)
     .map((row) => {
       const version = row.installedVersion ? ` (${row.installedVersion})` : '';
       if (row.skipped && row.skipped !== 'current') return `${row.target}: skipped (${row.skipped})`;

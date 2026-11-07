@@ -44,15 +44,31 @@ it('treats protected installations as successful skips while retaining their rea
   for (const row of rows) expect(formatPluginRefresh(result)).toContain(`skipped (${row.skipped})`);
 });
 
-it('reports actual installer errors without hiding successful updates in other clients', async () => {
-  const rows = [
-    { target: 'cursor', status: 'installed', changed: true, installedVersion: '9.0.0' },
-    { target: 'gemini', status: 'pending', error: 'native installer failed' },
-  ];
-  const f = fixture(`console.log(JSON.stringify(${JSON.stringify({ ok: false, plugins: rows })}));process.exitCode=4;`);
+it.each(['pending', 'absent'])(
+  'reports actual installer errors when the client is %s, preserving other results',
+  async (status) => {
+    const rows = [
+      { target: 'cursor', status: 'installed', changed: true, installedVersion: '9.0.0' },
+      { target: 'gemini', status, error: 'native installer failed' },
+    ];
+    const f = fixture(
+      `console.log(JSON.stringify(${JSON.stringify({ ok: false, plugins: rows })}));process.exitCode=4;`,
+    );
+    const result = await f.run();
+    expect(result).toMatchObject({ ok: false, updated: true, plugins: rows });
+    expect(formatPluginRefresh(result)).toContain('gemini: update failed — native installer failed');
+  },
+);
+
+it('shows the removed client and reinstall error when no other plugin is installed', async () => {
+  const row = { target: 'copilot', status: 'absent', error: 'reinstall preflight failed' };
+  const f = fixture(
+    `console.log(JSON.stringify(${JSON.stringify({ ok: false, plugins: [row] })}));process.exitCode=4;`,
+  );
   const result = await f.run();
-  expect(result).toMatchObject({ ok: false, updated: true, plugins: rows });
-  expect(formatPluginRefresh(result)).toContain('gemini: update failed — native installer failed');
+  expect(result.ok).toBe(false);
+  expect(formatPluginRefresh(result)).toContain('copilot: update failed — reinstall preflight failed');
+  expect(formatPluginRefresh(result)).not.toContain('No coding-agent plugins need updating');
 });
 
 it.each([
