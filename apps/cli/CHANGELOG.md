@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Agent output warns when the agent's plan limit (Claude 5-hour/weekly, Codex) is nearly used up or reached, with the reset time; Play's chat header shows the limits too (#2074).
+
 ## 0.65.0 — 2026-11-07
 
 ### Added

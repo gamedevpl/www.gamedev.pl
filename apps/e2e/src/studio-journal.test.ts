@@ -118,7 +118,7 @@ it.skipIf(!browserPrerequisite().ok)(
       );
       expect(journal.version).toBe('v1');
       expect(journal.entries.some((e) => e.kind === 'state')).toBe(true);
-      expect(await page.locator('.studio-journal-chip').count()).toBe(0);
+      await expect.poll(() => page.locator('.studio-journal-chip').count()).toBe(0);
       await attach();
       await send('Second recording comes from the new build');
       await expect.poll(() => page.evaluate(() => (window as unknown as { sent: unknown[] }).sent.length)).toBe(3);

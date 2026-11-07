@@ -179,3 +179,24 @@ it('renders events from a live session the same way', () => {
     ]),
   ).toEqual(['codex ▸ Checking', 'codex ▸ ⚙ ls', 'codex ▸ Edited: a.ts, b.ts', 'codex ▸ warning']);
 });
+
+it('warns once per plan limit and on budget', () => {
+  const resetsAt = Date.now() + 90 * 60_000;
+  const warning: AgentEvent = {
+    type: 'rate-limit',
+    limit: { window: '5h', status: 'warning', usedPercent: 84, resetsAt },
+  };
+  expect(
+    renderEvents('claude', [
+      { type: 'rate-limit', limit: { window: '7d', status: 'ok', usedPercent: 10 } },
+      warning,
+      warning,
+      { type: 'rate-limit', limit: { window: 'quota', status: 'exceeded' } },
+      { type: 'budget-warning', warning: { kind: 'cost', used: 1.6, limit: 2 } },
+    ]),
+  ).toEqual([
+    'claude ▸ 5h usage limit nearly used up (84% used), resets in 2 h',
+    'claude ▸ usage limit reached',
+    'claude ▸ Cost budget 80% used ($1.60 of $2)',
+  ]);
+});
