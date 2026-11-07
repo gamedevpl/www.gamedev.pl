@@ -221,7 +221,7 @@ Without a client name it visits all supported clients. Failed updates can leave
 a pending installation: uninstall it before retrying. Native clients may ask for
 trust or settings again; restart the coding agent after its package changes.
 
-CLI 0.66.0 and earlier execute their existing update behavior when upgrading to
+CLI 0.66.x and earlier execute their existing update behavior when upgrading to
 this release. Restart the CLI after that first upgrade; subsequent `gamedevpl update`
 commands also refresh plugins automatically.
 
@@ -260,6 +260,9 @@ changes the existing `gamedevpl connect <slug>` flow. The plugin server has a
 separate `gamedevpl_cli` name so temporary round wiring remains independent.
 
 ## Working copy
+
+`connect` and `checkout` accept an empty destination or one containing only `.git`
+(a directory or a worktree file). Existing Git metadata is preserved.
 
 `gamedevpl checkout <slug>` writes `.gamedev-slug` and `.gamedev-base.json` (the platform
 version the copy was taken from). `diff`, `pull`, and `submit` share that three-way

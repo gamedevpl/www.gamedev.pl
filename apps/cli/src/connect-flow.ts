@@ -114,7 +114,7 @@ export async function connectSession(
       const custom = 'Choose another path with /checkout';
       const destination = await input.pick(
         [directory, here, custom, 'Cancel'],
-        `Where should ${input.slug} be checked out? The destination must be empty.`,
+        `Where should ${input.slug} be checked out? The destination must be empty except for .git.`,
       );
       if (destination === custom)
         input.write(`Use /checkout ${input.slug} <directory>; . means the current directory.`);

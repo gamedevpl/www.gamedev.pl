@@ -490,7 +490,7 @@ describe('SubmissionStatusView', () => {
     // Gate-green is Done — do not mount connect (endpoint is inactive_round and used
     // to render a red "could not load connect steps" over a finished delivery).
     expect(container.querySelector('.studio-connect')).toBeNull();
-    expect(container.textContent).not.toContain('Continue with your agent');
+    expect(container.textContent).not.toContain('No recent progress updates');
     expect(container.textContent).not.toMatch(/could not load the connect steps/i);
     expect(container.querySelector('.status-feedback-route')).toBeNull();
     expect(container.querySelector('.studio-status-chip')).toBeNull();
@@ -841,7 +841,7 @@ describe('SubmissionStatusView', () => {
       // Connect card lead covers quiet — no second amber chip under the composer.
       expect(container.querySelector('.studio-status-chip')).toBeNull();
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
-      expect(container.textContent).toContain('Continue with your agent');
+      expect(container.textContent).toContain('No recent progress updates');
       expect(container.textContent).not.toContain('Connect your coding agent');
       // Quiet escape hatch: Change opens the builder modal — API kills the self token
       // when platform is chosen and a note is sent. Tiles are not permanent chrome.
@@ -859,8 +859,8 @@ describe('SubmissionStatusView', () => {
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
-      // One waiting caption in the foot — not "Writing code" while we wait on the agent.
-      expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Waiting for your agent/i);
+      // Silence does not establish that the agent stopped.
+      expect(container.querySelector('.studio-context-phase')?.textContent).toContain('may still be working');
       expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
       expect(container.querySelector('.status-feedback-route')).toBeNull();
       expect(container.textContent?.toLowerCase()).not.toMatch(/\btoken\b/);

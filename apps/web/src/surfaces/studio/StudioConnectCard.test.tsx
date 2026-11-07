@@ -743,7 +743,7 @@ describe('StudioConnectCard', () => {
     });
 
     expect(container.querySelector('[data-connect-mode="resume"]')).not.toBeNull();
-    expect(container.querySelector('.studio-connect-title')?.textContent).toContain('Continue with your agent');
+    expect(container.querySelector('.studio-connect-title')?.textContent).toContain('No recent progress updates');
     expect(container.textContent).not.toContain('Connect your coding agent');
     expect(container.querySelector('[data-testid="connect-kickoff"]')?.textContent).toContain('slug: sky-dodge');
     // Install stays under a closed disclosure — still in the DOM (jsdom keeps details
@@ -815,7 +815,7 @@ describe('StudioConnectCard', () => {
     expect(container.querySelector('[data-testid="connect-setup-details"]')).toBeNull();
     expect(container.querySelector('.studio-connect-waiting')).toBeNull();
     const open = container.querySelector<HTMLButtonElement>('[data-testid="connect-open-install"]');
-    expect(open?.textContent).toContain('Reconnect MCP in Details');
+    expect(open?.textContent).toContain('Agent connection details');
     await act(async () => {
       open?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flush();

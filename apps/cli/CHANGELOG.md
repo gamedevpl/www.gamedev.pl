@@ -11,6 +11,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - `gamedevpl update` refreshes unchanged managed coding-agent plugins with the newly installed CLI, preserving customized, external, incomplete and disabled installations (#2080).
 
+## 0.66.1 — 2026-11-07
+
+### Fixed
+
+- `connect` and `checkout` accept a destination containing only `.git`, preserving the existing Git metadata (#2079).
+
 ## 0.66.0 — 2026-11-07
 
 ### Added
