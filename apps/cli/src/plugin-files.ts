@@ -55,7 +55,7 @@ export function treeDigest(path: string): string {
     const stat = lstatSync(file);
     if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile()))
       throw new CliError('plugin tree contains a link or special file', EXIT_REFUSED);
-    hash.update(`${relative}\0`);
+    hash.update(`${stat.isDirectory() ? 'directory' : 'file'}:${relative}\0`);
     if (stat.isDirectory()) {
       for (const entry of readdirSync(file).sort()) visit(join(file, entry), `${relative}/${entry}`);
     } else {

@@ -7,6 +7,7 @@ const output = (message) => process.stdout.write(`${JSON.stringify(message)}\n`)
 const controllers = new Map();
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let initialized = Promise.resolve();
+let closed = false;
 
 async function readReply(response, id) {
   if (!response.headers.get('content-type')?.includes('text/event-stream')) return response.json();
@@ -41,6 +42,7 @@ async function readReply(response, id) {
 }
 
 async function forward(message) {
+  if (closed) return;
   if (message.method === 'notifications/cancelled') {
     controllers.get(message.params?.requestId)?.abort();
     return;
@@ -96,5 +98,6 @@ input.on('line', (line) => {
   else void initialized.then(() => forward(message));
 });
 input.on('close', () => {
+  closed = true;
   for (const controller of controllers.values()) controller.abort();
 });

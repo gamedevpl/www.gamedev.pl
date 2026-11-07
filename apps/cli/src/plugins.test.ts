@@ -137,6 +137,15 @@ describe('plugin lifecycle', () => {
     expect(existsSync(join(f.home, '.config'))).toBe(false);
   });
 
+  it('cleans owned sources after the native client already removed its plugin', async () => {
+    const f = fixture('copilot');
+    await f.invoke('install');
+    rmSync(join(f.layout.roots[0]!, PLUGIN_NAME), { recursive: true });
+    expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'pending' }] });
+    expect(await f.invoke('uninstall')).toMatchObject({ status: 'absent', changed: true });
+    expect(existsSync(join(f.layout.state, 'source'))).toBe(false);
+  });
+
   it('refuses dangling symlinks before writing a plugin', async () => {
     const f = fixture('cursor');
     mkdirSync(dirname(f.layout.direct!), { recursive: true });

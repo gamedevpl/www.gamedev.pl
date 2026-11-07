@@ -56,10 +56,19 @@ function unchanged(target: PluginTarget, env: NodeJS.ProcessEnv, receipt: Receip
 export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv) {
   const layout = pluginLayout(target, env);
   const receipt = readReceipt(join(layout.state, 'receipt.json'));
+  const removedByClient =
+    receipt &&
+    Object.keys(receipt.trees).length > 0 &&
+    Object.keys(receipt.trees).every((path) => !existsSync(path)) &&
+    installedTrees(target, env).length === 0 &&
+    existsSync(join(layout.state, 'source')) &&
+    treeDigest(join(layout.state, 'source')) === receipt.sourceDigest;
   const status = receipt
     ? unchanged(target, env, receipt)
       ? receipt.phase
-      : 'modified'
+      : removedByClient
+        ? 'pending'
+        : 'modified'
     : existingIntegration(target, env)
       ? 'external'
       : 'absent';
@@ -207,6 +216,14 @@ export async function runPluginsCommand(
   stdout: { write(value: string): unknown },
 ): Promise<number> {
   const result = await managePlugins({ args, flags, env, cwd: process.cwd() });
-  stdout.write(`${flags.json ? JSON.stringify(result) : JSON.stringify(result, null, 2)}\n`);
+  if (flags.json) stdout.write(`${JSON.stringify(result)}\n`);
+  else if ('plugins' in result && result.plugins)
+    for (const plugin of result.plugins) stdout.write(`${plugin.target}: ${plugin.status}\n`);
+  else if ('dryRun' in result) stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  else {
+    stdout.write(`${result.target}: ${result.status}${result.changed === false ? ' (unchanged)' : ''}\n`);
+    if ('hint' in result && result.hint) stdout.write(`${result.hint}\n`);
+    if (result.status === 'external') stdout.write('Existing integration preserved; this installer does not own it.\n');
+  }
   return 0;
 }

@@ -78,6 +78,11 @@ function client(child: ChildProcessWithoutNullStreams, server: Server) {
         : new Promise<Record<string, unknown>>((resolve) => waiters.push(resolve));
     },
     text: () => output + errors,
+    end: () =>
+      new Promise<void>((resolve) => {
+        child.once('exit', () => resolve());
+        child.stdin.end();
+      }),
   };
 }
 
@@ -148,4 +153,21 @@ it('reports HTTP failures without echoing response bodies or authorization', asy
   expect(await c.next()).toMatchObject({ id: 5, error: { message: 'Gamedev.pl MCP returned HTTP 401' } });
   expect(c.text()).not.toContain('sensitive response body');
   expect(c.text()).not.toContain('test-creator-key');
+});
+
+it('does not forward requests queued behind initialization after the client disconnects', async () => {
+  let received!: () => void;
+  const started = new Promise<void>((resolve) => {
+    received = resolve;
+  });
+  let calls = 0;
+  const c = await bridge(() => {
+    calls++;
+    received();
+  });
+  c.send({ jsonrpc: '2.0', id: 1, method: 'initialize' });
+  c.send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  await started;
+  await c.end();
+  expect(calls).toBe(1);
 });
