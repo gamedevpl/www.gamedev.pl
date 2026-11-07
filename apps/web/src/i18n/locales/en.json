@@ -1551,6 +1551,19 @@
       "existingHint": "List your games, then replace <slug> with the identifier of the game you want:",
       "existingDraft": "The game can still be waiting for its first build. It only needs to have been created in Studio — publication and finished game files are not required.",
       "afterConnect": "Connect opens an interactive session. Choose a local checkout, a conversation about the game, or an available agent. No manual MCP setup is needed."
+    },
+    "plugins": {
+      "nav": "Plugins",
+      "title": "Install a plugin for your agent",
+      "lead": "Install the Gamedev.pl integration without cloning a repository. Plugin installation does not require gamedevpl login.",
+      "installCli": "Install gamedevpl CLI first.",
+      "client": "Your coding agent",
+      "key": "To use the MCP tools, supply an approved account’s coding-agent key as GAMEDEV_CREATOR_KEY in the agent environment or its plugin settings. Find the key in Account settings.",
+      "vibe": "Vibe filters the MCP process environment. With GAMEDEV_CREATOR_KEY set, run the command below once to save the key in a private local file. Updates preserve that file.",
+      "muse": "Muse installs the skill as a plugin and adds a separate authenticated MCP entry in its settings. Existing settings are preserved.",
+      "restart": "Restart your coding agent after installation. Ask it to list your games to check the connection.",
+      "update": "gamedevpl update updates the CLI. Installed plugins keep their version until you run gamedevpl plugins update. Run it without a client name to update all eligible installations. Some clients may ask you to confirm trust or settings again.",
+      "preserve": "Existing external integrations and customized plugin files are preserved. Uninstall removes only integrations owned by this installer; other plugins, CLI sign-in and the Vibe key file are retained."
     }
   },
   "contact": {

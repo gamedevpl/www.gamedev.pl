@@ -176,11 +176,12 @@ export async function dispatchReadVerb(input: {
       emit(
         io,
         asJson,
-        { ...result, project, releaseNotes },
+        { ...result, project, releaseNotes, plugins: { updated: false, updateCommand: 'gamedevpl plugins update' } },
         (input.runningVersion
           ? `Installed ${result.asset} ${result.version} on disk. This session is still running ${input.runningVersion}.\nUse /exit, then start ${cliUsage()} again to load the installed version.`
           : `updated ${result.asset} ${previousVersion} -> ${result.version}`) +
           (project ? `\nProject @gamedevpl/cli updated to ${project.version}; npm exec uses this version.` : '') +
+          `\nCoding-agent plugins are updated separately: gamedevpl plugins update. Customized and external installations are preserved.` +
           `\n\n${formatUpdateNotes(releaseNotes, io.stdout.columns)}`,
       );
     } finally {

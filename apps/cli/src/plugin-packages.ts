@@ -1,10 +1,11 @@
+import { CODING_AGENT_PLUGIN_TARGETS } from '@gamedevpl/contract';
 import { join } from 'node:path';
 import assets from './generated/plugin-assets.json' with { type: 'json' };
 import { CLI_VERSION } from './update.js';
 
 export const PLUGIN_NAME = 'gamedevpl-cli';
 export const PLUGIN_MARKET = 'gamedevpl-cli-bundled';
-export const PLUGIN_TARGETS = ['claude', 'codex', 'copilot', 'antigravity', 'cursor', 'gemini', 'opencode'] as const;
+export const PLUGIN_TARGETS = CODING_AGENT_PLUGIN_TARGETS;
 export type PluginTarget = (typeof PLUGIN_TARGETS)[number];
 
 export function pluginFiles(target: PluginTarget, source: string): Record<string, Buffer> {
@@ -22,7 +23,11 @@ export function pluginFiles(target: PluginTarget, source: string): Record<string
     'assets/logo.png': Buffer.from(assets.logo, 'base64'),
     'mcp.mjs': Buffer.from(assets.bridge),
     'README.md': Buffer.from(
-      'Gamedev.pl integration installed by gamedevpl CLI. Set GAMEDEV_CREATOR_KEY in the agent environment.\n' +
+      'Gamedev.pl integration installed by gamedevpl CLI.\n' +
+        (target === 'vibe'
+          ? 'Set GAMEDEV_CREATOR_KEY, then run gamedevpl plugins configure vibe to save its private key file.\n'
+          : 'Set GAMEDEV_CREATOR_KEY in the agent environment or plugin settings.\n') +
+        `After updating the CLI, run gamedevpl plugins update ${target} to refresh this package.\n` +
         'This installation does not start a round or change gamedevpl connect.\n',
     ),
   };
@@ -67,6 +72,29 @@ export function pluginFiles(target: PluginTarget, source: string): Record<string
     files['.cursor-plugin/plugin.json'] = json({ ...metadata, displayName: 'Gamedev.pl', logo: 'assets/logo.png' });
     files['mcp.json'] = json({ mcpServers: { gamedevpl_cli: server } });
   }
+  if (target === 'vibe') {
+    files['plugin.json'] = json({ $schema: 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json', ...metadata });
+    files['mcp.json'] = json({
+      $schema: 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',
+      mcpServers: {
+        gamedevpl_cli: {
+          type: 'stdio',
+          command: 'node',
+          args: ['${PLUGIN_ROOT}/mcp.mjs'],
+          env: { GAMEDEV_CREATOR_KEY_FILE: join(source, '../../creator-key') },
+        },
+      },
+    });
+  }
+  if (target === 'muse')
+    files['.muse-plugin/plugin.json'] = json({
+      schemaVersion: 1,
+      name: PLUGIN_NAME,
+      displayName: 'Gamedev.pl',
+      version: CLI_VERSION,
+      description: metadata.description,
+      capabilities: { skills: [{ id: 'gamedevpl', path: 'skills/gamedevpl/SKILL.md', enabledDefault: true }] },
+    });
   if (target === 'gemini')
     files['gemini-extension.json'] = json({
       name: PLUGIN_NAME,

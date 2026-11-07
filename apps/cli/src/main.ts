@@ -32,7 +32,7 @@ import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js'
 import { colorCheckoutLines } from './checkout-style.js';
 import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
-import { runPluginsCommand } from './plugins.js';
+import { runPluginsCommand } from './plugin-command.js';
 import { submitCommand } from './submit-command.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';

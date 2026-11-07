@@ -50,9 +50,11 @@ describe('dispatchReadVerb', () => {
         releaseNotes: { previousVersion: CLI_VERSION, status: 'available' },
       });
       expect(data.releaseNotes.releases[0].changes[0].text).toBe('Repair details');
+      expect(data.plugins).toEqual({ updated: false, updateCommand: 'gamedevpl plugins update' });
     } else {
       expect(io.read()).toContain(`updated gamedevpl ${CLI_VERSION} -> 9.0.0`);
       expect(io.read()).toContain('Fixed: Repair details');
+      expect(io.read()).toContain('plugins are updated separately');
     }
   });
 

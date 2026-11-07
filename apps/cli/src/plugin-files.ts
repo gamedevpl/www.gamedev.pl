@@ -105,6 +105,7 @@ export function pluginTrees(
       'plugin.json',
       '.claude-plugin/plugin.json',
       '.codex-plugin/plugin.json',
+      '.muse-plugin/plugin.json',
       '.cursor-plugin/plugin.json',
       'gemini-extension.json',
     ]) {

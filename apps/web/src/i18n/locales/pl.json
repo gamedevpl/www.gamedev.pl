@@ -1565,6 +1565,19 @@
       "existingHint": "Wyświetl swoje gry, a potem zastąp <slug> identyfikatorem wybranej gry:",
       "existingDraft": "Gra może dopiero czekać na pierwszy build. Wystarczy, że została już utworzona w Studio — nie musi być opublikowana ani mieć gotowych plików.",
       "afterConnect": "Connect otwiera interaktywną sesję. Wybierz lokalny checkout, rozmowę o grze albo dostępnego agenta. Nie musisz ręcznie konfigurować MCP."
+    },
+    "plugins": {
+      "nav": "Pluginy",
+      "title": "Zainstaluj plugin dla swojego agenta",
+      "lead": "Zainstaluj integrację Gamedev.pl bez klonowania repozytorium. Instalacja pluginu nie wymaga gamedevpl login.",
+      "installCli": "Najpierw zainstaluj gamedevpl CLI.",
+      "client": "Twój agent kodujący",
+      "key": "Aby korzystać z narzędzi MCP, ustaw klucz agenta kodującego zatwierdzonego konta jako GAMEDEV_CREATOR_KEY w środowisku agenta lub ustawieniach pluginu. Klucz znajdziesz w ustawieniach konta.",
+      "vibe": "Vibe filtruje środowisko procesu MCP. Po ustawieniu GAMEDEV_CREATOR_KEY uruchom poniższą komendę raz, aby zapisać klucz w prywatnym pliku lokalnym. Aktualizacje zachowują ten plik.",
+      "muse": "Muse instaluje skill jako plugin i dodaje osobny, uwierzytelniony wpis MCP w ustawieniach. Pozostałe ustawienia zostają zachowane.",
+      "restart": "Po instalacji uruchom ponownie agenta. Poproś go o listę swoich gier, aby sprawdzić połączenie.",
+      "update": "gamedevpl update aktualizuje CLI. Zainstalowane pluginy zachowują swoją wersję do uruchomienia gamedevpl plugins update. Uruchom tę komendę bez nazwy klienta, aby zaktualizować wszystkie kwalifikujące się instalacje. Niektórzy klienci mogą ponownie poprosić o potwierdzenie zaufania lub ustawień.",
+      "preserve": "Istniejące integracje zewnętrzne i zmodyfikowane pliki pluginów zostają zachowane. Uninstall usuwa tylko integracje należące do tego instalatora; zachowuje pozostałe pluginy, logowanie CLI i plik klucza Vibe."
     }
   },
   "contact": {
