@@ -176,7 +176,9 @@ Studio cannot observe a connected agent's local edits, shell commands or browser
 After 15 minutes without a build-channel signal, `quiet` means no recent updates;
 it does not establish that the agent disconnected or stopped. Resume copy and collapsed
 controls say this explicitly and offer continuation only if the agent has stopped.
-The thread retains the last signal's timestamp. First connection (`no_agent_yet`),
+The thread retains the last signal's timestamp unless local CLI activity supplies
+its own status: an old MCP timestamp must not contradict fresh local work.
+First connection (`no_agent_yet`),
 explicit `end`, and completed gates keep their own copy and behavior.
 `BUILD_PROGRESS_GUIDANCE` is shared by the round sequence and `report_progress`'s
 description: updates around long steps and at natural checkpoints every few minutes
