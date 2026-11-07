@@ -165,6 +165,63 @@ No credentials, inventory, executable paths, game identifiers, or prompts are se
 The existing CLI funnel rollup measures offered-to-used conversion by adapter.
 Telemetry failures never block the task.
 
+## Coding-agent plugins
+
+Install the account integration without cloning the app repository:
+
+```sh
+gamedevpl plugins install claude
+gamedevpl plugins install codex
+gamedevpl plugins install copilot
+gamedevpl plugins install antigravity
+gamedevpl plugins install cursor
+gamedevpl plugins install gemini
+gamedevpl plugins install opencode
+```
+
+Choose the client you use. Installation is local and needs no gamedev.pl sign-in.
+The released CLI contains the skill, logo and client manifests. Native managers
+handle Claude, Codex, Copilot, Antigravity and Gemini; Cursor uses its local plugin
+directory, and OpenCode uses a local JavaScript plugin. Cursor must permit local
+plugin imports; reload it after installation. Gemini may ask you to trust the
+bundled source folder. The installer does not change that trust preference itself.
+
+```sh
+gamedevpl plugins status
+gamedevpl plugins status codex --json
+gamedevpl plugins install claude --dry-run
+gamedevpl plugins uninstall claude
+```
+
+The manager preserves pre-existing Gamedev.pl plugins and recognizable standalone
+MCP entries, reporting `external` without taking ownership. Repeating installation
+is a no-op. It records ownership and file hashes for new installations; a modified
+package is reported as `modified` and is never overwritten or deleted. Uninstall
+only removes an unchanged installation owned by this manager, leaving other
+plugins, CLI login and existing connections alone. It also checks that its bundled
+marketplace has no other plugins before removing the marketplace registration.
+An interrupted installation is `pending`; uninstall it before retrying. Native
+managers may retain their own trust preferences and caches.
+
+The package is pinned to the installed CLI release. After a CLI update, uninstall
+and reinstall an owned plugin to adopt the new package. `status` checks local
+installation files; it does not prove that a client enabled or loaded them.
+
+To use the MCP tools, provide an approved account's coding-agent key as
+`GAMEDEV_CREATOR_KEY` in the coding agent's environment. Codex's package explicitly
+forwards that variable. In Antigravity, fill in the plugin's key setting; in Gemini,
+use `gemini extensions config gamedevpl-cli`. Enter the key value only, without
+`Authorization:` or `Bearer`. The generated files and ownership records contain
+no key. The local stdio bridge sends it only to `https://www.gamedev.pl/api/mcp`;
+installation does not start OAuth or copy the CLI's creator session into an agent.
+CLI login alone does not authenticate this plugin.
+
+In the client, first ask to list your games without opening a build round. A real
+`list_account_games` call, including an empty game list, verifies the connection.
+The installer never calls `connect`, starts a game, spends a build allowance or
+changes the existing `gamedevpl connect <slug>` flow. The plugin server has a
+separate `gamedevpl_cli` name so temporary round wiring remains independent.
+
 ## Working copy
 
 `gamedevpl checkout <slug>` writes `.gamedev-slug` and `.gamedev-base.json` (the platform

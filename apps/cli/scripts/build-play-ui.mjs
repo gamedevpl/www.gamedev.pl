@@ -1,3 +1,4 @@
+import './build-plugin-assets.mjs';
 import { build } from 'esbuild';
 import { mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';

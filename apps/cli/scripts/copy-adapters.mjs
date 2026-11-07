@@ -6,6 +6,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 mkdirSync(join(root, 'dist'), { recursive: true });
 copyFileSync(join(root, 'src/adapters.json'), join(root, 'dist', 'adapters.json'));
 mkdirSync(join(root, 'dist/generated'), { recursive: true });
+copyFileSync(join(root, 'src/generated/plugin-assets.json'), join(root, 'dist/generated/plugin-assets.json'));
 copyFileSync(
   join(root, 'src/generated/play-typescript-worker.js.gz'),
   join(root, 'dist/generated/play-typescript-worker.js.gz'),

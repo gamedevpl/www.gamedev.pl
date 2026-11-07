@@ -40,7 +40,7 @@ export const SLASH_VERBS = [
 
 export type SlashVerb = (typeof SLASH_VERBS)[number];
 
-export const CLI_VERBS = [...SLASH_VERBS.filter((verb) => verb !== 'logs'), 'create', 'repl'] as const;
+export const CLI_VERBS = [...SLASH_VERBS.filter((verb) => verb !== 'logs'), 'create', 'repl', 'plugins'] as const;
 
 export function completeSlash(prefix: string): SlashVerb[] {
   const needle = prefix.replace(/^\//, '').toLowerCase();
