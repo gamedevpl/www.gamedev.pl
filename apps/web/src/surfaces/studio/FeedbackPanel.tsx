@@ -382,11 +382,7 @@ export function FeedbackPanel({
         titleKey={titleKey}
         attachmentsApi={attachmentsApi}
         builderControls={builderControls}
-        journalControl={
-          effectiveBuilder === 'platform' ? (
-            <JournalAttachmentControl compact attachment={journalAttachment} disabled={sending} />
-          ) : null
-        }
+        journalAttachment={effectiveBuilder === 'platform' ? journalAttachment : undefined}
         showStop={showStop}
         stopRequested={stopRequested}
         onStopAndSwitchToSelf={() => void stopAndSwitchToSelf()}

@@ -47,13 +47,14 @@ it.skipIf(!browserPrerequisite().ok)(
       format: 'iife',
       define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env': '{}' },
     });
-    const css = (
-      await Promise.all(
-        ['status-composer.css', 'status-feedback.css'].map((p) =>
-          readFile(resolve(web, 'src/surfaces/studio', p), 'utf8'),
-        ),
-      )
-    ).join('\n');
+    const css =
+      (
+        await Promise.all(
+          ['status-composer.css', 'status-feedback.css'].map((p) =>
+            readFile(resolve(web, 'src/surfaces/studio', p), 'utf8'),
+          ),
+        )
+      ).join('\n') + (await readFile(resolve(web, 'src/styles.css'), 'utf8'));
     const server = createServer((_, res) =>
       res.end(
         `<style>body{margin:0}.hidden-file-input{display:none}*{box-sizing:border-box}iframe{width:100%;height:240px}${css}</style><div id="mount"></div><script>${result.outputFiles[0]!.text.replaceAll('</script', '<\\/script')}</script>`,
@@ -74,9 +75,10 @@ it.skipIf(!browserPrerequisite().ok)(
       const address = server.address();
       if (!address || typeof address === 'string') throw Error('server');
       await page.goto(`http://127.0.0.1:${address.port}`);
+      await page.locator('.status-composer-attach-btn').click();
       await expect
         .poll(() =>
-          page.getByRole('button', { name: 'Attach play recording', exact: true }).isEnabled({ timeout: 2000 }),
+          page.getByRole('menuitem', { name: 'Attach play recording', exact: true }).isEnabled({ timeout: 2000 }),
         )
         .toBe(true)
         .catch(async (error) => {
@@ -84,6 +86,13 @@ it.skipIf(!browserPrerequisite().ok)(
           console.error(errors);
           throw error;
         });
+      await page.keyboard.press('Escape');
+      const attach = async () => {
+        await page.locator('.status-composer-attach-btn').click();
+        await page.getByRole('menuitem', { name: 'Attach play recording', exact: true }).click();
+        expect(await page.locator('.studio-journal-chip').isVisible()).toBe(true);
+        expect(await page.getByRole('menu').count()).toBe(0);
+      };
       const send = async (text: string) => {
         await page.locator('textarea').fill(text);
         await page.locator('.status-composer .primary-btn').click();
@@ -95,7 +104,7 @@ it.skipIf(!browserPrerequisite().ok)(
       ).toBeUndefined();
       await page.frameLocator('iframe').locator('canvas').click();
       await page.keyboard.press('ArrowRight');
-      await page.getByRole('button', { name: 'Attach play recording', exact: true }).click();
+      await attach();
       await page.evaluate(() => (window as unknown as { swap(): void }).swap());
       await send('Inspect the problem in the attached recording');
       await expect.poll(() => page.evaluate(() => (window as unknown as { sent: unknown[] }).sent.length)).toBe(2);
@@ -109,12 +118,8 @@ it.skipIf(!browserPrerequisite().ok)(
       );
       expect(journal.version).toBe('v1');
       expect(journal.entries.some((e) => e.kind === 'state')).toBe(true);
-      await expect
-        .poll(() =>
-          page.getByRole('button', { name: 'Attach play recording', exact: true }).isEnabled({ timeout: 2000 }),
-        )
-        .toBe(true);
-      await page.getByRole('button', { name: 'Attach play recording', exact: true }).click();
+      expect(await page.locator('.studio-journal-chip').count()).toBe(0);
+      await attach();
       await send('Second recording comes from the new build');
       await expect.poll(() => page.evaluate(() => (window as unknown as { sent: unknown[] }).sent.length)).toBe(3);
       expect(
@@ -124,7 +129,7 @@ it.skipIf(!browserPrerequisite().ok)(
               .playJournal.version,
         ),
       ).toBe('v2');
-      await page.getByRole('button', { name: 'Attach play recording', exact: true }).click();
+      await attach();
       await page.evaluate(() => {
         (window as unknown as { failSend: boolean }).failSend = true;
       });
@@ -147,7 +152,9 @@ it.skipIf(!browserPrerequisite().ok)(
         await page.screenshot({ path: '/tmp/studio-journal-' + width + '.png' });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         expect((await page.locator('.status-composer').boundingBox())!.height).toBeLessThan(120);
-        expect((await page.locator('.studio-journal-button').boundingBox())!.height).toBeLessThan(100);
+        await page.locator('.status-composer-attach-btn').click();
+        expect((await page.getByRole('menu').boundingBox())!.width).toBeLessThan(width);
+        await page.keyboard.press('Escape');
       }
       expect(errors).toEqual([]);
     } finally {

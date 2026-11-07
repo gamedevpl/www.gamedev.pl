@@ -436,23 +436,25 @@
   overflow-wrap: anywhere;
 }
 
-.studio-journal-button {
-  flex: none;
-  min-height: 32px;
-  padding: 4px 6px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  color: var(--muted);
-  background: transparent;
-  font: inherit;
-  font-size: 0.7rem;
-  cursor: pointer;
-}
-.studio-journal-button[aria-pressed='true'] {
-  color: var(--text);
-  background: rgba(0, 228, 172, 0.12);
-}
-.studio-journal-button:disabled {
+.status-composer-attach .prompt-attach-item:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.studio-journal-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  max-width: 100%;
+  padding: 0 18px 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text);
+  background: rgba(0, 228, 172, 0.12);
+  font-size: 12px;
+}
+.studio-journal-chip span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
