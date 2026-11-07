@@ -22,6 +22,7 @@ interface Receipt {
   trees: Record<string, string>;
   marketplace?: boolean;
   files?: Record<string, Record<string, string>>;
+  uninstallStartedAt?: number;
 }
 
 function readReceipt(file: string): Receipt | undefined {
@@ -64,7 +65,23 @@ function recoverableUninstall(target: PluginTarget, env: NodeJS.ProcessEnv, rece
     if (!existsSync(path)) return true;
     const expected = receipt.files?.[path];
     return (
-      expected !== undefined && Object.entries(treeSnapshot(path)).every(([file, hash]) => expected[file] === hash)
+      expected !== undefined &&
+      Object.entries(treeSnapshot(path)).every(([file, hash]) => {
+        if (expected[file] === hash) return true;
+        if (
+          target !== 'claude' ||
+          file !== '/.orphaned_at' ||
+          Object.hasOwn(expected, file) ||
+          !receipt.uninstallStartedAt
+        )
+          return false;
+        const stamp = readFileSync(join(path, '.orphaned_at'), 'utf8').trim();
+        return (
+          /^\d{13,16}$/.test(stamp) &&
+          Number(stamp) >= receipt.uninstallStartedAt - 1000 &&
+          Number(stamp) <= Date.now() + 5000
+        );
+      })
     );
   });
 }
@@ -216,6 +233,7 @@ export async function managePlugins(input: {
         );
     }
     receipt.phase = 'uninstalling';
+    receipt.uninstallStartedAt ??= Date.now();
     writePluginFile(receiptFile, JSON.stringify(receipt));
     if (native.registered) for (const [command, ...args] of plan.commands) run(command!, args, input.env, layout.state);
     if (layout.direct) {

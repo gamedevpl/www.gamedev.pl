@@ -228,6 +228,26 @@ describe('plugin lifecycle', () => {
     expect(existsSync(join(f.layout.roots[0]!, PLUGIN_NAME))).toBe(false);
   });
 
+  it('cleans Claude orphaned cache metadata without touching unrelated caches', async () => {
+    const f = fixture('claude');
+    await f.invoke('install');
+    const root = join(f.layout.roots[0]!, PLUGIN_NAME);
+    const other = join(f.layout.roots[0]!, 'other-plugin');
+    mkdirSync(other, { recursive: true });
+    writeFileSync(join(other, 'notes.txt'), 'keep');
+    const run: PluginRunner = (...args) => {
+      if (args[1][0] === 'plugin' && args[1][1] === 'uninstall') {
+        f.forgetNative();
+        writeFileSync(join(root, '.orphaned_at'), String(Date.now()));
+        return 'ok';
+      }
+      return f.run(...args);
+    };
+    expect(await f.invoke('uninstall', {}, run)).toMatchObject({ status: 'absent' });
+    expect(existsSync(root)).toBe(false);
+    expect(readFileSync(join(other, 'notes.txt'), 'utf8')).toBe('keep');
+  });
+
   it('preserves a plugin installation shared with a project scope', async () => {
     const f = fixture('claude');
     await f.invoke('install');
