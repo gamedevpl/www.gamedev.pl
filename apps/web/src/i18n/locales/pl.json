@@ -1576,7 +1576,7 @@
       "vibe": "Vibe filtruje środowisko procesu MCP. Po ustawieniu GAMEDEV_CREATOR_KEY uruchom poniższą komendę raz, aby zapisać klucz w prywatnym pliku lokalnym. Aktualizacje zachowują ten plik.",
       "muse": "Muse instaluje skill jako plugin i dodaje osobny, uwierzytelniony wpis MCP w ustawieniach. Pozostałe ustawienia zostają zachowane.",
       "restart": "Po instalacji uruchom ponownie agenta. Poproś go o listę swoich gier, aby sprawdzić połączenie.",
-      "update": "gamedevpl update aktualizuje CLI. Zainstalowane pluginy zachowują swoją wersję do uruchomienia gamedevpl plugins update. Uruchom tę komendę bez nazwy klienta, aby zaktualizować wszystkie kwalifikujące się instalacje. Niektórzy klienci mogą ponownie poprosić o potwierdzenie zaufania lub ustawień.",
+      "update": "gamedevpl update aktualizuje CLI i zarządzane przez nie, niezmienione pluginy w jednej komendzie. Cudze, zmodyfikowane, niekompletne i wyłączone instalacje są pomijane i pokazywane w wyniku. gamedevpl plugins update [client] pozwala osobno ponowić aktualizację pluginu. Niektórzy klienci mogą ponownie poprosić o potwierdzenie zaufania lub ustawień. Po pierwszym uaktualnieniu CLI 0.66.x lub starszego uruchom CLI ponownie, aby korzystać z automatycznych aktualizacji pluginów.",
       "preserve": "Istniejące integracje zewnętrzne i zmodyfikowane pliki pluginów zostają zachowane. Uninstall usuwa tylko integracje należące do tego instalatora; zachowuje pozostałe pluginy, logowanie CLI i plik klucza Vibe."
     }
   },

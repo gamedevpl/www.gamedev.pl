@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { dispatchReadVerb } from './verbs.js';
-import { EXIT_GREEN } from './exit-codes.js';
+import { EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { CLI_VERSION } from './update.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -28,7 +28,9 @@ describe('dispatchReadVerb', () => {
   it.each([false, true])('prints installed changes as text or a single JSON object (json=%s)', async (json) => {
     const io = out();
     const api = createApi({ origin: 'https://www.gamedev.pl', store: memoryStore(null) });
-    const bytes = Buffer.from('#!/usr/bin/env node\n');
+    const bytes = Buffer.from(
+      `console.log(JSON.stringify({ok:true,plugins:[{target:'cursor',status:'installed',changed:true,installedVersion:'9.0.0'}]}));`,
+    );
     const hash = createHash('sha256').update(bytes).digest('hex');
     const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-update-notes-')), 'gamedevpl');
     vi.stubGlobal('fetch', async (url: RequestInfo | URL) => {
@@ -50,18 +52,22 @@ describe('dispatchReadVerb', () => {
         releaseNotes: { previousVersion: CLI_VERSION, status: 'available' },
       });
       expect(data.releaseNotes.releases[0].changes[0].text).toBe('Repair details');
-      expect(data.plugins).toEqual({ updated: false, updateCommand: 'gamedevpl plugins update' });
+      expect(data.plugins).toMatchObject({
+        ok: true,
+        updated: true,
+        plugins: [{ target: 'cursor', installedVersion: '9.0.0', changed: true }],
+      });
     } else {
       expect(io.read()).toContain(`updated gamedevpl ${CLI_VERSION} -> 9.0.0`);
       expect(io.read()).toContain('Fixed: Repair details');
-      expect(io.read()).toContain('plugins are updated separately');
+      expect(io.read()).toContain('cursor: updated (9.0.0)');
     }
   });
 
   it('keeps a successful install green when release notes fail', async () => {
     const io = out();
     const api = createApi({ origin: 'https://www.gamedev.pl', store: memoryStore(null) });
-    const bytes = Buffer.from('#!/usr/bin/env node\n');
+    const bytes = Buffer.from('console.log(JSON.stringify({ok:true,plugins:[]}));');
     const hash = createHash('sha256').update(bytes).digest('hex');
     const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-update-offline-')), 'gamedevpl');
     vi.stubGlobal('fetch', async (url: RequestInfo | URL) => {
@@ -85,6 +91,32 @@ describe('dispatchReadVerb', () => {
     expect(io.read()).toContain('This session is still running');
     expect(io.read()).toContain('Use /exit');
   });
+
+  it.each([true, false])(
+    'finishes the CLI update and reports protected skips versus installer failures (skip=%s)',
+    async (skip) => {
+      const io = out();
+      const api = createApi({ origin: 'https://www.gamedev.pl', store: memoryStore(null) });
+      const row = skip
+        ? { target: 'vibe', status: 'modified', skipped: 'modified', changed: false, error: 'preserved' }
+        : { target: 'gemini', status: 'pending', error: 'installer failed' };
+      const bytes = Buffer.from(
+        `console.log(JSON.stringify(${JSON.stringify({ ok: false, plugins: [row] })}));process.exitCode=4;`,
+      );
+      const hash = createHash('sha256').update(bytes).digest('hex');
+      const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-update-partial-')), 'gamedevpl');
+      vi.stubGlobal('fetch', async (url: RequestInfo | URL) => {
+        if (String(url).endsWith('SHA256SUMS')) return new Response(`${hash}  gamedevpl\n`);
+        if (String(url).endsWith('/gamedevpl')) return new Response(bytes);
+        throw new Error('notes unavailable');
+      });
+      expect(
+        await dispatchReadVerb({ verb: 'update', args: [], flags: { version: '9.0.0', dest, json: true }, api, io }),
+      ).toBe(skip ? EXIT_GREEN : EXIT_INPUT);
+      expect(readFileSync(dest)).toEqual(bytes);
+      expect(JSON.parse(io.read())).toMatchObject({ version: '9.0.0', plugins: { ok: skip, plugins: [row] } });
+    },
+  );
 
   it('lists games from /api/submissions/mine', async () => {
     const io = out();

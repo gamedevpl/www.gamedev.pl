@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- `gamedevpl update` refreshes unchanged managed coding-agent plugins with the newly installed CLI, preserving customized, external, incomplete and disabled installations (#2080).
+
+### Fixed
+
+- Plugin updates preserve Gemini disablement rules for other workspaces (#2080).
+
 ## 0.66.1 — 2026-11-07
 
 ### Fixed

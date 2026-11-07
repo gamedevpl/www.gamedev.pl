@@ -1562,7 +1562,7 @@
       "vibe": "Vibe filters the MCP process environment. With GAMEDEV_CREATOR_KEY set, run the command below once to save the key in a private local file. Updates preserve that file.",
       "muse": "Muse installs the skill as a plugin and adds a separate authenticated MCP entry in its settings. Existing settings are preserved.",
       "restart": "Restart your coding agent after installation. Ask it to list your games to check the connection.",
-      "update": "gamedevpl update updates the CLI. Installed plugins keep their version until you run gamedevpl plugins update. Run it without a client name to update all eligible installations. Some clients may ask you to confirm trust or settings again.",
+      "update": "gamedevpl update updates the CLI and its unchanged managed plugins together. External, customized, incomplete and disabled installations are skipped and reported. Use gamedevpl plugins update [client] to retry a plugin separately. Some clients may ask you to confirm trust or settings again. After your first upgrade from CLI 0.66.x or earlier, restart the CLI to use automatic plugin updates.",
       "preserve": "Existing external integrations and customized plugin files are preserved. Uninstall removes only integrations owned by this installer; other plugins, CLI sign-in and the Vibe key file are retained."
     }
   },

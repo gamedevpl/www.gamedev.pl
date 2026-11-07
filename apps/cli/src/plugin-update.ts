@@ -29,10 +29,23 @@ export async function updatePlugins(input: {
   for (const target of targets) {
     try {
       const state = pluginStatus(target, input.env);
-      if (['modified', 'pending'].includes(state.status))
-        throw new CliError(`${state.status} installation preserved; review plugins status first`, EXIT_REFUSED);
+      if (['modified', 'pending'].includes(state.status)) {
+        ok = false;
+        plugins.push({
+          ...state,
+          changed: false,
+          skipped: state.status,
+          error: `${state.status} installation preserved; review plugins status first`,
+        });
+        continue;
+      }
       if (!state.updateAvailable || input.flags['dry-run']) {
-        plugins.push({ ...state, changed: false, dryRun: input.flags['dry-run'] === true });
+        plugins.push({
+          ...state,
+          changed: false,
+          dryRun: input.flags['dry-run'] === true,
+          skipped: input.flags['dry-run'] ? 'dry-run' : state.status === 'installed' ? 'current' : state.status,
+        });
         continue;
       }
       const native = nativePluginListing(
@@ -41,8 +54,26 @@ export async function updatePlugins(input: {
         pluginLayout(target, input.env).home,
         input.run ?? runPluginTool,
       );
-      if (native.disabled)
-        throw new CliError('Native client reports disabled plugin configuration; preserved for review', EXIT_REFUSED);
+      if (!native.registered && !['cursor', 'opencode', 'vibe'].includes(target)) {
+        ok = false;
+        plugins.push({
+          ...state,
+          changed: false,
+          skipped: 'removed',
+          error: 'Client no longer lists this plugin; preserved. Uninstall and install explicitly to restore it.',
+        });
+        continue;
+      }
+      if (native.disabled) {
+        ok = false;
+        plugins.push({
+          ...state,
+          changed: false,
+          skipped: 'disabled',
+          error: 'Native client reports disabled plugin configuration; preserved for review',
+        });
+        continue;
+      }
       await managePlugins({ ...input, args: ['uninstall', target] });
       const installed = await managePlugins({ ...input, args: ['install', target] });
       const after = pluginStatus(target, input.env);

@@ -76,6 +76,17 @@ Older running versions update only the standalone binary: run the installed CLI'
 update once more from the game directory, or update the Creator Kit. A global version
 change alone does not prove that `npm exec -- gamedevpl` uses the new version.
 
+Plugin refresh after a CLI update must execute the newly installed bundle, whose
+assets and version match the download. Calling the running CLI's plugin updater
+would reinstall old packages. Updates started by 0.66.x or earlier keep their
+original behavior; automatic plugin refresh starts after restarting into the new
+release. Verify the downloaded-version handoff and protected-installation skips.
+Update and progress fixtures must emit the child's JSON report, not an empty script.
+Retain installer errors even when failed reinstalls leave the plugin absent.
+Gemini uninstall deletes all enablement overrides, including other workspaces.
+Check the owned extension's negative rules before reinstalling; preserve them.
+Preserve retained native caches when the client no longer registers the plugin.
+
 ## Local commands
 
 ```bash
