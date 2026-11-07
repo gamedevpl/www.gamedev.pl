@@ -138,6 +138,17 @@ repo in the same session.
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.
 
+- **Validate plugin authentication through the real client transport.** Vibe 3.1.0
+  accepts an Agent Plugins manifest but rejects an absolute stdio executable path,
+  and its MCP transport filters out creator-key environment variables. Its bundled
+  plugin uses a bare `node` command and an explicitly configured private key file.
+  Muse plugin management can normalize unrelated MCP settings when writing its
+  review state: isolate those manager commands from the creator configuration,
+  and merge only the owned authenticated MCP entry. A manifest inspection alone
+  does not prove that the account tools authenticate. Gemini can emit its extension
+  inventory on stderr: capture both streams and scope enabled/disabled checks to
+  the owned extension, so a disabled neighbor cannot block its update.
+
 - **Check bundle size immediately after adding a runtime dependency.** Run
   `npm test -w @gamedevpl/cli -- src/bundle.test.ts` before the full gate. It runs
   the built CLI and enforces the 4.5 MB bundle budget. Release bundling removes

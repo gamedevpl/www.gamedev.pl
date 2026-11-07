@@ -28,6 +28,10 @@ function fixture(target: PluginTarget) {
     if (args.includes('--help')) return 'install uninstall add remove';
     if (args.includes('list')) {
       if (args.includes('marketplace')) return '[]';
+      if (target === 'gemini')
+        return registered
+          ? `✓ ${PLUGIN_NAME} (1.0.0)\n Enabled (User): true\n Enabled (Workspace): true\n`
+          : 'No extensions installed.';
       return registered
         ? JSON.stringify([{ id: `${PLUGIN_NAME}@gamedevpl-cli-bundled`, name: PLUGIN_NAME, scope: 'user' }])
         : '[]';
@@ -130,7 +134,11 @@ describe('plugin lifecycle', () => {
     const original =
       target === 'codex'
         ? '[mcp_servers.other]\ncommand = "other"\n'
-        : '{"theme":"dark","mcpServers":{"other":{"command":"other"}}}\n';
+        : JSON.stringify({
+            ...(target === 'muse' ? { schema_version: 1 } : {}),
+            theme: 'dark',
+            mcpServers: { other: { command: 'other' } },
+          }) + '\n';
     writeFileSync(config, original);
     expect(await f.invoke('install')).toMatchObject({ status: 'installed', changed: true });
     const firstCalls = f.calls.length;
@@ -138,7 +146,8 @@ describe('plugin lifecycle', () => {
     expect(f.calls).toHaveLength(firstCalls);
     expect(await f.invoke('status')).toMatchObject({ plugins: [{ target, status: 'installed' }] });
     expect(await f.invoke('uninstall')).toMatchObject({ status: 'absent', changed: true });
-    expect(readFileSync(config, 'utf8')).toBe(original);
+    if (target === 'muse') expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual(JSON.parse(original));
+    else expect(readFileSync(config, 'utf8')).toBe(original);
     expect(await f.invoke('uninstall')).toMatchObject({ status: 'absent', changed: false });
     expect(existsSync(join(f.layout.state, 'source'))).toBe(false);
   });
@@ -184,6 +193,8 @@ describe('plugin lifecycle', () => {
     ['copilot', true],
     ['gemini', false],
     ['gemini', true],
+    ['muse', false],
+    ['muse', true],
   ] as const)('recovers a killed %s installer while preserving customizations: %s', async (target, customized) => {
     const f = fixture(target);
     const script = join(f.home, 'killed.mts');
@@ -323,6 +334,31 @@ describe('plugin lifecycle', () => {
     expect(await f.invoke('status')).toMatchObject({ plugins: [{ status: 'installed' }] });
   });
 
+  it('preserves customized Muse MCP settings before invoking native removal', async () => {
+    const f = fixture('muse');
+    await f.invoke('install');
+    const file = f.layout.configs[0]!;
+    const settings = JSON.parse(readFileSync(file, 'utf8'));
+    settings.mcpServers.gamedevpl_cli.args.push('--creator-option');
+    writeFileSync(file, JSON.stringify(settings));
+    const calls = f.calls.length;
+    await expect(f.invoke('uninstall')).rejects.toThrow('changed outside');
+    expect(f.calls).toHaveLength(calls);
+    expect(readFileSync(file, 'utf8')).toContain('--creator-option');
+  });
+
+  it('does not claim a Muse registration whose cached package is missing', async () => {
+    const f = fixture('muse');
+    const registry = join(f.layout.roots[0]!, '../../installed.json');
+    mkdirSync(dirname(registry), { recursive: true });
+    const original = JSON.stringify({ plugins: [{ id: PLUGIN_NAME, source: { path: '/creator/own-plugin' } }] });
+    writeFileSync(registry, original);
+    expect(await f.invoke('install')).toMatchObject({ status: 'external', changed: false });
+    expect(await f.invoke('uninstall')).toMatchObject({ status: 'external', changed: false });
+    expect(f.calls).toHaveLength(0);
+    expect(readFileSync(registry, 'utf8')).toBe(original);
+  });
+
   it('refuses dangling symlinks before writing a plugin', async () => {
     const f = fixture('cursor');
     mkdirSync(dirname(f.layout.direct!), { recursive: true });
@@ -387,7 +423,7 @@ describe('plugin lifecycle', () => {
         stderr: new PassThrough() as unknown as NodeJS.WriteStream,
       });
       expect(code).toBe(0);
-      expect(JSON.parse(output.join('')).plugins).toHaveLength(7);
+      expect(JSON.parse(output.join('')).plugins).toHaveLength(PLUGIN_TARGETS.length);
       expect(fetch).not.toHaveBeenCalled();
     } finally {
       fetch.mockRestore();

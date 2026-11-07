@@ -96,6 +96,29 @@ describe('ConnectAgentsPage', () => {
     expect(container.textContent).toContain(i18n.t('connectAgents.cli.existingDraft'));
   });
 
+  it.each(['en', 'pl'])('shows all plugin clients and their distinct setup in %s', async (language) => {
+    await i18n.changeLanguage(language);
+    await draw(true);
+    const section = container.querySelector('#plugins')!;
+    const select = section.querySelector('select')!;
+    expect(select.options).toHaveLength(9);
+    expect(section.textContent).toContain('gamedevpl plugins install claude');
+    act(() => {
+      select.value = 'vibe';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(section.textContent).toContain('gamedevpl plugins install vibe');
+    expect(section.textContent).toContain('gamedevpl plugins configure vibe');
+    expect(section.textContent).toContain(i18n.t('connectAgents.plugins.update'));
+    act(() => {
+      select.value = 'muse';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(section.textContent).toContain(i18n.t('connectAgents.plugins.muse'));
+    expect(section.textContent).not.toContain('gamedevpl plugins configure vibe');
+    expect(section.textContent).toContain('gamedevpl plugins uninstall muse');
+  });
+
   it('scrolls the hashed section into view on mount', async () => {
     if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
       Object.defineProperty(Element.prototype, 'scrollIntoView', {

@@ -177,18 +177,24 @@ gamedevpl plugins install antigravity
 gamedevpl plugins install cursor
 gamedevpl plugins install gemini
 gamedevpl plugins install opencode
+gamedevpl plugins install vibe
+gamedevpl plugins install muse
 ```
 
 Choose the client you use. Installation is local and needs no gamedev.pl sign-in.
 The released CLI contains the skill, logo and client manifests. Native managers
-handle Claude, Codex, Copilot, Antigravity and Gemini; Cursor uses its local plugin
-directory, and OpenCode uses a local JavaScript plugin. Cursor must permit local
+handle Claude, Codex, Copilot, Antigravity, Gemini and Muse; Cursor and Vibe use
+local plugin directories, and OpenCode uses a local JavaScript plugin. Muse ships
+the skill as a native plugin and merges a separate authenticated MCP entry into
+its settings. Only that owned entry is removed on uninstall. Cursor must permit local
 plugin imports; reload it after installation. Gemini may ask you to trust the
 bundled source folder. The installer does not change that trust preference itself.
 
 ```sh
 gamedevpl plugins status
 gamedevpl plugins status codex --json
+gamedevpl plugins update
+gamedevpl plugins update vibe --dry-run
 gamedevpl plugins install claude --dry-run
 gamedevpl plugins uninstall claude
 ```
@@ -203,9 +209,19 @@ marketplace has no other plugins before removing the marketplace registration.
 An interrupted installation is `pending`; uninstall it before retrying. Native
 managers may retain their own trust preferences and caches.
 
-The package is pinned to the installed CLI release. After a CLI update, uninstall
-and reinstall an owned plugin to adopt the new package. `status` checks local
-installation files; it does not prove that a client enabled or loaded them.
+`gamedevpl update` updates the CLI binary and this project's npm CLI dependency;
+it does not update installed coding-agent plugins. Their assets and bridge stay
+pinned to the release that installed them. Run `gamedevpl plugins update [client]`
+after updating the CLI to refresh eligible owned packages to that CLI's version.
+Without a client name it visits all supported clients. Current packages are a no-op;
+external integrations are skipped, and modified or incomplete installations are
+preserved and reported. Disabled native registrations are preserved rather than
+reinstalled and enabled. Failed updates can leave a pending installation: uninstall
+it before retrying. Native clients may ask for trust or settings again.
+
+`status` reports installed/available package versions and update availability from
+local files. It does not prove that a client enabled or loaded a plugin, and it
+does not query remote releases.
 
 To use the MCP tools, provide an approved account's coding-agent key as
 `GAMEDEV_CREATOR_KEY` in the coding agent's environment. Codex's package explicitly
@@ -215,6 +231,21 @@ use `gemini extensions config gamedevpl-cli`. Enter the key value only, without
 no key. The local stdio bridge sends it only to `https://www.gamedev.pl/api/mcp`;
 installation does not start OAuth or copy the CLI's creator session into an agent.
 CLI login alone does not authenticate this plugin.
+
+Vibe also filters the environment inherited by plugin MCP processes. After
+setting `GAMEDEV_CREATOR_KEY`, configure its dedicated credential file explicitly:
+
+```sh
+gamedevpl plugins configure vibe
+```
+
+This stores only the coding-agent key in
+`$XDG_CONFIG_HOME/gamedevpl/plugins/vibe/creator-key` (default:
+`~/.config/gamedevpl/plugins/vibe/creator-key`) with private file permissions. The
+plugin references that file; its package and receipt contain no key. Updates and
+uninstall preserve this user credential file. Remove it yourself when revoking
+local access. Other clients continue to use their environment or native settings.
+Muse's separate MCP entry forwards an environment reference and stores no key.
 
 In the client, first ask to list your games without opening a build round. A real
 `list_account_games` call, including an empty game list, verifies the connection.

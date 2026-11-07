@@ -1,3 +1,4 @@
+import { ConnectAgentPlugins } from './ConnectAgentPlugins.js';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
@@ -17,7 +18,7 @@ export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; on
   useEffect(() => {
     const scrollHash = (): void => {
       const id = window.location.hash.replace(/^#/, '');
-      if (id === 'mcp' || id === 'cli') {
+      if (id === 'mcp' || id === 'cli' || id === 'plugins') {
         document.getElementById(id)?.scrollIntoView({ block: 'start' });
       }
     };
@@ -37,9 +38,12 @@ export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; on
       </header>
 
       <nav className="connect-jump" aria-label={t('connectAgents.jump')}>
+        {cliOn && <a href="#plugins">{t('connectAgents.plugins.nav')}</a>}
         <a href="#mcp">{t('connectAgents.mcp.nav')}</a>
         <a href="#cli">{t('connectAgents.cli.nav')}</a>
       </nav>
+
+      {cliOn && <ConnectAgentPlugins />}
 
       <section id="mcp" className="connect-section">
         <h2 className="connect-section-title">

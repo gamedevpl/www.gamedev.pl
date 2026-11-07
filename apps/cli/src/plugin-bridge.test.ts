@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,11 @@ afterEach(async () => {
   for (const close of cleanup.splice(0).reverse()) await close();
 });
 
-async function bridge(handler: Parameters<typeof createServer>[0], key = 'test-creator-key') {
+async function bridge(
+  handler: Parameters<typeof createServer>[0],
+  key = 'test-creator-key',
+  fileKey?: { value: string; mode?: number },
+) {
   const server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   cleanup.push(
@@ -24,6 +28,11 @@ async function bridge(handler: Parameters<typeof createServer>[0], key = 'test-c
   const address = server.address() as { port: number };
   const root = mkdtempSync(join(tmpdir(), 'plugin-bridge-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+  const keyFile = join(root, 'creator-key');
+  if (fileKey) {
+    writeFileSync(keyFile, fileKey.value, { mode: fileKey.mode ?? 0o600 });
+    chmodSync(keyFile, fileKey.mode ?? 0o600);
+  }
   const preload = join(root, 'fetch.mjs');
   writeFileSync(
     preload,
@@ -36,7 +45,7 @@ async function bridge(handler: Parameters<typeof createServer>[0], key = 'test-c
     process.execPath,
     ['--import', preload, fileURLToPath(new URL('./plugin-bridge.mjs', import.meta.url))],
     {
-      env: { ...process.env, GAMEDEV_CREATOR_KEY: key },
+      env: { ...process.env, GAMEDEV_CREATOR_KEY: key, GAMEDEV_CREATOR_KEY_FILE: fileKey ? keyFile : undefined },
       stdio: 'pipe',
     },
   );
@@ -171,3 +180,42 @@ it('does not forward requests queued behind initialization after the client disc
   await c.end();
   expect(calls).toBe(1);
 });
+
+it('authenticates from the explicit private key file used by Vibe without echoing its value', async () => {
+  let authorization: string | undefined;
+  const c = await bridge(
+    (request, response) => {
+      authorization = request.headers.authorization;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }));
+    },
+    '',
+    { value: 'private-vibe-fixture' },
+  );
+  c.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+  expect(await c.next()).toMatchObject({ id: 1, result: {} });
+  expect(authorization).toBe('Bearer private-vibe-fixture');
+  expect(c.text()).not.toContain('private-vibe-fixture');
+});
+
+it.skipIf(process.platform === 'win32')(
+  'refuses a publicly readable key file before making any network call',
+  async () => {
+    let calls = 0;
+    const c = await bridge(
+      (_request, response) => {
+        calls++;
+        response.end('{}');
+      },
+      '',
+      { value: 'private-vibe-fixture', mode: 0o644 },
+    );
+    c.send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+    expect(await c.next()).toMatchObject({
+      id: 1,
+      error: { message: expect.stringContaining('private creator key file') },
+    });
+    expect(calls).toBe(0);
+    expect(c.text()).not.toContain('private-vibe-fixture');
+  },
+);

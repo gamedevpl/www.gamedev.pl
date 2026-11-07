@@ -51,6 +51,23 @@ Two doors, same games. The on-site page is
 [`https://www.gamedev.pl/connect`](https://www.gamedev.pl/connect) (also `/mcp`). It lives
 in the header menu, not on `/create` or public game pages.
 
+**Agent plugins.** Install the integration directly from the CLI without cloning this repo:
+
+```sh
+gamedevpl update
+gamedevpl plugins install <client>
+gamedevpl plugins status
+gamedevpl plugins update
+gamedevpl plugins uninstall <client>
+```
+
+Clients: `claude`, `codex`, `copilot`, `antigravity`, `cursor`, `gemini`, `opencode`,
+`vibe`, and `muse`. Installation does not require CLI login. MCP access uses an
+approved creator's coding-agent key, with client-specific setup described in
+[the plugin guide](./apps/cli/README.md#coding-agent-plugins). `gamedevpl update`
+updates the CLI; `gamedevpl plugins update` separately refreshes eligible owned
+plugins. Customized and external installations are preserved.
+
 **MCP.** The server is remote and needs no install: point an MCP-capable client at
 `https://www.gamedev.pl/api/mcp` and sign in with OAuth. Claude users can install it as a
 plugin instead — [`listings/mcp/claude-plugin/README.md`](./listings/mcp/claude-plugin/README.md)

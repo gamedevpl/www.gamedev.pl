@@ -1,4 +1,5 @@
 import { createInterface } from 'node:readline';
+import { lstatSync, readFileSync } from 'node:fs';
 
 const endpoint = 'https://www.gamedev.pl/api/mcp';
 let session;
@@ -52,7 +53,23 @@ async function forward(message) {
   if (hasId) controllers.set(message.id, controller);
   const timeout = setTimeout(() => controller.abort(), 120_000);
   try {
-    const key = process.env.GAMEDEV_CREATOR_KEY?.trim();
+    let key = process.env.GAMEDEV_CREATOR_KEY?.trim();
+    if (!key && process.env.GAMEDEV_CREATOR_KEY_FILE) {
+      try {
+        const file = process.env.GAMEDEV_CREATOR_KEY_FILE;
+        const stat = lstatSync(file);
+        if (
+          !stat.isFile() ||
+          stat.isSymbolicLink() ||
+          stat.size > 4096 ||
+          (process.platform !== 'win32' && stat.mode & 0o077)
+        )
+          throw new Error('invalid key file');
+        key = readFileSync(file, 'utf8').trim();
+      } catch {
+        throw new Error('Configure the private creator key file with gamedevpl plugins configure vibe');
+      }
+    }
     if (!key || /\s/.test(key) || key.startsWith('${'))
       throw new Error('Set GAMEDEV_CREATOR_KEY in your coding agent environment; use the key value only');
     const response = await fetch(endpoint, {

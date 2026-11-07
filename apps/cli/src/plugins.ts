@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { CLI_VERSION, compareSemver } from './update.js';
 import { randomUUID } from 'node:crypto';
 import { join, relative, isAbsolute, sep } from 'node:path';
 import { homedir } from 'node:os';
@@ -17,6 +18,8 @@ import {
   type PluginRunner,
 } from './plugin-adapters.js';
 
+import { planMuseMcp, installMuseMcp, uninstallMuseMcp, museMcpState, type MuseMcpReceipt } from './plugin-muse.js';
+
 interface Receipt {
   version: 1;
   phase: 'pending' | 'installed' | 'uninstalling';
@@ -26,6 +29,8 @@ interface Receipt {
   files?: Record<string, Record<string, string>>;
   uninstallStartedAt?: number;
   installId?: string;
+  museMcp?: MuseMcpReceipt;
+  packageVersion?: string;
 }
 
 function readReceipt(file: string): Receipt | undefined {
@@ -121,9 +126,11 @@ function pendingInstallTrees(target: PluginTarget, env: NodeJS.ProcessEnv, recei
   return valid ? roots : undefined;
 }
 
-export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv) {
+function pluginState(target: PluginTarget, env: NodeJS.ProcessEnv) {
   const layout = pluginLayout(target, env);
   const receipt = readReceipt(join(layout.state, 'receipt.json'));
+  if (receipt?.museMcp && museMcpState(layout.configs[0]!, receipt.museMcp) === 'modified')
+    return { target, status: 'modified' };
   if (
     receipt?.phase === 'pending' &&
     !Object.keys(receipt.trees).length &&
@@ -148,7 +155,51 @@ export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv) {
     : existingIntegration(target, env)
       ? 'external'
       : 'absent';
-  return { target, status };
+  return {
+    target,
+    status:
+      status === 'installed' && receipt?.museMcp && museMcpState(layout.configs[0]!, receipt.museMcp) === 'absent'
+        ? 'pending'
+        : status,
+  };
+}
+
+export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv, availableVersion = CLI_VERSION) {
+  const state = pluginState(target, env);
+  const layout = pluginLayout(target, env);
+  const receipt = readReceipt(join(layout.state, 'receipt.json'));
+  let installedVersion = receipt?.packageVersion;
+  if (receipt && !installedVersion) {
+    for (const name of [
+      'plugin.json',
+      '.claude-plugin/plugin.json',
+      '.codex-plugin/plugin.json',
+      '.cursor-plugin/plugin.json',
+      '.muse-plugin/plugin.json',
+      'gemini-extension.json',
+    ]) {
+      const file = join(layout.state, 'source/plugin', name);
+      noSymlinks(file);
+      if (!existsSync(file)) continue;
+      let value: { version?: unknown };
+      try {
+        value = JSON.parse(readFileSync(file, 'utf8')) as { version?: unknown };
+      } catch {
+        continue;
+      }
+      if (typeof value.version === 'string') {
+        installedVersion = value.version;
+        break;
+      }
+    }
+  }
+  return {
+    ...state,
+    installedVersion,
+    availableVersion,
+    updateAvailable:
+      state.status === 'installed' && (!installedVersion || compareSemver(installedVersion, availableVersion) < 0),
+  };
 }
 
 export async function managePlugins(input: {
@@ -213,6 +264,7 @@ export async function managePlugins(input: {
         if (listing.includes(PLUGIN_MARKET))
           throw new CliError('bundled marketplace already exists outside this installer', EXIT_REFUSED);
       }
+      const museMcp = target === 'muse' ? planMuseMcp(layout.configs[0]!, source) : undefined;
       const installId = randomUUID();
       const files: Record<string, Buffer> = {
         ...pluginFiles(target, join(source, 'plugin')),
@@ -226,11 +278,13 @@ export async function managePlugins(input: {
         sourceDigest: treeDigest(source),
         trees: {},
         installId,
+        museMcp,
+        packageVersion: CLI_VERSION,
         marketplace: target === 'claude' || target === 'codex',
       };
       writePluginFile(receiptFile, JSON.stringify(receipt));
       try {
-        if (target === 'cursor') {
+        if (target === 'cursor' || target === 'vibe') {
           claimPluginPath(layout.direct!);
           for (const [path, bytes] of Object.entries(files))
             writePluginFile(join(layout.direct!, path.replace(/^plugin\//, '')), bytes);
@@ -243,6 +297,7 @@ export async function managePlugins(input: {
               writePluginFile(receiptFile, JSON.stringify(receipt));
             }
           }
+        if (museMcp) installMuseMcp(layout.configs[0]!, museMcp);
         const trees = installedTrees(target, input.env);
         receipt.trees = Object.fromEntries(trees.map((path) => [path, treeDigest(path)]));
         if (!trees.length)
@@ -260,7 +315,10 @@ export async function managePlugins(input: {
         target,
         status: 'installed',
         changed: true,
-        hint: 'Set GAMEDEV_CREATOR_KEY in the client environment or its plugin settings, then restart the client.',
+        hint:
+          target === 'vibe'
+            ? 'Set GAMEDEV_CREATOR_KEY, run gamedevpl plugins configure vibe, then restart Vibe.'
+            : 'Set GAMEDEV_CREATOR_KEY in the client environment or its plugin settings, then restart the client.',
       };
     }
     const receipt = readReceipt(receiptFile)!;
@@ -297,7 +355,7 @@ export async function managePlugins(input: {
     if (native.registered) for (const [command, ...args] of plan.commands) run(command!, args, input.env, layout.state);
     if (layout.direct) {
       noSymlinks(layout.direct);
-      rmSync(layout.direct, { recursive: target === 'cursor', force: true });
+      rmSync(layout.direct, { recursive: target !== 'opencode', force: true });
     }
     if (!layout.direct && Object.keys(receipt.trees).some((path) => existsSync(path))) {
       if (nativePluginListing(target, input.env, layout.state, run).registered)
@@ -319,6 +377,7 @@ export async function managePlugins(input: {
         rmSync(path, { recursive: true, force: true });
       }
     }
+    if (receipt.museMcp) uninstallMuseMcp(layout.configs[0]!, receipt.museMcp);
     receipt.phase = 'pending';
     receipt.trees = {};
     receipt.files = {};
@@ -336,23 +395,4 @@ export async function managePlugins(input: {
     rmSync(receiptFile);
     return { target, status: 'absent', changed: true };
   });
-}
-
-export async function runPluginsCommand(
-  args: string[],
-  flags: Record<string, string | boolean>,
-  env: NodeJS.ProcessEnv,
-  stdout: { write(value: string): unknown },
-): Promise<number> {
-  const result = await managePlugins({ args, flags, env, cwd: process.cwd() });
-  if (flags.json) stdout.write(`${JSON.stringify(result)}\n`);
-  else if ('plugins' in result && result.plugins)
-    for (const plugin of result.plugins) stdout.write(`${plugin.target}: ${plugin.status}\n`);
-  else if ('dryRun' in result) stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  else {
-    stdout.write(`${result.target}: ${result.status}${result.changed === false ? ' (unchanged)' : ''}\n`);
-    if ('hint' in result && result.hint) stdout.write(`${result.hint}\n`);
-    if (result.status === 'external') stdout.write('Existing integration preserved; this installer does not own it.\n');
-  }
-  return 0;
 }

@@ -165,3 +165,5 @@ export { GAME_PREVIEW_CSP, GAME_PREVIEW_CSP_HEADER, SHELL_FRAME_SRC, withGamePre
 export * from './play-journal.js';
 export { PLAY_JOURNAL_RECORDER } from './play-journal-recorder.js';
 export { gameTypeScriptEntry, type HotGameDeclaration } from './hot-game-entry.js';
+
+export { CODING_AGENT_PLUGIN_TARGETS } from './coding-agent-plugins.js';

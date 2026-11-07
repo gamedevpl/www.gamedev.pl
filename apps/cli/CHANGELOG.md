@@ -9,6 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Install and safely uninstall Muse Code and Mistral Vibe plugins; inspect package versions and explicitly refresh owned integrations with `gamedevpl plugins update` (#2076).
 - Agent output warns when the agent's plan limit (Claude 5-hour/weekly, Codex) is nearly used up or reached, with the reset time; Play's chat header shows the limits too (#2074).
 
 ## 0.65.0 — 2026-11-07
