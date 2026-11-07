@@ -119,7 +119,8 @@ export function createSourceReadTools(
         'kit briefly and call this again rather than scaffolding. ' +
         'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
         'manifest[].sha256 is the delivered file: hash your local files (sha256sum) and stage only those that differ, ' +
-        'since submit_sources({ fromStaged: true }) overlays staging on exactly this delivery; mtimes are not a diff.',
+        'since submit_sources({ fromStaged: true }) overlays staging on exactly this delivery; mtimes are not a diff. ' +
+        'Staging survives a refused submit: check list_staged_sources and re-stage or clear any path you since reverted.',
       inputSchema: {
         type: 'object',
         properties: {

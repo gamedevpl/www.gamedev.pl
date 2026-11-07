@@ -785,7 +785,7 @@ export async function registerAgentChannelRoutes(
       assertUploadTokenUnexpired(upload, now());
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        reply.status(401).send({ error: error.message || 'invalid upload token', ...roundClosedFields(error) });
         return null;
       }
       throw error;

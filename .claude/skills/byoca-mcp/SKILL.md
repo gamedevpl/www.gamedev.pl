@@ -113,7 +113,7 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
      enter the model
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
-     PUT each file to `batch.url?path=<path>` with the one `batch.headers` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
+     PUT each file to `batch.url?path=<path>` with the one `batch.headers` (a lone `path` returns top-level `url` + `headers`, PUT without `?path=`) — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
