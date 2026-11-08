@@ -23,6 +23,7 @@ import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { quotaHeadroom, quotaRefusal, type QuotaRefusal } from './agent-quota-headroom.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import { creatorLocale } from './creator-locale.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import {
   toolOk,
@@ -308,7 +309,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             },
             text: sanitizedFeedback,
             title: sanitizedTitle,
-            locale: resolved.publishedRecord.locale ?? 'en',
+            locale: await creatorLocale(store, resolved.creatorUid, resolved.publishedRecord.locale),
             log: ctx.request.log,
             builder: 'self',
             openedBy: 'agent',
@@ -485,10 +486,12 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         }
 
         const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
+        const locale = await creatorLocale(store, resolved.creatorUid, resolved.draft.locale);
+        if (locale !== resolved.draft.locale) await store.setSubmissionLocale(resolved.draft.jobId, locale);
         const continued = await continueDraftRound({
           jobId: resolved.draft.jobId,
           feedback: sanitizedFeedback,
-          locale: resolved.draft.locale ?? 'en',
+          locale,
           log: ctx.request.log,
           openedBy: 'agent',
           ownerUid: resolved.creatorUid,

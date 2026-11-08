@@ -930,7 +930,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(job?.locale).toBe('pl');
   });
 
-  it("falls back to the account's language when the agent sends neither locale nor header", async () => {
+  it("uses the account's language when the agent sends no locale, whatever its client header", async () => {
     // The MCP case, and the one that was broken: Claude chat is not a browser, so there
     // is no accept-language to fall back on. Eight consecutive self-build games landed on
     // 'en' this way and their Polish creator read English progress through every one.
@@ -943,7 +943,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     const { structured } = await callCreateGame(
       app,
       { title: 'Po polsku', concept: GAME_CONCEPT },
-      { authorization: `Bearer ${creatorKey}` },
+      { authorization: `Bearer ${creatorKey}`, 'accept-language': 'en-US,en;q=0.9' },
     );
 
     const job = await store.getSubmission((structured as { jobId: number }).jobId);

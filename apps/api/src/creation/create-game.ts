@@ -176,11 +176,12 @@ export function createGameCreator(deps: CreateGameDeps): {
       }
     }
 
-    // Otherwise nobody-said and said-English collapse into one input.
-    const declaredLocale = parsed.data.locale ?? input.acceptLanguage?.split(',')[0];
-    const creatorLocale = declaredLocale
-      ? normalizeLocale(declaredLocale)
-      : normalizeLocale(store ? ((await store.getUser(input.uid))?.locale ?? undefined) : undefined);
+    // Explicit, then account, then header: agent clients send `*` or `en`.
+    const accountLocale = store ? ((await store.getUser(input.uid))?.locale ?? undefined) : undefined;
+    const headerLocale = input.acceptLanguage?.split(',')[0]?.trim();
+    const creatorLocale = normalizeLocale(
+      parsed.data.locale ?? accountLocale ?? (/^(pl|en)\b/i.test(headerLocale ?? '') ? headerLocale : undefined),
+    );
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
     const sanitizedConcept = sanitizeCreatorText(parsed.data.concept, { singleLine: false });
     const sanitizedDisplayName = parsed.data.displayName
