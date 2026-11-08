@@ -22,7 +22,8 @@ Releases tagged `cli-v*` carry the standalone `gamedevpl` script and an npm-inst
 updates the standalone script and, when the current project depends on `@gamedevpl/cli`,
 its npm package, manifest and lockfile. `npm exec -- gamedevpl` then uses the same
 version. Downloads are checked against release checksums; npm installs skip lifecycle
-scripts. Run the update from your game directory.
+scripts. The downloaded CLI then refreshes unchanged managed coding-agent plugins.
+Run the update from your game directory.
 
 During `gamedevpl update`, a terminal spinner shows the current step and elapsed time.
 Redirected output uses plain step messages; `/update` shows the steps in its activity
@@ -209,15 +210,22 @@ marketplace has no other plugins before removing the marketplace registration.
 An interrupted installation is `pending`; uninstall it before retrying. Native
 managers may retain their own trust preferences and caches.
 
-`gamedevpl update` updates the CLI binary and this project's npm CLI dependency;
-it does not update installed coding-agent plugins. Their assets and bridge stay
-pinned to the release that installed them. Run `gamedevpl plugins update [client]`
-after updating the CLI to refresh eligible owned packages to that CLI's version.
-Without a client name it visits all supported clients. Current packages are a no-op;
-external integrations are skipped, and modified or incomplete installations are
-preserved and reported. Disabled native registrations are preserved rather than
-reinstalled and enabled. Failed updates can leave a pending installation: uninstall
-it before retrying. Native clients may ask for trust or settings again.
+`gamedevpl update` updates the CLI binary, this project's npm CLI dependency and
+eligible coding-agent plugins in one command. It runs the newly installed CLI to
+refresh unchanged owned packages to the downloaded version. Current packages are
+a no-op; external, modified, incomplete and disabled installations are skipped and
+reported. Gemini disablement rules for other workspaces are preserved too.
+Plugins removed in the native client are not reinstalled from retained caches.
+These skips do not fail the CLI update. An installer failure is reported
+with exit code 4 after the CLI has been updated; other clients are still attempted.
+Run `gamedevpl plugins update [client]` to retry or update plugins separately.
+Without a client name it visits all supported clients. Failed updates can leave
+a pending installation: uninstall it before retrying. Native clients may ask for
+trust or settings again; restart the coding agent after its package changes.
+
+CLI 0.66.x and earlier execute their existing update behavior when upgrading to
+this release. Restart the CLI after that first upgrade; subsequent `gamedevpl update`
+commands also refresh plugins automatically.
 
 `status` reports installed/available package versions and update availability from
 local files. It does not prove that a client enabled or loaded a plugin, and it
@@ -254,6 +262,9 @@ changes the existing `gamedevpl connect <slug>` flow. The plugin server has a
 separate `gamedevpl_cli` name so temporary round wiring remains independent.
 
 ## Working copy
+
+`connect` and `checkout` accept an empty destination or one containing only `.git`
+(a directory or a worktree file). Existing Git metadata is preserved.
 
 `gamedevpl checkout <slug>` writes `.gamedev-slug` and `.gamedev-base.json` (the platform
 version the copy was taken from). `diff`, `pull`, and `submit` share that three-way

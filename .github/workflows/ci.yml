@@ -32,11 +32,16 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install and run Gitleaks
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Keep in sync with the version used for local verification — different
           # versions flag different false positives over the full git history.
           GITLEAKS_VERSION="8.30.1"
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          GITLEAKS_ARCHIVE="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          gh release download "v${GITLEAKS_VERSION}" --repo gitleaks/gitleaks \
+            --pattern "$GITLEAKS_ARCHIVE" --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/$GITLEAKS_ARCHIVE" gitleaks
           ./gitleaks detect --source . --no-banner --verbose
 
   build_and_test:
@@ -51,8 +56,11 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Validate workflow syntax
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz -o "$RUNNER_TEMP/actionlint.tgz"
+          gh release download v1.7.12 --repo rhysd/actionlint \
+            --pattern actionlint_1.7.12_linux_amd64.tar.gz --output "$RUNNER_TEMP/actionlint.tgz"
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tgz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -shellcheck= -pyflakes=

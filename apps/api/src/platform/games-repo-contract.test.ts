@@ -28,7 +28,7 @@ import { RASTER_ASSET_BUDGET_BYTES } from './raster-contract.js';
 import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 import { ALLOWED_SOURCE_FILES, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from '../delivery/games-store.js';
 
-/** The real games-repo file, snapshotted under fixtures/ (see local-games-repo.ts). */
+// Fixture snapshot of the real games-repo contract.
 async function readDeliveryContractFixture(): Promise<string> {
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
@@ -142,7 +142,7 @@ describe('delivery contract (website half)', () => {
 
   it('keeps the extra-module pattern comparable to the games-repo JSON byte-for-byte', () => {
     // A regex *literal* would render `/` as `\/` in `.source` and read as permanent drift.
-    expect(DELIVERY_EXTRA_MODULE_PATTERN.source).toBe('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
+    expect(DELIVERY_EXTRA_MODULE_PATTERN.source).toBe('^[a-z0-9][a-z0-9/-]{0,60}(?:\\.(?:test|spec))?\\.ts$');
     expect(DELIVERY_EXTRA_MODULE_PATTERN.test('game/editor-content.ts')).toBe(true);
     expect(DELIVERY_EXTRA_MODULE_PATTERN.test('Game.ts')).toBe(false);
   });

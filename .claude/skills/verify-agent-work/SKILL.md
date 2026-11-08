@@ -885,6 +885,16 @@ useful than an assumed pass.
 Watch for exit codes hidden by pipes: `cmd | tail` reports `tail`'s status, not `cmd`'s. Use
 `cmd > file; echo "exit=$?"` when the exit code matters.
 
+A scanner job can fail before scanning: GitHub release downloads returned non-archive
+responses while the pinned release still existed. Inspect the download/extraction logs,
+use the official release API for that same pinned version, and rerun the actual scan.
+Do not interpret a download failure as either a finding or a clean scan.
+
+For npm tarball dependencies behind redirects, `npm cache add` can cache only the
+redirect target. An offline request to the original pinned URL may still miss. Verify
+cached bytes against the committed integrity and published asset digest before reuse;
+keep the real package-generation test and its original dependency pin.
+
 ## When something's wrong
 
 - **Wrong foundation** (wrong base branch, built on stale code): close it and re-dispatch. Do

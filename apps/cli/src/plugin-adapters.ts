@@ -158,6 +158,18 @@ export function nativePluginCommands(
   ];
 }
 
+function geminiScopedDisablement(env: NodeJS.ProcessEnv): boolean {
+  const file = join(pluginLayout('gemini', env).roots[0]!, 'extension-enablement.json');
+  noSymlinks(file);
+  if (!existsSync(file)) return false;
+  const config = JSON.parse(readFileSync(file, 'utf8')) as Record<string, { overrides?: unknown }>;
+  const own = config[PLUGIN_NAME];
+  if (own === undefined) return false;
+  if (!own || !Array.isArray(own.overrides) || own.overrides.some((rule) => typeof rule !== 'string'))
+    throw new CliError('unknown Gemini enablement rules; preserving the installation', EXIT_REFUSED);
+  return own.overrides.some((rule: string) => rule.startsWith('!'));
+}
+
 export function nativePluginListing(target: PluginTarget, env: NodeJS.ProcessEnv, cwd: string, run: PluginRunner) {
   if (target === 'cursor' || target === 'opencode' || target === 'vibe')
     return { text: '[]', registered: false, disabled: false };
@@ -177,7 +189,7 @@ export function nativePluginListing(target: PluginTarget, env: NodeJS.ProcessEnv
     return {
       text,
       registered: own !== undefined,
-      disabled: own !== undefined && /^\s*Enabled[^\n:]*:\s*false\s*$/im.test(own),
+      disabled: geminiScopedDisablement(env) || (own !== undefined && /^\s*Enabled[^\n:]*:\s*false\s*$/im.test(own)),
     };
   }
   const parsed = JSON.parse(text) as unknown;

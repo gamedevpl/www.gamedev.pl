@@ -11,11 +11,21 @@ vi.mock('../../submissionApi.js', async () => {
   return { ...actual, getSubmissionStatus: vi.fn() };
 });
 
-it.each([false, true])('shows local Codex work before any MCP check-in (collapsed: %s)', async (collapsed) => {
+it.each([
+  ['no_agent_yet', false],
+  ['no_agent_yet', true],
+  ['quiet', false],
+  ['quiet', true],
+] as const)('shows local Codex work despite server %s (collapsed: %s)', async (stall, collapsed) => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   if (collapsed) localStorage.setItem('gamedev_connect_collapsed:local-token', '1');
-  vi.mocked(getSubmissionStatus).mockResolvedValue({ status: 'queued', stall: 'no_agent_yet', builder: 'self' });
+  vi.mocked(getSubmissionStatus).mockResolvedValue({
+    status: stall === 'quiet' ? 'building' : 'queued',
+    stall,
+    builder: 'self',
+    ...(stall === 'quiet' ? { lastAgentSignalAt: new Date(Date.now() - 17 * 60_000).toISOString() } : {}),
+  });
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) =>
@@ -62,6 +72,7 @@ it.each([false, true])('shows local Codex work before any MCP check-in (collapse
       'The agent is editing locally.',
     );
     expect(container.textContent).not.toContain('Waiting for your agent to check in');
+    expect(container.querySelector('.studio-thread-foot .studio-context-beat')).toBeNull();
   } finally {
     await act(async () => root.unmount());
     container.remove();

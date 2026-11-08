@@ -14,6 +14,7 @@ import {
   type ToolResult,
 } from './mcp-tool-support.js';
 import { UPLOAD_REQUEST_PROPS, uploadRequestFromChannel } from './upload-request.js';
+import { BUILD_PROGRESS_GUIDANCE } from './mcp-round-guide.js';
 
 const READS = {
   readOnlyHint: true,
@@ -158,7 +159,7 @@ export function createSessionBasicsTools(deps: SessionBasicsToolsDeps): Record<s
       // Additive: appends a note; nothing is overwritten, consumed or hidden.
       annotations: { title: 'Report progress', ...WRITES },
       description:
-        'Report a build-progress update to the creator thread, most useful before and after long steps. ' +
+        `Report a build-progress update to the creator thread. ${BUILD_PROGRESS_GUIDANCE} ` +
         `step is one of: ${BUILD_STEPS.join(', ')}. Reply includes stop and pendingMessages.`,
       inputSchema: {
         type: 'object',

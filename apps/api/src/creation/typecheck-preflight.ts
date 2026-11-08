@@ -2,16 +2,14 @@
 
 import path from 'node:path';
 import ts from 'typescript';
+import { isDeliveryTestPath } from '@gamedevpl/contract';
 import type { KitTree } from '../agent-surface/kit-files.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 
 const COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,
   strict: true,
-  // Game code only, and stricter than the games repo's `tsconfig.json` on purpose: its
-  // `npm run typecheck` compiles `games/` under this flag too (it just cannot say so
-  // per-directory, with GameKit's own debt in the same tree). An unannotated parameter is
-  // an `any` with nothing to grep for, so Check 37's ban would be a formality without it.
+  // Strict game code matches the Creator Kit's per-game typecheck.
   noImplicitAny: true,
   strictPropertyInitialization: false,
   useUnknownInCatchVariables: false,
@@ -178,7 +176,7 @@ export function typecheckDeliverySources(input: {
     if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
       const virtual = `${gameRoot}/${rel}`;
       files.set(virtual, source);
-      roots.push(virtual);
+      if (!isDeliveryTestPath(rel)) roots.push(virtual);
     }
   }
 

@@ -7,6 +7,28 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.67.1 — 2026-11-08
+
+### Fixed
+
+- Checkout, pull and push preserve game unit tests named `*.test.ts` and `*.spec.ts` alongside the game sources (#2086).
+
+## 0.67.0 — 2026-11-07
+
+### Added
+
+- `gamedevpl update` refreshes unchanged managed coding-agent plugins with the newly installed CLI, preserving customized, external, incomplete and disabled installations (#2080).
+
+### Fixed
+
+- Plugin updates preserve Gemini disablement rules for other workspaces (#2080).
+
+## 0.66.1 — 2026-11-07
+
+### Fixed
+
+- `connect` and `checkout` accept a destination containing only `.git`, preserving the existing Git metadata (#2079).
+
 ## 0.66.0 — 2026-11-07
 
 ### Added

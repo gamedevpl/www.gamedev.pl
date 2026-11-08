@@ -552,20 +552,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   return notes.length > 0 ? { kind: 'ok', notes } : { kind: 'ok' };
 }
 
-/**
- * Compare the games repo's delivery contract against this side's constants.
- *
- * Asymmetric, and deliberately so — it enforces the ordering rule rather than mere
- * equality. A path the games repo sends and this side refuses is the bug the whole check
- * exists for: every delivery carrying it 400s at upload. The reverse — this side accepting
- * a path no game sends yet — is the *intended* middle state of a website-first rollout, so
- * failing on it would make the documented safe order the one that turns master red, and the
- * unsafe order the comfortable one. It is reported as a note instead, loudly enough that a
- * permanently half-landed change is still visible.
- *
- * Same asymmetry the GameKit module half already uses for website-ahead extras, arrived at
- * for the same reason.
- */
+// Website-first expansion is safe; games-first expansion breaks uploads.
 function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null; notes: string[] } {
   const localFixed = [...DELIVERY_FIXED_FILES] as string[];
   const problems: string[] = [];
@@ -608,7 +595,14 @@ function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null
     );
   }
 
-  if (remote.extraModulePattern !== DELIVERY_EXTRA_MODULE_PATTERN.source) {
+  const websiteFirstTests =
+    remote.extraModulePattern === '^[a-z0-9][a-z0-9/-]{0,60}\\.ts$' &&
+    DELIVERY_EXTRA_MODULE_PATTERN.source === '^[a-z0-9][a-z0-9/-]{0,60}(?:\\.(?:test|spec))?\\.ts$';
+  if (websiteFirstTests) {
+    notes.push(
+      'delivery contract: website accepts *.test.ts and *.spec.ts first; update the Creator Kit pattern next.',
+    );
+  } else if (remote.extraModulePattern !== DELIVERY_EXTRA_MODULE_PATTERN.source) {
     problems.push(
       `extraModulePattern: games-repo=${remote.extraModulePattern} ` +
         `website=${DELIVERY_EXTRA_MODULE_PATTERN.source}`,

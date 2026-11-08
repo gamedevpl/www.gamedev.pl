@@ -43,6 +43,14 @@ other `.ts` files within their own game directory; package imports and cross-gam
 allowed. Its build tooling and this app's GitHub client bundle those module graphs into
 dependency-free JavaScript before browser delivery.
 
+Game unit tests may use `node:test` and `node:assert/strict` in `*.test.ts` or
+`*.spec.ts`, beside the module or under `tests/`. Run them locally with
+`npm run test:game -- <slug>`. The delivery contract preserves these files with the
+game sources so later rounds can reuse them. The browser-only submission typecheck
+does not treat tests or `tests/` helpers as entry points. Production imports still
+bring those files into its checked graph. The server gate marks deliveries as
+untrusted and never executes their Node tests; an accepted upload is not a test result.
+
 **Coding agents maintain that repo.** GitHub Copilot works on it autonomously — fixing
 problems, and bringing each game into line with its current spec. Claude Code / Codex / agy
 can be brought in as extra hands on the same repo when needed.

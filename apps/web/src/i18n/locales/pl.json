@@ -936,7 +936,7 @@
       "endedTitle": "Agent zakończył tę rundę.",
       "stall": {
         "ended": "W tej rundzie nie powstała grywalna wersja — napisz w wątku, aby zacząć kolejną.",
-        "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — większe gry trwają dłużej.",
+        "quiet": "Brak nowych informacji o postępie. Agent może nadal pisać kod lub testować.",
         "awaiting_input": "Agent czeka na Ciebie — odpowiedz w wątku, aby budowa ruszyła dalej.",
         "no_agent_yet": "Żaden agent jeszcze nie podjął tej rundy — podłącz swojego w wątku."
       }
@@ -1371,7 +1371,7 @@
       "awaiting_input": "Agent czeka na Twoją odpowiedź — napisz poniżej, aby budowa ruszyła dalej.",
       "not_dispatched": "Budowa nie została jeszcze podjęta przez agenta. Trwa to dłużej niż zwykle — sprawdzamy to.",
       "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — możesz też wysłać poniżej uwagi, aby rozpocząć kolejną rundę.",
-      "quietSelf": "Twój agent od dłuższej chwili milczy. Nie możemy go stąd uruchomić — wklej poniżej prompt do swojego agenta, gdy będziesz gotowy, albo wyślij uwagę, którą odbierze przy następnym uruchomieniu.",
+      "quietSelf": "Studio od dłuższego czasu nie dostało aktualizacji. Agent może nadal pracować. Jeśli się zatrzymał, wklej poniższy prompt do swojej sesji agenta.",
       "ended": "Twój agent zakończył tę rundę. Wyślij uwagę poniżej, żeby kontynuować.",
       "endedSelf": "Twój agent zakończył tę rundę. Wyślij uwagę poniżej, żeby kontynuować ze swoim agentem.",
       "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić.",
@@ -1576,7 +1576,7 @@
       "vibe": "Vibe filtruje środowisko procesu MCP. Po ustawieniu GAMEDEV_CREATOR_KEY uruchom poniższą komendę raz, aby zapisać klucz w prywatnym pliku lokalnym. Aktualizacje zachowują ten plik.",
       "muse": "Muse instaluje skill jako plugin i dodaje osobny, uwierzytelniony wpis MCP w ustawieniach. Pozostałe ustawienia zostają zachowane.",
       "restart": "Po instalacji uruchom ponownie agenta. Poproś go o listę swoich gier, aby sprawdzić połączenie.",
-      "update": "gamedevpl update aktualizuje CLI. Zainstalowane pluginy zachowują swoją wersję do uruchomienia gamedevpl plugins update. Uruchom tę komendę bez nazwy klienta, aby zaktualizować wszystkie kwalifikujące się instalacje. Niektórzy klienci mogą ponownie poprosić o potwierdzenie zaufania lub ustawień.",
+      "update": "gamedevpl update aktualizuje CLI i zarządzane przez nie, niezmienione pluginy w jednej komendzie. Cudze, zmodyfikowane, niekompletne i wyłączone instalacje są pomijane i pokazywane w wyniku. gamedevpl plugins update [client] pozwala osobno ponowić aktualizację pluginu. Niektórzy klienci mogą ponownie poprosić o potwierdzenie zaufania lub ustawień. Po pierwszym uaktualnieniu CLI 0.66.x lub starszego uruchom CLI ponownie, aby korzystać z automatycznych aktualizacji pluginów.",
       "preserve": "Istniejące integracje zewnętrzne i zmodyfikowane pliki pluginów zostają zachowane. Uninstall usuwa tylko integracje należące do tego instalatora; zachowuje pozostałe pluginy, logowanie CLI i plik klucza Vibe."
     }
   },
@@ -2049,13 +2049,14 @@
       "error": "Nie udało się teraz obrócić klucza. Spróbuj za chwilę."
     },
     "resume": {
-      "title": "Wznów pracę z agentem",
-      "lead": "Twój agent umilkł. Wklej ten prompt do tej samej sesji — albo uruchom nową z istniejącym połączeniem gamedev.pl.",
-      "kickoffTitle": "Prompt wznowienia",
+      "title": "Brak nowych informacji o postępie",
+      "show": "Pokaż opcje agenta",
+      "lead": "Studio od dłuższego czasu nie dostało aktualizacji. Agent może nadal pisać kod lub testować. Jeśli się zatrzymał, wklej poniższy prompt do swojej sesji agenta.",
+      "kickoffTitle": "Wznów, jeśli agent się zatrzymał",
       "kickoffHint": "Ten prompt niesie tylko slug gry. Połączenie MCP zostaje w konfiguracji agenta.",
       "setupDetails": "Trzeba ponownie podłączyć MCP?",
-      "openInstall": "Podłącz MCP w Szczegółach",
-      "waiting": "Czekamy, aż Twój agent znów się odezwie…"
+      "openInstall": "Szczegóły połączenia z agentem",
+      "waiting": "Brak nowych aktualizacji — agent może nadal pracować."
     }
   },
   "workspaceCheckout": {

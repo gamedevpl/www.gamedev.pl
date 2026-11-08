@@ -297,7 +297,9 @@ export function writeGameFiles(
 export function assertCheckoutDestination(dest: string, slug: string): void {
   if (
     existsSync(dest) &&
-    (lstatSync(dest).isSymbolicLink() || !lstatSync(dest).isDirectory() || readdirSync(dest).length > 0)
+    (lstatSync(dest).isSymbolicLink() ||
+      !lstatSync(dest).isDirectory() ||
+      readdirSync(dest).some((entry) => entry !== '.git'))
   ) {
     throw new CliError(
       'Checkout destination is not empty; your files were left untouched.',

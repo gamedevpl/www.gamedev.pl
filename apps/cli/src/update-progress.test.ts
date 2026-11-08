@@ -31,7 +31,7 @@ function fixture(json = false) {
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const stdout = stream();
   const stderr = stream(true);
-  const bytes = Buffer.from('#!/usr/bin/env node\n');
+  const bytes = Buffer.from('console.log(JSON.stringify({ok:true,plugins:[]}));');
   const hash = createHash('sha256').update(bytes).digest('hex');
   const input = {
     verb: 'update',
