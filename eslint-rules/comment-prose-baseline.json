@@ -149,7 +149,7 @@
     "apps/api/src/creation/seed-provider-env.ts": 123,
     "apps/api/src/creation/session-crash.test.ts": 14,
     "apps/api/src/creation/type-check.test.ts": 153,
-    "apps/api/src/creation/type-check.ts": 606,
+    "apps/api/src/creation/type-check.ts": 470,
     "apps/api/src/creation/typecheck-preflight.ts": 40,
     "apps/api/src/creator-studio-workspace.test.ts": 167,
     "apps/api/src/delivery/games-store.test.ts": 876,

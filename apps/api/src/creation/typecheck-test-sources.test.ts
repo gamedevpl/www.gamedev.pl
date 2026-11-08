@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { typecheckDeliverySources } from './typecheck-preflight.js';
+import { typeCheckGame } from './type-check.js';
 
 const kitShared = { 'shared/game-kit.d.ts': 'declare const GameKit: unknown;\n' };
 const sources = {
@@ -35,5 +36,27 @@ describe('test sources in the browser typecheck preflight', () => {
       sources: { ...sources, 'game.ts': "import './game/model.test.ts';\n" },
     });
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining('node:test') });
+  });
+});
+
+describe('test sources in the Studio browser typecheck', () => {
+  const check = (files: Record<string, string>) => typeCheckGame(files, kitShared['shared/game-kit.d.ts']);
+
+  it('accepts Node test roots and helpers', () => {
+    expect(check(sources)).toEqual({ ok: true });
+  });
+
+  it('still checks production modules delivered alongside tests', () => {
+    expect(check({ ...sources, 'game/model.ts': 'export const score: number = "wrong";\n' })).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([expect.stringContaining('game/model.ts')]),
+    });
+  });
+
+  it('checks test files when the production game imports them', () => {
+    expect(check({ ...sources, 'game.ts': "import './game/model.test.ts';\n" })).toMatchObject({
+      ok: false,
+      errors: expect.arrayContaining([expect.stringContaining('node:test')]),
+    });
   });
 });
