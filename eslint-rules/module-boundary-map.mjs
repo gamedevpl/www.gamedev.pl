@@ -459,6 +459,7 @@ const FILE_BUCKET = {
   'mcp-account-games-tools': 'agent-surface',
   'mcp-ownership-tools': 'agent-surface',
   'mcp-round-reopen-tools': 'agent-surface',
+  'creator-locale': 'agent-surface',
   'mcp-session-basics-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
   'mcp-ui': 'agent-surface',
