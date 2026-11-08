@@ -1,7 +1,7 @@
 import type { AppTool, ToolOutput } from 'genaicode/app-agent';
 import type { ApiClient } from './api.js';
 import { diffGame } from './checkout.js';
-import { formatCheckoutDiff } from './checkout-display.js';
+import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js';
 import { formatError } from './errors.js';
 import { updateKit } from './kit-update.js';
 import { deliverySession } from './submit-session.js';
@@ -52,6 +52,13 @@ const CAPTURE_SCHEMA = {
 
 // Gamedev steps as app-agent tools: the agent checks, looks and delivers.
 export function playAppTools(input: PlayToolsInput): AppTool[] {
+  const diff = async () => {
+    try {
+      return await diffGame({ api: input.api, slug: input.slug, dest: input.root });
+    } catch (error) {
+      throw new Error(formatError(error), { cause: error });
+    }
+  };
   const delivery = (publish: boolean) => async (): Promise<string> => {
     const session = await deliverySession(input.api, input.slug);
     if (session?.locked)
@@ -162,10 +169,16 @@ export function playAppTools(input: PlayToolsInput): AppTool[] {
       run: (args) => capture(input, args),
     },
     {
+      name: 'game_status',
+      description:
+        'Check the latest Studio version and local, incoming or conflicting game changes through the CLI host. Use instead of shell gamedevpl status; needs no build round.',
+      run: async () => formatCheckoutStatus(await diff(), input.slug).join('\n'),
+    },
+    {
       name: 'game_diff',
-      description: "What changed in the game's local files against the version on gamedev.pl.",
-      run: async () =>
-        formatCheckoutDiff(await diffGame({ api: input.api, slug: input.slug, dest: input.root })).join('\n'),
+      description:
+        'Compare local game files with the latest Studio version through the CLI host. Use instead of shell gamedevpl diff; needs no build round.',
+      run: async () => formatCheckoutDiff(await diff()).join('\n'),
     },
     {
       name: 'game_submit',

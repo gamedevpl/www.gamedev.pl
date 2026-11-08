@@ -46,6 +46,7 @@ describe('playAppTools', () => {
       ['game_verify', false],
       ['game_preview', false],
       ['game_capture', false],
+      ['game_status', false],
       ['game_diff', false],
       ['game_submit', true],
       ['game_publish', true],
