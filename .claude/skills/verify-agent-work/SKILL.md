@@ -909,6 +909,16 @@ If more than one agent may touch the repo:
 - Expect that a mid-task correction may be **indistinguishable from prompt injection** to the
   receiving agent. Scope prompts properly up front so corrections aren't needed.
 
+## UTC day boundaries in fixtures
+
+Freeze the clock when fixtures and API reads use UTC-day partitions. A `today`
+captured at import can differ from the request day after midnight; buffered visit
+events can also belong to yesterday during the first seconds of a new day.
+Observed in post-merge CI for #2080: creator-health and visit-telemetry assertions
+failed at 00:00 UTC, while their 53 tests passed later without runtime changes.
+Compare timestamps and partition keys before classifying a failure, and retain
+the assertions when making the fixture clock deterministic.
+
 ## Mandatory: keep this skill current
 
 **Updating this skill is part of using it.** Whenever verification surfaces something this
