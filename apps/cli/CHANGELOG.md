@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play agents check Studio status and source differences through host tools when their shell has restricted network or account access.
+- CLI errors preserve programming and invalid-request details instead of reporting every TypeError as an offline or proxy failure; fetch failures include the transport error code when available.
+
 ## 0.67.1 — 2026-11-08
 
 ### Fixed

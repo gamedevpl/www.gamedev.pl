@@ -16,6 +16,12 @@ per-round managed opener (`mcpOpenerToken`), and `start` exchanges it for the ro
 
 ## Local CLI delegation
 
+Local Play exposes `game_status` and `game_diff` for Studio synchronization reads.
+They use the CLI host's authenticated API client and need no build round. Direct
+agents to these tools instead of shell `gamedevpl status`/`diff`, whose network or
+creator-token access can be restricted. A shell failure should lead to the matching
+MCP call in the same turn; a host-tool failure should retain its concrete error.
+
 Local Play's `game_git_push` proposes a host action for an explicitly requested
 source-repository push. `gamedevpl:` remotes keep their existing platform Git delivery flow.
 It requires approval even in Auto/YOLO, validates the configured push URL

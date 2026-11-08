@@ -5,9 +5,12 @@ export function describeError(error: unknown): { message: string; next?: string;
   if (error instanceof CliError) {
     return { message: error.message, next: error.next, code: error.exitCode };
   }
-  if (error instanceof TypeError) {
+  if (error instanceof TypeError && error.message === 'fetch failed') {
+    const cause = error.cause;
+    const code = cause instanceof Error && 'code' in cause ? cause.code : undefined;
+    const detail = typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(code) ? ` (${code})` : '';
     return {
-      message: 'offline or proxy failure — check the network and try again',
+      message: `network request failed${detail} — check the connection and try again`,
       next: cliUsage('whoami'),
       code: EXIT_REFUSED,
     };

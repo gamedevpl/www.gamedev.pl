@@ -938,6 +938,12 @@ Your agent subscription pays for the work. Without such an agent the workshop ru
 before; `--brain repl` (or `GAMEDEVPL_BRAIN=repl`) keeps the workshop, and `--brain app-agent`
 says so when no agent can drive Play.
 
+Play agents check Studio synchronization through `game_status` and compare sources
+through `game_diff`. Both run on the CLI host with its platform access and need no
+build round. The agent shell can have restricted networking and omits creator
+tokens, so agents use these tools directly instead of shell `gamedevpl status` or
+`gamedevpl diff` commands.
+
 An updated CLI restarts raw previews from older versions. For an existing browser
 workspace, it tells you to finish active work and run `gamedevpl stop`, then
 `gamedevpl play`, so an agent is not interrupted by an update.
