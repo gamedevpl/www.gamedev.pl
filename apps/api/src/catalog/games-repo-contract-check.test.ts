@@ -220,9 +220,7 @@ describe('runGamesRepoContractCheck', () => {
   });
 
   it('reports drift when a module moved to a vertical this side still reads from shared/modules', async () => {
-    // The regression that broke the nightly bake: games-repo #527 promoted `vehicles` to
-    // a vertical. Both sides still listed the name, so the module check stayed green while
-    // the bake looked for shared/modules/vehicles.ts and reported the game as missing.
+    // A module-to-vertical move must change its entry path too.
     const assembleWithNewVertical = ASSEMBLE_SOURCE.replace(
       "urban: 'shared/verticals/urban/index.ts',",
       "urban: 'shared/verticals/urban/index.ts',\n    actors: 'shared/verticals/actors/index.ts',",
@@ -485,9 +483,7 @@ describe('runGamesRepoContractCheck — delivery contract', () => {
   });
 
   it('passes with a note when this side accepts a file the games repo does not list yet', async () => {
-    // The documented rollout order is website-first, so this state is the safe one. If it
-    // failed, the safe order would be the one that reddens master and the unsafe order the
-    // comfortable one — see describeDeliveryDrift.
+    // Website-first rollout must stay green.
     const withoutEditor = DELIVERY_FIXED_FILES.filter((path) => path !== 'EDITOR.json');
     const { outcome } = await check(deliverySource({ fixedFiles: withoutEditor }));
     expect(outcome.kind).toBe('ok');
@@ -503,8 +499,7 @@ describe('runGamesRepoContractCheck — delivery contract', () => {
   });
 
   it('does not read a website-ahead entry as a phantom reorder', async () => {
-    // Dropping a middle entry shifts every later one; comparing full lists would call that
-    // a reorder on top of the (tolerated) missing entry.
+    // Compare only shared entries to avoid phantom reorders.
     const withoutTrace = DELIVERY_FIXED_FILES.filter((path) => path !== 'TRACE.json');
     const { outcome } = await check(deliverySource({ fixedFiles: withoutTrace }));
     expect(outcome.kind).toBe('ok');
@@ -515,6 +510,12 @@ describe('runGamesRepoContractCheck — delivery contract', () => {
       (await check(deliverySource({ extraModulePattern: '^[a-z0-9][a-z0-9/-]{0,90}\\.ts$' }))).outcome,
     );
     expect(reason).toContain('extraModulePattern');
+  });
+
+  it('allows the website to accept test paths before the Creator Kit', async () => {
+    const { outcome } = await check(deliverySource({ extraModulePattern: '^[a-z0-9][a-z0-9/-]{0,60}\\.ts$' }));
+    expect(outcome.kind).toBe('ok');
+    expect(outcome.kind === 'ok' && outcome.notes?.join('\n')).toContain('*.test.ts and *.spec.ts');
   });
 
   it('reports drift when a games-repo cap exceeds what this side accepts', async () => {
@@ -528,9 +529,7 @@ describe('runGamesRepoContractCheck — delivery contract', () => {
   });
 
   it('passes with a note when this side accepts more than the games repo advertises', async () => {
-    // A website-first cap raise. Inert for deliveries, and failing it would make the
-    // documented safe merge order the one that reddens master — same asymmetry as the
-    // fixed-file list.
+    // Website-first cap increases must stay green.
     const { outcome } = await check(deliverySource({ maxUploadBytes: DELIVERY_MAX_UPLOAD_BYTES / 2 }));
     expect(outcome.kind).toBe('ok');
     expect((outcome as { notes?: string[] }).notes?.join('\n')).toContain('maxUploadBytes');

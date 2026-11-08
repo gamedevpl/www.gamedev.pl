@@ -17,7 +17,7 @@
     "style.css",
     "sim.ts"
   ],
-  "extraModulePattern": "^[a-z0-9][a-z0-9/-]{0,60}\\.ts$",
+  "extraModulePattern": "^[a-z0-9][a-z0-9/-]{0,60}(?:\\.(?:test|spec))?\\.ts$",
   "reservedSegments": ["shared", "tools", "games", "node_modules", "dist", "references", "templates"],
   "maxFiles": 300,
   "maxUploadBytes": 2097152,

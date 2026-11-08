@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Checkout, pull and push preserve game unit tests named `*.test.ts` and `*.spec.ts` alongside the game sources (#2086).
+
 ## 0.67.0 — 2026-11-07
 
 ### Added

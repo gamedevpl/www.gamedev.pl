@@ -13,4 +13,11 @@ describe('codeSurfacePaths against the shared delivery allowlist', () => {
       if (deliverablePathReason(path) === null) expect(deliveryPathRefusal(path), path).toBeNull();
     }
   });
+
+  it('allows creating game test files in Studio', () => {
+    for (const path of ['game/audit.test.ts', 'game/model.spec.ts', 'tests/model.test.ts']) {
+      expect(deliverablePathReason(path), path).toBeNull();
+      expect(deliveryPathRefusal(path), path).toBeNull();
+    }
+  });
 });

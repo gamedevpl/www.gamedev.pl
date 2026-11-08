@@ -124,6 +124,11 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
      Or `patch_source_file({ path, patch })` with a unified
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
+   - **Tests:** deliveries preserve `*.test.ts`, `*.spec.ts` and `tests/` helpers.
+     Run `npm run test:game -- <slug>` locally with Node's `node:test` runner.
+     Browser typecheck preflight excludes test roots; imports from production still
+     bring them into the checked graph. The server gate does not execute delivered
+     Node tests. Do not describe stored tests as a passing server test run.
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
      `warnings.code=module_too_large` (on `get_sources` / stage / patch)
      by splitting cohesive pieces _before_ more feature work — same urgency as
