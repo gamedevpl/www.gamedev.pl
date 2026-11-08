@@ -1,6 +1,7 @@
 export { looksLikeMcpSessionKey } from './mcp-session-shape.js';
 import { verifyCapabilityRevision } from '../platform/capability-revision.js';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { expiredInfo } from '../platform/round-closed.js';
 import { COMPACT_PREFIX, mintCompactSessionKey, verifyCompactSessionKey } from './mcp-session-compact.js';
 import {
   ACTOR_UID_RE,
@@ -180,6 +181,6 @@ export function verifyMcpSessionKey(token: string, secret: string): McpSessionKe
 /** Expiry check only — generation checks go through {@link classifyAgentTokenAccess}. */
 export function assertMcpSessionKeyUnexpired(claims: McpSessionKeyClaims, nowMs: number = Date.now()): void {
   if (claims.exp * 1000 <= nowMs) {
-    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON, expiredInfo(claims.exp));
   }
 }

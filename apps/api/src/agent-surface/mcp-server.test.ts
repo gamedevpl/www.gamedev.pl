@@ -501,7 +501,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(screenshotUpload?.description).toMatch(/later\/resumed|already available/);
     expect(screenshotUpload?.description).toMatch(/get_gate_verdict/);
     const stageUpload = tools.find((t) => t.name === 'stage_upload_url')?.description;
-    expect(stageUpload).toMatch(/upload contracts as data .*exactly its headers/);
+    expect(stageUpload).toMatch(/ONE upload contract .*exactly `batch.headers`/);
     expect(stageUpload).not.toMatch(/curl |--upload-file/);
     expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
@@ -2141,7 +2141,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(staged.map((file) => file.path)).toContain('game/typeless.ts');
   });
 
-  it('gives a managed session one upload contract per batch; public clients keep one per path', async () => {
+  it('gives managed and public sessions one upload contract per batch', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     await store.setRoundBuilder(ISSUE, 'platform');
@@ -2156,10 +2156,10 @@ declare const GameKit: { defineGame(): unknown };
       name: string;
       description: string;
     }>;
-    expect(listed.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/one upload contract/);
+    expect(listed.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/ONE upload contract/);
     const publicList = (await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId })).json().result
       .tools as Array<{ name: string; description: string }>;
-    expect(publicList.find((t) => t.name === 'stage_upload_url')?.description).not.toMatch(/one upload contract/);
+    expect(publicList.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/ONE upload contract/);
     const started = await callTool(app, 'start', { slug: 'comet-courier' }, managed);
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
     const minted = await callTool(app, 'stage_upload_url', { sessionKey, paths: ['game/a.ts', 'game/b.ts'] }, managed);
@@ -2184,8 +2184,8 @@ declare const GameKit: { defineGame(): unknown };
       { sessionKey: publicKey, paths: ['game/a.ts'] },
       { 'mcp-session-id': sessionId },
     );
-    expect(perPath.structured).toHaveProperty('uploads');
-    expect(perPath.structured).not.toHaveProperty('batch');
+    expect(perPath.structured).toHaveProperty('batch');
+    expect(perPath.structured).not.toHaveProperty('uploads');
   });
 
   it('stage_upload_url + raw PUT stages without content in a tool argument', async () => {
@@ -2256,10 +2256,10 @@ declare const GameKit: { defineGame(): unknown };
     );
     expect(mixed.isError).toBe(false);
     const mixedResult = mixed.structured as {
-      uploads: Array<{ path: string }>;
+      batch: { paths: string[] };
       rejected?: Array<{ path: string; reason: string }>;
     };
-    expect(mixedResult.uploads.map((upload) => upload.path)).toEqual(['game/ok-one.ts', 'game/ok-two.ts']);
+    expect(mixedResult.batch.paths).toEqual(['game/ok-one.ts', 'game/ok-two.ts']);
     expect(mixedResult.rejected).toEqual([{ path: 'tsconfig.json', reason: expect.stringContaining('tsconfig.json') }]);
 
     // With nothing mintable there is nothing to hand back, so it still refuses.
@@ -2271,28 +2271,28 @@ declare const GameKit: { defineGame(): unknown };
     const testPaths = Array.from({ length: 20 }, (_, i) => `game/module-${i}.ts`);
     const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
-    const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string; method: string; headers: Record<string, string> }>;
+    const { batch } = batchMinted.structured as {
+      batch: { paths: string[]; url: string; method: string; headers: Record<string, string> };
     };
-    expect(batchStructured.uploads).toHaveLength(20);
-    for (const item of batchStructured.uploads) {
-      expect(item.method).toBe('PUT');
-      expect(item.headers['Content-Type']).toBe('text/plain; charset=utf-8');
-      expect(item.headers.Authorization).toMatch(/^Bearer /);
-    }
-    expect(JSON.stringify(batchStructured)).not.toMatch(SHELL_COMMAND);
+    // One token serves the whole batch, so the reply carries one Authorization.
+    expect(batch.paths).toEqual(testPaths);
+    expect(batch.method).toBe('PUT');
+    expect(batch.headers['Content-Type']).toBe('text/plain; charset=utf-8');
+    expect(batch.headers.Authorization).toMatch(/^Bearer /);
+    expect(JSON.stringify(batchMinted.structured).match(/Bearer /g)).toHaveLength(1);
+    expect(JSON.stringify(batchMinted.structured)).not.toMatch(SHELL_COMMAND);
 
     // Parallel concurrent PUT execution — verifies CAS retry resilience under 20-way concurrency
     const putResults = await Promise.all(
-      batchStructured.uploads.map((item) =>
+      batch.paths.map((path) =>
         app.inject({
           method: 'PUT',
-          url: item.url.replace(/^https?:\/\/[^/]+/, ''),
+          url: `${batch.url.replace(/^https?:\/\/[^/]+/, '')}?path=${encodeURIComponent(path)}`,
           headers: {
-            authorization: item.headers.Authorization!,
-            'content-type': item.headers['Content-Type']!,
+            authorization: batch.headers.Authorization!,
+            'content-type': batch.headers['Content-Type']!,
           },
-          payload: Buffer.from(`// content for ${item.path}\n`, 'utf8'),
+          payload: Buffer.from(`// content for ${path}\n`, 'utf8'),
         }),
       ),
     );

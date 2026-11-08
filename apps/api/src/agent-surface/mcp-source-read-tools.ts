@@ -117,7 +117,10 @@ export function createSourceReadTools(
         'read only the files you need, with read_source_files, or download archive once if you have a shell. ' +
         'Pass full:true to get every file inline. seedStatus=pending means a draft is still generating — browse the ' +
         'kit briefly and call this again rather than scaffolding. ' +
-        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features.',
+        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
+        'manifest[].sha256 is the delivered file: hash your local files (sha256sum) and stage only those that differ, ' +
+        'since submit_sources({ fromStaged: true }) overlays staging on exactly this delivery; mtimes are not a diff. ' +
+        'Staging survives a refused submit: check list_staged_sources and re-stage or clear any path you since reverted.',
       inputSchema: {
         type: 'object',
         properties: {

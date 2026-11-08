@@ -43,7 +43,13 @@ const WRITES_ONCE = {
 // Studio labels and translates this relay of the creator's words.
 const RELAY_VERBATIM =
   "Quote the creator's own words, in the language they used — this is shown to them as their request, so a " +
-  'rewritten or translated summary reads as something they said and did not. Summarize only what will not fit.';
+  'rewritten or translated summary reads as something they said and did not. Summarize only what will not fit. ' +
+  'If moderation refuses the quote, retry once with the same request in milder words, same language and meaning.';
+
+// Soften a refused creator quote; never drop it.
+const SOFTEN_HINT =
+  "The creator's quote was refused by moderation. Retry once with the same request in milder words, " +
+  'keeping their language and meaning; do not drop the request.';
 
 export interface RoundReopenToolsDeps {
   store: Store | undefined;
@@ -138,7 +144,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const key = typeof args.key === 'string' ? args.key.trim() : '';
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
-
 
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {
@@ -252,6 +257,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
           return toolRefusal(rejectionFor(moderation).error, 'moderation_rejected', {
             category: rejectionFor(moderation).category,
+            ...(moderation.unavailable ? {} : { hint: SOFTEN_HINT }),
           });
         }
 
@@ -376,7 +382,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {
           return toolErr('feedback is required — relay what the creator wants changed');
@@ -469,6 +474,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
           return toolRefusal(rejectionFor(moderation).error, 'moderation_rejected', {
             category: rejectionFor(moderation).category,
+            ...(moderation.unavailable ? {} : { hint: SOFTEN_HINT }),
           });
         }
 

@@ -2,6 +2,9 @@ import { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-
 export { ACTOR_UID_RE, encodeActorUidField, decodeActorUidField } from './actor-uid.js';
 import { bindCapabilityRevision, verifyCapabilityRevision } from './capability-revision.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { RoundClosed } from '../store/records/rounds.js';
+import { closedInfo, expiredInfo, type RoundClosedInfo } from './round-closed.js';
+export { roundClosedFields, type RoundClosedInfo } from './round-closed.js';
 
 export { readBearerToken } from './bearer.js';
 
@@ -27,7 +30,10 @@ export { readBearerToken } from './bearer.js';
  */
 
 export class InvalidAgentTokenError extends Error {
-  constructor(message = 'invalid build token') {
+  constructor(
+    message = 'invalid build token',
+    readonly closed?: RoundClosedInfo,
+  ) {
     super(message);
     this.name = 'InvalidAgentTokenError';
   }
@@ -206,10 +212,7 @@ export function verifyManagedMcpOpener(token: string, secret: string): ManagedOp
   }
 }
 
-/**
- * Legacy mint: HMAC over `(scope, jobId)` only. Kept for tests that need to synthesize
- * a pre-migration token; production minting always goes through {@link mintAgentToken}.
- */
+// Pre-migration token shape, for tests; production uses mintAgentToken.
 export function mintLegacyAgentToken(jobId: number, secret: string): string {
   return Buffer.from(`${jobId}.${signLegacy(jobId, secret)}`, 'utf8').toString('base64url');
 }
@@ -300,12 +303,12 @@ export function verifyAgentToken(token: string, secret: string): AgentTokenClaim
  */
 export function assertAgentTokenActive(
   claims: AgentTokenClaims,
-  record: { roundGeneration?: number; receiptRound?: { generation: number } },
+  record: { roundGeneration?: number; receiptRound?: { generation: number }; roundClosed?: RoundClosed },
   nowMs: number = Date.now(),
 ): void {
   const access = classifyAgentTokenAccess(claims, record, nowMs);
   if (access !== 'active') {
-    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON, closedInfo(claims.roundGeneration ?? 0, record));
   }
 }
 
@@ -326,14 +329,14 @@ export type AgentTokenAccess = 'active' | 'terminal_receipt';
 
 export function classifyAgentTokenAccess(
   claims: AgentTokenClaims,
-  record: { roundGeneration?: number; receiptRound?: { generation: number } },
+  record: { roundGeneration?: number; receiptRound?: { generation: number }; roundClosed?: RoundClosed },
   nowMs: number = Date.now(),
 ): AgentTokenAccess {
   const active = record.roundGeneration;
 
   if (claims.roundGeneration !== undefined && claims.exp !== undefined) {
     if (claims.exp * 1000 <= nowMs) {
-      throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+      throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON, expiredInfo(claims.exp));
     }
     if (active !== undefined && claims.roundGeneration === active) {
       return 'active';
@@ -346,7 +349,7 @@ export function classifyAgentTokenAccess(
     ) {
       return 'terminal_receipt';
     }
-    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON, closedInfo(claims.roundGeneration, record));
   }
 
   // Legacy shape: only while the job has never been generation-scoped.
@@ -356,9 +359,4 @@ export function classifyAgentTokenAccess(
   return 'active';
 }
 
-/**
- * `readBearerToken` lives in `bearer.ts` and is re-exported above. The agent channel
- * takes its credential from a header rather than the path (unlike the creator-facing
- * status routes) because these calls come from scripts and CI-ish environments where
- * URLs end up in shell history and access logs.
- */
+// Header, not path: script URLs land in shell history and access logs.

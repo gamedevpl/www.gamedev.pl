@@ -8,11 +8,7 @@
 
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery, SeedFiles } from './agent-backend.js';
 import type { AgentObservation } from '../creation/job-state.js';
-
-export interface SelfBuildSignals {
-  lastAgentSignalAt?: string;
-  deliveredVersion?: string;
-}
+import { publishedThisRound, type SelfBuildSignals } from './self-build-signals.js';
 
 export interface SelfBuildBackendOptions {
   /**
@@ -79,7 +75,8 @@ export function createSelfBuildBackend(options: SelfBuildBackendOptions = {}): A
       const jobId = parseSelfBuildRef(ref);
       if (jobId === null) return null;
       const signals = options.readSignals ? await options.readSignals(jobId) : null;
-      const delivered = hasCandidate || Boolean(signals?.deliveredVersion);
+      // A continuation inherits deliveredVersion; that closed live rounds mid-work.
+      const delivered = signals ? publishedThisRound(signals) : hasCandidate;
       if (delivered) {
         return { state: 'completed', hasCandidate: true };
       }

@@ -7,6 +7,7 @@ import {
   encodeActorUidField,
 } from '../platform/agent-token.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS } from '../delivery/gcs-sign.js';
+import { expiredInfo } from '../platform/round-closed.js';
 
 // Short-lived signed PUT URLs for raw file uploads.
 
@@ -242,6 +243,6 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
 
 export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: number = Date.now()): void {
   if (claims.exp * 1000 <= nowMs) {
-    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON);
+    throw new InvalidAgentTokenError(STALE_AGENT_TOKEN_REASON, expiredInfo(claims.exp));
   }
 }

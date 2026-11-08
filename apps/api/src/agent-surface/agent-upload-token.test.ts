@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import { assertUploadTokenUnexpired, mintUploadToken, verifyUploadToken } from './agent-upload-token.js';
+import { InvalidAgentTokenError, roundClosedFields } from '../platform/agent-token.js';
 
 const secret = 'upload-test-secret';
 
@@ -114,6 +115,14 @@ describe('agent-upload-token', () => {
     });
     const claims = verifyUploadToken(token, secret);
     expect(() => assertUploadTokenUnexpired(claims, 1_000_000 + 2_000)).toThrow(/finished/i);
+    try {
+      assertUploadTokenUnexpired(claims, 1_000_000 + 2_000);
+    } catch (error) {
+      expect(roundClosedFields(error as InvalidAgentTokenError)).toMatchObject({
+        code: 'round_closed',
+        reason: 'expired',
+      });
+    }
   });
 
   it('requires a path for stage uploads', () => {

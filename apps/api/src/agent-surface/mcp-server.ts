@@ -82,6 +82,7 @@ import { resolveGameAccess, roundAuthorityCurrent } from '../platform/game-acces
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
+  roundClosedFields,
   mintAgentToken,
   readBearerToken,
   STALE_AGENT_TOKEN_REASON,
@@ -145,6 +146,8 @@ import type { ContentChecker } from '../platform/moderation.js';
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
+import { briefLocales, receiptClosedFields, SESSION_EXPIRES_AT_PROP } from './mcp-round-closed.js';
+
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
@@ -557,11 +560,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           // Expired keys carry STALE_AGENT_TOKEN_REASON (correct: round is done).
           // Forge/malformed throws InvalidAgentTokenError with the generic default —
           // do not rewrite that as "finished" or agents will chase the wrong fix.
-          return toolErr(
-            error.message === STALE_AGENT_TOKEN_REASON
-              ? STALE_AGENT_TOKEN_REASON
-              : 'invalid sessionKey — call start() again',
-          );
+          return error.message === STALE_AGENT_TOKEN_REASON
+            ? toolErr(STALE_AGENT_TOKEN_REASON, roundClosedFields(error))
+            : toolErr('invalid sessionKey — call start() again');
         }
         throw error;
       }
@@ -634,13 +635,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       access = classifyAgentTokenAccess(claims, record, now());
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        return toolErr(error.message || FINISHED_REASON);
+        return toolErr(error.message || FINISHED_REASON, roundClosedFields(error));
       }
       throw error;
     }
 
     if (access === 'terminal_receipt' && !options.allowTerminalReceipt) {
-      return toolErr(FINISHED_REASON);
+      return toolErr(FINISHED_REASON, receiptClosedFields(record));
     }
 
     const actorUid = sessionActorUid ?? claims.actorUid ?? record.ownerUid;
@@ -959,7 +960,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           round: { type: 'number' },
           locales: { type: 'array', items: { type: 'string' } },
           deliveriesRemaining: { type: ['number', 'null'] },
-          expiresAt: { type: 'number', description: 'Unix seconds.' },
+          expiresAt: SESSION_EXPIRES_AT_PROP,
           sequence: { type: 'array', items: { type: 'string' }, description: 'The usual order of a round.' },
           workflow: { type: 'array', items: { type: 'string' }, description: 'Deprecated alias of sequence.' },
           nextSuggestedTool: { type: 'string' },
@@ -1065,7 +1066,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             title: active.title,
             state: active.state ?? 'queued',
             round: roundGeneration,
-            locales: active.locale ? [active.locale, 'en'] : ['en'],
+            locales: briefLocales(active.locale),
             deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
             expiresAt: sessionClaims.exp,
             sequence: ROUND_SEQUENCE,
@@ -1147,7 +1148,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               }
             } catch (error) {
               noteInvalidStart(ctx.request);
-              if (error instanceof InvalidAgentTokenError) return toolErr(error.message || FINISHED_REASON);
+              if (error instanceof InvalidAgentTokenError)
+                return toolErr(error.message || FINISHED_REASON, roundClosedFields(error));
               throw error;
             }
             if ((active.builder ?? 'platform') !== 'platform') {
@@ -1228,7 +1230,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           } catch (error) {
             noteInvalidStart(ctx.request);
             if (error instanceof InvalidAgentTokenError) {
-              return toolErr(error.message || FINISHED_REASON);
+              return toolErr(error.message || FINISHED_REASON, roundClosedFields(error));
             }
             throw error;
           }
@@ -1273,7 +1275,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           title: record.title,
           state: record.state ?? 'queued',
           round: roundGeneration,
-          locales: record.locale ? [record.locale, 'en'] : ['en'],
+          locales: briefLocales(record.locale),
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           expiresAt: sessionClaims.exp,
           sequence: ROUND_SEQUENCE,
@@ -1337,7 +1339,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       agentTokenSecret,
       now,
       assertDeliverableSourcePath,
-      batchUploads: (ctx) => managedOpenerClaims(ctx.bearerToken) !== null,
     }),
     ...createExampleTools({ resolveAuth, injectChannel }),
 
@@ -1557,13 +1558,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                 : uiResourceUri
                   ? { 'openai/outputTemplate': uiResourceUri }
                   : null;
-              const shown = (opener !== null && tool.managed) || tool;
               return {
                 name,
-                description: shown.description,
+                description: tool.description,
                 inputSchema: tool.inputSchema,
                 // Declared once here, so a tool cannot forget that it can refuse.
-                outputSchema: withErrorBranch(shown.outputSchema),
+                outputSchema: withErrorBranch(tool.outputSchema),
                 ...(tool.annotations ? { annotations: tool.annotations } : {}),
                 ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
               };

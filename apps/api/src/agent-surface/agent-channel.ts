@@ -25,6 +25,7 @@ import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
+  roundClosedFields,
   readBearerToken,
   STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
@@ -755,7 +756,7 @@ export async function registerAgentChannelRoutes(
       // sources/inbox plus unguarded inbox/ack writes. The 401 body already is the
       // stop signal ("this build is finished — get a fresh prompt…"). Terminal-receipt
       // reads for a closed round's own gate verdict use allowTerminalReceipt above.
-      reply.status(401).send({ error: error.message || 'invalid build token' });
+      reply.status(401).send({ error: error.message || 'invalid build token', ...roundClosedFields(error) });
       return null;
     }
   }
@@ -784,7 +785,7 @@ export async function registerAgentChannelRoutes(
       assertUploadTokenUnexpired(upload, now());
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        reply.status(401).send({ error: error.message || 'invalid upload token', ...roundClosedFields(error) });
         return null;
       }
       throw error;
@@ -824,7 +825,7 @@ export async function registerAgentChannelRoutes(
       );
     } catch (error) {
       if (error instanceof InvalidAgentTokenError) {
-        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        reply.status(401).send({ error: error.message || 'invalid upload token', ...roundClosedFields(error) });
         return null;
       }
       throw error;

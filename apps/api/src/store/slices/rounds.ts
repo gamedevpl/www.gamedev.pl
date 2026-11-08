@@ -5,18 +5,18 @@ import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import { nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
-import type { BuilderHandoff } from '../records/rounds.js';
+import type { BuilderHandoff, RoundClosedReason } from '../records/rounds.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 import { ownsTakeoverRound, firestoreOwnsTakeoverRound } from '../takeover-authority.js';
 import type { GameAccessRecord } from '../records/game-access.js';
 import { erasedInTransaction } from './erasure-fence.js';
 import { epochForRound } from './round-epoch.js';
-import { clearRoundSignals, takeoverRecord } from './round-close.js';
+import { clearRoundSignals, stampRoundClosed, takeoverRecord } from './round-close.js';
 
 export interface RoundsStore {
   takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean>;
   // Advances roundGeneration with no state change; null if the job is gone.
-  bumpRoundGeneration(jobId: number): Promise<number | null>;
+  bumpRoundGeneration(jobId: number, reason?: RoundClosedReason): Promise<number | null>;
 
   // Returns the job's active generation, initializing it to 1 when absent.
   ensureRoundGeneration(jobId: number): Promise<number | null>;
@@ -86,7 +86,7 @@ export class InMemoryRoundsStore implements RoundsStore {
     return true;
   }
 
-  async bumpRoundGeneration(jobId: number): Promise<number | null> {
+  async bumpRoundGeneration(jobId: number, reason: RoundClosedReason = 'new_round'): Promise<number | null> {
     const sub = this.submissions.get(jobId);
     if (!sub) return null;
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
@@ -103,6 +103,7 @@ export class InMemoryRoundsStore implements RoundsStore {
       roundStartedAt: new Date().toISOString(),
     };
     clearRoundSignals(next);
+    stampRoundClosed(next, sub, reason, next.roundStartedAt!);
     this.submissions.set(jobId, next);
     return roundGeneration;
   }
@@ -263,7 +264,7 @@ export class FirestoreRoundsStore implements RoundsStore {
     });
   }
 
-  async bumpRoundGeneration(jobId: number): Promise<number | null> {
+  async bumpRoundGeneration(jobId: number, reason: RoundClosedReason = 'new_round'): Promise<number | null> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -285,6 +286,7 @@ export class FirestoreRoundsStore implements RoundsStore {
         roundStartedAt: new Date().toISOString(),
       };
       clearRoundSignals(next);
+      stampRoundClosed(next, current, reason, next.roundStartedAt!);
       tx.set(ref, next);
       return roundGeneration;
     });

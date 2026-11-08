@@ -17,7 +17,7 @@ import {
 } from '../records/dispatch.js';
 import type { SubmissionRecord } from '../records/submission.js';
 import { erasedInTransaction } from './erasure-fence.js';
-import { clearRoundSignals, guardHolds, stampReceiptRound, type TransitionGuard } from './round-close.js';
+import { closeRoundRecord, guardHolds, type TransitionGuard } from './round-close.js';
 
 export type { TransitionGuard } from './round-close.js';
 
@@ -108,8 +108,7 @@ export class InMemoryDispatchStore implements DispatchStore {
         : {}),
     };
     if (closes) {
-      clearRoundSignals(next);
-      stampReceiptRound(next, sub);
+      closeRoundRecord(next, sub, transition);
     }
     this.submissions.set(jobId, next);
     return true;
@@ -295,8 +294,7 @@ export class FirestoreDispatchStore implements DispatchStore {
           roundPreflightRefusalsSymbols: 0,
           roundStartedAt: transition.at,
         };
-        clearRoundSignals(next);
-        stampReceiptRound(next, current);
+        closeRoundRecord(next, current, transition);
         tx.set(ref, next);
       } else {
         tx.set(

@@ -42,7 +42,7 @@ import type {
   ReviewSweep,
   Scorecard,
 } from './records/review.js';
-import type { AgentEndedBy, BuilderHandoff } from './records/rounds.js';
+import type { AgentEndedBy, BuilderHandoff, RoundClosedReason } from './records/rounds.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './records/social.js';
 import type { SubmissionRecord } from './records/submission.js';
 import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
@@ -496,8 +496,8 @@ export class FirestoreStore extends PlayJournalFacade implements Store {
     return this.roundsStore.takeOverAgentRound(jobId, uid, generation, at);
   }
 
-  async bumpRoundGeneration(jobId: number): Promise<number | null> {
-    return this.roundsStore.bumpRoundGeneration(jobId);
+  async bumpRoundGeneration(jobId: number, reason?: RoundClosedReason): Promise<number | null> {
+    return this.roundsStore.bumpRoundGeneration(jobId, reason);
   }
 
   async pinRoundKitEngineRef(jobId: number, engineRef: string, replace = false): Promise<string | null> {
