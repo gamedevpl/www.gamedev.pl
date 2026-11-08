@@ -1,4 +1,4 @@
-export const CLI_VERSION = '0.67.1';
+export const CLI_VERSION = '0.67.2';
 
 export const CLI_RELEASE_PREFIX = 'cli-v';
 

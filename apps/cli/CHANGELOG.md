@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.67.2 — 2026-11-08
+
 ### Fixed
 
 - Play agents check Studio status and source differences through host tools when their shell has restricted network or account access (#2088).
