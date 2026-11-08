@@ -33,7 +33,12 @@ export function withoutRetiredPaths<T extends { path: string }>(files: readonly 
 }
 
 // Own modules; string form keeps `.source` equal to games-repo JSON.
-export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
+export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}(?:\\.(?:test|spec))?\\.ts$');
+
+// Node test roots stay outside the browser-only typecheck preflight.
+export function isDeliveryTestPath(path: string): boolean {
+  return path.startsWith('tests/') || /\.(?:test|spec)\.ts$/.test(path);
+}
 
 // Game-owned PNG/WebP under scenes/, cast/ or images/.
 export const DELIVERY_EXTRA_ASSET_PATTERN = new RegExp(

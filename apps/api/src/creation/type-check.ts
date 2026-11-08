@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isDeliveryTestPath } from '@gamedevpl/contract';
 
 /**
  * Type-check a candidate game edit, in memory, before it is allowed to become a
@@ -38,10 +39,7 @@ import ts from 'typescript';
 export const COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,
   strict: true,
-  // Game code only, and stricter than the games repo's `tsconfig.json` on purpose: its
-  // `npm run typecheck` compiles `games/` under this flag too (it just cannot say so
-  // per-directory, with GameKit's own debt in the same tree). An unannotated parameter is
-  // an `any` with nothing to grep for, so Check 37's ban would be a formality without it.
+  // Strict game code matches the Creator Kit's per-game typecheck.
   noImplicitAny: true,
   strictPropertyInitialization: false,
   useUnknownInCatchVariables: false,
@@ -83,7 +81,7 @@ export function typeCheckGame(
     if (relative.endsWith('.ts')) files.set(`${ROOT}/${relative}`, source);
   }
   // Kit files resolve imports; they are not program roots.
-  const roots = [...files.keys()];
+  const roots = [...files.keys()].filter((file) => !isDeliveryTestPath(file.slice(ROOT.length + 1)));
   for (const [rel, source] of Object.entries(kitShared)) files.set(`/${rel}`, source);
 
   const host: ts.CompilerHost = {

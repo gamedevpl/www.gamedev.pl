@@ -34,4 +34,24 @@ describe('untrusted editor materialization', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('preserves delivered tests and marks them as untrusted', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'test-delivery-'));
+    const content = "import test from 'node:test';\nthrow new Error('must not run');\n";
+    const store = { getSourceFile: async () => content } as unknown as GamesStore;
+    const manifest = {
+      slug: 'test',
+      version: 'v1',
+      sourceFiles: ['game/audit.test.ts', 'tests/nested/model.spec.ts'],
+    } as VersionManifest;
+    try {
+      await materializeCandidate(store, manifest, directory);
+      expect(await readFile(path.join(directory, '.untrusted-delivery'), 'utf8')).toBe('');
+      for (const file of manifest.sourceFiles) {
+        expect(await readFile(path.join(directory, file), 'utf8')).toBe(content);
+      }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

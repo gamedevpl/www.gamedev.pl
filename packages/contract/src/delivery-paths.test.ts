@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DELIVERY_FIXED_FILES, deliveryPathRefusal, isDeliverablePath, isRasterSourcePath } from './delivery-paths.js';
+import {
+  DELIVERY_FIXED_FILES,
+  deliveryPathRefusal,
+  isDeliverablePath,
+  isDeliveryTestPath,
+  isRasterSourcePath,
+} from './delivery-paths.js';
 
 describe('isDeliverablePath', () => {
   it('accepts every fixed file, own modules and raster assets', () => {
@@ -27,6 +33,34 @@ describe('isDeliverablePath', () => {
       ' SPEC.md',
     ]) {
       expect(isDeliverablePath(path), path).toBe(false);
+    }
+  });
+
+  it('accepts test suffixes without admitting arbitrary dots or harness paths', () => {
+    for (const path of ['audit.test.ts', 'game/audit.test.ts', 'game/model.spec.ts', 'tests/model.test.ts']) {
+      expect(isDeliverablePath(path), path).toBe(true);
+    }
+    for (const path of [
+      'game/audit.unit.ts',
+      'game/audit.test.spec.ts',
+      'game.test/audit.ts',
+      'game/.test.ts',
+      'game//audit.test.ts',
+      '../audit.test.ts',
+      'shared/audit.test.ts',
+      'tools/audit.spec.ts',
+      'vitest.config.ts',
+    ]) {
+      expect(isDeliverablePath(path), path).toBe(false);
+    }
+  });
+
+  it('identifies test roots and their helpers for the browser preflight', () => {
+    for (const path of ['audit.test.ts', 'game/model.spec.ts', 'tests/helper.ts', 'tests/nested/model.test.ts']) {
+      expect(isDeliveryTestPath(path), path).toBe(true);
+    }
+    for (const path of ['game.ts', 'game/audit.ts', 'game/test.ts', 'tests-helper.ts']) {
+      expect(isDeliveryTestPath(path), path).toBe(false);
     }
   });
 
