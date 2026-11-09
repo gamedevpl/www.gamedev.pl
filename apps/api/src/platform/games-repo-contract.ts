@@ -135,7 +135,8 @@ export const GAME_BUDGET_BYTES = 1404 * 1024;
 
 // Raw source ceilings cover bake/play/seed; comments and types assemble away.
 // 1593 → 2390 KiB: stay above ink-and-fury's expanded author budget.
-export const SOURCE_GRAPH_BUDGET_BYTES = 2390 * 1024;
+// 2390 → 3585 KiB: constantinople-siege sat 66 bytes under 2390 KiB.
+export const SOURCE_GRAPH_BUDGET_BYTES = 3585 * 1024;
 
 // Headroom for 300 delivered files plus shared simulation imports.
 export const MAX_SOURCE_GRAPH_MODULES = 512;

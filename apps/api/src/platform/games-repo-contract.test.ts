@@ -61,7 +61,7 @@ describe('games-repo-contract (website half)', () => {
 
   it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
     // Comments and types can exceed assembled author bytes.
-    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(2390 * 1024);
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(3585 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
     expect(MAX_SOURCE_GRAPH_MODULES).toBeGreaterThanOrEqual(256);
   });
