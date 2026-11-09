@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Pull, stash, resolve and blocked delivery offer local-agent conflict repair; merge resolution and validation repair work while the platform builder owns the round, and checkout repair requests in chat reach a local agent.
+- Pull, stash, resolve and blocked delivery offer local-agent conflict repair; merge resolution and validation repair work while the platform builder owns the round, and checkout repair requests in chat reach a local agent (#2093).
 
 ## 0.67.2 — 2026-11-08
 
