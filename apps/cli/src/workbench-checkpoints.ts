@@ -12,6 +12,7 @@ import { recoverVerification } from './repl-delivery.js';
 import { formatError } from './errors.js';
 import type { ApiClient } from './api.js';
 import type { Workshop } from './workshop.js';
+import { offerMergeAgent } from './checkout-agent.js';
 
 async function localActionUnlocked(
   line: string,
@@ -132,6 +133,12 @@ async function localActionUnlocked(
 
 export async function workbenchLocalAction(...args: Parameters<typeof localActionUnlocked>): Promise<boolean> {
   if (!['/verify', '/checkpoint', '/restore-checkpoint'].includes(args[0])) return false;
-  const ws = args[1];
-  return ws ? withCheckoutWriter(ws.root, () => localActionUnlocked(...args)) : localActionUnlocked(...args);
+  const [line, ws, write, api] = args;
+  try {
+    return await (ws ? withCheckoutWriter(ws.root, () => localActionUnlocked(...args)) : localActionUnlocked(...args));
+  } catch (error) {
+    if (line !== '/verify' || !api) throw error;
+    if (await offerMergeAgent({ api, ws, write })) return true;
+    throw error;
+  }
 }

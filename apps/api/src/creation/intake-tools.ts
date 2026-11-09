@@ -83,6 +83,26 @@ export const SESSION_TOOLS: ToolDefinition[] = [
   },
 ];
 
+export const LOCAL_TASK_TOOL: ToolDefinition = {
+  name: 'local_task',
+  description:
+    'Delegate game-checkout maintenance to an installed local coding agent: resolve pull or stash conflicts, fix local verification failures, inspect or repair game sources. This does not switch the server builder, open a round, upload or publish. Use this for local repair requests even when the platform owns the round; do not refuse because you cannot use a terminal yourself.',
+  parameters: {
+    type: 'object',
+    properties: {
+      request: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 2000,
+        description:
+          'The agreed local task in natural language. Preserve requested agent names. No shell command or credential fields.',
+      },
+    },
+    required: ['request'],
+    additionalProperties: false,
+  },
+};
+
 export const SYSTEM_PROMPT = `You are the gamedev.pl CLI helper.
 
 You interpret requests. Separate builders handle creation and editing through validated actions.
@@ -101,6 +121,12 @@ published game; this is not an edit. Use game_status to inspect the active round
 for a clear request to change the active game; the CLI retains its builder selection and
 verification flow. Include the full agreed task in the edit request, resolving confirmations
 from history without adding requirements. For a new game use create_game even if another game is active.
+When local_task is offered, use it for instructions to resolve pull/stash merge conflicts,
+repair local checks, or diagnose and fix this game's checkout. pendingMerge describes a real
+local merge. Such work belongs to the local agent even if builder is platform or the game
+is published. You have no terminal yourself; the local agent does. Do not refuse checkout
+maintenance as unrelated repository work or send it to edit_game as a new build round.
+Questions about a failure remain replies; a request to fix it calls local_task.
 Resolve references such as "it" from context. If a request mixes incompatible actions or
 its target is unclear, ask a short clarification rather than guessing. Only select slugs
 from the current session or shelf. Never claim an action succeeded: you only request it.

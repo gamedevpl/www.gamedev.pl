@@ -52,6 +52,20 @@ it('keeps a successful agent repair local when delivery is declined', async () =
   expect(readFileSync(f.source, 'utf8')).toBe('C');
 });
 
+it('repairs validation locally even while the server builder is platform and handoff is unavailable', async () => {
+  const f = fixture();
+  f.ws.builder = 'platform';
+  f.pick.mockImplementation(async (_choices, question) =>
+    question.startsWith('Local checks') ? 'Fix with agent' : BACK,
+  );
+  await f.run();
+  expect(f.ws.runAdapter).toHaveBeenCalledTimes(1);
+  expect(f.requests.some((r) => r.path.endsWith('/handoff') || r.path.endsWith('/turn'))).toBe(false);
+  expect(f.writes()).toEqual([]);
+  expect(f.ws.builder).toBe('platform');
+  expect(f.lines.join('\n')).toContain('Local checks passed.');
+});
+
 it('passes multiline diagnostics as diagnostic JSON rather than shell arguments', async () => {
   const f = fixture();
   f.state.detail = 'game.ts:3: missing "cue"\nGAME.json: missing title\n';

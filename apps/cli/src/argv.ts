@@ -109,6 +109,7 @@ const BOOLEAN_FLAGS = new Set([
   'recover',
   'publish',
   'handoff',
+  'local',
   'takeover',
   'submit',
   'json',

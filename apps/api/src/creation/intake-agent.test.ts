@@ -240,7 +240,15 @@ describe('CLI session tools', () => {
   function actionResult(action: Record<string, unknown>): GenerationResult {
     const { name, ...args } = action;
     const tool =
-      name === 'play' ? 'play_game' : name === 'status' ? 'game_status' : name === 'edit' ? 'edit_game' : String(name);
+      name === 'play'
+        ? 'play_game'
+        : name === 'status'
+          ? 'game_status'
+          : name === 'edit'
+            ? 'edit_game'
+            : name === 'local'
+              ? 'local_task'
+              : String(name);
     return { parts: [{ type: 'toolCall', toolCall: { name: tool, arguments: args } }] };
   }
   it.each([
@@ -313,6 +321,34 @@ describe('CLI session tools', () => {
   it('does not enable actions for legacy clients', async () => {
     const agent = new IntakeChatAgent({ client: stubClient(actionResult({ name: 'play', slug: 'airtime' })) });
     await expect(agent.decide({ message: 'go', history: [] })).rejects.toThrow('invalid CLI action');
+  });
+  it('routes merge repair to a capable local client without treating it as a new game edit', async () => {
+    const action = { name: 'local', request: 'Rozwiąż konflikty po pullu' };
+    let captured: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(actionResult(action), (request) => {
+        captured = request;
+      }),
+    });
+    expect(
+      await agent.decide({
+        message: action.request,
+        history: [],
+        session: { ...session, localTasks: true, pendingMerge: 'pull' },
+      }),
+    ).toMatchObject({ kind: 'action', action });
+    expect(captured!.tools?.some((tool) => tool.name === 'local_task')).toBe(true);
+    expect(JSON.stringify(captured!.prompt)).toContain('pendingMerge');
+  });
+  it('does not advertise or accept local tasks for an older client', async () => {
+    let captured: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(actionResult({ name: 'local', request: 'Resolve conflicts' }), (request) => {
+        captured = request;
+      }),
+    });
+    await expect(agent.decide({ message: 'resolve', history: [], session })).rejects.toThrow('capable checkout');
+    expect(captured!.tools?.some((tool) => tool.name === 'local_task')).toBe(false);
   });
   it('clarifies rather than executing several actions', async () => {
     const agent = new IntakeChatAgent({

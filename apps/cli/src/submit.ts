@@ -25,7 +25,7 @@ import {
   readGameContent,
   rasterBytes,
 } from './checkout.js';
-import { hashesOf, hashContent, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
+import { hashesOf, hashContent, CheckoutSyncError, type SyncResult, type TreeFile } from './checkout-sync.js';
 import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
@@ -219,8 +219,7 @@ async function submitGameUnlocked(input: {
     !input.force &&
     (first.sync.kind === 'conflict' || first.sync.kind === 'legacy' || first.sync.kind === 'platform_only')
   ) {
-    const refused = syncRefuse(first.sync, 'submit');
-    throw new CliError(refused.message, EXIT_REFUSED, refused.next);
+    throw new CheckoutSyncError(first.sync);
   }
   await warnIfKitStale(input);
   const sourceHash = verificationSourceHash(input.dest, input.slug);
@@ -247,8 +246,7 @@ async function submitGameUnlocked(input: {
   progress('recheck', 'Rechecking platform sources after local checks');
   const latest = await inspectGame(input);
   if (!input.force && latest.sync.kind === 'conflict') {
-    const refused = syncRefuse(latest.sync, 'submit');
-    throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
+    throw new CheckoutSyncError(latest.sync, 'platform changed during verify — ');
   }
   if (
     latest.sync.kind === 'clean' &&
@@ -261,8 +259,7 @@ async function submitGameUnlocked(input: {
     return { kind: 'nothing', sync: latest.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
-    const refused = syncRefuse(latest.sync, 'submit');
-    throw new CliError(refused.message, EXIT_REFUSED, refused.next);
+    throw new CheckoutSyncError(latest.sync);
   }
 
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, latest.tree.version);

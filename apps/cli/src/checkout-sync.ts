@@ -20,6 +20,16 @@ export type SyncResult = {
 
 export type BaseRecord = { version: string; files: Record<string, string>; slug?: string };
 
+export class CheckoutSyncError extends CliError {
+  constructor(
+    readonly sync: SyncResult,
+    prefix = '',
+  ) {
+    const refused = syncRefuse(sync, 'submit');
+    super(prefix + refused.message, EXIT_REFUSED, refused.next);
+  }
+}
+
 export const BASE_FILE = '.gamedev-base.json';
 
 export function hashContent(content: string): string {

@@ -16,6 +16,15 @@ per-round managed opener (`mcpOpenerToken`), and `start` exchanges it for the ro
 
 ## Local CLI delegation
 
+Checkout maintenance is independent of server builder ownership. Pending pull/stash
+merges and validation repairs use a local task without requesting a builder handoff
+or opening a new round. The CLI keeps its writer lock, validates the agent's explicit
+per-conflict resolution report, runs checks and completes the merge. Delivery remains
+an explicit creator action. Cover both source repositories and legacy Kit checkouts,
+including add-delete choices with no source changes and retries after cancellation.
+Do not pass a pending merge through the ordinary build guard or prepare its runtime
+before source conflicts have been resolved.
+
 Local Play exposes `game_status` and `game_diff` for Studio synchronization reads.
 They use the CLI host's authenticated API client and need no build round. Direct
 agents to these tools instead of shell `gamedevpl status`/`diff`, whose network or

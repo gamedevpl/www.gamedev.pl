@@ -36,7 +36,7 @@ export const BLURB: Record<SlashVerb, string> = {
   builder: 'who builds — builder <slug> globally; choose [self|platform] in a checkout',
   connect:
     'open a game session — connect <slug>; --manual for MCP setup; --brain repl keeps the workshop instead of your agent driving Play',
-  delegate: 'local agent edits the checkout — delegate <task>; offers handoff if needed',
+  delegate: 'local agent edits the checkout — delegate [--local] <task>; local repairs need no handoff',
   checkout: 'download and open local files — checkout [slug]; --version <version> restores sources in this checkout',
   stash: 'save local drafts without delivery — stash [push [-m text]|list|show|apply|pop|drop [id]|continue|abort]',
   resolve:
