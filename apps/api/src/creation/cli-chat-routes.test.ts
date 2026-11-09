@@ -124,6 +124,33 @@ describe('POST /api/cli/chat', () => {
     expect(decide).not.toHaveBeenCalled();
     await app.close();
   });
+  it.each([true, false])('gates local task actions on checkout capability: %s', async (localTasks) => {
+    const action = { name: 'local' as const, request: 'Rozwiąż konflikty po pullu' };
+    const decide = vi.fn(async () => ({ kind: 'action' as const, action }));
+    const { app, store, authHeaders: headers } = await createApp({ intakeAgent: { decide } });
+    await store.createSubmission(1, 'g:test-user', 'Airtime');
+    await store.setSubmissionSlug(1, 'airtime');
+    const response = await chat(app, headers, {
+      text: action.request,
+      session: {
+        token: mintToken(1, secret),
+        checkoutSlug: 'airtime',
+        agents: ['codex'],
+        localTasks,
+        pendingMerge: 'pull',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().kind).toBe(localTasks ? 'action' : 'reply');
+    if (localTasks) {
+      expect(response.json().action).toEqual(action);
+      expect(decide).toHaveBeenCalledWith(
+        expect.objectContaining({ session: expect.objectContaining({ localTasks: true, pendingMerge: 'pull' }) }),
+      );
+    }
+    expect(await store.listSubmissionsByOwner('g:test-user')).toHaveLength(1);
+    await app.close();
+  });
 
   it('fails closed if an injected agent proposes an unknown target', async () => {
     const { app, authHeaders: headers } = await createApp({

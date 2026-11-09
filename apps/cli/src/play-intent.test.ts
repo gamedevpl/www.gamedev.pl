@@ -37,7 +37,7 @@ describe('CLI assistant actions', () => {
       });
       expect(request).toHaveBeenCalledExactlyOnceWith('POST', '/api/cli/chat', {
         text: line,
-        session: { token: workshop.token, checkoutSlug: 'airtime', agents: [] },
+        session: { token: workshop.token, checkoutSlug: 'airtime', agents: [], localTasks: true },
       });
       expect(playGame).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ cwd: workshop.root, slug: 'airtime' }),

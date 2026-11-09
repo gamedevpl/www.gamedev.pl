@@ -307,6 +307,23 @@ gamedevpl pull --abort
 `--ours` selects the pre-merge local file; `--theirs` selects the incoming file or its
 deletion. Case collisions are resolved as one group. `resolve --continue` / `--abort`
 work for either a pull or stash merge. The slash commands use identical rules.
+
+In a connected interactive session, `/pull`, `/resolve` and conflicting stash restores
+offer an installed local agent to resolve the merge. `/push` and `/publish` also offer
+to pull first when synchronization blocks delivery. You can decline and continue by
+hand, or use `/delegate resolve the conflicts` later. Conflict resolution runs locally
+even while the platform owns the build round; it does not request a builder handoff.
+The CLI validates explicit choices for each conflict, runs checks and completes the merge.
+Sources stay local until you explicitly deliver again. Failed or stopped work is kept
+and `/retry` resumes it. JSON and unattended commands do not show interactive offers.
+
+Game-checkout maintenance requests in chat use the same local task path. Validation
+repair after `/verify`, `/push`, `/submit` or `/publish` also runs independently of the
+server builder. Ordinary game feature requests retain the builder selection flow.
+Use `/delegate --local <task>` (or `gamedevpl delegate --local "<task>"`) to request
+local maintenance explicitly without a builder handoff or delivery. A pending merge
+automatically uses this path even without `--local`.
+
 `status` shows the pending operation. Delivery, another pull and other CLI writers
 are blocked until completion or abort. Completion validates all resolutions and the
 platform tip, then records the downloaded tree as the base; merged drafts stay local.

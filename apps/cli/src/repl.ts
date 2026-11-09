@@ -13,9 +13,8 @@ import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
 import { playSessionCommand } from './play-session-command.js';
-import { CLI_BIN, cliUsage } from './bin-name.js';
-import { glyphs, wantsColor } from './renderer.js';
-import { completeSlash, parseArgv, jsonMode, SLASH_VERBS, suggestSlash, type SlashVerb } from './argv.js';
+import { cliUsage } from './bin-name.js';
+import { parseArgv, jsonMode, SLASH_VERBS, type SlashVerb } from './argv.js';
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
@@ -30,13 +29,16 @@ import { postCliChat } from './chat.js';
 import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
-import { MASCOT_ASCII } from './tui/mascot.js';
+import { writeSlashSuggestion } from './repl-help.js';
+export { replBanner } from './repl-help.js';
 import { discoverAgents } from './agents.js';
 import type { PickChoice } from './workshop.js';
 import { handoffBuilder, handoffLine, workshopTurn, type Workshop } from './workshop.js';
 import { handleWorkshopVerb } from './workshop-verbs.js';
 import { chooseExecution, executeChoice, type PendingExecution } from './execution.js';
 import type { CliTelemetry } from './telemetry.js';
+import { checkoutAgentTask, localTaskContext, offerMergeAgent } from './checkout-agent.js';
+import { retryWorkshop } from './repl-retry.js';
 export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
@@ -81,24 +83,7 @@ export async function handleReplLine(input: {
   }
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
-    const task = input.workshop?.failedTask;
-    if (task && input.workshop) {
-      try {
-        await workshopTurn({
-          api: input.api,
-          ws: input.workshop,
-          request: task.request,
-          ack: task.ack,
-          agent: task.agent,
-          retry: true,
-          write: input.write,
-        });
-      } catch (error) {
-        input.write(formatError(error));
-      }
-      return { next: 'continue', conversationId: input.conversationId };
-    }
-    input.write('no pending task to retry');
+    await retryWorkshop(input);
     return { next: 'continue', conversationId: input.conversationId };
   }
   const original = splitEvidence(retry?.request ?? input.line.trim());
@@ -240,6 +225,14 @@ export async function handleReplLine(input: {
         }
       } catch (error) {
         input.write(formatError(error));
+        if (cmd === 'pull')
+          await offerMergeAgent({
+            api: input.api,
+            ws: input.workshop,
+            cwd: parsed.args[1],
+            flags: parsed.flags,
+            write: input.write,
+          });
       }
       return { next: 'continue', conversationId: input.conversationId };
     }
@@ -262,22 +255,20 @@ export async function handleReplLine(input: {
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);
+          if (cmd === 'stash' || cmd === 'resolve')
+            await offerMergeAgent({ api: input.api, ws: input.workshop, flags: parsed.flags, write: input.write });
           return { next: 'continue', conversationId: input.conversationId };
         }
         input.write(`run it as ${cliUsage(cmd)}`);
         return { next: 'continue', conversationId: input.conversationId };
       } catch (error) {
         input.write(formatError(error));
+        if (cmd === 'stash' || cmd === 'resolve')
+          await offerMergeAgent({ api: input.api, ws: input.workshop, flags: parsed.flags, write: input.write });
         return { next: 'continue', conversationId: input.conversationId };
       }
     }
-    const matches = completeSlash(cmd ?? '');
-    if (matches.includes(cmd as SlashVerb)) input.write(`/${cmd} is not available here. /help lists commands.`);
-    else if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
-    else {
-      const suggestion = suggestSlash(cmd ?? '');
-      input.write(`Unknown command /${cmd}.${suggestion ? ` Did you mean /${suggestion}?` : ''} /help lists commands.`);
-    }
+    writeSlashSuggestion(cmd ?? '', input.write);
     return { next: 'continue', conversationId: input.conversationId };
   }
   if (!retry) {
@@ -285,6 +276,7 @@ export async function handleReplLine(input: {
       const result = await postCliChat(input.api, trimmed, input.conversationId, Boolean(input.pick), {
         ...(input.token ? { token: input.token } : {}),
         ...(input.workshop ? { checkoutSlug: input.workshop.slug } : {}),
+        ...localTaskContext(input.workshop),
         agents:
           input.workshop?.adapters.map((agent) => agent.name) ??
           discoverAgents(input.env)
@@ -293,6 +285,16 @@ export async function handleReplLine(input: {
       });
       input.conversationId = result.conversationId;
       if (result.kind === 'action') {
+        if (result.action.name === 'local') {
+          if (!input.workshop) throw new Error('Open a local checkout before delegating a local task.');
+          await checkoutAgentTask({
+            api: input.api,
+            ws: input.workshop,
+            request: withEvidence(result.action.request, original.evidence),
+            write: input.write,
+          });
+          return { next: 'continue', conversationId: result.conversationId };
+        }
         if (result.action.name === 'play') {
           input.onActivity?.('Starting game preview');
           await playGame({
@@ -489,10 +491,4 @@ export async function handleReplLine(input: {
     input.write(formatError(error));
     return { next: 'continue', conversationId: input.conversationId };
   }
-}
-
-export function replBanner(isTty: boolean, env: NodeJS.ProcessEnv): string {
-  const g = glyphs(wantsColor(env, isTty));
-  const hint = `${g.agent} ${CLI_BIN} ${CLI_VERSION} — ${g.prompt} to talk, /help for verbs`;
-  return isTty ? `${MASCOT_ASCII}\n${hint}` : hint;
 }

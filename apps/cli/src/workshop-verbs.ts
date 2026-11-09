@@ -2,6 +2,8 @@ import { parseArgv } from './argv.js';
 import type { ApiClient } from './api.js';
 import { formatError } from './errors.js';
 import { handoffBuilder, handoffLine, refreshBuilder, workshopTurn, type Workshop } from './workshop.js';
+import { checkoutAgentTask } from './checkout-agent.js';
+import { readLocalOperation } from './local-operation.js';
 
 export async function handleWorkshopVerb(input: {
   cmd: string;
@@ -10,6 +12,7 @@ export async function handleWorkshopVerb(input: {
   ws: Workshop;
   write: (s: string) => void;
   offerDelivery?: boolean;
+  localOnly?: boolean;
 }): Promise<boolean | undefined> {
   const { ws } = input;
   try {
@@ -46,6 +49,14 @@ export async function handleWorkshopVerb(input: {
       input.write(`say what to do: /delegate make the jump feel floatier`);
       return;
     }
+    if (input.localOnly || parsed.flags.local === true || readLocalOperation(ws.root))
+      return await checkoutAgentTask({
+        api: input.api,
+        ws,
+        request,
+        write: input.write,
+        agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
+      });
     await refreshBuilder(input.api, ws);
     if (ws.builder !== 'self' && ws.adapters.length) {
       const local = 'Build here with a local agent';

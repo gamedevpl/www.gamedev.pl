@@ -1,10 +1,13 @@
 export type CliSessionContext = {
   token?: string;
   checkoutSlug?: string;
+  localTasks?: boolean;
+  pendingMerge?: 'pull' | 'stash';
   agents: string[];
 };
 
-export type CliAction = { name: 'play'; slug: string } | { name: 'status' } | { name: 'edit'; request: string };
+export type CliAction =
+  { name: 'play'; slug: string } | { name: 'status' } | { name: 'edit' | 'local'; request: string };
 
 export function isCliAction(value: unknown): value is CliAction {
   if (!value || typeof value !== 'object') return false;
@@ -17,7 +20,7 @@ export function isCliAction(value: unknown): value is CliAction {
       action.slug.length <= 100
     );
   }
-  if (action.name === 'edit')
+  if (action.name === 'edit' || action.name === 'local')
     return (
       Object.keys(action).length === 2 &&
       typeof action.request === 'string' &&

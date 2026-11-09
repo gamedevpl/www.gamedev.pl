@@ -11,6 +11,7 @@ import { DeliveryValidationError } from './delivery-validation.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { handleWorkshopVerb } from './workshop-verbs.js';
 import type { PickChoice, Workshop } from './workshop.js';
+import { offerSyncAgent } from './checkout-agent.js';
 
 type Input = Parameters<typeof handleReplLine>[0];
 type Delivery = Parameters<typeof submitGame>[0];
@@ -76,6 +77,8 @@ export async function recoverVerification(
   record(failure);
   for (;;) {
     diagnosticsCurrent &&= matchesDiagnostics();
+    if (diagnosticsCurrent && ws)
+      for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', { adapter: spec.name });
     const choice = await pick(
       [...(diagnosticsCurrent && ws?.adapters.length ? [FIX] : []), CHECK, BACK],
       allowDelivery
@@ -95,6 +98,7 @@ export async function recoverVerification(
         ws,
         write: input.write,
         offerDelivery: false,
+        localOnly: true,
       });
       if (!repaired) {
         input.write('Repair did not complete. Your edits remain local.');
@@ -178,6 +182,8 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
         input.write(formatSubmitLines(result, slug).join('\n'));
         return;
       } catch (error) {
+        if (await offerSyncAgent({ api: input.api, ws, cwd: dest, flags: parsed.flags, error, write: input.write }))
+          return;
         if (
           !(error instanceof VerificationError || error instanceof DeliveryValidationError) ||
           !pick ||

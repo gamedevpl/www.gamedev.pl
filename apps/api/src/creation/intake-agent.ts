@@ -4,7 +4,7 @@ import { resultText, resultToolCalls, type GenAIClient } from 'genaicode';
 import { createOpenAiClient, createVertexClient } from '../platform/genai.js';
 import { resolveIntakeFallbackModel } from '../platform/vertex-fallback-models.js';
 import type { CliChatTurn } from '../store/slices/cli-chat.js';
-import { CREATE_TOOL, REPLY_TOOL, SESSION_TOOLS, SYSTEM_PROMPT } from './intake-tools.js';
+import { CREATE_TOOL, REPLY_TOOL, LOCAL_TASK_TOOL, SESSION_TOOLS, SYSTEM_PROMPT } from './intake-tools.js';
 
 export const DEFAULT_INTAKE_MODEL = 'gemini-3.5-flash-lite';
 export const DEFAULT_INTAKE_TIMEOUT_MS = 12_000;
@@ -30,7 +30,15 @@ export interface IntakeAgentRequest {
   // Absent means the shelf could not be read.
   games?: IntakeGame[];
   gamesTotal?: number;
-  session?: { slug?: string; state?: string; builder?: string; checkout: boolean; agents: string[] };
+  session?: {
+    slug?: string;
+    state?: string;
+    builder?: string;
+    checkout: boolean;
+    agents: string[];
+    localTasks?: boolean;
+    pendingMerge?: 'pull' | 'stash';
+  };
 }
 
 // Enough to answer the question, short enough for the prompt budget.
@@ -143,7 +151,17 @@ export class IntakeChatAgent implements IntakeAgent {
       },
       attempt: (attempted, timeoutMs) =>
         this.buildPrompt(history, request.message, games, attempted)
-          .tools(request.session ? [REPLY_TOOL, CREATE_TOOL, ...SESSION_TOOLS] : [REPLY_TOOL, CREATE_TOOL], 'required')
+          .tools(
+            request.session
+              ? [
+                  REPLY_TOOL,
+                  CREATE_TOOL,
+                  ...SESSION_TOOLS,
+                  ...(request.session.localTasks && request.session.checkout ? [LOCAL_TASK_TOOL] : []),
+                ]
+              : [REPLY_TOOL, CREATE_TOOL],
+            'required',
+          )
           .thinking({ level: 'low' })
           .temperature(0.2)
           .signal(AbortSignal.timeout(timeoutMs))
@@ -152,7 +170,7 @@ export class IntakeChatAgent implements IntakeAgent {
 
     const calls = resultToolCalls(result);
     if (calls.length > 1) throw new Error('ambiguous CLI actions');
-    const actionNames = { play_game: 'play', game_status: 'status', edit_game: 'edit' } as const;
+    const actionNames = { play_game: 'play', game_status: 'status', edit_game: 'edit', local_task: 'local' } as const;
     const actionCall = calls.find((call) => Object.hasOwn(actionNames, call.name));
     if (actionCall) {
       const args = actionCall.arguments;
@@ -162,6 +180,8 @@ export class IntakeChatAgent implements IntakeAgent {
       const action = { name: actionNames[actionCall.name as keyof typeof actionNames], ...args };
       if (!request.session) throw new Error('invalid CLI action');
       if (!isCliAction(action)) throw new Error(`invalid CLI ${action.name} arguments`);
+      if (action.name === 'local' && (!request.session.localTasks || !request.session.checkout))
+        throw new Error('local task requires a capable checkout client');
       if (action.name !== 'play' && !request.session.slug) throw new Error('no active game');
       if (
         action.name === 'play' &&

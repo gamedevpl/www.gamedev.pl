@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { BRAIN_ENV, parseBrainChoice } from './play-brain-choice.js';
 import { selectWorkbenchEntry } from './workbench-entry.js';
-import { matchingCheckout, openCheckoutGame, replStart } from './local-recovery.js';
+import { matchingCheckout, replStart } from './local-recovery.js';
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS, suggestVerb } from './argv.js';
 import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
-import { createApi, requireTtyFlag, type ApiClient } from './api.js';
+import { createApi, requireTtyFlag } from './api.js';
 import {
   encryptedFileStore,
   FILE_FALLBACK_WARNING,
@@ -24,7 +24,7 @@ import {
 } from './keychain.js';
 import { chosenLoginFlow, runLogin } from './sign-in.js';
 import { originFromEnv } from './oauth.js';
-import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
 import { checkoutGame, diffGame, findCheckout, readCheckoutSlug } from './checkout.js';
@@ -39,11 +39,9 @@ import { runStatusVerb } from './status-watch.js';
 import { runPullCommand } from './local-change-command.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp, printVersion } from './help.js';
-import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
-import { preflightAdapter } from './adapters.js';
+import { runDelegateVerb } from './delegate-command.js';
 import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
 import { takeInstallReport } from './install-mark.js';
-import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -62,62 +60,6 @@ export function isGitRemoteHelper(argv: string[]): boolean {
   const first = argv[2];
   if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
   return true;
-}
-
-async function runDelegateVerb(input: {
-  telemetry?: CliTelemetry;
-  api: ApiClient;
-  args: string[];
-  flags: Record<string, string | boolean>;
-  env: NodeJS.ProcessEnv;
-  cwd: string;
-  write: (line: string) => void;
-}): Promise<number> {
-  const request = input.args.join(' ').trim();
-  if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
-  const adapters = detectLocalAdapters(input.env);
-  const agent = typeof input.flags.agent === 'string' ? input.flags.agent : undefined;
-  const spec = pickAdapter({ adapters, env: input.env }, agent);
-  preflightAdapter(spec, input.env);
-  const opened = await openCheckoutGame(input.api, input.cwd);
-  if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
-  let builder = (await getStatus(input.api, opened.token)).builder ?? 'platform';
-  if (builder !== 'self' && input.flags.handoff === true) {
-    const outcome = await handoffBuilder(input.api, opened.token, 'self', builder);
-    if (outcome.pending) {
-      throw new CliError(
-        'handoff pending — the platform agent has not acknowledged yet',
-        EXIT_REFUSED,
-        'retry shortly',
-      );
-    }
-    builder = outcome.builder;
-  }
-  if (builder !== 'self') {
-    throw new CliError(
-      `builder is ${builder} — the platform owns this round`,
-      EXIT_REFUSED,
-      `${cliUsage('delegate', '--handoff')} takes it here`,
-    );
-  }
-  const ws = {
-    ...opened,
-    env: input.env,
-    adapters,
-    telemetry: input.telemetry,
-    builder,
-    pick: async () => '',
-    abort: { current: null },
-    unattended: { deliver: input.flags.submit === true },
-  };
-  const ok = await workshopTurn({
-    api: input.api,
-    ws,
-    request,
-    agent: typeof input.flags.agent === 'string' ? input.flags.agent : undefined,
-    write: input.write,
-  });
-  return ok ? EXIT_GREEN : EXIT_RED;
 }
 
 // Verbs that already speak to the platform; the rest stay silent.

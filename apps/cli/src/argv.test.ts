@@ -55,6 +55,7 @@ it.each([
   'force',
   'publish',
   'handoff',
+  'local',
   'submit',
   'json',
   'help',

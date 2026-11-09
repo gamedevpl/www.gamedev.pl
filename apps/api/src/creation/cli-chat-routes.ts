@@ -1,7 +1,6 @@
 import { isCliAction } from '@gamedevpl/contract';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -11,7 +10,6 @@ import { peekQuota } from '../platform/quota-peek.js';
 import { canActOnSubmissionOrSlug } from '../platform/game-access-permissions.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
-import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
 import { clipCliChatTurns, type CliChatRecord, type CliChatTurn } from '../store/slices/cli-chat.js';
 import { CREATION_REFUSAL_CODES, type ChatGate } from './creation-limits.js';
 import type { CreateGameResult } from './create-game.js';
@@ -19,24 +17,7 @@ import { collapseJobsToOwnerGames, MAX_OWNER_GAMES } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { reconcileTransferredOwnership } from './studio-shelf-records.js';
 import { failClosedReply, IntakeChatAgent, type IntakeAgent } from './intake-agent.js';
-
-const ChatBodySchema = z.object({
-  text: z.string().trim().min(1, 'text is required').max(MAX_REVISION_CHARS, 'text is too long'),
-  conversationId: z.string().uuid().optional(),
-  prepareOnly: z.boolean().optional(),
-  session: z
-    .object({
-      token: z.string().min(1).max(512).optional(),
-      checkoutSlug: z
-        .string()
-        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-        .max(100)
-        .optional(),
-      agents: z.array(z.string().min(1).max(40)).max(20),
-    })
-    .strict()
-    .optional(),
-});
+import { ChatBodySchema } from './cli-chat-schema.js';
 
 export interface CliChatRoutesOptions {
   store: Store | undefined;
@@ -116,6 +97,9 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
             state: gameState(record),
             builder: record.builder,
             checkout: Boolean(supplied.checkoutSlug),
+            ...(supplied.checkoutSlug && supplied.localTasks
+              ? { localTasks: true, ...(supplied.pendingMerge ? { pendingMerge: supplied.pendingMerge } : {}) }
+              : {}),
           };
         } else if (supplied.checkoutSlug) {
           return reply.status(400).send({ error: 'checkout requires an active game token' });
@@ -189,6 +173,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
         if (
           !session ||
           !isCliAction(action) ||
+          (action.name === 'local' && (!session.localTasks || !session.checkout)) ||
           (action.name !== 'play' && !session.slug) ||
           (action.name === 'play' && action.slug !== session.slug && !games?.some((game) => game.slug === action.slug))
         ) {
@@ -203,7 +188,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
           conversationId,
           history,
           text,
-          `Requested CLI action: ${action.name}${action.name === 'edit' ? ': ' + action.request : ''}`,
+          `Requested CLI action: ${action.name}${action.name === 'edit' || action.name === 'local' ? ': ' + action.request : ''}`,
           now,
         );
         return reply.send({ kind: 'action', action, conversationId });

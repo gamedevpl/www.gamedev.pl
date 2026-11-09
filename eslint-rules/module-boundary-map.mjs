@@ -347,6 +347,7 @@ const FILE_BUCKET = {
   'intake-tools': 'creation',
   'chat-tools': 'creation',
   'cli-chat-routes': 'creation',
+  'cli-chat-schema': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
   'chat-turns-history': 'creation',

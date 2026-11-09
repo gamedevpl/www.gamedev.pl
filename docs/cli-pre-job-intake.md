@@ -13,12 +13,13 @@ OpenRouter used to front Gemini here; its key never reached production after 202
 and it was removed on 2026-10-20.
 
 The client sends its active submission token, optional checkout slug and installed agent
-names. The server verifies the token and ownership, resolves the game's state and builder,
+names, optional local-task capability and the kind of a pending merge (pull or stash).
+The server verifies the token and ownership, resolves the game's state and builder,
 and gives the model only that context. Local paths, tokens and credentials are not included
 in the model prompt. A checkout slug that disagrees with the submission is rejected.
 
 The model can reply, ask a clarification, propose a new game through `create_game`, or
-request one of three separate tools (`play_game`, `game_status`, `edit_game`). Each
+request separate tools (`play_game`, `game_status`, `edit_game`, and `local_task` for capable checkout clients). Each
 tool advertises only its own required arguments and maps to the existing CLI action
 format:
 
@@ -30,6 +31,11 @@ format:
   builder selection, handoff, verification and delivery controls. For published games,
   the CLI calls `/improve` with the chosen builder and follows the new round token; it
   does not send edits to the closed published round.
+- `local` carries game-checkout maintenance, including merge resolution and validation
+  repair, directly to an installed local agent. It does not dispatch a game round or
+  switch builder ownership. The CLI reads the actual local merge state and retains
+  writer locking, resolution validation, verification and explicit delivery controls.
+  Older clients are neither offered nor returned this action.
 
 Both the API and CLI validate the closed action vocabulary. There is no shell-command,
 filesystem-path or arbitrary-URL action. Multiple tool calls, unknown targets, malformed
@@ -42,7 +48,10 @@ Existing clients without the optional session field retain the pre-game reply/cr
 protocol. Deploy the API before releasing the corresponding CLI. Chat authentication,
 moderation, rate limits, daily quota and account-deletion handling remain shared with intake.
 The existing `play_requested` and build funnel events are emitted by actual CLI execution;
-server logs record action names without prompt contents or local paths.
+server logs record action names without prompt contents or local paths. Existing
+`delegate_offered` and `delegate_used` events measure the local recovery offer and launch;
+`verify_failed` still measures failed checks. Query `cli_step` by step and adapter for
+the creator funnel. There is no new telemetry vocabulary or prompt/path dimension.
 
 Tests use injected provider responses to exercise tool selection boundaries, ownership,
 prompt context, and client execution without spending model quota. They do not establish
