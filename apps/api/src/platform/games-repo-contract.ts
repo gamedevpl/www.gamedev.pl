@@ -134,8 +134,7 @@ export function extractGameKitModuleRequires(assembleSource: string): Record<str
 export const GAME_BUDGET_BYTES = 1404 * 1024;
 
 // Raw source ceilings cover bake/play/seed; comments and types assemble away.
-// 1593 → 2390 KiB: stay above ink-and-fury's expanded author budget.
-// 2390 → 3585 KiB: constantinople-siege sat 66 bytes under 2390 KiB.
+// 1593 → 2390 → 3585 KiB: ink-and-fury, then constantinople-siege.
 export const SOURCE_GRAPH_BUDGET_BYTES = 3585 * 1024;
 
 // Headroom for 300 delivered files plus shared simulation imports.
