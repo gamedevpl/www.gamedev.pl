@@ -56,6 +56,8 @@ describe('BigQueryDiscoveryJournalStore', () => {
       },
     ]);
     expect(queries[0]?.sql).not.toContain('g:kid');
+    // AT is reserved in BigQuery, so the column must be quoted.
+    expect(queries[0]?.sql).not.toMatch(/[^`]\bat\b[^`]/);
     expect(queries[0]?.params.map((param) => param.name)).toEqual(['uid', 'limit', 'slug']);
   });
 

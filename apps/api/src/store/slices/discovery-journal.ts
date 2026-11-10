@@ -125,8 +125,8 @@ export class BigQueryDiscoveryJournalStore implements DiscoveryRowsStore {
     }
     const sql =
       'SELECT TO_JSON_STRING(STRUCT(CAST(day AS STRING) AS day, row_id, ' +
-      'FORMAT_TIMESTAMP("%Y-%m-%dT%H:%M:%E3SZ", at) AS at, uid, slug, journal_id, kind, label, seconds, ms_since_open)) ' +
-      `FROM ${DISCOVERY_TABLE} WHERE ${where} ORDER BY at LIMIT @limit`;
+      'FORMAT_TIMESTAMP("%Y-%m-%dT%H:%M:%E3SZ", `at`) AS `at`, uid, slug, journal_id, kind, label, seconds, ms_since_open)) ' +
+      `FROM ${DISCOVERY_TABLE} WHERE ${where} ORDER BY \`at\` LIMIT @limit`;
     const raw = await this.client.queryStrings(sql, params);
     return raw.map((line) => fromBigQueryRow(JSON.parse(line) as Record<string, unknown>));
   }
