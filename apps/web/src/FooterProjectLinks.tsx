@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
 import { REPO_URL } from './github.js';
 
-import { X_URL, YOUTUBE_URL } from './gameVideos.js';
+import { INSTAGRAM_URL, X_URL, YOUTUBE_URL } from './gameVideos.js';
 
-export { X_URL, YOUTUBE_URL };
+export { INSTAGRAM_URL, X_URL, YOUTUBE_URL };
 
 // Where the project lives and where it posts; brand names stay untranslated.
 export function FooterProjectLinks() {
@@ -20,6 +20,9 @@ export function FooterProjectLinks() {
       </a>
       <a href={X_URL} target="_blank" rel="noreferrer noopener">
         X
+      </a>
+      <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer noopener">
+        Instagram
       </a>
     </>
   );
