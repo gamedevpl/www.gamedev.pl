@@ -6,6 +6,8 @@ import type { PublishedGame } from './catalog.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
+import { useDiscoveryJournal } from './discoveryJournal.js';
+import { useAuth } from './AuthContext.js';
 import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
 import type { PlayVia } from './visitTelemetry.js';
@@ -63,6 +65,16 @@ export function PublishedGameFrame({
 
   // Open only when a published document is available.
   useGameTelemetry(slug, activeFrameRef, html !== null, slots, active, via, game?.artifactVersion, agentMode);
+  // Operator-enabled accounts only; a review candidate is not published play.
+  const { user } = useAuth();
+  const journalSince = (user as { discoveryJournalSince?: string | null } | null)?.discoveryJournalSince;
+  const journalOn = Boolean(journalSince) && !user?.uid.startsWith('bot:');
+  useDiscoveryJournal(
+    slug,
+    activeFrameRef,
+    journalOn && html !== null && reviewVersion === undefined && !agentMode,
+    active,
+  );
 
   useEffect(() => {
     if (html === null || reviewVersion !== undefined) return;

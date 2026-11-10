@@ -98,6 +98,11 @@ import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
+import {
+  InMemoryDiscoveryJournalStore,
+  type DiscoveryRowsStore,
+  type DiscoveryRow,
+} from './slices/discovery-journal.js';
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
@@ -199,6 +204,7 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
   );
   private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
+  private discoveryJournalStore = new InMemoryDiscoveryJournalStore();
   private notificationsStore = new InMemoryNotificationsStore();
   private socialStore = new InMemorySocialStore();
   private reviewStore = new InMemoryReviewStore();
@@ -314,6 +320,7 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
     this.playerDataStore.gameSaves.delete(uid);
     this.playerDataStore.editorDrafts.delete(uid);
     this.playerDataStore.playAffinity.delete(uid);
+    await this.discoveryJournalStore.deleteDiscoveryRows(uid);
     for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
       if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
@@ -392,6 +399,23 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
 
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     return this.identityStore.readProposalsMutedAt(uid);
+  }
+
+  async setDiscoveryJournal(uid: string, since: string | null): Promise<void> {
+    const existing = this.identityStore.users.get(uid);
+    if (existing) this.identityStore.users.set(uid, { ...existing, discoveryJournalSince: since });
+  }
+
+  async appendDiscoveryRows(rows: Parameters<DiscoveryRowsStore['appendDiscoveryRows']>[0]): Promise<void> {
+    return this.discoveryJournalStore.appendDiscoveryRows(rows);
+  }
+
+  async listDiscoveryRows(uid: string, opts?: { slug?: string; limit?: number }): Promise<DiscoveryRow[]> {
+    return this.discoveryJournalStore.listDiscoveryRows(uid, opts);
+  }
+
+  async deleteDiscoveryRows(uid: string): Promise<number> {
+    return this.discoveryJournalStore.deleteDiscoveryRows(uid);
   }
 
   async ensureRecipientCode(uid: string, at: string): Promise<string | null> {

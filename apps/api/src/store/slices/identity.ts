@@ -204,6 +204,7 @@ export class InMemoryIdentityStore implements IdentityStore {
       // Never set by sign-in either; dropping it here orphaned the reservation.
       recipientCode: existing?.recipientCode,
       appleSub: existing?.appleSub,
+      discoveryJournalSince: existing?.discoveryJournalSince,
     };
 
     this.users.set(userData.uid, updated);

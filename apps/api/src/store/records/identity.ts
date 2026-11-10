@@ -58,6 +58,8 @@ export interface User {
   // Opaque transfer/invite code (GO-02); minted lazily, not at sign-in.
   recipientCode?: string;
   appleSub?: string;
+  // Operator-set discovery journal switch; null or absent means off.
+  discoveryJournalSince?: string | null;
 }
 
 /** Reservation row for a lowercase handle → owning uid. */
