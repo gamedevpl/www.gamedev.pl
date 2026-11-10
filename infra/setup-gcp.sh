@@ -665,6 +665,26 @@ else
     --data-file=- --project="$PROJECT_ID" >/dev/null
 fi
 
+# Every deploy pushes app, gate-runner and world images; nothing removed them,
+# and the repository reached 415 GB by November 2026. Keep the 20 newest
+# versions of each image (rollback range) and delete the rest after 30 days.
+# Images a live revision runs are among the newest, so they stay.
+if gcloud artifacts repositories describe "$GATE_IMAGE_REPO" \
+  --location="$GATE_IMAGE_REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  echo "==> Ensuring the image cleanup policy on ${GATE_IMAGE_REGION}/${GATE_IMAGE_REPO}"
+  CLEANUP_POLICY_FILE="$(mktemp)"
+  cat >"$CLEANUP_POLICY_FILE" <<'JSON'
+[
+  {"name": "delete-older-than-30d", "action": {"type": "Delete"}, "condition": {"tagState": "any", "olderThan": "30d"}},
+  {"name": "keep-20-most-recent", "action": {"type": "Keep"}, "mostRecentVersions": {"keepCount": 20}}
+]
+JSON
+  gcloud artifacts repositories set-cleanup-policies "$GATE_IMAGE_REPO" \
+    --location="$GATE_IMAGE_REGION" --project="$PROJECT_ID" \
+    --policy="$CLEANUP_POLICY_FILE" --no-dry-run >/dev/null
+  rm -f "$CLEANUP_POLICY_FILE"
+fi
+
 # The runtime starts the gate itself when a game is delivered (gate-trigger.ts). Without
 # this a candidate is stored and never verified, so it can never publish and the upload
 # path ends in a queue nobody drains.
@@ -820,4 +840,4 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 # step 5d, after the publisher has been granted.
 
 echo ""
-echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, image cleanup, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
