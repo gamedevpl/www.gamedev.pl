@@ -138,10 +138,30 @@ describe('discovery journal route', () => {
       },
     ]);
     const dry = await erasePlayerSignals({ store, uid: 'g:kid', dryRun: true });
-    expect(dry.discoveryRowsDeleted).toBe(1);
+    expect(dry.discovery).toEqual({ deleted: 1, pending: 0 });
     expect(await store.listDiscoveryRows('g:kid')).toHaveLength(1);
     const real = await erasePlayerSignals({ store, uid: 'g:kid' });
-    expect(real.discoveryRowsDeleted).toBe(1);
+    expect(real.discovery).toEqual({ deleted: 1, pending: 0 });
+    expect((await store.getUser('g:kid'))?.discoveryJournalSince).toBeNull();
     expect(await store.listDiscoveryRows('g:kid')).toEqual([]);
+  });
+
+  it('defers rows BigQuery still holds in its streaming buffer instead of aborting the erase', async () => {
+    await store.appendDiscoveryRows([
+      {
+        at: '2026-11-10T10:00:00.000Z',
+        uid: 'g:kid',
+        slug: 'cozycraft',
+        journalId: JOURNAL,
+        kind: 'found',
+        label: 'a',
+      },
+    ]);
+    store.deleteDiscoveryRows = async () => {
+      throw new Error('UPDATE or DELETE statement over table would affect rows in the streaming buffer');
+    };
+    const result = await erasePlayerSignals({ store, uid: 'g:kid' });
+    expect(result.discovery).toEqual({ deleted: 0, pending: 1 });
+    expect((await store.getUser('g:kid'))?.discoveryJournalSince).toBeNull();
   });
 });

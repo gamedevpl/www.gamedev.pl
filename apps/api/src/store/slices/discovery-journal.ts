@@ -166,7 +166,20 @@ export function discoveryJournalStoreFor(
   return new BigQueryDiscoveryJournalStore(client ?? new RestBigQueryClient(project));
 }
 
-// Erase path: counts on a dry run, deletes otherwise.
-export async function eraseDiscoveryRows(store: DiscoveryRowsStore, uid: string, dryRun: boolean): Promise<number> {
-  return dryRun ? (await store.listDiscoveryRows(uid)).length : store.deleteDiscoveryRows(uid);
+// Erase path. Switches the journal off first, so no new rows arrive.
+export async function eraseDiscoveryRows(
+  store: DiscoveryJournalStore,
+  uid: string,
+  dryRun: boolean,
+): Promise<{ deleted: number; pending: number }> {
+  if (dryRun) return { deleted: (await store.listDiscoveryRows(uid)).length, pending: 0 };
+  await store.setDiscoveryJournal(uid, null);
+  try {
+    return { deleted: await store.deleteDiscoveryRows(uid), pending: 0 };
+  } catch (error) {
+    // Streamed rows refuse DML for up to ~90 min; rerunning later finishes.
+    console.error('discovery journal erase deferred', error);
+    const left = await store.listDiscoveryRows(uid).catch(() => []);
+    return { deleted: 0, pending: Math.max(1, left.length) };
+  }
 }

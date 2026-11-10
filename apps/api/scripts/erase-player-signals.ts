@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     // what other players see the next time they open the game.
     console.log('  note: world entries were visible to other players; removing them changes those games.');
   }
-  console.log('  play telemetry: not applicable (carries no uid by design).');
+  console.log(`  discovery journal: ${result.discovery.deleted}, ${result.discovery.pending} pending (rerun later)`);
 }
 
 main().catch((error) => {

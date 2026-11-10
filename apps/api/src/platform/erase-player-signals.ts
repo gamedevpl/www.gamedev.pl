@@ -106,7 +106,7 @@ export interface ErasePlayerSignalsResult {
    * screens. It is still the right call — it is their contribution to withdraw.
    */
   worldsErased: string[];
-  discoveryRowsDeleted: number; // opt-in discovery journal rows (BigQuery)
+  discovery: { deleted: number; pending: number }; // journal rows; pending = rerun later
   /** Creator-profile handle reservations freed (active and cooldown-held). */
   handlesReleased: string[];
   dryRun: boolean;
@@ -210,7 +210,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
 
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
-  const discoveryRowsDeleted = await eraseDiscoveryRows(store, uid, dryRun);
+  const discovery = await eraseDiscoveryRows(store, uid, dryRun);
   // Public creator-profile identity is personal data shown by consent of claiming a
   // handle. The privacy notice promises the reservation clears with the account — without
   // this, deleting the user doc would leave handles/{handle} taken forever.
@@ -233,7 +233,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     editorDraftsDeleted,
     affinityCleared,
     worldsErased,
-    discoveryRowsDeleted,
+    discovery,
     handlesReleased,
     dryRun,
   };
