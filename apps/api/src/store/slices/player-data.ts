@@ -6,6 +6,10 @@ import {
   type GameSaveRecord,
   type PlayAffinityRecord,
 } from '../records/player-data.js';
+import type { DiscoveryJournalStore } from './discovery-journal.js';
+
+// The Store's player slice: saves, drafts, affinity, plus the discovery journal.
+export interface PlayerSignalsStore extends PlayerDataStore, DiscoveryJournalStore {}
 
 export interface PlayerDataStore {
   // One player's save for one game, null if none exists.

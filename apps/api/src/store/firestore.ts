@@ -91,6 +91,7 @@ import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
 import { FirestoreSubmissionStore } from './slices/submission.js';
 import { FirestoreTelemetryStore, type TelemetryStore, type VisitListOptions } from './slices/telemetry.js';
 import { telemetryStoreFor } from './slices/telemetry-bigquery.js';
+import { discoveryJournalStoreFor, type DiscoveryRowsStore, type DiscoveryRow } from './slices/discovery-journal.js';
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
@@ -99,6 +100,7 @@ import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } 
 export class FirestoreStore extends PlayJournalFacade implements Store {
   private db: GuardedFirestore;
   private telemetryStore: TelemetryStore;
+  private discoveryJournalStore: DiscoveryRowsStore;
   listTelemetryEventsAcross?: TelemetryStore['listTelemetryEventsAcross'];
   protected oauthStore: FirestoreOAuthStore;
   private playerDataStore: FirestorePlayerDataStore;
@@ -143,6 +145,7 @@ export class FirestoreStore extends PlayJournalFacade implements Store {
     this.db = createGuardedFirestore(db ?? new Firestore());
     this.telemetryStore = telemetryStoreFor(new FirestoreTelemetryStore(this.db));
     this.listTelemetryEventsAcross = this.telemetryStore.listTelemetryEventsAcross;
+    this.discoveryJournalStore = discoveryJournalStoreFor();
     this.oauthStore = new FirestoreOAuthStore(this.db);
     this.playerDataStore = new FirestorePlayerDataStore(this.db);
     this.worldEntriesStore = new FirestoreWorldEntriesStore(this.db);
@@ -407,6 +410,23 @@ export class FirestoreStore extends PlayJournalFacade implements Store {
 
   async readProposalsMutedAt(uid: string): Promise<string | null> {
     return this.identityStore.readProposalsMutedAt(uid);
+  }
+
+  async setDiscoveryJournal(uid: string, since: string | null): Promise<void> {
+    await this.db.collection('users').doc(uid).set({ discoveryJournalSince: since }, { merge: true });
+    this.identityStore.forgetUser(uid);
+  }
+
+  async appendDiscoveryRows(rows: Parameters<DiscoveryRowsStore['appendDiscoveryRows']>[0]): Promise<void> {
+    return this.discoveryJournalStore.appendDiscoveryRows(rows);
+  }
+
+  async listDiscoveryRows(uid: string, opts?: { slug?: string; limit?: number }): Promise<DiscoveryRow[]> {
+    return this.discoveryJournalStore.listDiscoveryRows(uid, opts);
+  }
+
+  async deleteDiscoveryRows(uid: string): Promise<number> {
+    return this.discoveryJournalStore.deleteDiscoveryRows(uid);
   }
 
   async ensureRecipientCode(uid: string, at: string): Promise<string | null> {

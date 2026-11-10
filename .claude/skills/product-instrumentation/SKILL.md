@@ -109,6 +109,28 @@ The BigQuery tables are `telemetry.play_events` and `telemetry.visit_events`, pr
 Daily rollups (`telemetryDaily`) stay in Firestore in every mode. The same invariants
 apply in BigQuery: no shared key between the two tables, and no identity columns.
 
+### The discovery journal (the one attributed play signal)
+
+`progress` landmarks can also feed a per-account **discovery journal**: which landmarks
+one named player reached in a game, when, and after how much focused play. It exists for
+playtesting with a known player (a creator watching their own kid play), and it is built
+so it cannot weaken anything below:
+
+- **Operator opt-in per account.** `User.discoveryJournalSince`, set only from the ops
+  console (`store.setDiscoveryJournal`). Every other account's shell sends nothing; the
+  API re-checks the flag and answers `202 { accepted: 0 }` otherwise. `bot:` uids never.
+- **A separate channel, not a field on play telemetry.** Shell:
+  [apps/web/src/discoveryJournal.ts](../../../apps/web/src/discoveryJournal.ts) with its
+  own per-open `journalId` (never the telemetry `sessionId`). API:
+  [apps/api/src/telemetry/discovery-journal.ts](../../../apps/api/src/telemetry/discovery-journal.ts)
+  (`POST /api/discovery-journal`). No shared key, so neither stream joins to the other.
+- **BigQuery only** (`telemetry.player_discoveries`, created by the ops repo's
+  `infra/setup-telemetry-bigquery.sh`): append-only `found`/`play` rows; "first
+  discovered" is `MIN(at)` at read time. No Firestore writes, no expiry (pace over weeks is
+  the point), erased by `erasePlayerSignals` with a BigQuery `DELETE`.
+- **Read only in the ops console.** Labels are game-authored strings: render them as text.
+- Widening it to every signed-in account is a privacy-notice change, not a flag flip.
+
 ## Invariants (do not renegotiate these per-feature)
 
 - **Play telemetry measures games, not people.** No uid, no IP, no user agent, no

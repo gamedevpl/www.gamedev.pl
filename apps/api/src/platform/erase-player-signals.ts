@@ -1,4 +1,5 @@
 import type { Store } from './store.js';
+import { eraseDiscoveryRows } from '../store/slices/discovery-journal.js';
 
 /**
  * Erase everything a person contributed *as a player*: their votes, their written
@@ -12,12 +13,8 @@ import type { Store } from './store.js';
  * A commitment that depends on somebody remembering how the schema works is one that
  * quietly stops being true.
  *
- * **Play telemetry is deliberately not touched, and that is not an omission.** Play
- * events carry no uid, no IP and no user agent by construction, so there is nothing in
- * them to erase and nothing that could be found even if we tried. That is the whole point
- * of the "measures games, not people" invariant: the erase path for play data is that it
- * was never attributed in the first place. Play *affinity* (the signed-in open history
- * used for recommendations) is different — it lives under the user and is erased here.
+ * **Play telemetry is not touched**: no uid, IP or user agent, so nothing to erase.
+ * Play affinity and the opt-in discovery journal are attributed, so both go here.
  *
  * Two shapes of deletion, because the two collections are keyed differently:
  *
@@ -109,6 +106,7 @@ export interface ErasePlayerSignalsResult {
    * screens. It is still the right call — it is their contribution to withdraw.
    */
   worldsErased: string[];
+  discovery: { deleted: number; pending: number }; // journal rows; pending = rerun later
   /** Creator-profile handle reservations freed (active and cooldown-held). */
   handlesReleased: string[];
   dryRun: boolean;
@@ -212,6 +210,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
 
   if (!dryRun && worldsErased.length > 0) await store.deleteWorldEntriesForUser(uid);
 
+  const discovery = await eraseDiscoveryRows(store, uid, dryRun);
   // Public creator-profile identity is personal data shown by consent of claiming a
   // handle. The privacy notice promises the reservation clears with the account — without
   // this, deleting the user doc would leave handles/{handle} taken forever.
@@ -234,6 +233,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     editorDraftsDeleted,
     affinityCleared,
     worldsErased,
+    discovery,
     handlesReleased,
     dryRun,
   };

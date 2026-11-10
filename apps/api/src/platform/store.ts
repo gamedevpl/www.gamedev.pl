@@ -115,7 +115,7 @@ import type { OAuthStore } from '../store/slices/oauth.js';
 export type { OAuthStore };
 import type { CliChatStore } from '../store/slices/cli-chat.js';
 export type { CliChatStore };
-import type { PlayerDataStore } from '../store/slices/player-data.js';
+import type { PlayerDataStore, PlayerSignalsStore } from '../store/slices/player-data.js';
 export type { PlayerDataStore };
 import type { WorldEntriesStore } from '../store/slices/world-entries.js';
 export type { WorldEntriesStore };
@@ -282,7 +282,7 @@ export interface Store
     ReviewStore,
     ReviewSweepStore,
     ModerationFlagStore,
-    PlayerDataStore,
+    PlayerSignalsStore,
     WorldEntriesStore,
     ContributionStore,
     AccessTokensStore,

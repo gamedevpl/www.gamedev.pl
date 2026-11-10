@@ -129,6 +129,7 @@ import { mintToken } from './submission-token.js';
 import { loadReviewCandidate } from '../community/review-candidate.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from '../telemetry/telemetry.js';
 import { registerVisitTelemetryRoutes } from '../telemetry/visit-telemetry.js';
+import { registerDiscoveryJournalRoutes, type DiscoveryJournalRoutesOptions } from '../telemetry/discovery-journal.js';
 import { registerCliSurfaceRoutes } from './cli-surface.js';
 import { registerCreatorPatRoutes } from './creator-pat-routes.js';
 import { registerCreatorVersionRoutes } from '../creation/creator-versions.js';
@@ -177,6 +178,7 @@ export interface BuildAppOptions {
   recommendationRoutes?: Omit<RecommendationRoutesOptions, 'store'>;
   /** Seams for per-player game saves; defaults to a live catalog-backed slug gate. */
   gameSaveRoutes?: Omit<GameSaveRoutesOptions, 'store'>;
+  discoveryRoutes?: Omit<DiscoveryJournalRoutesOptions, 'store'>;
   /** Seams for shared worlds; defaults to a live games-repo-backed schema source. */
   worldRoutes?: Partial<Omit<WorldRoutesOptions, 'store'>>;
   /** Seams for ambient presence. Note the absence of a store: it keeps nothing durable. */
@@ -649,6 +651,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     publishedSlugs: envPublishedSlugs,
     ...options.gameSaveRoutes,
   });
+  await registerDiscoveryJournalRoutes(app, { store, publishedSlugs: envPublishedSlugs, ...options.discoveryRoutes });
 
   // Shared asynchronous worlds (docs/persistent-world-plan.md P2). Unlike saves, the
   // read here is public: a world is worth looking at before you have an account, and
