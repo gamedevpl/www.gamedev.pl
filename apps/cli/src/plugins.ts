@@ -9,6 +9,7 @@ import { pluginFiles, PLUGIN_NAME, PLUGIN_MARKET, PLUGIN_TARGETS, type PluginTar
 import { claimPluginPath, noSymlinks, pluginTrees, treeDigest, treeSnapshot, writePluginFile } from './plugin-files.js';
 import {
   existingIntegration,
+  existingIntegrations,
   nativePluginCommands,
   nativePluginListing,
   ownedMarketplace,
@@ -195,6 +196,7 @@ export function pluginStatus(target: PluginTarget, env: NodeJS.ProcessEnv, avail
   }
   return {
     ...state,
+    ...(state.status === 'external' ? { detectedIntegrations: existingIntegrations(target, env) } : {}),
     installedVersion,
     availableVersion,
     updateAvailable:
@@ -210,6 +212,11 @@ export async function managePlugins(input: {
   run?: PluginRunner;
 }) {
   const [action = 'status', name, ...extra] = input.args;
+  if ((action === 'install' || action === 'uninstall') && !name)
+    throw new CliError(
+      `No plugins were ${action === 'install' ? 'installed' : 'uninstalled'}. Choose a client: gamedevpl plugins ${action} <client>.\nExample: gamedevpl plugins ${action} codex\nCheck what you already have: gamedevpl plugins status\nClients: ${PLUGIN_TARGETS.join(', ')}.`,
+      EXIT_INPUT,
+    );
   if (
     !['install', 'uninstall', 'status'].includes(action) ||
     extra.length ||
@@ -217,7 +224,7 @@ export async function managePlugins(input: {
     (action !== 'status' && !name)
   )
     throw new CliError(
-      `Use gamedevpl plugins install|uninstall <${PLUGIN_TARGETS.join('|')}> or plugins status [client].`,
+      `Use gamedevpl plugins status [client], install|uninstall <client>, update [client], or configure vibe. Clients: ${PLUGIN_TARGETS.join(', ')}.`,
       EXIT_INPUT,
     );
   if (
@@ -312,8 +319,7 @@ export async function managePlugins(input: {
         writePluginFile(receiptFile, JSON.stringify(receipt));
       }
       return {
-        target,
-        status: 'installed',
+        ...pluginStatus(target, input.env),
         changed: true,
         hint:
           target === 'vibe'

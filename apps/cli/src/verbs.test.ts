@@ -60,7 +60,7 @@ describe('dispatchReadVerb', () => {
     } else {
       expect(io.read()).toContain(`updated gamedevpl ${CLI_VERSION} -> 9.0.0`);
       expect(io.read()).toContain('Fixed: Repair details');
-      expect(io.read()).toContain('cursor: updated (9.0.0)');
+      expect(io.read()).toContain('cursor: plugin updated (9.0.0)');
     }
   });
 

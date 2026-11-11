@@ -201,7 +201,10 @@ gamedevpl plugins uninstall claude
 ```
 
 The manager preserves pre-existing Gamedev.pl plugins and recognizable standalone
-MCP entries, reporting `external` without taking ownership. Repeating installation
+MCP entries, reporting `external` in JSON without taking ownership. Terminal output distinguishes
+plugin files from standalone MCP configuration, shows where each was detected, and
+explains how to manage it. Detection does not verify connection or authentication.
+A working existing MCP connection does not require a second plugin installation. Repeating installation
 is a no-op. It records ownership and file hashes for new installations; a modified
 package is reported as `modified` and is never overwritten or deleted. Uninstall
 only removes an unchanged installation owned by this manager, leaving other

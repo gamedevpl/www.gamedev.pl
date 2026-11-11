@@ -27,7 +27,7 @@ it('runs the downloaded CLI with its own version and the same creator home and c
     home: f.root,
     cwd: f.root,
   });
-  expect(formatPluginRefresh(result)).toContain('cursor: updated (9.0.0)');
+  expect(formatPluginRefresh(result)).toContain('cursor: plugin updated (9.0.0)');
 });
 
 it('treats protected installations as successful skips while retaining their reasons', async () => {
@@ -41,7 +41,12 @@ it('treats protected installations as successful skips while retaining their rea
   const f = fixture(`console.log(JSON.stringify(${JSON.stringify({ ok: false, plugins: rows })}));process.exitCode=4;`);
   const result = await f.run();
   expect(result).toMatchObject({ ok: true, updated: false, plugins: rows });
-  for (const row of rows) expect(formatPluginRefresh(result)).toContain(`skipped (${row.skipped})`);
+  const output = formatPluginRefresh(result);
+  expect(output).not.toContain('skipped (');
+  expect(output).toContain('Finish cleanup:');
+  expect(output).toContain('Enable it in disabled');
+  expect(output).toContain('To restore it:');
+  expect(output).not.toContain('up to date');
 });
 
 it.each(['pending', 'absent'])(
@@ -85,5 +90,5 @@ it('keeps an empty inventory successful without printing absent clients', async 
   const f = fixture(
     'console.log(JSON.stringify({ok:true,plugins:[{target:"cursor",status:"absent",skipped:"absent",changed:false}]}));',
   );
-  expect(formatPluginRefresh(await f.run())).toBe('No coding-agent plugins need updating.');
+  expect(formatPluginRefresh(await f.run())).toContain('No Gamedev.pl plugins or MCP configuration detected.');
 });
