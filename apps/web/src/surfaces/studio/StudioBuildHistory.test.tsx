@@ -241,7 +241,7 @@ describe('StudioBuildHistory', () => {
       );
     });
     const rows = host.querySelectorAll('.studio-build-history-row');
-    expect(rows[0]?.querySelector('.studio-build-history-playing')?.textContent).toContain('Playing');
+    expect(rows[0]?.querySelector('.studio-build-history-playing')?.textContent).toContain('Viewing');
     expect(rows[1]?.querySelector('.studio-build-history-playing')).toBeNull();
     expect(host.querySelector('.studio-build-history-live')?.classList.contains('is-live')).toBe(true);
     expect(host.querySelector('.studio-build-history-live')?.textContent).toContain('you can already play it');

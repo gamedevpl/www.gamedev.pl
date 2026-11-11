@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
-import { isLiveGame, type RepoPublishedSlugs } from './game-liveness.js';
+import { gameLiveness, type RepoPublishedSlugs } from './game-liveness.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { recordShelfShadow } from './shelf-shadow.js';
 import { loadShelfRecords, reconcileTransferredOwnership } from './studio-shelf-records.js';
@@ -52,17 +52,7 @@ function typecheckKitRef(record: SubmissionRecord, current: string): string {
   return current;
 }
 
-/**
- * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).
- *
- * The operator health view covers every published game; this one is scoped to the
- * signed-in creator's own submissions. Attribution runs through `ownerUid` + `slug`,
- * so a game never commissioned here (no submission document) correctly stays out —
- * the creator has nothing to manage for it.
- *
- * Aggregates only. Error message samples are the one attacker-controlled field; they
- * are safe to render as text in the studio and unsafe to feed to an agent unfenced.
- */
+// Studio reads remain scoped to the signed-in creator.
 
 const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;
@@ -184,12 +174,15 @@ export async function registerCreatorStudioRoutes(
 
     // Keep publication history; resolve liveness through the current lane.
     const notLiveSlugs = new Set<string>();
+    const publishedVersions = new Map<string, string>();
     await Promise.all(
       shelf
         .filter(({ tip, catalogPublishedAt }) => tip.slug && (tip.publishedAt || catalogPublishedAt))
         .map(async ({ tip }) => {
-          if (!(await isLiveGame(store, tip.slug as string, options.repoPublishedSlugs ?? null)))
-            notLiveSlugs.add(tip.slug as string);
+          const slug = tip.slug as string;
+          const publication = await gameLiveness(store, slug, options.repoPublishedSlugs ?? null);
+          if (!publication.live) notLiveSlugs.add(slug);
+          if (publication.publishedVersion) publishedVersions.set(slug, publication.publishedVersion);
         }),
     );
 
@@ -228,6 +221,7 @@ export async function registerCreatorStudioRoutes(
         ...(tip.slug ? { slug: tip.slug } : {}),
         ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
         ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
+        ...(tip.slug && publishedVersions.has(tip.slug) ? { publishedVersion: publishedVersions.get(tip.slug) } : {}),
         ...(tip.slug && notLiveSlugs.has(tip.slug) ? { live: false as const } : {}),
         ...(tip.draftSharedAt ? { draftShared: true } : {}),
         ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),

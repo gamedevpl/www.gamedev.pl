@@ -14,16 +14,10 @@ export function StudioDetailsBuildProgress({
   onSelectPreviewVersion,
   activePreviewVersion,
   playingVersion,
+  published,
+  publishedVersion,
   onReverted,
-}: {
-  token: string;
-  // Shown when there's neither a checklist nor build history yet.
-  emptyLabel?: string;
-  onSelectPreviewVersion?: (version: string | null) => void;
-  activePreviewVersion?: string | null;
-  playingVersion?: string | null;
-  onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
-}) {
+}: Omit<Parameters<typeof StudioBuildHistory>[0], 'status' | 'onSealed'> & { token: string }) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -56,6 +50,8 @@ export function StudioDetailsBuildProgress({
       onSelectPreviewVersion={onSelectPreviewVersion}
       activePreviewVersion={activePreviewVersion}
       playingVersion={playingVersion}
+      published={published}
+      publishedVersion={publishedVersion}
       onReverted={onReverted}
       onSealed={() => pokeStudioStatus(token, i18n.language)}
     />

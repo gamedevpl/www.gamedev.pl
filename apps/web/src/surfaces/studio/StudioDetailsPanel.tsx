@@ -291,6 +291,8 @@ export function DetailsPanel({
               onSelectPreviewVersion={onSelectPreviewVersion}
               activePreviewVersion={activePreviewVersion}
               playingVersion={playingVersion}
+              published={catalogLive}
+              publishedVersion={game.publishedVersion}
               onReverted={onReverted}
             />
           ) : (

@@ -30,7 +30,7 @@ export function isStudioGamePublished(game: StudioGame): boolean {
 
 /** Live in the catalog — this job, or a published sibling collapsed behind an improve tip. */
 export function isStudioGameShelfLive(game: StudioShelfGame): boolean {
-  return isStudioGamePublished(game) || game.livePublishedAt !== undefined;
+  return game.live !== false && (isStudioGamePublished(game) || game.livePublishedAt !== undefined);
 }
 
 function shelfRank(game: StudioShelfGame): number {
