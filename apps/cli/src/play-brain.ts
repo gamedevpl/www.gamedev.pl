@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { realpathSync } from 'node:fs';
@@ -209,10 +210,7 @@ export async function startPlayBrain(input: {
       if (!handled) res.writeHead(404).end();
     });
   });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
+  await once(server.listen(0, '127.0.0.1'), 'listening');
   const steering = trackPlaySteering();
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
@@ -243,6 +241,7 @@ export async function startPlayBrain(input: {
       }),
     ]),
     dev: { cwd: ws.root, commit: 'on-request', only: true },
+    artifacts: true,
     agents: () => {
       const make = (permissions?: AgentTask['permissions']) =>
         (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);

@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- The Play agent can show a report, a comparison or a small page as a card in the browser conversation; a page it writes opens in a sandbox with no network and no access to Play (#2101).
+
 ## 0.67.3 — 2026-11-09
 
 ### Fixed
