@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-// Kit's hot-game-build caps bundles at the same size in bytes.
+// Matches the Kit hot-game-build byte cap.
 export const HOT_BUNDLE_MAX_LENGTH = 4_000_000;
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const artifact = z
