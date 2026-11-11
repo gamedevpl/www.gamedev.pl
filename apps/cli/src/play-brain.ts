@@ -452,7 +452,8 @@ export async function startPlayBrain(input: {
       if (signal.aborted) write(`${name} stopped — the tree keeps whatever it wrote; /diff to see`);
       if (finished) delete ws.failedTask;
       else {
-        ws.failedTask = { request: text, agent: name, before, source: 'play-brain' };
+        // Hosts key this brain by its configured agent, even after takeover.
+        ws.failedTask = { request: text, agent: first, before, source: 'play-brain' };
         if (!ws.unattended) write(`Task saved locally — /retry resumes it with ${name}; /diff shows partial edits.`);
       }
     }
