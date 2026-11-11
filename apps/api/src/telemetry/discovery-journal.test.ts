@@ -113,6 +113,13 @@ describe('discovery journal route', () => {
     await app.close();
   });
 
+  it('lists the accounts that have the switch on', async () => {
+    const uids = async () => (await store.listDiscoveryJournalAccounts()).map((user) => user.uid).sort();
+    expect(await uids()).toEqual(['bot:e2e', 'g:kid']);
+    await store.setDiscoveryJournal('g:kid', null);
+    expect(await uids()).toEqual(['bot:e2e']);
+  });
+
   it('turns off when the operator clears the switch', async () => {
     await store.setDiscoveryJournal('g:kid', null);
     const app = await appWith(store);

@@ -417,6 +417,11 @@ export class FirestoreStore extends PlayJournalFacade implements Store {
     this.identityStore.forgetUser(uid);
   }
 
+  async listDiscoveryJournalAccounts(): Promise<User[]> {
+    const snap = await this.db.collection('users').where('discoveryJournalSince', '!=', null).limit(50).get();
+    return snap.docs.map((doc) => ({ ...(doc.data() as User), uid: doc.id }));
+  }
+
   async appendDiscoveryRows(rows: Parameters<DiscoveryRowsStore['appendDiscoveryRows']>[0]): Promise<void> {
     return this.discoveryJournalStore.appendDiscoveryRows(rows);
   }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { User } from '../records/identity.js';
 import { RestBigQueryClient, telemetryBackend, type BigQueryClient, type QueryParam } from './telemetry-bigquery.js';
 
 // Per-account landmark journal; opt-in, BigQuery only, never joined to telemetry.
@@ -28,6 +29,8 @@ export interface DiscoveryRow {
 // Operator switch on the account (null turns it off), plus the rows.
 export interface DiscoveryJournalStore extends DiscoveryRowsStore {
   setDiscoveryJournal(uid: string, since: string | null): Promise<void>;
+  // Accounts with the switch on, for the operator's picker.
+  listDiscoveryJournalAccounts(): Promise<User[]>;
 }
 
 export interface DiscoveryRowsStore {
