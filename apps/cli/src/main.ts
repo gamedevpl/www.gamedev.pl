@@ -5,6 +5,7 @@ import { matchingCheckout, replStart } from './local-recovery.js';
 export { openCheckoutGame } from './local-recovery.js';
 import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
+import { fallbackCommand } from './fallback-command.js';
 import { choosePermissionMode, permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playSessionCommand } from './play-session-command.js';
@@ -180,6 +181,10 @@ export async function runCli(
     }
     if (verb === 'model') {
       await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
+      return EXIT_GREEN;
+    }
+    if (verb === 'fallback') {
+      fallbackCommand({ args, env, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;
     }
     if (verb === 'kit') {

@@ -26,6 +26,23 @@ function settings(env: NodeJS.ProcessEnv): Record<string, AgentSelection> {
     throw error;
   }
 }
+function fallbackPath(env: NodeJS.ProcessEnv): string {
+  return join(dirname(path(env)), 'agent-fallback.json');
+}
+// Agents taking over a Play turn; empty means off.
+export function readFallback(env: NodeJS.ProcessEnv): string[] {
+  try {
+    const saved = (JSON.parse(readFileSync(fallbackPath(env), 'utf8')) as { agents?: unknown }).agents;
+    return Array.isArray(saved) ? saved.filter((name): name is string => typeof name === 'string') : [];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
+export function saveFallback(agents: string[], env: NodeJS.ProcessEnv): void {
+  mkdirSync(dirname(fallbackPath(env)), { recursive: true, mode: 0o700 });
+  writeFileSync(fallbackPath(env), JSON.stringify({ agents: [...new Set(agents)] }, null, 2) + '\n', { mode: 0o600 });
+}
 export function readAgentSelection(agent: string, env: NodeJS.ProcessEnv): AgentSelection {
   return settings(env)[agent] ?? {};
 }

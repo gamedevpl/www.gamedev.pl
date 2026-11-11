@@ -34,9 +34,10 @@ import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { gameSourceRoot } from './source-project.js';
 import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
-import { modePermissions, taskPermissionMode, type PermissionMode } from './agent-permissions.js';
+import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { requestDetail } from './agent-approval.js';
-import { readAgentSelection, validateSelection } from './agent-settings.js';
+import { playFallback, withRunSettings } from './play-brain-agents.js';
+export { withRunSettings };
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
 import { liveGameAppTools } from './live-game-app-tools.js';
@@ -200,7 +201,9 @@ export async function startPlayBrain(input: {
     if (!inTurn) throw Error('The Play turn has ended.');
     return inTurn(() => reconcileRemotePush({ api: input.api, cwd: ws.root, slug: ws.slug, remote, srcRef }));
   });
-  const permission = () => taskPermissionMode(spec, ws.permissionMode);
+  // After a failover, the working agent's own mode applies.
+  const permissionOf = (agentName: string) =>
+    taskPermissionMode(ws.adapters.find((candidate) => candidate.name === agentName) ?? spec, ws.permissionMode);
   // Play's tools for the agent; bound once the agent exists.
   const bound: { handle?: ReturnType<typeof createAppAgentHandler> } = {};
   const server = createServer((req, res) => {
@@ -214,6 +217,7 @@ export async function startPlayBrain(input: {
     server.listen(0, '127.0.0.1', resolve);
   });
   const steering = trackPlaySteering();
+  const fallback = playFallback(ws.env, name, ws.adapters, BRAIN_AGENTS);
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: playBrainInstructions(ws),
@@ -243,17 +247,19 @@ export async function startPlayBrain(input: {
       }),
     ]),
     dev: { cwd: ws.root, commit: 'on-request', only: true },
-    agents: () => {
-      const make = (permissions?: AgentTask['permissions']) =>
-        (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === name);
-      const configured = withRunSettings(make, ws.env, permission);
-      return configured ? [steering.wrap(configured)] : [];
-    },
+    agents: () =>
+      [name, ...fallback].flatMap((each) => {
+        const make = (permissions?: AgentTask['permissions']) =>
+          (input.agents ?? brainAgents)(ws.root, permissions).find((candidate) => candidate.name === each);
+        const configured = withRunSettings(make, ws.env, () => permissionOf(each));
+        return configured ? [steering.wrap(configured)] : [];
+      }),
     agent: name,
+    fallback,
     serverName: 'gamedevpl',
     mcpUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/agent/mcp`,
     env,
-    autoApprove: (request) => decideApproval(permission(), request),
+    autoApprove: (request) => decideApproval(permissionOf(agent.get().agent), request),
   });
   bound.handle = createAppAgentHandler(agent, { basePath: '/agent' });
   const unmirror = mirrorPlayBrain(agent, write, input.activity);
@@ -475,26 +481,4 @@ export async function startPlayBrain(input: {
       await new Promise((resolve) => server.close(resolve));
     },
   };
-}
-
-// Runs use /model's selection and the permission mode, like the workshop.
-export function withRunSettings(
-  make: (permissions?: AgentTask['permissions']) => CodingAgent | undefined,
-  env: NodeJS.ProcessEnv,
-  mode: () => PermissionMode,
-): CodingAgent | undefined {
-  const agent = make();
-  if (!agent) return undefined;
-  const run: CodingAgent['run'] = (task) => {
-    const selection = readAgentSelection(agent.name, env);
-    validateSelection(agent.name, selection);
-    const permissions = modePermissions(mode());
-    return (permissions ? make(permissions)! : agent).run({
-      ...task,
-      ...(permissions ? { permissions } : {}),
-      ...(selection.model && !task.model ? { model: selection.model } : {}),
-      ...(selection.effort && !task.effort ? { effort: selection.effort } : {}),
-    });
-  };
-  return Object.assign(Object.create(agent) as CodingAgent, { run });
 }

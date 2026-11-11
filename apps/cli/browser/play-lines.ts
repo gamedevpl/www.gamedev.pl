@@ -1,5 +1,6 @@
 import { userText, type AppAgentState } from 'genaicode/react';
 import type { Delivery } from '../src/session-delivery.js';
+import { failoverLine } from '../src/failover-line.js';
 
 export function playLines(lines: string[], state: AppAgentState, deliveries: Delivery[]): string[] {
   const turns = [...state.history, ...(state.session?.turns ?? [])];
@@ -7,7 +8,13 @@ export function playLines(lines: string[], state: AppAgentState, deliveries: Del
   const texts = new Set(
     turns.flatMap((turn) =>
       turn.entries.flatMap((entry) =>
-        entry.kind === 'text' ? [entry.text.trim()] : entry.kind === 'error' ? [`! ${entry.message}`] : [],
+        entry.kind === 'text'
+          ? [entry.text.trim()]
+          : entry.kind === 'error'
+            ? [`! ${entry.message}`]
+            : entry.kind === 'failover'
+              ? [failoverLine(entry)]
+              : [],
       ),
     ),
   );

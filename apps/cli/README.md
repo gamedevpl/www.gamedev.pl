@@ -917,6 +917,15 @@ Without overrides, the agent keeps its own configuration. The task header says
 Vibe model selection uses `VIBE_ACTIVE_MODEL`; tools without an effort override
 keep their own reasoning settings. Unsupported installed CLI flags fail preflight.
 
+### Agent failover in Play
+
+Off by default. `/fallback codex agy` (or `gamedevpl fallback codex agy`) names
+agents that take over a Play turn when Play's agent hits its plan limit, is signed
+out, missing or crashes. The next one in order gets the same request, briefed with
+the conversation, and Play stays with it. Only installed agents that can drive Play
+(claude, codex, copilot, agy) count. `/fallback` shows the list; `/fallback off`
+clears it. The change applies to the next Play session.
+
 The main local-task view groups progress and abbreviates shell operations. `/logs`
 shows the full sanitized transcript of the latest task in the current interactive
 checkout. Logs are private local temporary files; one-shot delegation prints the

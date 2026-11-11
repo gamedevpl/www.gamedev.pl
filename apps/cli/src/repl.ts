@@ -8,6 +8,7 @@ import { recoverRepl } from './recover.js';
 import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
+import { fallbackCommand } from './fallback-command.js';
 import { permissionsCommand } from './agent-permissions.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
@@ -97,6 +98,10 @@ export async function handleReplLine(input: {
   if (trimmed === '/model' || trimmed.startsWith('/model ')) {
     const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
     await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
+    return { next: 'continue' };
+  }
+  if (trimmed === '/fallback' || trimmed.startsWith('/fallback ')) {
+    fallbackCommand({ args: trimmed.split(/\s+/).slice(1), env: input.env ?? process.env, write: input.write });
     return { next: 'continue' };
   }
   if (trimmed === '/permissions' || trimmed.startsWith('/permissions ')) {

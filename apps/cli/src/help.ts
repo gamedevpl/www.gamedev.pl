@@ -26,6 +26,7 @@ export const BLURB: Record<SlashVerb, string> = {
     'restore delivered sources locally — restore <version> [--dry-run] [--force]; --recover repairs an interrupted edit',
   revert: 'undo one delivery while preserving later changes — revert <version> [--dry-run]',
   model: 'view or choose delegated model and effort — model [agent]',
+  fallback: 'agents Play hands a turn to when its agent runs out — fallback [agent…|off]',
   agents: 'detect local agents and show supported modes',
   permissions: 'agent approvals — permissions [ask|auto|yolo]; default Auto with a sandbox, Ask for other agents',
   games: 'list your games',

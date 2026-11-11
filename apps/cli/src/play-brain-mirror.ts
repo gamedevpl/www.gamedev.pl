@@ -1,4 +1,5 @@
 import type { AppAgent } from 'genaicode/app-agent';
+import { failoverLine } from './failover-line.js';
 
 // The agent's conversation as session lines for terminal and browser.
 export function mirrorPlayBrain(agent: AppAgent, write: (line: string) => void, activity: (text: string) => void) {
@@ -23,6 +24,7 @@ export function mirrorPlayBrain(agent: AppAgent, write: (line: string) => void, 
         else if (entry.kind === 'tool')
           write(`  · ${entry.name.replace(/^mcp__gamedevpl__/, '')}${entry.isError ? ' (failed)' : ''}`);
         else if (entry.kind === 'error') write(`! ${entry.message}`);
+        else if (entry.kind === 'failover') write(failoverLine(entry));
       }
       shown.set(turn.id, index);
     }
