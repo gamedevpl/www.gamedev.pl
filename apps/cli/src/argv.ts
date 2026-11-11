@@ -2,6 +2,7 @@ export const SLASH_VERBS = [
   'recover',
   'agents',
   'model',
+  'fallback',
   'logs',
   'log',
   'show',
