@@ -92,25 +92,37 @@ export function pluginLayout(target: PluginTarget, env: NodeJS.ProcessEnv) {
   return { home, state: join(config, 'gamedevpl/plugins', target), roots, configs, direct };
 }
 
-export function existingIntegration(target: PluginTarget, env: NodeJS.ProcessEnv): boolean {
+export type IntegrationEvidence = { kind: 'plugin' | 'mcp'; path: string };
+
+export function existingIntegrations(target: PluginTarget, env: NodeJS.ProcessEnv): IntegrationEvidence[] {
   const layout = pluginLayout(target, env);
-  if (layout.direct && existsSync(layout.direct)) return true;
+  const found: IntegrationEvidence[] = [];
+  if (layout.direct && existsSync(layout.direct)) found.push({ kind: 'plugin', path: layout.direct });
   if (target === 'muse') {
     const registry = join(layout.roots[0]!, '../../installed.json');
     noSymlinks(registry);
-    if (existsSync(registry) && /"gamedevpl(?:-cli)?"/.test(readFileSync(registry, 'utf8'))) return true;
+    if (existsSync(registry) && /"gamedevpl(?:-cli)?"/.test(readFileSync(registry, 'utf8')))
+      found.push({ kind: 'plugin', path: registry });
   }
-  if (pluginTrees(layout.roots, [PLUGIN_NAME, 'gamedev-pl', 'gamedevpl'], { slots: true }).length) return true;
+  for (const path of pluginTrees(layout.roots, [PLUGIN_NAME, 'gamedev-pl', 'gamedevpl'], { slots: true }))
+    if (!found.some((entry) => entry.path === path)) found.push({ kind: 'plugin', path });
   for (const file of layout.configs) {
     noSymlinks(file);
     if (!existsSync(file)) continue;
     const text = readFileSync(file, 'utf8');
-    if (text.includes('www.gamedev.pl/api/mcp')) return true;
-    if (target === 'vibe' && /^\s*name\s*=\s*["']gamedevpl(?:[-_]cli)?["']\s*$/m.test(text)) return true;
-    if (/["']gamedevpl(?:_cli)?["']\s*:/.test(text) || /\[mcp_servers\.(?:"|')?gamedevpl(?:_cli)?(?:"|')?\]/.test(text))
-      return true;
+    if (
+      text.includes('www.gamedev.pl/api/mcp') ||
+      (target === 'vibe' && /^\s*name\s*=\s*["']gamedevpl(?:[-_]cli)?["']\s*$/m.test(text)) ||
+      /["']gamedevpl(?:_cli)?["']\s*:/.test(text) ||
+      /\[mcp_servers\.(?:"|')?gamedevpl(?:_cli)?(?:"|')?\]/.test(text)
+    )
+      found.push({ kind: 'mcp', path: file });
   }
-  return false;
+  return found;
+}
+
+export function existingIntegration(target: PluginTarget, env: NodeJS.ProcessEnv): boolean {
+  return existingIntegrations(target, env).length > 0;
 }
 
 export function nativePluginCommands(

@@ -13,6 +13,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - What the Play agent shows in the browser conversation can be a sound or a video with a player, or a page that asks you something: fill it in, confirm what is sent, and the agent gets your answers (#2104).
 - The Play agent can show a report, a comparison or a small page as a card in the browser conversation; a page it writes opens in a sandbox with no network and no access to Play (#2101).
 
+### Fixed
+
+- Plugin status, installation and CLI updates distinguish detected MCP configuration from plugin files, explain unchanged installations, and show the next command; missing client names explicitly report that nothing was installed.
+
 ## 0.67.3 — 2026-11-09
 
 ### Fixed
