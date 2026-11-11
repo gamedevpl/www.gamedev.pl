@@ -141,7 +141,7 @@ export async function startSessionBrowser(
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; worker-src blob:; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; worker-src blob:; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -177,8 +177,8 @@ export async function startSessionBrowser(
         reply(404, { error: 'Artifact unavailable' });
         return;
       }
-      const response = artifactResponse(found.artifact, found.body);
-      res.writeHead(200, response.headers);
+      const response = artifactResponse(found.artifact, found.body, { range: req.headers.range });
+      res.writeHead(response.status, response.headers);
       res.end(response.body);
       return;
     }
