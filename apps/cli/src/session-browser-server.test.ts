@@ -15,6 +15,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { privatePlayDirectory } from './play-state.js';
 import { stopPlaySession } from './play.js';
 import type { AppAgent } from 'genaicode/app-agent';
+import { createArtifactStore } from 'genaicode/agents';
 
 vi.mock('./workbench-phone.js', async (original) => ({
   ...(await original<typeof import('./workbench-phone.js')>()),
@@ -107,6 +108,32 @@ it('shows the Play agent and forwards only its card answers', async () => {
   expect((await post({ kind: 'approval', id: '9', decision: 'deny' })).status).toBe(409);
   expect((await post({ kind: 'reset' })).status).toBe(200);
   expect(calls).toEqual([['decide', '1', 'approve'], ['reset']]);
+});
+
+it('serves what the Play agent published to a frame, sandboxed, by id only', async () => {
+  const session = createSessionController('hello', vi.fn());
+  const artifacts = createArtifactStore({ cwd: tmpdir() });
+  const artifact = await artifacts.publish({ title: 'Plan', content: '<b>plan</b>', format: 'html' });
+  const server = await startSessionBrowser(session, { agent: () => ({ artifacts }) as unknown as AppAgent });
+  cleanup.push(async () => {
+    session.close();
+    await server.close();
+  });
+  const { origin } = new URL(server.url);
+  // No bearer: a frame cannot send one.
+  const response = await fetch(`${origin}/published/${artifact.id}?v=1`, {
+    headers: { 'sec-fetch-site': 'same-origin' },
+  });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-security-policy')).toContain('sandbox allow-scripts');
+  expect(response.headers.get('content-security-policy')).not.toContain('connect-src');
+  expect(await response.text()).toBe('<b>plan</b>');
+  expect((await fetch(`${origin}/published/${'0'.repeat(32)}`)).status).toBe(404);
+  expect(
+    (await fetch(`${origin}/published/${artifact.id}`, { headers: { 'sec-fetch-site': 'cross-site' } })).status,
+  ).toBe(403);
+  const page = await fetch(origin);
+  expect(page.headers.get('content-security-policy')).toContain("frame-src 'self' about:");
 });
 
 it('authenticates build retries and refuses stale sources and unsupported previews', async () => {

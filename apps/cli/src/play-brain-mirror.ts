@@ -23,6 +23,7 @@ export function mirrorPlayBrain(agent: AppAgent, write: (line: string) => void, 
         if (entry.kind === 'text' && entry.text.trim()) write(entry.text.trim());
         else if (entry.kind === 'tool')
           write(`  · ${entry.name.replace(/^mcp__gamedevpl__/, '')}${entry.isError ? ' (failed)' : ''}`);
+        else if (entry.kind === 'artifact') write(`  · published "${entry.artifact.title}" (see the Play browser tab)`);
         else if (entry.kind === 'error') write(`! ${entry.message}`);
         else if (entry.kind === 'failover') write(failoverLine(entry));
       }
