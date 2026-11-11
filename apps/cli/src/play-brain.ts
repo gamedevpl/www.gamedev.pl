@@ -36,7 +36,7 @@ import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { requestDetail } from './agent-approval.js';
-import { playFallback, withRunSettings } from './play-brain-agents.js';
+import { playFallback, usableAgents, withRunSettings } from './play-brain-agents.js';
 export { withRunSettings };
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
 import { withCheckoutWriter } from './workbench-lock.js';
@@ -133,9 +133,10 @@ export async function startPlayBrain(input: {
 }): Promise<PlayBrain | undefined> {
   const { ws, write } = input;
   const gameRoot = gameSourceRoot(ws.root, ws.slug);
-  const name = brainAgent(ws);
-  if (!name) return undefined;
-  const spec = ws.adapters.find((candidate) => candidate.name === name)!;
+  const first = brainAgent(ws);
+  if (!first) return undefined;
+  const specOf = (agentName: string) => ws.adapters.find((candidate) => candidate.name === agentName)!;
+  let order = [first, ...playFallback(ws.env, first, ws.adapters, BRAIN_AGENTS)];
   const lifetime = new AbortController();
   const local = !ws.runAdapter;
   const env = subscriptionEnv(childEnv(ws.env, ''));
@@ -146,18 +147,23 @@ export async function startPlayBrain(input: {
     try {
       write('Preparing Creator Kit and dependencies…');
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: setup.signal, write });
-      if (name === 'claude')
-        await requireClaudeSubscription({
-          command: spec.command,
-          cwd: gameRoot,
-          env,
-          abort: setup.signal,
-        });
+      // Every Claude in the order, fallback too, must use a subscription.
+      order = await usableAgents(
+        order,
+        async (each) => {
+          if (each === 'claude')
+            await requireClaudeSubscription({ command: specOf(each).command, cwd: gameRoot, env, abort: setup.signal });
+        },
+        (each, error) => setup.signal.aborted || write(`${each} is left out of Play: ${formatError(error)}`),
+      );
+      if (order[0] !== first) write(`${order[0]} takes over Play.`);
       if (setup.signal.aborted) throw new CliError('setup cancelled', EXIT_REFUSED);
     } finally {
       if (ws.abort.current === setup) ws.abort.current = null;
     }
   }
+  const [name, ...fallback] = order as [string, ...string[]];
+  const spec = specOf(name);
   let previewUrl: Promise<string | undefined> | undefined;
   const preview = () =>
     (previewUrl ??=
@@ -217,7 +223,6 @@ export async function startPlayBrain(input: {
     server.listen(0, '127.0.0.1', resolve);
   });
   const steering = trackPlaySteering();
-  const fallback = playFallback(ws.env, name, ws.adapters, BRAIN_AGENTS);
   const agent = createAppAgent({
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: playBrainInstructions(ws),

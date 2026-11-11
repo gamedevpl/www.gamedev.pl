@@ -15,6 +15,27 @@ export function playFallback(
   );
 }
 
+// Agents passing their preflight, in order; none left rethrows the first refusal.
+export async function usableAgents(
+  order: readonly string[],
+  check: (name: string) => Promise<void>,
+  skipped: (name: string, error: unknown) => void,
+): Promise<string[]> {
+  const kept: string[] = [];
+  let refused: { error: unknown } | undefined;
+  for (const name of order) {
+    try {
+      await check(name);
+      kept.push(name);
+    } catch (error) {
+      refused ??= { error };
+      skipped(name, error);
+    }
+  }
+  if (!kept.length) throw refused!.error;
+  return kept;
+}
+
 // Runs use /model's selection and the permission mode, like the workshop.
 export function withRunSettings(
   make: (permissions?: AgentTask['permissions']) => CodingAgent | undefined,
