@@ -671,6 +671,17 @@
       "resize": "Resize details panel"
     },
     "buildHistory": {
+      "checksHint": "Passing checks does not publish a version.",
+      "publicationStatus": "Publication status",
+      "publicVersion": "Public version",
+      "notPublished": "Not published",
+      "publicHint": "This is the version players get through your public link.",
+      "notPublishedHint": "There is no public version. Builds below are available for preview.",
+      "openPublic": "Open public game",
+      "viewingPreview": "Viewing in Studio:",
+      "matchesPublic": "Same as the public version.",
+      "previewOnly": "This preview is not the public version.",
+      "previewUnconfirmed": "Public version could not be compared.",
       "timedOut": "Build timed out",
       "crashed": "Build interrupted",
       "live": "Checking your latest changes now",
@@ -681,7 +692,7 @@
       "title": "Recent builds",
       "mode": {
         "preview": "Preview",
-        "publish": "Publish",
+        "publish": "Publish checks",
         "proposal": "Proposal"
       },
       "verdict": {
@@ -696,6 +707,7 @@
       "showAll": "Show older builds",
       "showLess": "Show fewer",
       "previewAction": "Preview build",
+      "latestPreviewAction": "Back to latest preview",
       "revertAction": "Revert to this build",
       "reverting": "Reverting…",
       "revertSuccess": "Roll-forward started for {{version}}",
@@ -708,7 +720,7 @@
       "fileCount_one": "{{count}} source file",
       "fileCount_other": "{{count}} source files",
       "versionLabel": "Version {{version}}",
-      "playing": "Playing",
+      "playing": "Viewing",
       "failedStageLabel": "Failed check: {{stage}} ({{id}})",
       "activeStageLabel": "Current check: {{stage}}",
       "failureNextStep": "What to do: Open Chat and ask the agent to fix the checks, edit & publish again from Code, or revert to an earlier passed build below.",

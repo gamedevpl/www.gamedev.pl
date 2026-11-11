@@ -12,6 +12,8 @@ export interface StudioGame {
   publishedAt?: string;
   // Catalog publish time when this row is an improvement tip.
   livePublishedAt?: string;
+  // Current public delivery, independent of this row's round and verdict.
+  publishedVersion?: string;
   // The creator turned on the shared link for this draft.
   draftShared?: boolean;
   // The latest build ships an editor definition.
@@ -26,7 +28,6 @@ export interface StudioGame {
   ownerProfileName?: string;
 }
 
-// One page of the creator's Studio shelf.
 export interface StudioGamesResponse {
   games: StudioGame[];
   truncated: boolean;
@@ -64,7 +65,6 @@ export interface StudioScorecardsResponse {
   totalGames: number;
 }
 
-// Build versions for a creator's game.
 export interface StudioBuildsResponse {
   builds: import('./submission-status.js').RecentBuild[];
   totalCount: number;

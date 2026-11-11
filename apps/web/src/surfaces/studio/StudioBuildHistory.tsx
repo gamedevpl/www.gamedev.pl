@@ -3,19 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { isBuildLive, newestBuildIsCurrentRound } from '../../buildLive.js';
 import { deliveredPreview } from '../../studioPreviewDelivery.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
 import {
   formatActiveStageBadge,
   formatBuildFailureGuidance,
-  formatBuildHistoryVerdict,
   formatFailedStageBadge,
   formatLiveBannerText,
   mergeBuildHistory,
   resolveBuildHistoryLiveKey,
 } from './studioBuildHistoryModel.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
+import { StudioPublicationStatus } from './StudioPublicationStatus.js';
+import { StudioBuildHistorySummary } from './StudioBuildHistorySummary.js';
 import './studio-build-history.css';
 import './studio-credentials.css';
 
@@ -28,6 +28,8 @@ export function StudioBuildHistory({
   onSelectPreviewVersion,
   activePreviewVersion,
   playingVersion,
+  published,
+  publishedVersion,
   onReverted,
   onSealed,
 }: {
@@ -37,6 +39,8 @@ export function StudioBuildHistory({
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
   playingVersion?: string | null;
+  published?: boolean;
+  publishedVersion?: string;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
   // Refresh immediately: the polling snapshot still permits sealing.
   onSealed?: () => void;
@@ -63,7 +67,7 @@ export function StudioBuildHistory({
   const live = isBuildLive(status);
   const liveKey = resolveBuildHistoryLiveKey(status, head, playingVersion);
   const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
-  if (!showLiveRoundRow && builds.length === 0) {
+  if (!showLiveRoundRow && builds.length === 0 && published === undefined) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
   }
 
@@ -123,6 +127,14 @@ export function StudioBuildHistory({
 
   return (
     <div className="studio-build-history" data-testid="studio-build-history">
+      {published !== undefined ? (
+        <StudioPublicationStatus
+          published={published}
+          publishedVersion={publishedVersion}
+          playingVersion={playingVersion}
+          slug={status.slug}
+        />
+      ) : null}
       <div className={`studio-build-history-live${live ? ' is-live' : ''}`}>
         <span className="live-dot" aria-hidden="true" />
         <span>{formatLiveBannerText(t, status, liveKey)}</span>
@@ -138,6 +150,7 @@ export function StudioBuildHistory({
           </span>
         ) : null}
       </div>
+      <p className="studio-build-history-explanation">{t('studioPanel.buildHistory.checksHint')}</p>
 
       {revertSuccess || sealSuccess ? (
         <div className="studio-build-history-alert is-success" role="status">
@@ -167,35 +180,15 @@ export function StudioBuildHistory({
               key={build.version}
               className={`studio-build-history-row is-${build.verdict}${isExpanded ? ' is-expanded' : ''}${isPreviewing ? ' is-active-preview' : ''}`}
             >
-              <div
-                className="studio-build-history-summary"
-                onClick={() => toggleExpand(build.version)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) =>
-                  (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleExpand(build.version))
-                }
-                aria-expanded={isExpanded}
-              >
-                <span
-                  className={`studio-build-history-dot${live && index === 0 && build.verdict === 'pending' ? ' is-live' : ''}`}
-                  aria-hidden="true"
-                >
-                  {build.verdict === 'green' && <PixelIcon name="check" size={10} />}
-                  {build.verdict === 'red' && <PixelIcon name="close" size={10} />}
-                </span>
-                <span className="studio-build-history-mode">{t(`studioPanel.buildHistory.mode.${build.mode}`)}</span>
-                {playingVersion === build.version ? (
-                  <span className="studio-build-history-playing">▶ {t('studioPanel.buildHistory.playing')}</span>
-                ) : null}
-                <span className="studio-build-history-verdict">{formatBuildHistoryVerdict(t, status, build)}</span>
-                <time className="studio-build-history-time" dateTime={build.createdAt}>
-                  {formatRelativeTime(build.createdAt, i18n.language)}
-                </time>
-                <span className="studio-build-history-expand-icon" aria-hidden="true">
-                  <PixelIcon name={isExpanded ? 'chevronUp' : 'chevronDown'} size={10} />
-                </span>
-              </div>
+              <StudioBuildHistorySummary
+                build={build}
+                status={status}
+                expanded={isExpanded}
+                live={live && index === 0 && build.verdict === 'pending'}
+                playing={playingVersion === build.version}
+                published={published === true && publishedVersion === build.version}
+                onToggle={() => toggleExpand(build.version)}
+              />
 
               {isExpanded ? (
                 <div className="studio-build-history-details" data-testid={`build-details-${build.version}`}>
@@ -263,7 +256,7 @@ export function StudioBuildHistory({
                       >
                         <PixelIcon name={isPreviewing ? 'eye' : 'play'} size={12} />
                         <span>
-                          {isPreviewing ? t('studioPanel.preview.live') : t('studioPanel.buildHistory.previewAction')}
+                          {t(`studioPanel.buildHistory.${isPreviewing ? 'latestPreviewAction' : 'previewAction'}`)}
                         </span>
                       </button>
                     ) : null}

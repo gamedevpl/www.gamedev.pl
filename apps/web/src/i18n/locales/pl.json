@@ -677,6 +677,17 @@
       "resize": "Zmień szerokość panelu"
     },
     "buildHistory": {
+      "checksHint": "Zaliczenie testów nie publikuje wersji.",
+      "publicationStatus": "Status publikacji",
+      "publicVersion": "Wersja publiczna",
+      "notPublished": "Nieopublikowana",
+      "publicHint": "Tę wersję dostają gracze po otwarciu publicznego linku.",
+      "notPublishedHint": "Gra nie ma wersji publicznej. Buildy poniżej możesz oglądać w podglądzie.",
+      "openPublic": "Otwórz publiczną grę",
+      "viewingPreview": "Oglądasz w Studio:",
+      "matchesPublic": "Ta sama wersja co publiczna.",
+      "previewOnly": "Ten podgląd nie jest wersją publiczną.",
+      "previewUnconfirmed": "Nie udało się porównać z wersją publiczną.",
       "timedOut": "Przekroczono czas buildu",
       "crashed": "Build przerwany",
       "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
@@ -687,7 +698,7 @@
       "title": "Ostatnie buildy",
       "mode": {
         "preview": "Podgląd",
-        "publish": "Publikacja",
+        "publish": "Testy publikacji",
         "proposal": "Propozycja"
       },
       "verdict": {
@@ -702,6 +713,7 @@
       "showAll": "Pokaż starsze buildy",
       "showLess": "Pokaż mniej",
       "previewAction": "Podgląd buildu",
+      "latestPreviewAction": "Wróć do najnowszego podglądu",
       "revertAction": "Przywróć ten build",
       "reverting": "Przywracanie…",
       "revertSuccess": "Rozpoczęto roll-forward do wersji {{version}}",
@@ -716,7 +728,7 @@
       "fileCount_many": "{{count}} plików źródłowych",
       "fileCount_other": "{{count}} plików źródłowych",
       "versionLabel": "Wersja {{version}}",
-      "playing": "Grasz",
+      "playing": "Oglądasz",
       "failedStageLabel": "Niezaliczony test: {{stage}} ({{id}})",
       "activeStageLabel": "Bieżący test: {{stage}}",
       "failureNextStep": "Co dalej: Otwórz Czat i poproś agenta o naprawę testów, popraw kod w zakładce Code i opublikuj ponownie albo przywróć starszy zaliczony build poniżej.",
