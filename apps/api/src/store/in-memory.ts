@@ -406,6 +406,10 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
     if (existing) this.identityStore.users.set(uid, { ...existing, discoveryJournalSince: since });
   }
 
+  async listDiscoveryJournalAccounts(): Promise<User[]> {
+    return [...this.identityStore.users.values()].filter((user) => user.discoveryJournalSince);
+  }
+
   async appendDiscoveryRows(rows: Parameters<DiscoveryRowsStore['appendDiscoveryRows']>[0]): Promise<void> {
     return this.discoveryJournalStore.appendDiscoveryRows(rows);
   }
