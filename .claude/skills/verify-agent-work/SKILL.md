@@ -165,6 +165,11 @@ Non-root cloud containers may still require the games kit's documented `CI=1`
 browser mode. Preflight `check:webgl` with the final environment before a long
 catalog gate: changing environment variables invalidates its resume checkpoint.
 
+When adding diagnostic evidence, preserve already-established integration detection if a
+later optional configuration cannot safely be read. Exercise a detected plugin or MCP
+entry followed by a symlinked configuration, plus a no-evidence control that still
+refuses the symlink. Test status inventory and install/uninstall no-ops together.
+
 For colored CLI output, sanitize untrusted metadata before adding ANSI styling.
 Check a real terminal, piped output, `NO_COLOR`, JSON and narrow Unicode wrapping:
 stripping all controls after formatting removes intended colors as well.

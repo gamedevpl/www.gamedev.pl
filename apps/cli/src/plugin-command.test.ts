@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  symlinkSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
@@ -88,4 +97,39 @@ it('never presents an available update as already current, including dry runs', 
   expect(formatPluginRow(row, 'update')).toContain('Update available (2.0.0): gamedevpl plugins update codex');
   expect(formatPluginRow(row, 'update')).not.toContain('no package update needed');
   expect(formatPluginRow(row, 'update')).not.toContain('plugin updated');
+});
+
+it.each(['plugin', 'mcp'])('preserves established %s evidence when later configuration is symlinked', async (kind) => {
+  const f = fixture();
+  const target = kind === 'plugin' ? 'cursor' : 'claude';
+  const client = join(f.home, `.${target}`);
+  mkdirSync(client);
+  const evidence = kind === 'plugin' ? join(client, 'plugins/local/gamedevpl-cli') : join(f.home, '.claude.json');
+  if (kind === 'plugin') mkdirSync(evidence, { recursive: true });
+  else writeFileSync(evidence, '{"mcpServers":{"gamedevpl":{}}}');
+  const privateFile = join(f.home, 'private-config');
+  writeFileSync(privateFile, 'do-not-read-or-change');
+  const link = join(client, kind === 'plugin' ? 'mcp.json' : 'settings.json');
+  symlinkSync(privateFile, link);
+  for (const args of [[], ['status'], ['install', target], ['uninstall', target], ['update', target]]) {
+    const result = await f.command(args, { json: true });
+    expect(result.code).toBe(0);
+    const data = JSON.parse(result.output);
+    const state = data.plugins?.find((row: { target: string }) => row.target === target) ?? data;
+    expect(state).toMatchObject({ status: 'external', detectedIntegrations: [{ kind, path: evidence }] });
+    expect(result.output).not.toContain('do-not-read-or-change');
+  }
+  expect(lstatSync(link).isSymbolicLink()).toBe(true);
+  expect(readFileSync(privateFile, 'utf8')).toBe('do-not-read-or-change');
+  expect(existsSync(join(f.home, '.config/gamedevpl/plugins', target, 'receipt.json'))).toBe(false);
+});
+
+it('refuses unsafe configuration when no integration has been established', async () => {
+  const f = fixture();
+  mkdirSync(join(f.home, '.cursor'));
+  const privateFile = join(f.home, 'private-config');
+  writeFileSync(privateFile, '{"mcpServers":{"gamedevpl":{}}}');
+  symlinkSync(privateFile, join(f.home, '.cursor/mcp.json'));
+  for (const action of ['status', 'install', 'uninstall'])
+    await expect(f.command([action, 'cursor'])).rejects.toThrow('refusing symlink');
 });
