@@ -22,6 +22,7 @@ import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
 import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
 import { playPresence, attachPlayPresence, presenceToken } from './play-presence.js';
 import type { AppAgent } from 'genaicode/app-agent';
+import { artifactResponse } from 'genaicode/agents';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
@@ -140,7 +141,7 @@ export async function startSessionBrowser(
     res.setHeader('referrer-policy', 'no-referrer');
     res.setHeader(
       'content-security-policy',
-      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; worker-src blob:; frame-src about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
+      `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data: blob:; media-src data: blob:; connect-src 'self' ${origin.replace('http:', 'ws:')}; worker-src blob:; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`,
     );
     const reply = (status: number, value: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json' });
@@ -166,6 +167,19 @@ export async function startSessionBrowser(
         'cache-control': 'public, max-age=86400',
       });
       res.end(MASCOT_FAVICON_SVG);
+      return;
+    }
+    // A frame cannot send the bearer; the unguessable id is the capability.
+    const published = req.method === 'GET' && /^\/published\/([0-9a-f]{32})(?:\?|$)/.exec(req.url ?? '')?.[1];
+    if (published) {
+      const found = options.agent?.()?.artifacts?.read(published);
+      if (!found) {
+        reply(404, { error: 'Artifact unavailable' });
+        return;
+      }
+      const response = artifactResponse(found.artifact, found.body);
+      res.writeHead(200, response.headers);
+      res.end(response.body);
       return;
     }
     if (req.headers.authorization !== `Bearer ${token}`) {
