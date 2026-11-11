@@ -128,12 +128,15 @@ it('serves what the Play agent published to a frame, sandboxed, by id only', asy
   expect(response.headers.get('content-security-policy')).toContain('sandbox allow-scripts');
   expect(response.headers.get('content-security-policy')).not.toContain('connect-src');
   expect(await response.text()).toBe('<b>plan</b>');
+  const part = await fetch(`${origin}/published/${artifact.id}`, { headers: { range: 'bytes=3-6' } });
+  expect([part.status, await part.text()]).toEqual([206, 'plan']);
   expect((await fetch(`${origin}/published/${'0'.repeat(32)}`)).status).toBe(404);
   expect(
     (await fetch(`${origin}/published/${artifact.id}`, { headers: { 'sec-fetch-site': 'cross-site' } })).status,
   ).toBe(403);
   const page = await fetch(origin);
   expect(page.headers.get('content-security-policy')).toContain("frame-src 'self' about:");
+  expect(page.headers.get('content-security-policy')).toContain("media-src 'self'");
 });
 
 it('authenticates build retries and refuses stale sources and unsupported previews', async () => {
