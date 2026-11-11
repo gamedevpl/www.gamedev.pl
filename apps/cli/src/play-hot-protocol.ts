@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+// Kit's hot-game-build caps bundles at the same size in bytes.
+export const HOT_BUNDLE_MAX_LENGTH = 4_000_000;
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const artifact = z
   .object({
@@ -8,7 +10,7 @@ const artifact = z
     bundleHash: hash,
     stateVersion: z.number().int().positive(),
     observationVersion: z.number().int().positive(),
-    bundle: z.string().min(1).max(1_000_000),
+    bundle: z.string().min(1).max(HOT_BUNDLE_MAX_LENGTH),
   })
   .strict();
 export const playHotArtifact = z.discriminatedUnion('protocol', [

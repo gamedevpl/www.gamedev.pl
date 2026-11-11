@@ -5,7 +5,7 @@ import { CAPTURE_READY_BRIDGE } from './capture-readiness.js';
 import { CAPTURE_SCENARIO_SCRIPT } from './generated/capture-scenario.js';
 import type { CaptureScenario } from './capture-scenario.js';
 import { parse } from 'parse5';
-import { playHotArtifact, type PlayHotArtifact } from './play-hot-protocol.js';
+import { HOT_BUNDLE_MAX_LENGTH, playHotArtifact, type PlayHotArtifact } from './play-hot-protocol.js';
 
 export type PreviewStatus = {
   revision: string;
@@ -100,7 +100,10 @@ export function previewSource(url: string, signal: AbortSignal): PreviewSource {
         ) {
           let hot: PlayHotArtifact | undefined;
           if (after.hot) {
-            const value = JSON.parse(await read('hot', 3_000_000)) as { revision?: string; hot?: unknown };
+            const value = JSON.parse(await read('hot', 3 * HOT_BUNDLE_MAX_LENGTH)) as {
+              revision?: string;
+              hot?: unknown;
+            };
             if (value.revision !== after.revision) continue;
             if (value.hot) {
               hot = playHotArtifact.parse(value.hot);

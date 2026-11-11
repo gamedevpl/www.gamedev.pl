@@ -27,7 +27,7 @@ export const PLAY_HOT_BRIDGE = String.raw`
     parent.postMessage({source:'gdpl-workbench-hot',type:'unavailable',resources:true},'*');
   });
   function valid(input){
-    if(!input||typeof input.id!=='string'||input.id.length>80||typeof input.bundle!=='string'||input.bundle.length>1000000)
+    if(!input||typeof input.id!=='string'||input.id.length>80||typeof input.bundle!=='string'||input.bundle.length>4000000)
       reject('Invalid hot candidate');
     const before=status();
     if(!before||!before.ready||input.bootHash!==before.bootHash||input.expectedEpoch!==before.epoch)
