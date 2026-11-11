@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl fallback codex agy` (or `/fallback`) picks agents that take over a Play turn when Play's agent hits its plan limit, is signed out, missing or crashes; the next agent is briefed with the conversation and Play stays with it. `fallback off` turns it off, which is the default (#PR).
+- `gamedevpl fallback codex agy` (or `/fallback`) picks agents that take over a Play turn when Play's agent hits its plan limit, is signed out, missing or crashes; the next agent is briefed with the conversation and Play stays with it. `fallback off` turns it off, which is the default (#2103).
 
 ## 0.67.3 — 2026-11-09
 
