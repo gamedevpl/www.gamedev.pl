@@ -15,7 +15,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Local Play hot-swaps game behavior bundles up to 4 MB instead of refusing them past 1 MB, matching the Creator Kit's new cap (#PRNUM).
+- Local Play hot-swaps game behavior bundles up to 4 MB instead of refusing them past 1 MB, matching the Creator Kit's new cap (#2107).
 - Plugin status, installation and CLI updates distinguish detected MCP configuration from plugin files, explain unchanged installations, and show the next command; missing client names explicitly report that nothing was installed (#2105).
 
 ## 0.67.3 — 2026-11-09
