@@ -18,6 +18,11 @@ import type { PushUiState } from './pushApi.js';
 import './NotificationBell.css';
 const POLL_MS = 60_000;
 
+// Operator alerts point at the removed /admin; the ops console handles them.
+function isOperatorNotice(n: AppNotification): boolean {
+  return n.type.startsWith('operator.');
+}
+
 // English fallbacks used until locale keys land in i18n/locales/*.json. Rendering
 // through t(key, { defaultValue }) means the component localizes automatically
 // once those keys exist — no change here.
@@ -249,26 +254,37 @@ export function NotificationBell() {
             <div className="notif-empty">{t('notifications.empty', { defaultValue: 'Nothing yet.' })}</div>
           ) : (
             <ul className="notif-list">
-              {items.map((n) => (
-                <li key={n.id} className={n.readAt ? 'notif-item' : 'notif-item is-unread'}>
-                  <a href={n.link} className="notif-link" onClick={() => setOpen(false)}>
+              {items.map((n) => {
+                const text = (
+                  <>
                     <span className="notif-item-title">
                       {t(n.titleKey, { ...n.params, defaultValue: FALLBACK[n.type]?.title ?? 'Update' })}
                     </span>
                     <span className="notif-item-body">
                       {t(n.bodyKey, { ...n.params, defaultValue: FALLBACK[n.type]?.body ?? '' })}
                     </span>
-                  </a>
-                  <button
-                    type="button"
-                    className="notif-dismiss"
-                    aria-label={t('notifications.dismiss', { defaultValue: 'Dismiss' })}
-                    onClick={() => void dismissOne(n.id)}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
+                  </>
+                );
+                return (
+                  <li key={n.id} className={n.readAt ? 'notif-item' : 'notif-item is-unread'}>
+                    {isOperatorNotice(n) ? (
+                      <div className="notif-link is-static">{text}</div>
+                    ) : (
+                      <a href={n.link} className="notif-link" onClick={() => setOpen(false)}>
+                        {text}
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className="notif-dismiss"
+                      aria-label={t('notifications.dismiss', { defaultValue: 'Dismiss' })}
+                      onClick={() => void dismissOne(n.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
 

@@ -145,7 +145,11 @@
   text-decoration: none;
 }
 
-.notif-link:hover {
+.notif-link.is-static {
+  cursor: default;
+}
+
+.notif-link:not(.is-static):hover {
   background: rgba(255, 255, 255, 0.05);
 }
 

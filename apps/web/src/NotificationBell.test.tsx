@@ -161,6 +161,38 @@ describe('NotificationBell — weekly digest switch', () => {
     expect(container.textContent).toContain('Your games this week');
     root.unmount();
   });
+
+  it('renders operator alerts as plain text, not links', async () => {
+    fetchNotifications.mockResolvedValue([
+      {
+        id: 'op-1',
+        type: 'operator.build_failed',
+        createdAt: '2026-07-28T09:00:00.000Z',
+        readAt: null,
+        titleKey: 'notifications.operator.build_failed.title',
+        bodyKey: 'notifications.operator.build_failed.body',
+        params: { title: 'Demo' },
+        link: '/admin/jobs/1',
+      },
+      {
+        id: 'sub-1',
+        type: 'submission.building',
+        createdAt: '2026-07-28T09:00:00.000Z',
+        readAt: null,
+        titleKey: 'notifications.submission.building.title',
+        bodyKey: 'notifications.submission.building.body',
+        params: { title: 'Demo' },
+        link: '/studio/demo',
+      },
+    ] as never);
+
+    const { container, root } = await openBell();
+
+    const hrefs = [...container.querySelectorAll('a.notif-link')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(['/studio/demo']);
+    expect(container.querySelectorAll('.notif-link.is-static')).toHaveLength(1);
+    root.unmount();
+  });
 });
 
 describe('notificationPanelShiftX', () => {
