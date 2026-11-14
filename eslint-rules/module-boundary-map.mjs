@@ -629,6 +629,7 @@ const FILE_BUCKET = {
   recommendations: 'catalog',
   'published-slugs': 'catalog',
   'published-slugs-source': 'catalog',
+  'game-page-description': 'catalog',
   'game-page-routes': 'catalog',
   'game-health': 'catalog',
   'games-repo-client': 'catalog',

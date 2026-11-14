@@ -264,4 +264,27 @@ describe('GamePage', () => {
     await renderPage({ onGameLoaded });
     expect(onGameLoaded).toHaveBeenCalledWith('Neon Courier');
   });
+
+  it('renders Polish localizedDescription when the UI language is Polish and falls back cleanly', async () => {
+    fetchGamePage.mockResolvedValue(
+      pageData({
+        description: 'A cozy digital dollhouse town.',
+        localizedDescription: {
+          en: 'A cozy digital dollhouse town.',
+          pl: 'Przytulne cyfrowe miasteczko dla lalek.',
+        },
+      }),
+    );
+    await i18n.changeLanguage('pl');
+    await renderPage();
+
+    expect(container.querySelector('.game-page-description')?.textContent).toBe(
+      'Przytulne cyfrowe miasteczko dla lalek.',
+    );
+
+    await act(async () => {
+      await i18n.changeLanguage('en');
+    });
+    expect(container.querySelector('.game-page-description')?.textContent).toBe('A cozy digital dollhouse town.');
+  });
 });
