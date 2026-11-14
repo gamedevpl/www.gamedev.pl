@@ -6,9 +6,12 @@ name: Games catalog gate
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
 # mode=full on schedule / manual dispatch / unidentifiable universal GameKit
 # patches (and catalog-wide fields like draw.rect): playtest --suite default, no
-# catalog agent-play. Named function/field edits of core/drawing/gfx/… run
-# static on the games that call that surface. Opt-in modules (gfx3d, sensing, …)
-# reverse-index to GAME.json consumers and run static + those slugs.
+# catalog agent-play. Named function/field edits of core/drawing/gfx/… and
+# opt-in modules (gfx3d, sensing, …) reverse-index to consumer slugs and run
+# smoke/trace/build/accept/agency on those slugs, while on push agent-play runs
+# only on directly touched games/<slug>/ dirs and playtest bounds to directly
+# touched games/<slug>/ dirs (or 4 consumers with -j 4 when none); static
+# failures skip browser stages.
 # Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
 # still playtests touched slugs. A games-published dispatch re-classifies the
 # SHA with tools/gate-scope.mjs --event push --base <last-published-sha>
@@ -136,6 +139,7 @@ jobs:
       games_sha: ${{ steps.checkout_sha.outputs.games_sha }}
       mode: ${{ steps.scope.outputs.mode }}
       slugs: ${{ steps.scope.outputs.slugs }}
+      direct_slugs: ${{ steps.scope.outputs.direct_slugs }}
       need_webkit: ${{ steps.scope.outputs.need_webkit }}
       narrow_conformance: ${{ steps.scope.outputs.narrow_conformance }}
       run_gate: ${{ steps.scope.outputs.run_gate }}
@@ -254,6 +258,7 @@ jobs:
           set -euo pipefail
           MODE="${INPUT_MODE:-full}"
           SLUGS="${INPUT_SLUGS:-}"
+          DIRECT_SLUGS=""
           NEED_WEBKIT="${INPUT_NEED_WEBKIT:-1}"
           NARROW_CONFORMANCE="${INPUT_NARROW_CONFORMANCE:-0}"
           RUN_GATE=1
@@ -322,7 +327,19 @@ jobs:
               echo "gate-scope returned incomplete flags — full catalog gate"
               return 1
             fi
-            echo "Push scope: mode=${MODE} run_gate=${RUN_GATE} webkit=${NEED_WEBKIT} slugs=${SLUGS:-"(none)"}"
+            DIRECT_SLUGS=$(
+              printf '%s\n' "$files" | node -e '
+                const fs = require("node:fs");
+                const lines = fs.readFileSync(0, "utf8").split("\n");
+                const seen = new Set();
+                for (const file of lines) {
+                  const m = /^games\/([a-z0-9-]+)\//.exec(file);
+                  if (m && fs.existsSync(`games/${m[1]}/SPEC.md`)) seen.add(m[1]);
+                }
+                process.stdout.write([...seen].sort().join(" "));
+              '
+            )
+            echo "Push scope: mode=${MODE} run_gate=${RUN_GATE} webkit=${NEED_WEBKIT} slugs=${SLUGS:-"(none)"} direct_slugs=${DIRECT_SLUGS:-"(none)"}"
             return 0
           }
 
@@ -335,12 +352,14 @@ jobs:
               echo "No published snapshot SHA — full catalog gate"
               MODE=full
               SLUGS=
+              DIRECT_SLUGS=
               NEED_WEBKIT=1
               NARROW_CONFORMANCE=0
               RUN_GATE=1
             elif ! classify_from_parent "$baseline"; then
               MODE=full
               SLUGS=
+              DIRECT_SLUGS=
               NEED_WEBKIT=1
               NARROW_CONFORMANCE=0
               RUN_GATE=1
@@ -369,6 +388,14 @@ jobs:
                 ;;
             esac
           done
+          for slug in $DIRECT_SLUGS; do
+            case "$slug" in
+              *[!a-z0-9-]*)
+                echo "Error: invalid direct slug: $slug"
+                exit 1
+                ;;
+            esac
+          done
           if [ "$RUN_GATE" = 1 ] && [ "$MODE" = scoped ] && [ -z "${SLUGS// /}" ]; then
             echo "Error: scoped validation requires at least one game"
             exit 1
@@ -377,6 +404,7 @@ jobs:
           {
             echo "mode=$MODE"
             echo "slugs=$SLUGS"
+            echo "direct_slugs=$DIRECT_SLUGS"
             echo "need_webkit=$NEED_WEBKIT"
             echo "narrow_conformance=$NARROW_CONFORMANCE"
             echo "run_gate=$RUN_GATE"
@@ -448,21 +476,27 @@ jobs:
         working-directory: games-repo
         env:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          CATALOG_AGENT_PLAY: ${{ needs.resolve.outputs.catalog_agent_play }}
+          CATALOG_PLAYTEST: ${{ needs.resolve.outputs.catalog_playtest }}
         run: |
           set -euo pipefail
           gate_failed=0
           run_stage() {
             "$QUIET" "$@" || gate_failed=1
           }
+          playtest_j=()
+          if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
+            playtest_j=(-j 4)
+          fi
           # The observer emits a SHA-bound attestation only after the full gate.
           run_stage npm run check:pr -- --full
-          if [ "${{ needs.resolve.outputs.catalog_agent_play }}" = 1 ]; then
+          if [ "$CATALOG_AGENT_PLAY" = 1 ]; then
             run_stage npm run agent-play
           fi
-          if [ "${{ needs.resolve.outputs.catalog_playtest }}" = all ]; then
-            run_stage npm run playtest -- --all
+          if [ "$CATALOG_PLAYTEST" = all ]; then
+            run_stage npm run playtest -- "${playtest_j[@]}" --all
           else
-            run_stage npm run playtest -- --suite default
+            run_stage npm run playtest -- "${playtest_j[@]}" --suite default
           fi
           if [ "$gate_failed" -ne 0 ]; then
             echo "::error title=Games full gate failed::One or more gate checks failed."
@@ -480,13 +514,20 @@ jobs:
         env:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
           SLUGS: ${{ needs.resolve.outputs.slugs }}
+          DIRECT_SLUGS: ${{ needs.resolve.outputs.direct_slugs }}
           NARROW_CONFORMANCE: ${{ needs.resolve.outputs.narrow_conformance }}
+          CATALOG_AGENT_PLAY: ${{ needs.resolve.outputs.catalog_agent_play }}
+          CATALOG_PLAYTEST: ${{ needs.resolve.outputs.catalog_playtest }}
         run: |
           set -euo pipefail
           gate_failed=0
           run_stage() {
             "$QUIET" "$@" || gate_failed=1
           }
+          playtest_j=()
+          if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
+            playtest_j=(-j 4)
+          fi
           run_stage npm run check:no-js
           run_stage npm run check:gfx
           run_stage npm run check:ios
@@ -499,14 +540,26 @@ jobs:
             run_stage npm run test
           fi
           run_stage npm run validate
-          if [ -n "${SLUGS// /}" ]; then
+          if [ "$gate_failed" -eq 0 ] && [ -n "${SLUGS// /}" ]; then
             run_stage npm run smoke -- $SLUGS
             run_stage npm run trace -- -j 4 $SLUGS
             run_stage npm run build -- $SLUGS
             run_stage npm run accept -- $SLUGS
-            run_stage npm run agent-play -- -j 2 $SLUGS
+            if [ "$CATALOG_AGENT_PLAY" = 1 ]; then
+              run_stage npm run agent-play -- -j 2 $SLUGS
+            elif [ -n "${DIRECT_SLUGS// /}" ]; then
+              run_stage npm run agent-play -- -j 2 $DIRECT_SLUGS
+            fi
             run_stage npm run agency -- --strict -j 4 $SLUGS
-            run_stage npm run playtest -- $SLUGS
+            set -- $SLUGS
+            if [ "$CATALOG_PLAYTEST" = all ] || [ "$#" -le 4 ]; then
+              playtest_slugs="$*"
+            elif [ -n "${DIRECT_SLUGS// /}" ]; then
+              playtest_slugs="$DIRECT_SLUGS"
+            else
+              playtest_slugs="$1 $2 $3 $4"
+            fi
+            run_stage npm run playtest -- "${playtest_j[@]}" $playtest_slugs
             need_webgl=$(node --import tsx -e '
               import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
               const touched = process.argv.slice(1);
@@ -531,6 +584,10 @@ jobs:
           run_stage() {
             "$QUIET" "$@" || gate_failed=1
           }
+          playtest_j=()
+          if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
+            playtest_j=(-j 4)
+          fi
           run_stage npm run check:no-js
           run_stage npm run check:gfx
           run_stage npm run check:ios
@@ -539,19 +596,21 @@ jobs:
           GAME_TEST_SLUGS="$SLUGS" run_stage npm run test:conformance
           run_stage npm run typecheck
           run_stage npm run validate -- $SLUGS
-          run_stage npm run smoke -- $SLUGS
-          run_stage npm run trace -- -j 4 $SLUGS
-          run_stage npm run build -- $SLUGS
-          run_stage npm run accept -- $SLUGS
-          run_stage npm run agent-play -- -j 2 $SLUGS
-          run_stage npm run agency -- --strict -j 4 $SLUGS
-          run_stage npm run playtest -- $SLUGS
-          need_webgl=$(node --import tsx -e '
-            import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
-            const touched = process.argv.slice(1);
-            process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
-          ' $SLUGS)
-          if [ "$need_webgl" = 1 ]; then run_stage npm run check:webgl; fi
+          if [ "$gate_failed" -eq 0 ]; then
+            run_stage npm run smoke -- $SLUGS
+            run_stage npm run trace -- -j 4 $SLUGS
+            run_stage npm run build -- $SLUGS
+            run_stage npm run accept -- $SLUGS
+            run_stage npm run agent-play -- -j 2 $SLUGS
+            run_stage npm run agency -- --strict -j 4 $SLUGS
+            run_stage npm run playtest -- "${playtest_j[@]}" $SLUGS
+            need_webgl=$(node --import tsx -e '
+              import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
+              const touched = process.argv.slice(1);
+              process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
+            ' $SLUGS)
+            if [ "$need_webgl" = 1 ]; then run_stage npm run check:webgl; fi
+          fi
           if [ "$gate_failed" -ne 0 ]; then
             echo "::error title=Games scoped gate failed::One or more gate checks failed."
             exit 1
