@@ -166,10 +166,16 @@ scoped path is the same `check:game` the PR already attested, re-run on a
 clean runner, and WebKit is skipped on push because the PR already sealed it
 (`gate-scope.mjs` `eventName === 'push'`). Opt-in GameKit modules
 (`gfx3d`, `sensing`, verticals, …) reverse-index to the games that select
-them in `GAME.json` and run `mode=static` on those slugs, with WebKit.
+them in `GAME.json` and run `mode=static` (with WebKit).
 Universal modules (`core`, `drawing`, `gfx`, `audio`, …) use the same
 `--base <last-published-sha>` classify: a named function or `draw.*` field that only
 a subset of games call is `mode=static` on those slugs (WebKit included).
+In `mode=static`, `smoke`/`trace`/`build`/`accept`/`agency` cover every
+reverse-indexed consumer slug, while on push `agent-play` runs only on directly
+touched `games/<slug>/` dirs and `playtest` runs with `-j 4` on directly touched
+`games/<slug>/` dirs (or a 4-consumer sample when no game dir changed; `<= 4`
+consumer slugs run in full). Both `mode=static` and `mode=scoped` skip browser
+stages if static checks fail.
 An unidentifiable patch, a lifecycle symbol (`mount`, `createRenderer`, …),
 or a surface most of the catalog calls (`draw.rect`) stays full — post-merge
 `mode=static` would playtest more games than full's default suite.
