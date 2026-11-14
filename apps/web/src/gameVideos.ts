@@ -3,7 +3,6 @@ import type { CatalogLinks } from '@gamedevpl/contract';
 // Here, not in the footer: the play bundle cannot load svg.
 export const YOUTUBE_URL = 'https://www.youtube.com/@gamedev_pl';
 export const X_URL = 'https://x.com/plgamedev';
-export const INSTAGRAM_URL = 'https://www.instagram.com/gamedev.pl/';
 
 // Where the link was clicked; becomes `utm_medium`.
 export type SocialLinkPlacement = 'beta_splash' | 'game_page' | 'player_menu';
@@ -19,7 +18,6 @@ export function withUtm(url: string, placement: SocialLinkPlacement, campaign?: 
 
 export const splashYouTubeUrl = withUtm(YOUTUBE_URL, 'beta_splash');
 export const splashXUrl = withUtm(X_URL, 'beta_splash');
-export const splashInstagramUrl = withUtm(INSTAGRAM_URL, 'beta_splash');
 
 // SPEC links, tagged; X falls back to the brand account.
 export function gameSocialLinks(
