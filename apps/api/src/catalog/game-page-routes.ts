@@ -7,11 +7,19 @@ import {
   type PublicCreatorProfile,
 } from '../platform/creator-profile.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
+import {
+  extractManifestDescription,
+  extractSpecDescription,
+  resolveGamePageDescriptions,
+  type LocalizedGameDescription,
+} from './game-page-description.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
+
+export { extractManifestDescription, extractSpecDescription, type LocalizedGameDescription };
 
 /**
  * The compact public landing page at `/:handle/:slug`.
@@ -34,6 +42,7 @@ export interface GamePageResponse {
   platformAuthored: boolean;
   /** First prose paragraph from SPEC.md, flattened for compact player-facing copy. */
   description: string | null;
+  localizedDescription?: LocalizedGameDescription;
 }
 
 export interface GamePageRoutesOptions {
@@ -45,38 +54,6 @@ export interface GamePageRoutesOptions {
   publishedRef?: string;
   now?: () => number;
   cacheTtlMs?: number;
-}
-
-/**
- * Finds the first prose paragraph without turning SPEC.md back into a public README.
- * Headings, rules, lists, and fenced code are skipped; wrapped prose is flattened.
- */
-export function extractSpecDescription(specMd: string | null): string | null {
-  if (!specMd) return null;
-  const lines = specMd.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, '').split(/\r?\n/);
-  const paragraph: string[] = [];
-  let inCodeFence = false;
-
-  for (const line of lines) {
-    const text = line.trim();
-    if (text.startsWith('```')) {
-      if (paragraph.length > 0) break;
-      inCodeFence = !inCodeFence;
-      continue;
-    }
-    if (inCodeFence) continue;
-    if (!text) {
-      if (paragraph.length > 0) break;
-      continue;
-    }
-    if (/^(#{1,6})\s+/.test(text) || /^(-{3,}|\*{3,})$/.test(text) || /^([-*]|\d+[.)])\s+/.test(text)) {
-      if (paragraph.length > 0) break;
-      continue;
-    }
-    paragraph.push(text);
-  }
-
-  return paragraph.length > 0 ? paragraph.join(' ') : null;
 }
 
 export interface GamePageRoutesHandle {
@@ -131,15 +108,18 @@ export async function registerGamePageRoutes(
     const noAttribution = erased || (access.source === 'canonical' && access.owner.kind === 'creator' && !creator);
 
     let specMd: string | null = null;
+    let gameJson: string | null = null;
     let entry: CatalogGameEntry | null = repoEntry;
 
     if (storePublished && gamesStore) {
       const version = storePublished.currentVersion;
-      const [storeSpec, mediaMetadata] = await Promise.all([
+      const [storeSpec, storeGameJson, mediaMetadata] = await Promise.all([
         gamesStore.getSourceFile(slug, version, 'SPEC.md'),
+        gamesStore.getSourceFile(slug, version, 'GAME.json'),
         gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json'),
       ]);
       specMd = storeSpec;
+      gameJson = storeGameJson;
       if (!entry && storeSpec) {
         entry = catalogEntryFromSpec(slug, storeSpec, (name) =>
           name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
@@ -148,7 +128,12 @@ export async function registerGamePageRoutes(
     }
 
     if (repoEntry && githubClient && !specMd) {
-      specMd = await githubClient.getGameFile(publishedRef, slug, 'SPEC.md');
+      [specMd, gameJson] = await Promise.all([
+        githubClient.getGameFile(publishedRef, slug, 'SPEC.md'),
+        gameJson ? Promise.resolve(gameJson) : githubClient.getGameFile(publishedRef, slug, 'GAME.json'),
+      ]);
+    } else if (repoEntry && githubClient && !storePublished && !gameJson) {
+      gameJson = await githubClient.getGameFile(publishedRef, slug, 'GAME.json');
     }
 
     if (!entry) return null;
@@ -167,7 +152,7 @@ export async function registerGamePageRoutes(
       },
       creator,
       platformAuthored,
-      description: extractSpecDescription(specMd),
+      ...resolveGamePageDescriptions(specMd, gameJson),
     };
   }
 

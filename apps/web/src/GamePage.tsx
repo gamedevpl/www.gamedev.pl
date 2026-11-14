@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
+import { pickGamePageDescription } from './gamePageDescription.js';
 import { gameSocialLinks } from './gameVideos.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -43,7 +44,7 @@ export function GamePage({
   onPlay?: (game: CatalogEntry, via?: PlayVia) => void;
   onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, privateBeta } = useAuth();
   // Only the image link needs this; buttons don't navigate away.
   const [arrivalVia] = useState(() => {
@@ -122,6 +123,7 @@ export function GamePage({
   const isOwner = Boolean(user?.handle && ownerHandle && user.handle.toLowerCase() === ownerHandle.toLowerCase());
   const studioHref = studioPath(slug);
   const social = gameSocialLinks(slug, entry.links, 'game_page');
+  const description = pickGamePageDescription(page, i18n.resolvedLanguage ?? i18n.language);
 
   const play = () => {
     if (playGated) {
@@ -152,7 +154,7 @@ export function GamePage({
           {entry.genre ? <span className="game-page-genre">{entry.genre}</span> : null}
         </nav>
         <h1>{entry.title}</h1>
-        {page.description ? <p className="game-page-description">{page.description}</p> : null}
+        {description ? <p className="game-page-description">{description}</p> : null}
         {social ? (
           <p className="game-page-videos">
             <PixelIcon name="play" size={12} /> {t('gamePage.videos')}{' '}
