@@ -9,8 +9,10 @@ name: Games catalog gate
 # catalog agent-play. Named function/field edits of core/drawing/gfx/… and
 # opt-in modules (gfx3d, sensing, …) reverse-index to consumer slugs and run
 # smoke/trace/build/accept/agency on those slugs, while on push agent-play runs
-# only on directly touched games/<slug>/ dirs and playtest bounds to directly
-# touched games/<slug>/ dirs (or 4 consumers with -j 4 when none); static
+# only on directly touched games/<slug>/ code/contract files (ignoring
+# games/<slug>/media/ and non-SPEC docs like SOCIAL.md so media --restamp
+# does not expand push playtest/agent-play to untouched consumers) and playtest
+# bounds to those direct slugs (or 4 consumers with -j 2 when none); static
 # failures skip browser stages.
 # Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
 # still playtests touched slugs. A games-published dispatch re-classifies the
@@ -333,8 +335,12 @@ jobs:
                 const lines = fs.readFileSync(0, "utf8").split("\n");
                 const seen = new Set();
                 for (const file of lines) {
-                  const m = /^games\/([a-z0-9-]+)\//.exec(file);
-                  if (m && fs.existsSync(`games/${m[1]}/SPEC.md`)) seen.add(m[1]);
+                  const m = /^games\/([a-z0-9-]+)\/(.+)$/.exec(file);
+                  if (!m) continue;
+                  const [, slug, rel] = m;
+                  if (rel.startsWith("media/")) continue;
+                  if (rel !== "SPEC.md" && /\.(md|txt)$/i.test(rel)) continue;
+                  if (fs.existsSync(`games/${slug}/SPEC.md`)) seen.add(slug);
                 }
                 process.stdout.write([...seen].sort().join(" "));
               '
@@ -486,7 +492,11 @@ jobs:
           }
           playtest_j=()
           if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
-            playtest_j=(-j 4)
+            if [ "$CATALOG_PLAYTEST" = all ]; then
+              playtest_j=(-j 2)
+            else
+              playtest_j=(-j 4)
+            fi
           fi
           # The observer emits a SHA-bound attestation only after the full gate.
           run_stage npm run check:pr -- --full
@@ -526,7 +536,7 @@ jobs:
           }
           playtest_j=()
           if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
-            playtest_j=(-j 4)
+            playtest_j=(-j 2)
           fi
           run_stage npm run check:no-js
           run_stage npm run check:gfx
@@ -586,7 +596,7 @@ jobs:
           }
           playtest_j=()
           if grep -q 'takeConcurrencyFlag' tools/playtest.ts 2>/dev/null; then
-            playtest_j=(-j 4)
+            playtest_j=(-j 2)
           fi
           run_stage npm run check:no-js
           run_stage npm run check:gfx
@@ -669,9 +679,15 @@ jobs:
           SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
-          # Bound Scene3D memory on hosted runners.
-          if [ "$MODE" = full ]; then
-            "$QUIET" npm run check:webkit -- -j 1
-          else
-            "$QUIET" npm run check:webkit -- -j 1 $SLUGS
-          fi
+          # Bound Scene3D memory on hosted runners; retry once on transient container timeouts.
+          run_webkit() {
+            if [ "$MODE" = full ]; then
+              "$QUIET" npm run check:webkit -- -j 1
+            else
+              "$QUIET" npm run check:webkit -- -j 1 $SLUGS
+            fi
+          }
+          run_webkit || {
+            echo "WebKit check failed on first attempt — retrying once..."
+            run_webkit
+          }

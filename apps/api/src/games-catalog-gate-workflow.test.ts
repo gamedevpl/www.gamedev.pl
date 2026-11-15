@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +24,13 @@ function extractStepRun(stepName: string): string {
   return match[1];
 }
 
+function extractDirectSlugsScript(): string {
+  const scopeRun = extractStepRun('Classify merge scope');
+  const match = /DIRECT_SLUGS=\$\(\n\s*printf '%s\\n' "\$files" \| node -e '\n([\s\S]*?)\n\s*'\n\s*\)/.exec(scopeRun);
+  if (!match) throw new Error('DIRECT_SLUGS inline node script not found');
+  return match[1];
+}
+
 describe('games-catalog-gate workflow', () => {
   it('exposes direct_slugs from resolve and emits it in Classify merge scope', () => {
     expect(workflow).toMatch(/^\s*direct_slugs:\s*\$\{\{\s*steps\.scope\.outputs\.direct_slugs\s*\}\}$/m);
@@ -30,8 +39,42 @@ describe('games-catalog-gate workflow', () => {
     expect(scopeRun).not.toContain('${{');
   });
 
+  it('excludes media and non-SPEC prose docs when computing direct_slugs', () => {
+    const script = extractDirectSlugsScript();
+    const tempDir = mkdtempSync(join(tmpdir(), 'gate-scope-test-'));
+    try {
+      for (const slug of ['apex-sprint', 'ink-and-fury', 'mexico-86', 'neon-strike-cell']) {
+        mkdirSync(join(tempDir, 'games', slug), { recursive: true });
+        writeFileSync(join(tempDir, 'games', slug, 'SPEC.md'), `# ${slug}\n`);
+      }
+      const changedFiles = [
+        'shared/modules/gfx3d/index.ts',
+        'games/apex-sprint/media/metadata.json',
+        'games/neon-strike-cell/media/gameplay.mp4',
+        'games/ink-and-fury/SOCIAL.md',
+        'games/ink-and-fury/NOTES.txt',
+        'games/ink-and-fury/game/runtime.ts',
+        'games/mexico-86/SPEC.md',
+        'games/deleted-game/game/runtime.ts',
+      ].join('\n');
+      const output = execFileSync(process.execPath, ['-e', script], {
+        cwd: tempDir,
+        encoding: 'utf8',
+        input: `${changedFiles}\n`,
+      });
+      expect(output).toBe('ink-and-fury mexico-86');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('passes workflow expressions through env rather than interpolating into run blocks', () => {
-    for (const stepName of ['Run the full games gate', 'Run the static games gate', 'Run the scoped games gate']) {
+    for (const stepName of [
+      'Run the full games gate',
+      'Run the static games gate',
+      'Run the scoped games gate',
+      'Check games on WebKit',
+    ]) {
       const runBlock = extractStepRun(stepName);
       expect(runBlock, stepName).not.toContain('${{');
     }
@@ -46,7 +89,7 @@ describe('games-catalog-gate workflow', () => {
     }
   });
 
-  it('bounds push agent-play and playtest in mode=static while supporting -j 4', () => {
+  it('bounds push agent-play and playtest in mode=static while supporting -j 2', () => {
     const staticBlock = extractStepBlock('Run the static games gate');
     expect(staticBlock).toContain('CATALOG_AGENT_PLAY: ${{ needs.resolve.outputs.catalog_agent_play }}');
     expect(staticBlock).toContain('CATALOG_PLAYTEST: ${{ needs.resolve.outputs.catalog_playtest }}');
@@ -57,9 +100,15 @@ describe('games-catalog-gate workflow', () => {
     expect(staticRun).toContain('elif [ -n "${DIRECT_SLUGS// /}" ]; then');
     expect(staticRun).toContain('run_stage npm run agent-play -- -j 2 $DIRECT_SLUGS');
     expect(staticRun).toContain("if grep -q 'takeConcurrencyFlag' tools/playtest.ts");
-    expect(staticRun).toContain('playtest_j=(-j 4)');
+    expect(staticRun).toContain('playtest_j=(-j 2)');
     expect(staticRun).toContain('elif [ -n "${DIRECT_SLUGS// /}" ]; then');
     expect(staticRun).toContain('playtest_slugs="$DIRECT_SLUGS"');
     expect(staticRun).toContain('run_stage npm run playtest -- "${playtest_j[@]}" $playtest_slugs');
+  });
+
+  it('retries Check games on WebKit once on transient failure', () => {
+    const webkitRun = extractStepRun('Check games on WebKit');
+    expect(webkitRun).toContain('run_webkit()');
+    expect(webkitRun).toContain('run_webkit || {');
   });
 });
