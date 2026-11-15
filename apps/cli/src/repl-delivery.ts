@@ -6,6 +6,7 @@ import { readCheckoutSlug } from './checkout.js';
 import { formatError } from './errors.js';
 import type { handleReplLine } from './repl.js';
 import { formatSubmitLines, submitGame } from './submit.js';
+import { deliverySummary } from './delivery-summary.js';
 import { VerificationError, runLadderAsync } from './verify.js';
 import { DeliveryValidationError } from './delivery-validation.js';
 import { withCheckoutWriter } from './workbench-lock.js';
@@ -150,13 +151,13 @@ async function deliver(input: Input, delivery: Delivery, ws?: Workshop) {
   }
 }
 
-export async function submitRepl(input: Input, cmd: string, rest: string[]): Promise<void> {
+export async function submitRepl(input: Input, line: string): Promise<void> {
   try {
-    const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+    const parsed = parseArgv(line);
     const dest = parsed.args[0] ?? input.workshop?.root ?? input.cwd ?? process.cwd();
     const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
     if (!slug) {
-      input.write(`run it as ${cliUsage(cmd, '[dir]')}`);
+      input.write(`run it as ${cliUsage(parsed.verb, '[dir]')}`);
       return;
     }
     const ws =
@@ -168,9 +169,10 @@ export async function submitRepl(input: Input, cmd: string, rest: string[]): Pro
       slug,
       dest,
       force: parsed.flags.force === true,
-      publish: parsed.flags.publish === true,
+      publish: parsed.verb === 'publish' || parsed.flags.publish === true,
       interactive: true,
       takeover: parsed.flags.takeover === true,
+      summary: deliverySummary(parsed.flags.summary),
       run: ws?.run,
       onProgress: input.onActivity ?? input.write,
     };

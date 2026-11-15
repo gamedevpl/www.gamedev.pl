@@ -164,7 +164,7 @@ export async function handleReplLine(input: {
       return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'submit' || cmd === 'push' || cmd === 'publish') {
-      await submitRepl(input, cmd === 'publish' ? 'push' : cmd, cmd === 'publish' ? [...rest, '--publish'] : rest);
+      await submitRepl(input, trimmed);
       return { next: 'continue', conversationId: input.conversationId };
     }
     const parsed = parseArgv(['node', 'cli', cmd ?? '', ...rest]);

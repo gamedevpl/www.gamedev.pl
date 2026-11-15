@@ -108,6 +108,18 @@
   user-select: none;
 }
 
+.studio-build-history-change-preview {
+  margin: 0 10px 8px 32px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 .studio-build-history-expand-icon {
   display: inline-flex;
   align-items: center;

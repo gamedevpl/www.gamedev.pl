@@ -35,6 +35,7 @@ import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
 import { runPluginsCommand } from './plugin-command.js';
 import { submitCommand } from './submit-command.js';
+import { deliverySummary } from './delivery-summary.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { runPullCommand } from './local-change-command.js';
@@ -343,6 +344,7 @@ export async function runCli(
           force: flags.force === true,
           publish: verb === 'publish' || flags.publish === true,
           takeover: flags.takeover === true,
+          summary: deliverySummary(flags.summary),
         },
         io,
         asJson,

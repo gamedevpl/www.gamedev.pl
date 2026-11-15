@@ -197,7 +197,6 @@ describe('submitGame', () => {
       message: expect.stringMatching(/rate_limited/),
     });
   });
-
   it('refuses leftover Studio staged files the checkout did not change', async () => {
     const dest = checkout([{ path: 'game.ts', content: 'A' }]);
     writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
@@ -418,7 +417,6 @@ describe('submitGame', () => {
     expect(result.kind).toBe('nothing');
     expect(seen.some((row) => row.includes('/sources/'))).toBe(false);
   });
-
   it('still delivers --publish on a matching tree', async () => {
     const dest = checkout([{ path: 'game.ts', content: 'A' }]);
     const seen: string[] = [];
@@ -439,8 +437,9 @@ describe('submitGame', () => {
         }
         if (path.endsWith('/sources')) return json({ files: [{ path: 'game.ts', content: 'A' }] });
         if (path.endsWith('/sources/deliver')) {
-          const body = JSON.parse(String(init?.body ?? '{}')) as { mode: string };
+          const body = JSON.parse(String(init?.body ?? '{}')) as { mode: string; summary: string };
           expect(body.mode).toBe('publish');
+          expect(body.summary).toBe('Added double jump');
           delivered = true;
           return json({ accepted: true, version: 'v2', mode: 'publish', gateStarted: true });
         }
@@ -452,6 +451,7 @@ describe('submitGame', () => {
       slug: SLUG,
       dest,
       publish: true,
+      summary: '  Added double jump  ',
       run: (_cmd, args) => {
         expect(args.slice(2)).toEqual(['--', SLUG]);
         return { status: 0, stderr: '' };
