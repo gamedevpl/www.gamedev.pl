@@ -190,6 +190,8 @@ export function StudioBuildHistory({
                 onToggle={() => toggleExpand(build.version)}
               />
 
+              {build.summary ? <p className="studio-build-history-change-preview">{build.summary}</p> : null}
+
               {isExpanded ? (
                 <div className="studio-build-history-details" data-testid={`build-details-${build.version}`}>
                   <div className="studio-build-history-meta">

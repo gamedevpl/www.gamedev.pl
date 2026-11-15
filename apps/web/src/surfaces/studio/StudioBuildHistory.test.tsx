@@ -175,12 +175,12 @@ describe('StudioBuildHistory', () => {
         },
       ],
     });
-
+    expect(host.querySelector('.studio-build-history-change-preview')?.textContent).toContain('Added jump physics');
+    expect(host.querySelector('[data-testid="build-details-v10"]')).toBeNull();
     const summary = host.querySelector('.studio-build-history-summary') as HTMLElement;
     await act(async () => {
       summary.click();
     });
-
     const details = host.querySelector('[data-testid="build-details-v10"]');
     expect(details).not.toBeNull();
     expect(details?.textContent).toContain('Version v10');

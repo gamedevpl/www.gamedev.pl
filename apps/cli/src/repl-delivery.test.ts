@@ -124,7 +124,7 @@ it.each(['/push --publish --takeover --force', '/publish --takeover --force'])(
       expect(choices).toEqual(['Publish game', BACK]);
       return 'Publish game';
     });
-    await f.run(line);
+    await f.run(line + ' --summary "Dodano podwójny skok"');
     expect(f.checks.filter((c) => c === 'check:game')).toHaveLength(3);
     expect(f.writes()).toContainEqual(
       expect.objectContaining({
@@ -135,7 +135,7 @@ it.each(['/push --publish --takeover --force', '/publish --takeover --force'])(
     expect(f.writes()).toContainEqual(
       expect.objectContaining({
         path: expect.stringContaining('/sources/deliver'),
-        body: { mode: 'publish', attestation: true },
+        body: { mode: 'publish', attestation: true, summary: 'Dodano podwójny skok' },
       }),
     );
     expect(f.ws.runAdapter).not.toHaveBeenCalled();

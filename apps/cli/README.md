@@ -946,6 +946,10 @@ Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks an
 
 Use `gamedevpl publish [dir]` in your shell or `/publish [dir]` in the checkout session as a shortcut for `push [dir] --publish`. Both run the full local checks and submit a publication candidate; an operator still approves public publication. Flags such as `--takeover` and `--force` work as with `push`.
 
+Add a short description with `gamedevpl publish --summary "Added double jump and fixed collisions"`.
+`push`, `submit` and their slash commands also accept `--summary` (1–1024 characters).
+The description is saved with that version and displayed in Studio build history.
+
 Local tasks default to **Auto (sandboxed)** for agents with supported sandbox flags.
 Other agents default to Ask. `/permissions ask` selects prompts explicitly; choosing
 Auto explicitly for an unsupported agent reports an error. Sandbox startup failures

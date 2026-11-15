@@ -32,6 +32,7 @@ import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder, runLadderAsync } from './verify.js';
 import { verificationSourceHash } from './verification-source.js';
 import { deliveryProgress } from './delivery-progress.js';
+import { deliverySummary } from './delivery-summary.js';
 import { deliveryValidationError, rejectedStagedPaths, type RejectedUpload } from './delivery-validation.js';
 
 export type DeliverMode = 'preview' | 'publish';
@@ -185,6 +186,7 @@ async function submitGameUnlocked(input: {
   force?: boolean;
   publish?: boolean;
   takeover?: boolean;
+  summary?: string;
   expectedSession?: DeliverySession;
   rejectedUpload?: RejectedUpload;
   interactive?: boolean;
@@ -194,6 +196,7 @@ async function submitGameUnlocked(input: {
   warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {
+  const summary = deliverySummary(input.summary);
   const progress = deliveryProgress(input.onProgress);
   progress('sources', 'Checking platform sources');
   let recovered = isRecoveryReady(input.dest, input.slug);
@@ -335,6 +338,7 @@ async function submitGameUnlocked(input: {
     delivered = await input.api.request<DeliverReply>('POST', `/api/me/studio/games/${input.slug}/sources/deliver`, {
       mode,
       attestation: true,
+      ...(summary ? { summary } : {}),
     });
   } catch (error) {
     const validation = deliveryValidationError(error, { files: uploaded, paths: staged }, input);
