@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.69.0 — 2026-11-15
+
 ### Added
 
 - `gamedevpl publish`, `push` and `submit` accept `--summary "changes"` to describe the version in Studio history (#2113).
