@@ -171,11 +171,13 @@ Universal modules (`core`, `drawing`, `gfx`, `audio`, …) use the same
 `--base <last-published-sha>` classify: a named function or `draw.*` field that only
 a subset of games call is `mode=static` on those slugs (WebKit included).
 In `mode=static`, `smoke`/`trace`/`build`/`accept`/`agency` cover every
-reverse-indexed consumer slug, while on push `agent-play` runs only on directly
-touched `games/<slug>/` dirs and `playtest` runs with `-j 4` on directly touched
-`games/<slug>/` dirs (or a 4-consumer sample when no game dir changed; `<= 4`
-consumer slugs run in full). Both `mode=static` and `mode=scoped` skip browser
-stages if static checks fail.
+reverse-indexed consumer slug, while on push `agent-play` and `playtest`
+(`-j 2`, also in `mode=scoped`) run only on directly touched `games/<slug>/`
+code/contract dirs — ignoring `games/<slug>/media/` (`media --restamp`
+updates to `media/metadata.json`) and non-`SPEC.md` prose docs (`SOCIAL.md`,
+`PROGRESS.md`, …) — or a 4-consumer sample when no game code changed
+(`<= 4` consumer slugs run in full). Both `mode=static` and `mode=scoped`
+skip browser stages if static checks fail.
 An unidentifiable patch, a lifecycle symbol (`mount`, `createRenderer`, …),
 or a surface most of the catalog calls (`draw.rect`) stays full — post-merge
 `mode=static` would playtest more games than full's default suite.
