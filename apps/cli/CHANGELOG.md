@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl publish`, `push` and `submit` accept `--summary "changes"` to describe the version in Studio history.
+- `gamedevpl publish`, `push` and `submit` accept `--summary "changes"` to describe the version in Studio history (#2113).
 
 ## 0.68.0 — 2026-11-12
 
