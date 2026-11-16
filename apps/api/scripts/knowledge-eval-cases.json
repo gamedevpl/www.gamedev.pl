@@ -300,5 +300,25 @@
     "scope": "examples",
     "expect": ["games/block-cascade/"],
     "terms": ["ghost"]
+  },
+  {
+    "id": "worms-destructible-terrain",
+    "kind": "kit",
+    "query": "turn-based worms artillery game with destructible pixel terrain",
+    "expect": [
+      ".github/skills/develop-canvas-game/references/technique-recipes.md",
+      ".github/skills/develop-canvas-game/references/game-kit.md",
+      "shared/game-kit.d.ts",
+      "shared/modules/world.ts"
+    ],
+    "terms": ["createDirtLand"]
+  },
+  {
+    "id": "worms-destructible-terrain-examples",
+    "kind": "example",
+    "query": "turn-based worms artillery game with destructible pixel terrain",
+    "scope": "examples",
+    "expect": ["games/molehill-mutiny/"],
+    "terms": ["createDirtLand", "carve"]
   }
 ]
