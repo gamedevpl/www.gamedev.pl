@@ -187,4 +187,15 @@ describe('buildPrompt (seeded)', () => {
     expect(prompt).toContain('Rewrite or delete anything that is wrong');
     expect(prompt).toContain('The trace still needs recording.');
   });
+
+  // 2026-11-16: one report in a six-minute round.
+  it('names required progress points for a shell round, and the advisor step for a new game', () => {
+    const shell = buildPrompt(BRIEF, { shell: true, workspace: ['Your workspace is already mounted.'] });
+    expect(shell).toContain('when the game first typechecks, after each capture, saying what the frames showed');
+    expect(shell).toMatch(/\n5\. Consult your advisor once/);
+    expect(buildPrompt(BRIEF, { shell: false })).not.toContain('when the game first typechecks');
+    expect(buildPrompt({ ...BRIEF, feedback: 'faster' }, { shell: true, workspace: ['x'] })).not.toContain(
+      'Consult your advisor',
+    );
+  });
 });
