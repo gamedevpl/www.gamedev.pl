@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { splashXUrl, splashYouTubeUrl } from './gameVideos.js';
+import { splashTikTokUrl, splashXUrl, splashYouTubeUrl } from './gameVideos.js';
 
 // Invite note, follow links (YouTube first), then terms and privacy.
 export function SplashFooter() {
@@ -15,6 +15,10 @@ export function SplashFooter() {
         {' · '}
         <a href={splashXUrl} target="_blank" rel="noreferrer noopener">
           X
+        </a>
+        {' · '}
+        <a href={splashTikTokUrl} target="_blank" rel="noreferrer noopener">
+          TikTok
         </a>
       </p>
       <nav className="beta-splash__legal" aria-label={t('footer.legalNav')}>
