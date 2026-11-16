@@ -46,7 +46,7 @@ function undeliveredRequest(brief: BuildBrief): string {
 const KNOWLEDGE_STEP =
   'One `knowledge_query` with what this round needs most, in plain words (for a racer: "lap timing, checkpoints ' +
   'and car handling"). It searches the kit docs, skills and example games at once; check any signature it names ' +
-  'in the unpacked kit before you use it.';
+  'in the unpacked kit before you use it, and use a GameKit helper it names instead of writing your own.';
 
 // Reads the kickoff already carries are not asked for again.
 export function openingSteps(
