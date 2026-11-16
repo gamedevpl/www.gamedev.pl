@@ -49,4 +49,23 @@ describe('openingSteps', () => {
       /`get_brief`.*\n3\. One `knowledge_query`.*\n4\. One short `report_progress`.*before you open any kit or game file/s,
     );
   });
+
+  // 2026-11-16: the system prompt line alone was not followed.
+  it('numbers the advisor consultation for a new game on a mounted workspace only', () => {
+    const lane = { workspace: true, mountedSources: true, inlined: { noFiles: true } };
+    const fresh = openingSteps(BRIEF, lane).join('\n');
+    expect(fresh).toMatch(/\n5\. Consult your advisor once, after you have looked at the creator’s images/);
+    expect(fresh).toContain('is the only consultation of the round');
+    expect(fresh).toContain('If no advisor answers, plan it yourself and go on');
+    expect(openingSteps({ ...BRIEF, feedback: 'faster' }, lane).join('\n')).not.toContain('advisor');
+    expect(openingSteps(BRIEF, { ...lane, workspace: false }).join('\n')).not.toContain('advisor');
+  });
+
+  // 2026-11-16: one report in a six-minute round.
+  it('names required progress points on a mounted workspace', () => {
+    const lane = { workspace: true, mountedSources: true };
+    const mounted = openingSteps({ ...BRIEF, feedback: 'faster' }, lane).join('\n');
+    expect(mounted).toContain('when the game first typechecks, after each capture, saying what the frames showed');
+    expect(openingSteps(BRIEF, { ...lane, workspace: false }).join('\n')).not.toContain('first typechecks');
+  });
 });

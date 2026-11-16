@@ -105,9 +105,10 @@ builder still does all the work itself. The setting lives on the Agent's `multia
 survives the session's model override; the pairing is checked again at session creation, so a
 `MANAGED_AGENT_MODEL` more capable than the advisor makes dispatch fail with a 400. A consultation
 is billed at the advisor's rates, counts against the session budget, and is sent the primary
-thread's conversation so far — so its cost grows through the round. The system prompt therefore
-asks for one consultation, for a plan, before the first edit of a new game, and none on a revision
-or a gate repair; without that line the builder does not consult at all. The advice reaches the
+thread's conversation so far — so its cost grows through the round. The kickoff therefore numbers
+one consultation, for a plan, among the opening steps of a new game, and the system prompt allows
+none later, on a revision or on a gate repair. It has to be a numbered step: with the rule in the
+system prompt alone the builder skipped it under the clock, and with no rule it never consulted. The advice reaches the
 client as `redacted`, and the usage ledger records the session's tokens under the builder's
 model, advisor tokens included.
 
