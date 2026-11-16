@@ -99,6 +99,18 @@ Anthropic rounds defer optional MCP tool definitions at the provider layer so th
 with the round-start, source-read and delivery path. The server's shared MCP behavioural contract
 is carried once in `initialize.instructions`; it must not be repeated in every tool description.
 
+**Advisor.** `infra/managed-agent.json` gives the Agent an advisor: a stronger model the
+builder's primary thread can consult mid-turn, with subagents and workflows switched off so the
+builder still does all the work itself. The setting lives on the Agent's `multiagent` block and
+survives the session's model override; the pairing is checked again at session creation, so a
+`MANAGED_AGENT_MODEL` more capable than the advisor makes dispatch fail with a 400. A consultation
+is billed at the advisor's rates, counts against the session budget, and is sent the primary
+thread's conversation so far — so its cost grows through the round. The system prompt therefore
+asks for one consultation, for a plan, before the first edit of a new game, and none on a revision
+or a gate repair; without that line the builder does not consult at all. The advice reaches the
+client as `redacted`, and the usage ledger records the session's tokens under the builder's
+model, advisor tokens included.
+
 ## Gemini under the seam
 
 Gemini uses the MCP lane and starts a background interaction with the documented
