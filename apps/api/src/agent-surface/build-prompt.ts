@@ -86,10 +86,6 @@ const SHELL_DOWNLOAD = [
   'Unpack `get_kit`’s kitUrl once and read the kit locally; that is your API and file-shape reference. In it run `npm ci --ignore-scripts` once, keep the game in `games/<slug>/`, and run `npm run typecheck -- <slug>` before each submit.',
 ];
 
-// 2026-11-16: the system prompt alone lost to the clock.
-const PROGRESS_POINTS =
-  'While you build, call `report_progress` at each of these points, one sentence in the creator’s language (each is required; the clock is no reason to skip one): when the game first typechecks, after each capture, saying what the frames showed, and just before `submit_sources`.';
-
 // The push contract: report and upload over the build channel, clocked.
 function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane): string[] {
   const { shell, workspace, mountedSources, inlined } = lane;
@@ -112,19 +108,13 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          ...openingSteps(brief, {
-            workspace: Boolean(workspace),
-            mountedSources: Boolean(mountedSources),
-            inlined,
-            newGame,
-          }),
+          ...openingSteps(brief, { workspace: Boolean(workspace), mountedSources: Boolean(mountedSources), inlined }),
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources || inlined?.noFiles ? [] : GET_SOURCES),
     ...(newGame ? NEW_GAME_CHECKS : []),
     ...(shell
       ? [
-          PROGRESS_POINTS,
           ...(workspace ?? SHELL_DOWNLOAD),
           'Upload changed files from disk: one `stage_upload_url` call with all their paths, then one bash loop that PUTs each `games/<slug>/<path>` to `batch.url?path=<path>` with `batch.headers` (`curl -sS -X PUT`, `--data-binary @…`). Use `patch_source_file` for a small edit; never paste whole files into tool arguments.',
           lane.mountedReferences
