@@ -62,4 +62,13 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('are required, every one of them, even when the round is on a clock');
     expect(builderSystemPrompt({ shell: false })).not.toContain('one `knowledge_query`');
   });
+
+  // 2026-11-16: unprompted, never consulted; late cost 3x early.
+  it('consults the advisor once, before the first edit of a new game, on the shell lane only', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('When an advisor is available to you and this round builds a new game from nothing');
+    expect(shell).toContain('before your first source edit. Ask it for a plan');
+    expect(shell).toContain('Do not consult it again in the round, and not at all on a revision or a gate repair');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('advisor');
+  });
 });

@@ -21,6 +21,12 @@
       }
     ],
     "mcp_servers": [{ "type": "url", "name": "gamedevpl", "url": "https://www.gamedev.pl/api/mcp" }],
-    "skills": []
+    "skills": [],
+    "multiagent": {
+      "type": "multiagent_20261001",
+      "advisor": { "type": "enabled", "model": "claude-opus-5-5" },
+      "subagents": { "type": "disabled" },
+      "workflows": { "type": "disabled" }
+    }
   }
 }
