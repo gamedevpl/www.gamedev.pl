@@ -63,7 +63,7 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: false })).not.toContain('one `knowledge_query`');
   });
 
-  // 2026-11-16: the answer named createDirtLand; the builder hand-rolled its terrain.
+  // 2026-11-16: answer named createDirtLand; builder hand-rolled its terrain.
   it('tells the builder to use a GameKit helper the knowledge answer names', () => {
     expect(builderSystemPrompt({ shell: true })).toMatch(
       /When the answer names a GameKit helper.*grep `shared\/game-kit\.d\.ts`.*select its module in `GAME\.json` before writing that mechanism yourself/s,
