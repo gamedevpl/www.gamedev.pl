@@ -48,10 +48,14 @@ const KNOWLEDGE_STEP =
   'and car handling"). It searches the kit docs, skills and example games at once; check any signature it names ' +
   'in the unpacked kit before you use it, and use a GameKit helper it names instead of writing your own.';
 
+// 2026-11-16: left to the system prompt, this was skipped.
+const ADVISOR_STEP =
+  'Consult your advisor once, after you have looked at the creator’s images: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
+
 // Reads the kickoff already carries are not asked for again.
 export function openingSteps(
   brief: BuildBrief,
-  lane: { workspace: boolean; mountedSources: boolean; inlined?: KickoffInlined },
+  lane: { workspace: boolean; mountedSources: boolean; inlined?: KickoffInlined; newGame?: boolean },
 ): string[] {
   // get_brief stays: start names it as the next call.
   const reads = [
@@ -67,6 +71,7 @@ export function openingSteps(
     ...(list ? [`${list}.`] : []),
     ...(lane.workspace ? [KNOWLEDGE_STEP] : []),
     'One short `report_progress`, in the creator’s language, of what you will change, before you open any kit or game file.',
+    ...(lane.newGame ? [ADVISOR_STEP] : []),
   ];
   return [
     'Before your first edit, in this order (each step is required and takes seconds; the clock is no reason to skip one):',

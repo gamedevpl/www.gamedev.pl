@@ -49,4 +49,14 @@ describe('openingSteps', () => {
       /`get_brief`.*\n3\. One `knowledge_query`.*\n4\. One short `report_progress`.*before you open any kit or game file/s,
     );
   });
+
+  // 2026-11-16: the system prompt line alone was not followed.
+  it('numbers the advisor consultation for a new game only', () => {
+    const lane = { workspace: true, mountedSources: true, inlined: { noFiles: true } };
+    const fresh = openingSteps(BRIEF, { ...lane, newGame: true }).join('\n');
+    expect(fresh).toMatch(/\n5\. Consult your advisor once, after you have looked at the creator’s images/);
+    expect(fresh).toContain('is the only consultation of the round');
+    expect(fresh).toContain('If no advisor answers, plan it yourself and go on');
+    expect(openingSteps(BRIEF, lane).join('\n')).not.toContain('advisor');
+  });
 });

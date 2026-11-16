@@ -73,9 +73,19 @@ describe('builderSystemPrompt', () => {
   // 2026-11-16: unprompted, never consulted; late cost 3x early.
   it('consults the advisor once, before the first edit of a new game, on the shell lane only', () => {
     const shell = builderSystemPrompt({ shell: true });
-    expect(shell).toContain('When an advisor is available to you and this round builds a new game from nothing');
+    expect(shell).toContain(
+      'the kickoff numbers one consultation among its opening steps, and it is required like the others',
+    );
     expect(shell).toContain('before your first source edit. Ask it for a plan');
     expect(shell).toContain('Do not consult it again in the round, and not at all on a revision or a gate repair');
     expect(builderSystemPrompt({ shell: false })).not.toContain('advisor');
+  });
+
+  // 2026-11-16: one report in a six-minute round.
+  it('names fixed progress points on the shell lane', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('when the game first typechecks, after each capture');
+    expect(shell).toContain('and just before `submit_sources`');
+    expect(builderSystemPrompt({ shell: false })).toContain('before and after long steps');
   });
 });
