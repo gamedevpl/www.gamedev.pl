@@ -878,7 +878,10 @@ only a clean Git export of the API and its dependencies. The inputs contain no
 publisher credentials, host directories or Docker socket. Chromium's sandbox stays on.
 Failure retains existing app traffic. Registry/sidecar identities and candidate
 `health.buildSha` are rechecked immediately before promoting the specific tested
-revision; concurrent API/Kit releases are still not an atomic transaction.
+revision; if a concurrent Kit release updates the registry mid-verification or
+before promotion, the deployment automatically re-verifies any newly published
+Kits and rechecks the receipt before switching traffic (concurrent API/Kit
+releases remain non-atomic if repeated updates exhaust retries).
 
 The manual script additionally requires Node dependencies installed locally,
 Docker with user-namespace support, `jq`, store read/list access and a read-only

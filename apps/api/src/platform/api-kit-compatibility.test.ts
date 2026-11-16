@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { apiKitPlan, assertApiKitPlanUnchanged, sha256, validateApiKitEvidence } from './api-kit-compatibility.js';
+import {
+  apiKitIdentityKey,
+  apiKitPlan,
+  assertApiKitPlanUnchanged,
+  parseVerifiedApiKitReceipt,
+  sha256,
+  validateApiKitBootModes,
+  validateApiKitEvidence,
+  verifyApiKitPlanWithRetry,
+  type ApiKitPlan,
+  type VerifiedApiKit,
+} from './api-kit-compatibility.js';
 import { apiKitContainerArgs, apiKitStarter } from './api-kit-input.js';
 import { writeTarGz } from './tar.js';
 
@@ -124,5 +135,161 @@ describe('published Kit input and isolation', () => {
       '--security-opt=apparmor=api-kit-verifier',
     );
     expect(() => apiKitContainerArgs('node:latest', '/input', '/output')).toThrow(/immutable/);
+  });
+});
+
+describe('API compatibility retry and receipt reuse', () => {
+  const makeVerified = (engineRef: string, tarballSha256: string, modes = ['ordinary-probe']): VerifiedApiKit => ({
+    modes,
+    evidence: {
+      version: 1,
+      engineRef,
+      tarballSha256,
+      consumerSha,
+      artifacts: modes.map((slug) => ({ slug, engineRef, htmlSha256: digest, frames: 8 })),
+    },
+  });
+  const validateKit = (kit: ApiKitPlan['kits'][number], verified: VerifiedApiKit) => {
+    validateApiKitBootModes(verified.modes);
+    validateApiKitEvidence(verified.evidence, { ...kit, consumerSha, modes: verified.modes });
+  };
+
+  it('retries when Kits change mid-verification and runs only newly published Kits', async () => {
+    const newer = '3'.repeat(40);
+    const kCurrent = { engineRef: current, sha256: digest };
+    const kPrevious = { engineRef: previous, sha256: digest };
+    const kNewer = { engineRef: newer, sha256: digest };
+    const plans: ApiKitPlan[] = [
+      { registrySha256: '1'.repeat(64), kits: [kCurrent, kPrevious] },
+      { registrySha256: '2'.repeat(64), kits: [kPrevious, kNewer] },
+      { registrySha256: '2'.repeat(64), kits: [kPrevious, kNewer] },
+      { registrySha256: '2'.repeat(64), kits: [kPrevious, kNewer] },
+    ];
+    let index = 0;
+    const executedBatches: { attempt: number; refs: string[] }[] = [];
+    const retries: number[] = [];
+
+    const result = await verifyApiKitPlanWithRetry({
+      readPlan: async () => plans[index++]!,
+      assertCandidate: async () => {},
+      validateKit,
+      onRetry: (attempt) => retries.push(attempt),
+      verifyMissingKits: async (kits, attempt) => {
+        executedBatches.push({ attempt, refs: kits.map((kit) => kit.engineRef) });
+        return new Map(kits.map((kit) => [apiKitIdentityKey(kit), makeVerified(kit.engineRef, kit.sha256)]));
+      },
+    });
+
+    expect(result.attempts).toBe(2);
+    expect(retries).toEqual([1]);
+    expect(executedBatches).toEqual([
+      { attempt: 1, refs: [current, previous] },
+      { attempt: 2, refs: [newer] },
+    ]);
+    expect(result.plan).toEqual(plans[2]);
+    expect(result.results.map((item) => (item.evidence as { engineRef: string }).engineRef)).toEqual([previous, newer]);
+  });
+
+  it('skips container execution on retry when Kits were only retired', async () => {
+    const kCurrent = { engineRef: current, sha256: digest };
+    const kPrevious = { engineRef: previous, sha256: digest };
+    const plans: ApiKitPlan[] = [
+      { registrySha256: '1'.repeat(64), kits: [kCurrent, kPrevious] },
+      { registrySha256: '2'.repeat(64), kits: [kCurrent] },
+      { registrySha256: '2'.repeat(64), kits: [kCurrent] },
+      { registrySha256: '2'.repeat(64), kits: [kCurrent] },
+    ];
+    let index = 0;
+    const executedBatches: string[][] = [];
+
+    const result = await verifyApiKitPlanWithRetry({
+      readPlan: async () => plans[index++]!,
+      assertCandidate: async () => {},
+      validateKit,
+      verifyMissingKits: async (kits) => {
+        executedBatches.push(kits.map((kit) => kit.engineRef));
+        return new Map(kits.map((kit) => [apiKitIdentityKey(kit), makeVerified(kit.engineRef, kit.sha256)]));
+      },
+    });
+
+    expect(result.attempts).toBe(2);
+    expect(executedBatches).toEqual([[current, previous]]);
+    expect(result.results).toHaveLength(1);
+    expect((result.results[0]!.evidence as { engineRef: string }).engineRef).toBe(current);
+  });
+
+  it('seeds from a matching receipt and rejects mismatched receipt identities', async () => {
+    const kCurrent = { engineRef: current, sha256: digest };
+    const kOlder = { engineRef: older, sha256: digest };
+    const receipt = {
+      version: 1 as const,
+      consumerSha,
+      candidateUrl: 'https://candidate.run.app/',
+      image: 'sha256:img1',
+      plan: { registrySha256: '1'.repeat(64), kits: [kCurrent] },
+      results: [makeVerified(current, digest)],
+    };
+
+    expect(() =>
+      parseVerifiedApiKitReceipt(receipt, {
+        consumerSha: previous,
+        candidateUrl: receipt.candidateUrl,
+        image: receipt.image,
+      }),
+    ).toThrow(/receipt/);
+    expect(() =>
+      parseVerifiedApiKitReceipt(receipt, {
+        consumerSha,
+        candidateUrl: 'https://other.run.app/',
+        image: receipt.image,
+      }),
+    ).toThrow(/receipt/);
+    expect(() =>
+      parseVerifiedApiKitReceipt(receipt, {
+        consumerSha,
+        candidateUrl: receipt.candidateUrl,
+        image: 'sha256:other',
+      }),
+    ).toThrow(/receipt/);
+
+    const parsed = parseVerifiedApiKitReceipt(receipt, {
+      consumerSha,
+      candidateUrl: receipt.candidateUrl,
+      image: receipt.image,
+    });
+    const initialVerified = new Map(parsed.plan.kits.map((kit, idx) => [apiKitIdentityKey(kit), parsed.results[idx]!]));
+    const expandedPlan: ApiKitPlan = { registrySha256: '2'.repeat(64), kits: [kCurrent, kOlder] };
+    const executed: string[] = [];
+
+    const result = await verifyApiKitPlanWithRetry({
+      readPlan: async () => expandedPlan,
+      assertCandidate: async () => {},
+      initialVerified,
+      validateKit,
+      verifyMissingKits: async (kits) => {
+        executed.push(...kits.map((kit) => kit.engineRef));
+        return new Map(kits.map((kit) => [apiKitIdentityKey(kit), makeVerified(kit.engineRef, kit.sha256)]));
+      },
+    });
+
+    expect(executed).toEqual([older]);
+    expect(result.attempts).toBe(1);
+    expect(result.results.map((item) => (item.evidence as { engineRef: string }).engineRef)).toEqual([current, older]);
+  });
+
+  it('fails with retry deployment error when retries are exhausted', async () => {
+    const kCurrent = { engineRef: current, sha256: digest };
+    let seq = 0;
+
+    await expect(
+      verifyApiKitPlanWithRetry({
+        maxAttempts: 2,
+        readPlan: async () => ({ registrySha256: String(++seq).repeat(64).slice(0, 64), kits: [kCurrent] }),
+        assertCandidate: async () => {},
+        validateKit,
+        verifyMissingKits: async (kits) =>
+          new Map(kits.map((kit) => [apiKitIdentityKey(kit), makeVerified(kit.engineRef, kit.sha256)])),
+      }),
+    ).rejects.toThrow(/retry deployment/);
   });
 });
