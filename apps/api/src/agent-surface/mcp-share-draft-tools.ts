@@ -64,31 +64,33 @@ export function createShareDraftTools(deps: ShareDraftToolsDeps): Record<string,
       annotations: { title: 'Share or unshare this draft', ...WRITES },
       outputSchema: SHARE_DRAFT_OUTPUT_SCHEMA,
       description:
-        "Toggle this unpublished draft's public link. Unshared, /play/<slug> is only playable by the signed-in " +
-        'owner — anyone else, including the creator on a device they are not logged into, hits a sign-in wall. ' +
-        'Sharing (the default when shared is omitted) opens that link to anyone who has it, once the latest ' +
-        'delivery has a green preview or publish gate; a red or pending gate refuses the share. Refused for a ' +
-        'slug that is already published — /play/<slug> always serves the published copy there, so sharing this ' +
-        'round would change nothing a visitor sees; publish it instead. Pass shared:false to take a previously ' +
-        'shared link private again.',
+        "Set whether this unpublished draft's /play/<slug> link is open to anyone who has it. Unshared, only the " +
+        'signed-in owner can play it; anyone else hits a sign-in wall. shared is required: true opens the link ' +
+        '(not a publication: the draft is not listed or reviewed), false makes it private again. Sharing needs a ' +
+        'green preview or publish gate on the latest delivery, and is refused for a slug that is already ' +
+        'published, since /play/<slug> serves the published copy there.',
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
-          shared: { type: 'boolean', description: 'true to share (default), false to make the draft private again.' },
+          shared: { type: 'boolean', description: 'true opens the link to anyone who has it; false makes it private.' },
         },
-        required: [],
+        required: ['shared'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('record' in auth)) return auth;
+        // Opening a link is never a default.
+        if (typeof args.shared !== 'boolean') {
+          return toolRefusal('shared is required: true opens the link, false makes it private', 'invalid_arguments');
+        }
         if (!store || !refuseShare) return toolErr('the MCP build endpoint is not configured');
 
         const record = auth.record;
         if (!(await canActOnSubmissionOrSlug(store, record, auth.actorUid, 'publish'))) {
           return toolRefusal('only the creator can share this game', 'not_owner');
         }
-        const shared = args.shared !== false;
+        const shared = args.shared;
 
         if (shared) {
           if (!record.slug) {

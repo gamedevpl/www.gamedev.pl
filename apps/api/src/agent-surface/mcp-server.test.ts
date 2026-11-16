@@ -3297,7 +3297,7 @@ declare const GameKit: { defineGame(): unknown };
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
       const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      const shared = await callTool(app, 'share_draft', { sessionKey, shared: true }, { 'mcp-session-id': sessionId });
       expect(shared.isError).toBe(false);
       expect(shared.structured).toMatchObject({ shared: true, slug: 'comet-courier' });
       expect((shared.structured as { playUrl?: string }).playUrl).toContain('/play/comet-courier');
@@ -3315,7 +3315,7 @@ declare const GameKit: { defineGame(): unknown };
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
       const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      const shared = await callTool(app, 'share_draft', { sessionKey, shared: true }, { 'mcp-session-id': sessionId });
       expect(shared.isError).toBe(true);
       expect((shared.structured as { reason?: string }).reason).toBe('gate_red');
 
@@ -3331,7 +3331,7 @@ declare const GameKit: { defineGame(): unknown };
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
       const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      const shared = await callTool(app, 'share_draft', { sessionKey, shared: true }, { 'mcp-session-id': sessionId });
       expect(shared.isError).toBe(true);
       expect((shared.structured as { reason?: string }).reason).toBe('nothing_delivered');
     });
@@ -3347,7 +3347,7 @@ declare const GameKit: { defineGame(): unknown };
       const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
       const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-      const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+      const shared = await callTool(app, 'share_draft', { sessionKey, shared: true }, { 'mcp-session-id': sessionId });
       expect(shared.isError).toBe(true);
       expect((shared.structured as { reason?: string }).reason).toBe('already_published');
 

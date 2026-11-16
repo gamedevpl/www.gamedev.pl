@@ -931,7 +931,7 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 **Read Only: False**
 
 ```
-Flips whether this unpublished draft's play link is public, so it changes server state.
+Sets whether this unpublished draft's play link is open to anyone who has it, so it changes server state. The caller must pass shared explicitly; an omitted value is refused rather than treated as a share.
 ```
 
 **Destructive: False**

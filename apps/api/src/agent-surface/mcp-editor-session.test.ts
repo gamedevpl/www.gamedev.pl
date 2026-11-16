@@ -203,7 +203,7 @@ describe('MCP editor session actor', () => {
     // This reads as a permission problem, not a schema one.
     expect((published.structured as { code?: string }).code).toBe('not_owner');
 
-    const shared = await callTool(app, 'share_draft', { sessionKey }, { 'mcp-session-id': sessionId });
+    const shared = await callTool(app, 'share_draft', { sessionKey, shared: true }, { 'mcp-session-id': sessionId });
     expect(shared.isError).toBe(true);
     expect(shared.structured).toMatchObject({
       error: 'only the creator can share this game',
