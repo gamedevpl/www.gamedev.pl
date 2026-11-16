@@ -1321,14 +1321,36 @@ jobs:
           node infra/deploy-hosting.mjs
 
       - name: Promote candidate revision to 100% traffic
+        env:
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
         run: |
-          if ! node --import tsx apps/api/scripts/verify-api-kits.ts --recheck \
-            --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
-            --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
-            > "$RUNNER_TEMP/api-kit-recheck.log" 2>&1; then
-            echo "::error::API/Kit identity recheck failed. App traffic retained; private diagnostics withheld."
-            grep -E '^(Error:|[A-Za-z]+Error:|    at |API compatibility|Verified API|Supported Kits|gate:)' "$RUNNER_TEMP/api-kit-recheck.log" | tail -n 25 || true
+          run_kit_recheck() {
+            node --import tsx apps/api/scripts/verify-api-kits.ts --recheck \
+              --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
+              --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
+              > "$RUNNER_TEMP/api-kit-recheck.log" 2>&1
+          }
+          fail_kit_gate() {
+            local title="$1" log="$2"
+            echo "::error::${title}. App traffic retained; private engine diagnostics withheld."
+            grep -E '^(Error:|[A-Za-z]+Error:|    at |API compatibility|Verified API|Supported Kits|gate:)' "$log" | tail -n 25 || true
             exit 1
+          }
+          if ! run_kit_recheck; then
+            if grep -Fq 'Supported Kits changed during API verification' "$RUNNER_TEMP/api-kit-recheck.log"; then
+              echo "Supported Kits changed before promotion; re-verifying candidate API (${DEPLOY_SHA})."
+              if ! node --import tsx apps/api/scripts/verify-api-kits.ts \
+                --bucket gamedevpl-games-store --source-sha "$DEPLOY_SHA" \
+                --candidate-url "$CANDIDATE_URL" --receipt "$KIT_COMPAT_RECEIPT" \
+                > "$RUNNER_TEMP/api-kit-verification.log" 2>&1; then
+                fail_kit_gate "API/Kit compatibility failed" "$RUNNER_TEMP/api-kit-verification.log"
+              fi
+              if ! run_kit_recheck; then
+                fail_kit_gate "API/Kit identity recheck failed" "$RUNNER_TEMP/api-kit-recheck.log"
+              fi
+            else
+              fail_kit_gate "API/Kit identity recheck failed" "$RUNNER_TEMP/api-kit-recheck.log"
+            fi
           fi
           gcloud run services update-traffic "$SERVICE" \
             --region "$REGION" \

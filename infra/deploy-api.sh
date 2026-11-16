@@ -626,14 +626,25 @@ gcloud run deploy "$SERVICE" \
 COMPAT_CANDIDATE_URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
   --format=json | jq -er --arg tag "$COMPAT_TAG" '.status.traffic[] | select(.tag==$tag) | .url')
 COMPAT_RECEIPT=$(mktemp)
-trap 'rm -f "$COMPAT_RECEIPT"' EXIT
+COMPAT_RECHECK_LOG=$(mktemp)
+trap 'rm -f "$COMPAT_RECEIPT" "$COMPAT_RECHECK_LOG"' EXIT
 npm --prefix "$REPO_ROOT" run build:packages
-node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" \
-  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
-  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
-node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" --recheck \
-  --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
-  --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+verify_api_kits() {
+  node --import "$REPO_ROOT/node_modules/tsx/dist/loader.mjs" "$REPO_ROOT/apps/api/scripts/verify-api-kits.ts" \
+    "$@" \
+    --bucket "$GAMES_STORE_BUCKET" --source-sha "$SOURCE_SHA" \
+    --candidate-url "$COMPAT_CANDIDATE_URL" --receipt "$COMPAT_RECEIPT"
+}
+verify_api_kits
+if ! verify_api_kits --recheck 2>&1 | tee "$COMPAT_RECHECK_LOG"; then
+  if grep -Fq 'Supported Kits changed during API verification' "$COMPAT_RECHECK_LOG"; then
+    echo "Supported Kits changed before promotion; re-verifying candidate API (${SOURCE_SHA})." >&2
+    verify_api_kits
+    verify_api_kits --recheck
+  else
+    exit 1
+  fi
+fi
 gcloud run services update-traffic "$SERVICE" --region "$REGION" --project "$PROJECT_ID" \
   --to-revisions "${SERVICE}-${COMPAT_REVISION_SUFFIX}=100" --remove-tags "$COMPAT_TAG"
 

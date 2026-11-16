@@ -4,10 +4,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  apiKitIdentityKey,
   apiKitPlan,
   assertApiKitPlanUnchanged,
+  parseVerifiedApiKitReceipt,
+  validateApiKitBootModes,
   validateApiKitEvidence,
+  verifyApiKitPlanWithRetry,
   type ApiKitPlan,
+  type VerifiedApiKit,
 } from '../src/platform/api-kit-compatibility.js';
 import { apiKitContainerArgs, apiKitStarter } from '../src/platform/api-kit-input.js';
 import { apiKitEngines } from './api-kit-engines.js';
@@ -67,27 +72,10 @@ async function assertCandidate(): Promise<void> {
 }
 
 if (process.argv.includes('--recheck')) {
-  const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as {
-    version: number;
-    consumerSha: string;
-    candidateUrl: string;
-    plan: ApiKitPlan;
-    results: { modes: string[]; evidence: unknown }[];
-  };
-  if (
-    receipt.version !== 1 ||
-    receipt.consumerSha !== sourceSha ||
-    receipt.candidateUrl !== candidate.href ||
-    receipt.results.length !== receipt.plan.kits.length
-  )
-    throw new Error('Missing API compatibility receipt');
-  for (const [index, kit] of receipt.plan.kits.entries()) {
-    const { modes, evidence } = receipt.results[index];
-    if (JSON.stringify(modes) !== '["ordinary-probe"]' && JSON.stringify(modes) !== '["ordinary-probe","hot-probe"]') {
-      throw new Error('Invalid API compatibility boot modes');
-    }
-    validateApiKitEvidence(evidence, { ...kit, consumerSha: sourceSha, modes });
-  }
+  const receipt = parseVerifiedApiKitReceipt(JSON.parse(await readFile(receiptPath, 'utf8')), {
+    consumerSha: sourceSha,
+    candidateUrl: candidate.href,
+  });
   await assertCandidate();
   assertApiKitPlanUnchanged(receipt.plan, await plan());
   console.log(`Rechecked supported Kit registry before API ${sourceSha} promotion`);
@@ -95,7 +83,6 @@ if (process.argv.includes('--recheck')) {
   if (run('git', ['rev-parse', 'HEAD']).toString('utf8').trim() !== sourceSha) throw new Error('API checkout mismatch');
   run('git', ['diff', '--quiet', 'HEAD', '--']);
   await assertCandidate();
-  const expected = await plan();
   const staging = await mkdtemp(path.join(tmpdir(), 'api-kits-'));
   try {
     const context = path.join(staging, 'context');
@@ -123,52 +110,84 @@ if (process.argv.includes('--recheck')) {
       },
     );
     const image = (await readFile(imageFile, 'utf8')).trim();
-    const engineDirectory = path.join(staging, 'engines');
-    await mkdir(engineDirectory);
     const repo = process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
     if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repo)) throw new Error('Invalid games repository');
-    const engineSources = apiKitEngines({
-      directory: engineDirectory,
-      repoUrl: `https://github.com/${repo}.git`,
-      refs: expected.kits.map((kit) => kit.engineRef),
-      token: process.env.GAMES_REPO_TOKEN,
-    });
-    const results = [];
-    for (const kit of expected.kits) {
-      const files = await apiKitStarter(object(`kits/${kit.engineRef}.tgz`), kit.engineRef, kit.sha256);
-      Object.assign(files, await engineSources(kit.engineRef));
-      const core = files['shared/modules/core.ts']
-        ? Buffer.from(files['shared/modules/core.ts'], 'base64').toString('utf8')
-        : null;
-      if (!core) throw new Error('Published Kit engine has no core source');
-      const modes = ['ordinary-probe', ...(core.includes('function createHotController(') ? ['hot-probe'] : [])];
-      const input: ApiKitInput = {
+    const initialVerified = new Map<string, VerifiedApiKit>();
+    try {
+      const existing = parseVerifiedApiKitReceipt(JSON.parse(await readFile(receiptPath, 'utf8')), {
         consumerSha: sourceSha,
-        engineRef: kit.engineRef,
-        tarballSha256: kit.sha256,
-        modes,
-        files,
-      };
-      const inputDir = path.join(staging, 'input');
-      const outputDir = path.join(staging, 'output');
-      await mkdir(inputDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-      await chmod(inputDir, 0o755);
-      await chmod(outputDir, 0o777);
-      await writeFile(path.join(inputDir, 'kit.json'), JSON.stringify(input), { mode: 0o644 });
-      await chmod(path.join(inputDir, 'kit.json'), 0o644);
-      execFileSync('docker', apiKitContainerArgs(image, inputDir, outputDir, process.env.API_KIT_APPARMOR_PROFILE), {
-        stdio: 'inherit',
-        timeout: 180_000,
+        candidateUrl: candidate.href,
+        image,
       });
-      const result: unknown = JSON.parse(await readFile(path.join(outputDir, 'receipt.json'), 'utf8'));
-      validateApiKitEvidence(result, { ...kit, consumerSha: sourceSha, modes });
-      results.push({ modes, evidence: result });
-      await rm(outputDir, { recursive: true, force: true });
-      console.log(`Verified API ${sourceSha} / Kit ${kit.engineRef}: ${modes.join(', ')}`);
+      for (const [index, kit] of existing.plan.kits.entries()) {
+        initialVerified.set(apiKitIdentityKey(kit), existing.results[index]!);
+      }
+    } catch {
+      // Absent or stale receipt triggers full Kit verification.
     }
-    await assertCandidate();
-    assertApiKitPlanUnchanged(expected, await plan());
+    const verified = await verifyApiKitPlanWithRetry({
+      readPlan: plan,
+      assertCandidate,
+      initialVerified,
+      maxAttempts: 3,
+      onRetry: (attempt, maxAttempts) =>
+        console.log(
+          `Supported Kits changed during API verification (attempt ${attempt}/${maxAttempts}); verifying updated Kit window`,
+        ),
+      validateKit: (kit, item) => {
+        validateApiKitBootModes(item.modes);
+        validateApiKitEvidence(item.evidence, { ...kit, consumerSha: sourceSha, modes: item.modes });
+      },
+      verifyMissingKits: async (missingKits, attempt) => {
+        const engineDirectory = path.join(staging, `engines-${attempt}`);
+        await mkdir(engineDirectory);
+        const engineSources = apiKitEngines({
+          directory: engineDirectory,
+          repoUrl: `https://github.com/${repo}.git`,
+          refs: [...new Set(missingKits.map((kit) => kit.engineRef))],
+          token: process.env.GAMES_REPO_TOKEN,
+        });
+        const fresh = new Map<string, VerifiedApiKit>();
+        for (const kit of missingKits) {
+          const files = await apiKitStarter(object(`kits/${kit.engineRef}.tgz`), kit.engineRef, kit.sha256);
+          Object.assign(files, await engineSources(kit.engineRef));
+          const core = files['shared/modules/core.ts']
+            ? Buffer.from(files['shared/modules/core.ts'], 'base64').toString('utf8')
+            : null;
+          if (!core) throw new Error('Published Kit engine has no core source');
+          const modes = ['ordinary-probe', ...(core.includes('function createHotController(') ? ['hot-probe'] : [])];
+          const input: ApiKitInput = {
+            consumerSha: sourceSha,
+            engineRef: kit.engineRef,
+            tarballSha256: kit.sha256,
+            modes,
+            files,
+          };
+          const inputDir = path.join(staging, 'input');
+          const outputDir = path.join(staging, 'output');
+          await mkdir(inputDir, { recursive: true });
+          await mkdir(outputDir, { recursive: true });
+          await chmod(inputDir, 0o755);
+          await chmod(outputDir, 0o777);
+          await writeFile(path.join(inputDir, 'kit.json'), JSON.stringify(input), { mode: 0o644 });
+          await chmod(path.join(inputDir, 'kit.json'), 0o644);
+          execFileSync(
+            'docker',
+            apiKitContainerArgs(image, inputDir, outputDir, process.env.API_KIT_APPARMOR_PROFILE),
+            {
+              stdio: 'inherit',
+              timeout: 180_000,
+            },
+          );
+          const result: unknown = JSON.parse(await readFile(path.join(outputDir, 'receipt.json'), 'utf8'));
+          validateApiKitEvidence(result, { ...kit, consumerSha: sourceSha, modes });
+          fresh.set(apiKitIdentityKey(kit), { modes, evidence: result });
+          await rm(outputDir, { recursive: true, force: true });
+          console.log(`Verified API ${sourceSha} / Kit ${kit.engineRef}: ${modes.join(', ')}`);
+        }
+        return fresh;
+      },
+    });
     await writeFile(
       receiptPath,
       JSON.stringify({
@@ -176,12 +195,12 @@ if (process.argv.includes('--recheck')) {
         consumerSha: sourceSha,
         candidateUrl: candidate.href,
         image,
-        plan: expected,
-        results,
+        plan: verified.plan,
+        results: verified.results,
       }) + '\n',
       { mode: 0o600 },
     );
-    console.log(`API compatibility gate passed for ${results.length} supported Kits`);
+    console.log(`API compatibility gate passed for ${verified.results.length} supported Kits`);
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
