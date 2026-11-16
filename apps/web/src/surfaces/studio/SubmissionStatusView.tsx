@@ -107,6 +107,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   if (isAwaitingOwnAgent(status)) return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
   if (status.gateProgress) return true;
+  if (['managed_idle', 'managed_ended'].includes(status.lastAgentPresence?.key ?? '')) return false;
   if (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt)) return false;
   return true;
 }

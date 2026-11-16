@@ -484,6 +484,26 @@ agent we happen to run.
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.
 
+## Activity through the existing progress status
+
+Anthropic rounds expose actual tool activity independently of `report_progress`.
+The existing submission status request reads the latest relevant vendor event for
+an active round viewed by a game member. It returns a closed activity vocabulary
+in the existing `lastAgentPresence` and `lastAgentSignalAt` fields: reading files,
+editing files, running a command, using a tool, working, idle, or stopped.
+Tool arguments, output, model messages, and reasoning never reach this status.
+
+The vendor read requests one event, uses a 1.5-second timeout, and shares concurrent
+reads and a five-second cache per session. Failure leaves ordinary progress intact.
+There is no separate browser connection, background subscriber, or Firestore write.
+Updates arrive at the existing status poll cadence, not as a per-event live trace.
+
+Fresh activity replaces stale opening copy and the queued label. Events older than
+90 seconds, from before this round, or older than channel signals are ignored.
+Idle and stopped events suppress the running indicator but do not seal the round.
+`report_progress` still carries authored updates; activity is not a percentage or
+proof of successful delivery. Other providers retain their current progress behavior.
+
 ## Attached Studio play recordings
 
 Creators can explicitly attach a frozen journal from Studio gameplay to a managed

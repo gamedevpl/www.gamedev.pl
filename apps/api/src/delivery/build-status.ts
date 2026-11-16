@@ -1,3 +1,4 @@
+import { attachAgentActivity, type ReadAgentActivity } from './status-agent-activity.js';
 import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
@@ -69,6 +70,7 @@ export function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'a
 }
 
 export interface BuildStatusOptions {
+  readAgentActivity?: ReadAgentActivity;
   store?: Store;
   gamesStore?: GamesStore;
   now: () => number;
@@ -473,6 +475,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       }
     }
 
+    if (viewerOwns) await attachAgentActivity(next, record, options.readAgentActivity, now);
     return finishReceiptStatus(next, record, viewerOwns, trustedReceiptVersion);
   }
 

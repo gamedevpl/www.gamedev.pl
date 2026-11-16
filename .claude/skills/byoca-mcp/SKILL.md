@@ -1435,6 +1435,22 @@ and add a row here.
 
 ## Soft warnings (never `isError`)
 
+`progress_stale` sees only MCP calls. A managed shell session can make dozens of
+local reads, writes and checks between its opening report and upload without ever
+receiving the warning. The managed system prompt and kickoff therefore share
+`builder-progress.ts`: another report within 60 seconds or six tool calls (local
+calls included), plus implementation, verification and upload checkpoints. Report
+before a blocking operation and after it returns; finish with `end.summary` after
+the final submit. This is a prompt contract, not a runtime guarantee. Verify actual
+report spacing in session events; passing prompt tests cannot prove compliance.
+
+Anthropic tool activity also decorates the existing submission status response through
+`lastAgentPresence`. Keep this on the progress/status path: the site uses Firebase
+Hosting rewrites, so a separate SSE transport can be buffered by the edge. Read only
+the latest relevant vendor event, cache and bound the read, and expose only the closed
+activity vocabulary. Do not turn tool calls into authored chat messages or write a
+heartbeat for each event. Activity does not seal rounds or replace `end`.
+
 Merged by `applySessionNudges` / submit handler. Each message states the round's state. The
 reply's `nextSuggestedTool` (`nextSuggestedTool()` in `mcp-round-guide.ts`) is set only when
 the state alone justifies a step: `end` on `stop` with `builder_handoff` or `gate_pending`;

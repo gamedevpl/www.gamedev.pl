@@ -1346,6 +1346,13 @@
     },
     "updatedAgo": "aktualizacja {{time}}",
     "presence": {
+      "managed_reading_files": "Czyta pliki projektu…",
+      "managed_editing_files": "Pisze kod…",
+      "managed_running_commands": "Wykonuje polecenie…",
+      "managed_using_tools": "Korzysta z narzędzia…",
+      "managed_working": "Agent pracuje…",
+      "managed_idle": "Agent chwilowo nie pracuje.",
+      "managed_ended": "Sesja agenta została zatrzymana.",
       "joining_round": "Dołączanie do rundy…",
       "reading_brief": "Czytanie briefu…",
       "loading_seed": "Ładowanie szkicu startowego…",

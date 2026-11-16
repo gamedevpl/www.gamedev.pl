@@ -526,6 +526,9 @@ const FILE_BUCKET = {
   'example-files': 'agent-surface',
   'build-prompt': 'agent-surface',
   'build-prompt-opening': 'agent-surface',
+  'builder-progress': 'agent-surface',
+  'managed-anthropic-activity': 'agent-surface',
+  'status-agent-activity': 'delivery',
   'builder-system-prompt': 'agent-surface',
   'gate-verdict': 'agent-surface',
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own

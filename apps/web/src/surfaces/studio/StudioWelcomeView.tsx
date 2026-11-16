@@ -82,7 +82,12 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const isNeedsChanges =
     status != null && (status.status === 'needs_changes' || status.phase === 'needs_changes' || status.failure != null);
 
-  const isRunning = !status || (!isReady && !isNeedsChanges && status.status !== 'abandoned');
+  const isRunning =
+    !status ||
+    (!isReady &&
+      !isNeedsChanges &&
+      status.status !== 'abandoned' &&
+      !['managed_idle', 'managed_ended'].includes(status.lastAgentPresence?.key ?? ''));
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'platform');

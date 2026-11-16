@@ -108,6 +108,7 @@ export interface ManagedAgentProvider {
   deleteSession?(sessionId: string): Promise<void>;
   deleteWorkspace?(workspace: string): Promise<void>;
   releaseCredential?(credentialRef: string): Promise<void>;
+  readActivity?(ref: string): Promise<{ key: string; at: string } | null>;
   // `label` is an opaque per-creator name, never a uid.
   createMemoryStore?(label: string): Promise<string>;
   deleteMemoryStore?(storeId: string): Promise<void>;

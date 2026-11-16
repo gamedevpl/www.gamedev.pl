@@ -96,6 +96,15 @@ system, and it happens to be true: `submit_sources` rejects anything outside
 
 ## Progress is part of the contract, not politeness
 
+The kickoff and managed system prompt share `builder-progress.ts`: after the opening
+`report_progress`, report within 60 seconds or six tool calls, counting local reads,
+writes and shell commands too. Reading → implementation, testing/capture and upload
+are explicit checkpoints. Describe actual changes, checks or blockers in the creator's
+language; a blocking operation gets a report before it starts and after it returns.
+MCP's `progress_stale` warning cannot interrupt local work, so the agent must not wait
+for it. This is an instruction to the builder, not an enforced runtime heartbeat;
+measure compliance using the timestamps of actual `report_progress` calls.
+
 The creator is watching a live page, and silence reads as failure. The brief tells the
 agent to stage and `submit_sources({ fromStaged: true, mode: "preview" })` as soon as the
 game is playable — a delivered rough draft beats a better one that never arrived — and to

@@ -177,10 +177,7 @@ export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
   submissionTokenSecret?: string;
-  /**
-   * Localizes an agent-relayed change request on the write that stores it; nothing that
-   * serves a read uses it. Defaults to createTranslatorFromEnv(); tests inject a stub.
-   */
+  // Localize agent feedback on write; reads reuse the stored translation.
   translator?: Translator;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
@@ -1147,6 +1144,7 @@ export async function registerSubmissionRoutes(
   }
 
   const buildStatus = createBuildStatusAssembler({
+    readAgentActivity: async (backend, ref) => (await backendByStoredName(backend)?.readActivity?.(ref)) ?? null,
     store,
     gamesStore: options.agentChannel?.gamesStore,
     now,
