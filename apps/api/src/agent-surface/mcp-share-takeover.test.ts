@@ -47,6 +47,23 @@ it.each([true, false])('does not apply a stale MCP share toggle after takeover (
   expect((await store.getSubmission(42))?.draftSharedAt).toBe(previous);
 });
 
+it.each([{}, { shared: 'yes' }])('never opens a link unless shared is stated (%o)', async (args) => {
+  const store = new InMemoryStore();
+  await store.createSubmission(42, 'owner', 'Game');
+  await store.setSubmissionSlug(42, 'game');
+  const record = (await store.getSubmission(42))!;
+  const tools = createShareDraftTools({
+    store,
+    now: Date.now,
+    resolveAuth: async () => ({ jobId: 42, record, actorUid: 'owner' }),
+    refuseShare: async () => null,
+  });
+  const result = await tools.share_draft.handler(args, {} as ToolContext);
+  expect(result.isError).toBe(true);
+  expect(result.structuredContent).toMatchObject({ code: 'invalid_arguments' });
+  expect((await store.getSubmission(42))?.draftSharedAt).toBeUndefined();
+});
+
 it.each([
   ['memory', () => new InMemoryStore()],
   ['firestore', () => new FirestoreStore(fakeFirestore().db)],
