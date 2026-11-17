@@ -109,6 +109,11 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
   };
 }
 
+// 2026-11-17: a blocking install held one round for 199 s.
+const INSTALL = `nohup sh -c 's=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log' >/dev/null 2>&1 &`;
+const INSTALL_WAIT =
+  'That installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself.';
+
 // Kickoff lines for a mounted workspace, in place of the download steps.
 export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): string[] {
   const kitDir = `${WORKSPACE_ROOT}/gamedevpl-creator-kit`;
@@ -118,14 +123,14 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
     `tar xzf ${dir}/${KIT_ARCHIVE} -C ${WORKSPACE_ROOT}`,
     ...(workspace.slug ? [`tar xzf ${dir}/${SOURCES_ARCHIVE} -C ${kitDir}/games`] : []),
     `cd ${kitDir}`,
-    'npm ci --ignore-scripts',
   ].join(' && ');
   const game = workspace.slug
     ? `the round's current files of this game in \`games/${workspace.slug}/\``
     : 'an empty `games/` — write the files `get_sources` returns into `games/<slug>/`';
   const remount = `move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again`;
   return [
-    `Your workspace is already mounted. Run once: \`${unpack}\`.`,
+    `Your workspace is already mounted. Run once: \`${unpack}; ${INSTALL}\`.`,
+    INSTALL_WAIT,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
     workspace.kitOutdated
       ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`

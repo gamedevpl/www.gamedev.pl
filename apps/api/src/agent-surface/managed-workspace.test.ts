@@ -98,6 +98,8 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('tar xzf /mnt/session/uploads/sources.tgz -C /workspace/gamedevpl-creator-kit/games');
     expect(lines).toContain('npm config set update-notifier false && mkdir -p /workspace');
     expect(lines).toContain('npm ci --ignore-scripts');
+    expect(lines).toContain('cd /workspace/gamedevpl-creator-kit; nohup sh -c');
+    expect(lines).toContain('`tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).not.toContain('do not call `get_sources`');
     expect(lines).toContain('Submit with kitEngineRef eng_new');

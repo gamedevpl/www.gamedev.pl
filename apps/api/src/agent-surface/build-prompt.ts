@@ -1,7 +1,7 @@
 // The brief every backend gives its agent. Rationale: docs/build-brief.md.
 
 import type { BuildBrief } from './agent-backend.js';
-import { buildPromptOpening, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
+import { buildPromptOpening, clockLines, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
 import { NEW_GAME_CHECKS, requestSourceLines, type Inlined, type KickoffInlined } from './workspace-context.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
@@ -91,12 +91,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
   const { shell, workspace, mountedSources, inlined } = lane;
   const newGame = Boolean(workspace) && !brief.feedback && !brief.gateRepair;
   return [
-    '## This round is on a clock',
-    '',
-    `The session is cancelled after ${!lane.maxSeconds ? 'a hard time limit' : lane.maxSeconds < 120 ? `${Math.floor(lane.maxSeconds)} seconds` : `${Math.floor(lane.maxSeconds / 60)} minutes`}; without \`submit_sources\` by then it delivers nothing.`,
-    'A typical revision takes minutes; the reads below, the creator’s images and a 2D capture take seconds each.',
-    '',
-    'Do not reply with a plan; act through tool calls. Reads come first, edits after.',
+    ...clockLines(lane.maxSeconds),
     ...(creating
       ? [
           `Call \`create_game\` first with ${JSON.stringify({

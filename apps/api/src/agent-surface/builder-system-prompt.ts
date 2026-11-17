@@ -48,7 +48,7 @@ const MCP_KIT = [
 
 // Measured: an early consultation costs a third of a late one.
 const ADVISOR =
-  'You have an advisor, a stronger model you can consult. When this round builds a new game from nothing, the kickoff numbers one consultation among its opening steps, and it is required like the others: after `get_brief` and the creator’s images, before your first source edit. Ask it for a plan: what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing. Then build to that plan. Do not consult it again in the round, and not at all on a revision or a gate repair. If no advisor answers, plan it yourself and carry on.';
+  'You have an advisor, a stronger model you can consult. When this round builds a new game from nothing, the kickoff numbers one consultation among its opening steps, and it is required like the others: right after your opening `report_progress`, before you open any kit or game file. Ask it for a plan: what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing. Then build to that plan. Do not consult it again in the round, and not at all on a revision or a gate repair. If no advisor answers, plan it yourself and carry on.';
 
 // 2026-11-16: shell work makes no MCP call; progress_stale stays silent.
 const PROGRESS_POINTS =

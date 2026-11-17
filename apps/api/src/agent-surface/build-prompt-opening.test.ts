@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BuildBrief } from './agent-backend.js';
-import { buildPromptOpening, openingSteps } from './build-prompt-opening.js';
+import { buildPromptOpening, clockLines, openingSteps } from './build-prompt-opening.js';
 
 const BRIEF = { jobId: 1, slug: 'rocks', spec: 's', channelToken: 't', apiBaseUrl: 'https://x' } as BuildBrief;
 
@@ -54,7 +54,7 @@ describe('openingSteps', () => {
   it('numbers the advisor consultation for a new game on a mounted workspace only', () => {
     const lane = { workspace: true, mountedSources: true, inlined: { noFiles: true } };
     const fresh = openingSteps(BRIEF, lane).join('\n');
-    expect(fresh).toMatch(/\n5\. Consult your advisor once, after you have looked at the creator’s images/);
+    expect(fresh).toMatch(/\n5\. Consult your advisor now, before you open any kit or game file/);
     expect(fresh).toContain('is the only consultation of the round');
     expect(fresh).toContain('If no advisor answers, plan it yourself and go on');
     expect(openingSteps({ ...BRIEF, feedback: 'faster' }, lane).join('\n')).not.toContain('advisor');
@@ -67,5 +67,17 @@ describe('openingSteps', () => {
     const mounted = openingSteps({ ...BRIEF, feedback: 'faster' }, lane).join('\n');
     expect(mounted).toContain('when the game first typechecks, after each capture, saying what the frames showed');
     expect(openingSteps(BRIEF, { ...lane, workspace: false }).join('\n')).not.toContain('first typechecks');
+  });
+});
+
+// 2026-11-17: the builder blamed the clock for each skipped step.
+describe('clockLines', () => {
+  it('calls a long limit a safety net and a short one a clock', () => {
+    const long = clockLines(1200).join('\n');
+    expect(long).toContain('cancelled after 20 minutes');
+    expect(long).toContain('a safety net, not a pace to keep');
+    expect(long).not.toContain('Do not reply with a plan');
+    expect(clockLines(90).join('\n')).toContain('A typical revision takes minutes');
+    expect(clockLines().join('\n')).toContain('cancelled after a hard time limit');
   });
 });

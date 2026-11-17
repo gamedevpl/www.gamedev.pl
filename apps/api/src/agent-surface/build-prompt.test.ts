@@ -13,7 +13,7 @@ const BRIEF: BuildBrief = {
 describe('buildPrompt', () => {
   it('tells the round what to give up, and to submit before the clock runs out', () => {
     const prompt = buildPrompt(BRIEF);
-    expect(prompt).toContain('This round is on a clock');
+    expect(prompt).toContain('## Time limit');
     expect(prompt).toContain('do not download or unpack the kit archive');
     expect(prompt).toContain('`get_kit_api` once');
     expect(prompt).toContain('`read_source_files` only the files you change');
