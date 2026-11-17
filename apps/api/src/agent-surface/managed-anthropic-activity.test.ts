@@ -28,6 +28,15 @@ describe('managed activity through status polling', () => {
     expect(managedActivityFromEvent({ ...event(), type: 'session.status_idle' })?.key).toBe('managed_idle');
   });
 
+  it.each([
+    ['budget_reached', 'managed_ended'],
+    ['retries_exhausted', 'managed_ended'],
+    ['end_turn', 'managed_idle'],
+    ['requires_action', 'managed_idle'],
+  ])('projects idle reason %s as %s', (type, key) => {
+    expect(managedActivityFromEvent({ ...event(), type: 'session.status_idle', stop_reason: { type } })?.key).toBe(key);
+  });
+
   it('reads only the latest relevant event and shares concurrent and cached reads', async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ data: [event()] }));

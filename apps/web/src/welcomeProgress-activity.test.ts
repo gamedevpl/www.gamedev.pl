@@ -33,3 +33,20 @@ it('does not claim the agent is still joining five minutes after its only signal
   };
   expect(welcomeProgressMessage(status, t)).toBe('welcome.agentStarted');
 });
+
+it('keeps a fresh checkpoint over a later coarse pulse, then allows a supported summary', () => {
+  const at = new Date(Date.now() + 4000).toISOString();
+  const status: SubmissionStatus = {
+    status: 'building',
+    phase: 'building',
+    lastAgentSignalAt: at,
+    lastAgentPresence: { key: 'managed_editing_files', at },
+    events: [
+      { id: '1', kind: 'step', text: 'The controls work.', createdAt: new Date(Date.now() - 2000).toISOString() },
+    ],
+  };
+  expect(welcomeStatusLabel(status, t)).toBe('statusView.states.building.label');
+  expect(welcomeProgressMessage(status, t)).toBe('The controls work.');
+  status.lastAgentPresence = { ...status.lastAgentPresence!, text: 'Edited the map.', textAt: at };
+  expect(welcomeProgressMessage(status, t)).toBe('statusView.activitySummary Edited the map.');
+});

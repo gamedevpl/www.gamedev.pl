@@ -76,3 +76,11 @@ it('remembers a silent start across reloads and provider outages, only for the r
   await store.bumpRoundGeneration(42);
   expect((await reload()).status).toBe('queued');
 });
+
+it('polls at the moving pace when only the provider observes recent work', async () => {
+  const { store, poll, now } = await setup();
+  const record = (await store.getSubmission(42))!;
+  vi.spyOn(store, 'getSubmission').mockResolvedValue({ ...record, createdAt: new Date(now - 180_000).toISOString() });
+  expect((await poll('owner')).pollAfterMs).toBe(3000);
+  expect((await poll('stranger')).pollAfterMs).toBe(10000);
+});

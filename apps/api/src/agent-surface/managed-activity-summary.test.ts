@@ -41,7 +41,7 @@ describe('activity evidence', () => {
       { ...tool('thinking'), type: 'agent.thinking', content: 'PRIVATE_THINKING' },
     ];
     const evidence = activityEvidence(events);
-    expect(evidence).toHaveLength(2);
+    expect(evidence).toHaveLength(1);
     const encoded = JSON.stringify(evidence);
     for (const secret of [
       'SECRET_VALUE',
@@ -181,6 +181,12 @@ describe('shared summary cadence', () => {
     await read('255');
     await read('0');
     expect(summarize).toHaveBeenCalledTimes(256);
+    await read('256');
+    await read('0');
+    await read('255');
+    expect(summarize).toHaveBeenCalledTimes(257);
+    await read('1');
+    expect(summarize).toHaveBeenCalledTimes(258);
   });
 
   it('keeps activity available after a background rejection without retrying consumed evidence', async () => {
@@ -218,4 +224,47 @@ it.each([
   const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response);
   expect(await summarizeActivity(config(fetchImpl), activityEvidence([tool()]))).toBeNull();
   expect(console.info).toHaveBeenCalledWith(expect.stringContaining(`"outcome":"${outcome}"`));
+});
+
+it.each([
+  'cat ".env"',
+  "source '.env.local'",
+  'cat ".ssh/id_rsa"',
+  'fs.readFileSync(".env","utf8")',
+  'cat /mnt/memories/other-game/draft.md',
+  'cat /mnt/agent-memory/other-game/notes.md',
+  'cat creator.md',
+  'env | sort',
+  'export -p',
+])('never summarizes the private invocation or its matched result: %s', async (command) => {
+  const call = { ...tool('call', at, { command }), name: 'bash' };
+  const reply = {
+    id: 'reply',
+    processed_at: at,
+    type: 'agent.tool_result',
+    tool_use_id: call.id,
+    content: [{ type: 'text', text: 'unlabelled private data' }],
+  };
+  const events = [reply, call];
+  expect(activityEvidence(events)).toEqual([]);
+  const summarize = vi.fn();
+  const read = createAnthropicActivityReader(
+    config(async () => Response.json({ data: events })),
+    summarize,
+  );
+  expect((await read('session'))?.key).toBe('managed_working');
+  expect(summarize).not.toHaveBeenCalled();
+});
+
+it('withholds shared-scanner credentials and unfinished private keys from excerpts', () => {
+  const payload = 'a'.repeat(16) + '_' + '-'.repeat(43);
+  for (const credential of [
+    ...['gdpl_pat_', 'gdpl_oat_', 'gdpl_ort_'].map((prefix) => prefix + payload),
+    ...['YzEu', 'ZzEu'].map((prefix) => prefix + 'x'.repeat(80)),
+    ...['gho_', 'ghs_', 'ghu_'].map((prefix) => prefix + 'x'.repeat(20)),
+    'AIza' + 'x'.repeat(35),
+    'AKIA' + 'X'.repeat(16),
+    '-----BEGIN RSA PRIVATE KEY-----\nprivate without end marker',
+  ])
+    expect(activityExcerpt('output: ' + credential)).toBe('[redacted]');
 });

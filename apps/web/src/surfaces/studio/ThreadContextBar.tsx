@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { BuildHeartbeat } from './BuildHeartbeat.js';
-import { PRESENCE_THOUGHT_MS, presenceThoughtLabel } from './presenceThought.js';
+import { PRESENCE_THOUGHT_MS, isManagedStop, presenceThoughtLabel } from './presenceThought.js';
 
 // The bar between the thread and the composer: where the work is.
 export function ThreadContextBar({
@@ -25,7 +25,8 @@ export function ThreadContextBar({
   const { t } = useTranslation();
   const [, setTick] = useState(0);
 
-  const thoughtAt = thought?.at ?? null;
+  const stopped = isManagedStop(thought?.key);
+  const thoughtAt = stopped ? null : (thought?.at ?? null);
 
   // One timeout at expiry so the headline falls back without a poll.
   useEffect(() => {
@@ -39,7 +40,8 @@ export function ThreadContextBar({
     return () => window.clearTimeout(id);
   }, [thoughtAt]);
 
-  const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
+  const thoughtFresh =
+    thought !== null && thought !== undefined && (stopped || Date.now() - thought.at < PRESENCE_THOUGHT_MS);
   const thoughtLabel =
     thoughtFresh && thought ? presenceThoughtLabel(thought, (key) => t(key, { defaultValue: '' })) : '';
   const headline = thoughtLabel || phase;

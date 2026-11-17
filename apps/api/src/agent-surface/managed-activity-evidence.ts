@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findCredentialLikeStrings } from '../platform/credential-scan.js';
 
 export interface ActivityEvidence {
   id: string;
@@ -15,18 +16,21 @@ const Event = z.object({
   processed_at: z.iso.datetime({ offset: true }),
   type: z.string(),
 });
-const privatePath = /(?:^|[/\\\s])(?:\.env|\.aws|\.ssh|credentials|secrets?)(?=[/\\.\s"'`]|$)/i;
+const privatePath =
+  /(?:^|[^\w.-])(?:\.env|\.aws|\.ssh|credentials|secrets?|creator\.md|\.?(?:agent[-_])?memor(?:y|ies)(?:[-_]stores?)?|memstore_[\w-]+)(?=[^\w-]|$)/i;
+const environmentDump = /\b(?:printenv|env|export\s+-p)\b/;
 
 // Redact before truncation so clipping cannot expose a partial credential.
 export function activityExcerpt(text: string, limit = 600): string {
+  if (findCredentialLikeStrings(text).length) return '[redacted]'.slice(0, limit);
   return text
-    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[redacted]')
+    .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g, '[redacted]')
     .replace(/\bmcp2_[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?/g, '[redacted]')
     .replace(/\b(?:sk|ghp|github_pat|xoxb|xoxp|member1)[_-][A-Za-z0-9_-]{10,}/g, '[redacted]')
     .replace(/(x-gamedev-stage["']?\s*:\s*)[^\s"'`]+/gi, '$1[redacted]')
     .replace(/\bBearer\s+[^\s"'`]+/gi, 'Bearer [redacted]')
     .replace(
-      /((?:api[_-]?key|session[_-]?key|authorization|password|secret|access[_-]?token|token)["']?\s*[:=]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
+      /((?:x-gamedev-stage|api[_-]?key|session[_-]?key|authorization|password|secret|access[_-]?token|token)["']?\s*[:=]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,
       '$1[redacted]',
     )
     .replace(/https?:\/\/[^\s"'`]+/g, '[url]')
@@ -45,18 +49,16 @@ export function activityEvidence(events: unknown[], since?: string, now = Date.n
     if (time < Math.max(now - 90_000, Date.parse(since ?? '') || 0) || time > now + 5000) continue;
     if (type === 'agent.tool_use') {
       const input = event.input && typeof event.input === 'object' ? (event.input as Record<string, unknown>) : {};
-      const path = String(input.path ?? input.file_path ?? '');
-      const details: Record<string, string> = {};
       if (
-        privatePath.test(path) ||
-        privatePath.test(String(input.command ?? '')) ||
-        /\bprintenv\b/.test(String(input.command ?? ''))
+        /^memory(?:_|$)/i.test(String(event.name ?? '')) ||
+        Object.values(input).some((v) => typeof v === 'string' && privatePath.test(v)) ||
+        environmentDump.test(String(input.command ?? ''))
       )
-        details.path = '[private file]';
-      else
-        for (const key of ['path', 'file_path', 'command', 'pattern', 'content', 'new_string', 'new_str']) {
-          if (typeof input[key] === 'string') details[key] = activityExcerpt(input[key]);
-        }
+        continue;
+      const details: Record<string, string> = {};
+      for (const key of ['path', 'file_path', 'command', 'pattern', 'content', 'new_string', 'new_str']) {
+        if (typeof input[key] === 'string') details[key] = activityExcerpt(input[key]);
+      }
       result.push({ id, at, type, tool: String(event.name ?? 'tool').slice(0, 60), details });
     } else if (type === 'agent.tool_result') {
       const blocks = Array.isArray(event.content) ? event.content : [];
@@ -76,10 +78,7 @@ export function activityEvidence(events: unknown[], since?: string, now = Date.n
   }
   const ordered = result.sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).slice(-12);
   while (JSON.stringify(ordered).length > 8000) ordered.shift();
-  const privateUses = new Set(ordered.filter((e) => e.details?.path === '[private file]').map((e) => e.id));
   // An unmatched result has no safe context for interpreting or disclosing it.
   const uses = new Set(ordered.filter((e) => e.type === 'agent.tool_use').map((e) => e.id));
-  return ordered.filter(
-    (e) => e.type !== 'agent.tool_result' || (uses.has(e.toolUseId ?? '') && !privateUses.has(e.toolUseId ?? '')),
-  );
+  return ordered.filter((e) => e.type !== 'agent.tool_result' || uses.has(e.toolUseId ?? ''));
 }

@@ -9,6 +9,7 @@ import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './s
 import { useGatedStatusPoll } from './useGatedStatusPoll.js';
 import type { SubmissionStatus } from '../../submissionApi.js';
 import { recordCreateStep } from '../../visitTelemetry.js';
+import { isManagedStop } from './presenceThought.js';
 import { welcomeProgressMessage, welcomeStatusLabel } from '../../welcomeProgress.js';
 import { isRoundSealed } from './roundSealed.js';
 import './studio-welcome.css';
@@ -82,12 +83,9 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const isNeedsChanges =
     status != null && (status.status === 'needs_changes' || status.phase === 'needs_changes' || status.failure != null);
 
+  const showBuildProgress = !isReady && !isNeedsChanges && status?.status !== 'abandoned';
   const isRunning =
-    !status ||
-    (!isReady &&
-      !isNeedsChanges &&
-      status.status !== 'abandoned' &&
-      !['managed_idle', 'managed_ended'].includes(status.lastAgentPresence?.key ?? ''));
+    showBuildProgress && (Boolean(status?.gateProgress) || !isManagedStop(status?.lastAgentPresence?.key));
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'platform');
@@ -264,10 +262,12 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
                 </span>
               ) : null}
             </div>
-            <p className="studio-welcome-progress-message" role="status" aria-live="polite">
-              {progress}
-            </p>
-            {isRunning && token ? (
+            {progress && (
+              <p className="studio-welcome-progress-message" role="status" aria-live="polite">
+                {progress}
+              </p>
+            )}
+            {showBuildProgress && token ? (
               <div className="studio-welcome-checklist">
                 <BuildProgressChecklist
                   progress={status?.progress ?? null}

@@ -46,9 +46,14 @@ export function managedActivityFromEvent(value: unknown): ManagedActivity | null
     case 'agent.mcp_tool_use':
       key = 'managed_using_tools';
       break;
-    case 'session.status_idle':
-      key = 'managed_idle';
+    case 'session.status_idle': {
+      const reason = z.object({ type: z.string() }).safeParse(event.stop_reason);
+      key =
+        reason.success && ['budget_reached', 'retries_exhausted'].includes(reason.data.type)
+          ? 'managed_ended'
+          : 'managed_idle';
       break;
+    }
     case 'session.status_terminated':
       key = 'managed_ended';
       break;
@@ -81,8 +86,12 @@ export function createAnthropicActivityReader(config: ManagedProviderConfig, sum
   return (sessionId: string, since?: string): Promise<ManagedActivity | null> => {
     const key = `${sessionId}:${since ?? ''}`;
     const cached = cache.get(key);
-    if (cached && (cached.pending || cached.until > Date.now()))
-      return cached.value.then((activity) => withSummary(activity, cached.summary));
+    if (cached) {
+      cache.delete(key);
+      cache.set(key, cached);
+      if (cached.pending || cached.until > Date.now())
+        return cached.value.then((activity) => withSummary(activity, cached.summary));
+    }
     const entry = cached ?? {
       until: 0,
       pending: false,

@@ -51,7 +51,7 @@ export async function summarizeActivity(
     const root = (config.baseUrl ?? 'https://api.anthropic.com').replace(/\/$/, '');
     const response = await (config.fetchImpl ?? fetch)(`${root}/v1/messages`, {
       method: 'POST',
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(8000),
       headers: { 'content-type': 'application/json', 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: ACTIVITY_SUMMARY_MODEL,

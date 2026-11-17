@@ -32,3 +32,26 @@ it('localizes summaries, keeps their original time and preserves newer authored 
   await attachAgentActivity(status, record, read, () => now, 'pl');
   expect(status.lastAgentPresence?.text).toBeUndefined();
 });
+
+it('allows the same five seconds of clock skew for activity and its summary', async () => {
+  const store = new InMemoryStore();
+  await store.createSubmission(42, 'owner', 'Game');
+  await store.recordDispatch(42, { backend: 'managed:test', ref: 'session' });
+  const record = (await store.getSubmission(42))!;
+  const now = Date.now();
+  for (const delta of [5000, 5001]) {
+    const at = new Date(now + delta).toISOString();
+    const status: SubmissionStatusResponse = { status: 'queued' };
+    await attachAgentActivity(
+      status,
+      record,
+      async () => ({
+        key: 'managed_editing_files',
+        at,
+        summary: { at, en: 'Edited terrain.', pl: 'Zmieniono teren.' },
+      }),
+      () => now,
+    );
+    expect(status.lastAgentPresence?.text).toBe(delta === 5000 ? 'Edited terrain.' : undefined);
+  }
+});

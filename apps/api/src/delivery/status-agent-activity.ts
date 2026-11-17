@@ -56,7 +56,7 @@ export async function attachAgentActivity(
   if (
     !stopped &&
     summary &&
-    Date.parse(summary.at) <= now() &&
+    Date.parse(summary.at) <= now() + 5000 &&
     Date.parse(summary.at) >=
       Math.max(
         latestReport,

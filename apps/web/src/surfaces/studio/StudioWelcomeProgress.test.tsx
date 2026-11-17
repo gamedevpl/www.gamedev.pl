@@ -46,6 +46,28 @@ describe('StudioWelcomeView progress copy', () => {
     vi.clearAllMocks();
   });
 
+  it.each([false, true])('keeps the report visible on idle and gives a running gate priority: %s', async (gate) => {
+    const at = new Date(Date.now() - 95_000).toISOString();
+    getStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      lastAgentPresence: { key: 'managed_idle', at },
+      events: [{ id: '1', kind: 'step', text: 'The level is ready.', createdAt: at }],
+      ...(gate
+        ? { gateProgress: { stage: 'typecheck' as const, lane: 'preview' as const, index: 1, total: 4, at } }
+        : {}),
+    });
+    const dialog = await renderWelcome();
+    const idle = i18n.t('statusView.presence.managed_idle');
+    expect(dialog?.textContent?.split(idle).length).toBe(gate ? 1 : 2);
+    expect(dialog?.querySelector('.studio-details-progress-note')?.textContent).toContain('The level is ready.');
+    expect(Boolean(dialog?.querySelector('.studio-welcome-progress.is-running'))).toBe(gate);
+    if (gate)
+      expect(dialog?.querySelector('.studio-welcome-progress-label')?.textContent).toContain(
+        i18n.t('statusView.gateProgress.typecheck'),
+      );
+  });
+
   it('shows an agent message once and leaves no empty checklist divider', async () => {
     getStatus.mockResolvedValue({
       status: 'building',

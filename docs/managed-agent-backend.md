@@ -500,7 +500,7 @@ and round start bound the read's evidence. Providers without session events stil
 When new local tool evidence exists, `claude-haiku-5-5` can produce a short English
 and Polish summary in one request using the managed provider's existing credential.
 Thinking is disabled, effort is low, output is capped, and the request times out after
-four seconds. It runs in the background: status returns coarse activity and any
+eight seconds. It runs in the background: status returns coarse activity and any
 still-fresh prior summary without waiting; a later poll sees the new result. A separate
 in-flight guard prevents overlapping summaries. This is best-effort process work, not
 a durable job: a terminated instance can lose it. At most twelve recent local tool
@@ -536,13 +536,11 @@ the round. There is no new browser connection, background subscriber or Firestor
 The official Python SDK's [event list parameters](https://github.com/anthropics/anthropic-sdk-python/blob/3fa305d99c4a1b8017bce15b1f1378a5871ca057/src/anthropic/types/beta/sessions/event_list_params.py)
 explicitly support `order: "asc" | "desc"`, sorted by `processed_at`, with `asc`
 as the default. The activity read sends `order=desc`, `limit=20` and `types[]`.
-This source was checked on 2026-11-17; it verifies the documented contract, not a
-live endpoint response. The exported session verifies event shapes and result IDs,
-not which page this query selects. A live-session check remains outstanding because
-the development workspace has no Anthropic credential. Before merge, run the exact
-query against a session with more than twenty matching events and compare its first
-and last timestamps with the session's newest events. Do not call a hand-sliced export
-a captured endpoint fixture.
+In the [live check on 2026-11-17](https://github.com/gamedevpl/www.gamedev.pl/pull/2125#discussion_r4604238357),
+the filtered query returned HTTP 200 in 383 ms. All 20 event IDs matched the newest
+20 of 145 matching events independently read in ascending order, in reverse order.
+A separate live Haiku request using eight events produced valid English and Polish
+summaries with matching evidence IDs in 2,872 ms. These timings are single observations.
 
 ## Attached Studio play recordings
 

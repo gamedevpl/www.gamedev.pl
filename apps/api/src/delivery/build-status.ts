@@ -49,13 +49,13 @@ function withoutAuthoredDetail(build: RecentBuild): RecentBuild {
 
 // Newest stamp that means this round moved.
 function sinceMovement(
-  record: { stateSince?: string; lastAgentSignalAt?: string; createdAt: string },
-  status: { events?: Array<{ createdAt: string }>; dreaming?: { since: string } },
+  record: { stateSince?: string; createdAt: string },
+  status: { lastAgentSignalAt?: string; events?: Array<{ createdAt: string }>; dreaming?: { since: string } },
   at: number,
 ): number {
   const movedAt = lastMovementAt([
     record.stateSince,
-    record.lastAgentSignalAt,
+    status.lastAgentSignalAt,
     status.events?.[0]?.createdAt,
     record.createdAt,
   ]);
@@ -438,15 +438,6 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       next.dreaming = { since: record.dreamRun!.claimedAt };
     } else delete next.dreaming;
 
-    // Recomputed with the stall: a cache hit overlays a fresher signal.
-    const floor = statusPollFloorMs({
-      terminal: next.status === 'published' || next.status === 'abandoned',
-      dispatched: next.phase === 'dispatched' && stillBooting(record.stateSince, now()),
-      msSinceMovement: sinceMovement(record, next, now()),
-    });
-    if (floor === undefined) delete next.pollAfterMs;
-    else next.pollAfterMs = floor;
-
     const trustedReceiptVersion = await refreshReceiptGateProgress(next, record, gamesStore, jobId);
 
     // Soft: sibling history must not 500 the live thread poll.
@@ -477,6 +468,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
 
     if (viewerOwns) await attachAgentActivity(next, record, options.readAgentActivity, now, locale);
+    // Recomputed with the stall: a cache hit overlays a fresher signal.
+    const floor = statusPollFloorMs({
+      terminal: next.status === 'published' || next.status === 'abandoned',
+      dispatched: next.phase === 'dispatched' && stillBooting(record.stateSince, now()),
+      msSinceMovement: sinceMovement(record, next, now()),
+    });
+    if (floor === undefined) delete next.pollAfterMs;
+    else next.pollAfterMs = floor;
+
     return finishReceiptStatus(next, record, viewerOwns, trustedReceiptVersion);
   }
 
