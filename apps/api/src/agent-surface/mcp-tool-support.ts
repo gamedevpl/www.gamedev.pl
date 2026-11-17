@@ -271,6 +271,7 @@ export const WARNINGS_PROP = {
             'game_manifest_invalid',
             'typecheck_hint',
             'audio_catalog_hint',
+            'audio_starter_copy',
             'card_unopened',
             'must_fix_gate',
             'must_deliver',

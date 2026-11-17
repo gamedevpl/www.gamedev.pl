@@ -287,6 +287,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
           typecheckHint?: string;
           budgetHint?: string;
           audioHint?: string;
+          audioFitHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -315,6 +316,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
+            ...(body.audioFitHint ? [{ code: 'audio_starter_copy' as const, message: body.audioFitHint }] : []),
             ...(body.budgetHint ? [{ code: 'byte_budget_low' as const, message: body.budgetHint }] : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),

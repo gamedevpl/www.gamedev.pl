@@ -87,6 +87,36 @@ the agent expects those parts to be missing rather than trusting them.
 
 Every newly seeded or built game ships compiled `EDITOR.json`, declaring at least three meaningful tunables or one content collection. `EDITOR.ts` is optional local authoring source; when present, run `npm run editor:gen -- <slug>` and ship only the compiled `EDITOR.json`. Deliveries refuse `EDITOR.ts` and executable `validate` functions, so express content rules as declarative bounds or constraints. Keep `EDITOR.content.json` (when the schema uses content) and generated `game/editor-content.ts` in sync, and make the game read those typed values instead of shadowing defaults. The kit also exposes `npm run edit -- <slug>` for local verification.
 
+## Audio is chosen for the game, not inherited from the starter
+
+A builder scaffolds from a kit starter and keeps what it does not have a reason to change. The
+starter's `audio` block is legal and passes every gate, so nothing ever gave it a reason: a
+robot artillery game shipped with the circus track of the tag game it was scaffolded from, and
+most games ended up with the same five sounds. The catalog was never the limit.
+
+Three things now ask, each where it is cheapest:
+
+- **The kickoff** tells a first round that the starter's audio is a placeholder and names the
+  search (`npm run audio:find -- <words>` in the kit, or `search_kit_files` under `shared/audio`
+  without a shell). The search returns a dozen described ids, so choosing costs a few hundred
+  tokens; the catalog is never read whole and never inlined in a prompt.
+- **`audio_starter_copy`** rides the stage/patch reply when `GAME.json` selects exactly a
+  starter's sound set (`ui-toggle` aside). It is computed from the pinned kit's own
+  `starters/*/GAME.json`, so there is no list to maintain here. It is advice, not a defect:
+  it never withholds `nextSuggestedTool`, and a builder may keep the set when it fits.
+- **`delivery audio profile`** is logged once per accepted delivery
+  (`apps/api/src/delivery/audio-profile-log.ts`): music id, whether it is a custom track, sound
+  counts, `starterCopy`, and `wanted`, the sounds the builder looked for and the catalog
+  lacked (`GAME.json` `audio.wanted`). The share of deliveries with `starterCopy` set is the
+  number to watch; `wanted` is the shopping list for the next catalog batch.
+
+```bash
+node infra/gcp-read.mjs logs 'jsonPayload.msg="delivery audio profile"' --since 7d --limit 200
+```
+
+Descriptions live with the catalog in the games repo (`shared/audio/guide.json`, checked by
+`npm run audio:check`), so nothing in this repo names a sound or a count.
+
 ## Scope is stated as a fact, not a request
 
 "Please do not edit `shared/`" is advice an agent may weigh against its task. "Changes

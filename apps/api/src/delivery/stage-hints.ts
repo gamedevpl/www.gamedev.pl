@@ -4,6 +4,7 @@ import type { GamesStore } from './games-store.js';
 import type { BaseVersionRecord, BaseVersionStore } from '../platform/round-base-version.js';
 import { overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import { defineGamePreflight } from './define-game-preflight.js';
+import { audioProfile, audioStarterCopyHint } from './audio-profile.js';
 import { audioCatalogHint } from './stage-audio-hint.js';
 
 // Tighter than submit's budget — hot endpoint, runs several times a round.
@@ -14,6 +15,8 @@ const STAGE_TYPECHECK_MAX_SOURCE_BYTES = 300_000;
 export type StageAdvisories = {
   typecheckHint?: string;
   audioHint?: string;
+  // Advice on fit, never a defect.
+  audioFitHint?: string;
 };
 
 // What one staged file needs checking, minus the injected preflight pair.
@@ -96,6 +99,8 @@ export async function computeStageAdvisories(input: StageAdvisoriesInput): Promi
         gameMusicJson: overlay['music.json'] ?? null,
       });
       if (hint) result.audioHint = hint;
+      const fit = hint ? null : audioStarterCopyHint(tree, audioProfile({ tree, gameJson: input.content }));
+      if (fit) result.audioFitHint = fit;
     } catch {
       // best-effort
     }

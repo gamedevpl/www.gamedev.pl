@@ -1,6 +1,7 @@
 // The brief every backend gives its agent. Rationale: docs/build-brief.md.
 
 import type { BuildBrief } from './agent-backend.js';
+import { audioFitLine } from './audio-fit-brief.js';
 import { buildPromptOpening, clockLines, gateRepairPrompt, openingSteps } from './build-prompt-opening.js';
 import { NEW_GAME_CHECKS, requestSourceLines, type Inlined, type KickoffInlined } from './workspace-context.js';
 
@@ -134,6 +135,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
       : "- Audio ids are a fixed catalog: copy from get_kit_api's Audio catalog and never invent one.",
     '- GAME.json must include an engine.modules array; every game needs an EditorKit editor with at least three meaningful tunables or one content collection; stage compiled `EDITOR.json`, `EDITOR.content.json` (v2), and `game/editor-content.ts` before submit. Keep EDITOR.ts local; upload only compiled JSON.',
     '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
+    ...(brief.feedback || brief.gateRepair ? [] : [audioFitLine(shell)]),
     '- The publish gate requires the audio module, so removing it only defers the failure.',
     '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
     '  game is playable, even if you can see things you would rather improve. A delivered rough',

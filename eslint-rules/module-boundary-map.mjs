@@ -525,6 +525,7 @@ const FILE_BUCKET = {
   // route and MCP `start` share -- none is read by the bucket it used to live in.
   'example-files': 'agent-surface',
   'build-prompt': 'agent-surface',
+  'audio-fit-brief': 'agent-surface',
   'build-prompt-opening': 'agent-surface',
   'builder-system-prompt': 'agent-surface',
   'gate-verdict': 'agent-surface',
@@ -558,6 +559,8 @@ const FILE_BUCKET = {
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'stage-audio-hint': 'delivery',
+  'audio-profile': 'delivery',
+  'audio-profile-log': 'delivery',
   'games-store': 'delivery',
   'stored-version-history': 'delivery',
   'storage-write-retry': 'delivery',
