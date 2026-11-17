@@ -30,11 +30,11 @@ it('sends activity through the existing status response only to members', async 
     lastAgentPresence: activity,
     lastAgentSignalAt: activity.at,
   });
-  expect(readAgentActivity).toHaveBeenCalledWith('managed:anthropic', 'session');
+  expect(readAgentActivity).toHaveBeenCalledWith('managed:anthropic', 'session', expect.any(String));
   expect((await store.getSubmission(42))?.lastAgentPresence).toBeUndefined();
   await store.recordDispatch(42, { backend: 'managed:anthropic', ref: 'new-session' });
   await poll('owner');
-  expect(readAgentActivity).toHaveBeenLastCalledWith('managed:anthropic', 'new-session');
+  expect(readAgentActivity).toHaveBeenLastCalledWith('managed:anthropic', 'new-session', expect.any(String));
   readAgentActivity.mockClear();
   await store.markAgentEnded(42);
   await poll('owner');

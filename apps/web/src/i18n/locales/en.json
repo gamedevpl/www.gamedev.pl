@@ -1335,6 +1335,7 @@
       "dispatched": "Starting agent"
     },
     "updatedAgo": "updated {{time}}",
+    "activitySummary": "Activity summary:",
     "presence": {
       "managed_reading_files": "Reading project files…",
       "managed_editing_files": "Writing code…",

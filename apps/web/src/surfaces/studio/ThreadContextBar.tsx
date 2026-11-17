@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { BuildHeartbeat } from './BuildHeartbeat.js';
-import { PRESENCE_THOUGHT_MS } from './presenceThought.js';
+import { PRESENCE_THOUGHT_MS, presenceThoughtLabel } from './presenceThought.js';
 
 // The bar between the thread and the composer: where the work is.
 export function ThreadContextBar({
@@ -15,7 +15,7 @@ export function ThreadContextBar({
 }: {
   phase: string;
   // Fresh MCP presence thought — a short headline flash over the phase.
-  thought?: { key: string; at: number } | null;
+  thought?: { key: string; at: number; text?: string } | null;
   heartbeatAt: number | null;
   progress?: { done: number; total: number };
   primary?: { label: string; onClick: () => void };
@@ -41,11 +41,7 @@ export function ThreadContextBar({
 
   const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
   const thoughtLabel =
-    thoughtFresh && thought
-      ? t(`statusView.presence.${thought.key}`, {
-          defaultValue: '',
-        })
-      : '';
+    thoughtFresh && thought ? presenceThoughtLabel(thought, (key) => t(key, { defaultValue: '' })) : '';
   const headline = thoughtLabel || phase;
   const showingThought = Boolean(thoughtLabel);
 

@@ -1144,7 +1144,8 @@ export async function registerSubmissionRoutes(
   }
 
   const buildStatus = createBuildStatusAssembler({
-    readAgentActivity: async (backend, ref) => (await backendByStoredName(backend)?.readActivity?.(ref)) ?? null,
+    readAgentActivity: async (backend, ref, since) =>
+      (await backendByStoredName(backend)?.readActivity?.(ref, since)) ?? null,
     store,
     gamesStore: options.agentChannel?.gamesStore,
     now,

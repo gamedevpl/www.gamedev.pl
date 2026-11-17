@@ -475,7 +475,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       }
     }
 
-    if (viewerOwns) await attachAgentActivity(next, record, options.readAgentActivity, now);
+    if (viewerOwns) await attachAgentActivity(next, record, options.readAgentActivity, now, locale);
     return finishReceiptStatus(next, record, viewerOwns, trustedReceiptVersion);
   }
 

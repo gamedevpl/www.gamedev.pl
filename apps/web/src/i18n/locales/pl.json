@@ -1345,6 +1345,7 @@
       "dispatched": "Uruchamianie agenta"
     },
     "updatedAgo": "aktualizacja {{time}}",
+    "activitySummary": "Podsumowanie aktywności:",
     "presence": {
       "managed_reading_files": "Czyta pliki projektu…",
       "managed_editing_files": "Pisze kod…",

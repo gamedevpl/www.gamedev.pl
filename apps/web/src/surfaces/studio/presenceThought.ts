@@ -7,11 +7,18 @@ export const PRESENCE_THOUGHT_MS = 90_000;
 export function presenceThought(
   status: SubmissionStatus | null,
   nowMs: number = Date.now(),
-): { key: string; at: number } | null {
+): { key: string; at: number; text?: string } | null {
   const presence = status?.lastAgentPresence;
   if (!presence?.key) return null;
   const at = Date.parse(presence.at);
   const age = nowMs - at;
   if (!Number.isFinite(at) || age < 0 || age > PRESENCE_THOUGHT_MS) return null;
+  const textAt = Date.parse(presence.textAt ?? '');
+  if (presence.text && textAt <= nowMs && nowMs - textAt <= PRESENCE_THOUGHT_MS)
+    return { key: presence.key, at: textAt, text: presence.text };
   return { key: presence.key, at };
+}
+
+export function presenceThoughtLabel(thought: { key: string; text?: string }, t: (key: string) => string): string {
+  return thought.text ? `${t('statusView.activitySummary')} ${thought.text}` : t(`statusView.presence.${thought.key}`);
 }

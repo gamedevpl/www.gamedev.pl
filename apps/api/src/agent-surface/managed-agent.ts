@@ -1,5 +1,6 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
 import { isSettledAgentState, type AgentTaskState } from '../platform/agent-state.js';
+import type { AgentActivity } from './agent-backend.js';
 import type { ManagedWorkspaceArchive } from './managed-workspace.js';
 
 // Coarse reasoning budget; vendors name it differently.
@@ -108,7 +109,7 @@ export interface ManagedAgentProvider {
   deleteSession?(sessionId: string): Promise<void>;
   deleteWorkspace?(workspace: string): Promise<void>;
   releaseCredential?(credentialRef: string): Promise<void>;
-  readActivity?(ref: string): Promise<{ key: string; at: string } | null>;
+  readActivity?(ref: string, since?: string): Promise<AgentActivity | null>;
   // `label` is an opaque per-creator name, never a uid.
   createMemoryStore?(label: string): Promise<string>;
   deleteMemoryStore?(storeId: string): Promise<void>;

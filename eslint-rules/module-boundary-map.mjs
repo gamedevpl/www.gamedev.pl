@@ -528,6 +528,8 @@ const FILE_BUCKET = {
   'build-prompt-opening': 'agent-surface',
   'builder-progress': 'agent-surface',
   'managed-anthropic-activity': 'agent-surface',
+  'managed-activity-evidence': 'agent-surface',
+  'managed-activity-summary': 'agent-surface',
   'status-agent-activity': 'delivery',
   'builder-system-prompt': 'agent-surface',
   'gate-verdict': 'agent-surface',

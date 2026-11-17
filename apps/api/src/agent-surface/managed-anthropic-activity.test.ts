@@ -18,7 +18,10 @@ describe('managed activity through status polling', () => {
     expect(managedActivityFromEvent(event('read'))?.key).toBe('managed_reading_files');
     expect(managedActivityFromEvent(event('PRIVATE'))?.key).toBe('managed_using_tools');
     expect(managedActivityFromEvent({ ...event(), type: 'agent.thinking' })).toBeNull();
-    expect(managedActivityFromEvent({ ...event(), type: 'agent.tool_result', content: 'PRIVATE' })).toBeNull();
+    expect(managedActivityFromEvent({ ...event(), type: 'agent.tool_result', content: 'PRIVATE' })).toEqual({
+      at,
+      key: 'managed_working',
+    });
     expect(managedActivityFromEvent({ ...event(), processed_at: 'bad' })).toBeNull();
     expect(managedActivityFromEvent({ ...event(), type: 'session.status_idle' })?.key).toBe('managed_idle');
   });
@@ -26,7 +29,7 @@ describe('managed activity through status polling', () => {
   it('reads only the latest relevant event and shares concurrent and cached reads', async () => {
     vi.useFakeTimers();
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ data: [event()] }));
-    const read = createAnthropicActivityReader({ apiKey: 'test-key', model: 'test', fetchImpl });
+    const read = createAnthropicActivityReader({ apiKey: 'test-key', model: 'test', fetchImpl }, async () => null);
     const result = await Promise.all([read('session/a'), read('session/a')]);
     expect(result).toEqual([
       { at, key: 'managed_editing_files' },
@@ -37,7 +40,7 @@ describe('managed activity through status polling', () => {
     const url = new URL(String(fetchImpl.mock.calls[0][0]));
     expect(url.pathname).toBe('/v1/sessions/session%2Fa/events');
     expect(url.searchParams.get('order')).toBe('desc');
-    expect(url.searchParams.get('limit')).toBe('1');
+    expect(url.searchParams.get('limit')).toBe('20');
     expect(url.searchParams.getAll('types[]')).toContain('agent.tool_use');
     expect(JSON.stringify(result)).not.toContain('PRIVATE');
     expect(url.href).not.toContain('test-key');
@@ -54,7 +57,7 @@ describe('managed activity through status polling', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(new Response('', { status: 503 }))
       .mockResolvedValueOnce(Response.json({ data: [event('read')] }));
-    const read = createAnthropicActivityReader({ apiKey: 'test-key', model: 'test', fetchImpl });
+    const read = createAnthropicActivityReader({ apiKey: 'test-key', model: 'test', fetchImpl }, async () => null);
     expect(await read('session')).toBeNull();
     vi.advanceTimersByTime(5001);
     expect(await read('session')).toBeNull();

@@ -169,7 +169,7 @@ export interface SubmissionStatusResponseBase {
   // Stable round start, independent of the capped event history.
   roundStartedAt?: string;
   slug?: string;
-  // Preview is green but nothing publishable exists yet; POST :token/seal makes one.
+  // Green preview needs POST :token/seal before publication.
   canSeal?: true;
   // Signal to try loading a draft, not a 200 guarantee.
   preview?: { slug: string };
@@ -180,7 +180,7 @@ export interface SubmissionStatusResponseBase {
   // Last agent activity; advances even with no chat event.
   lastAgentSignalAt?: string;
   // Ambient presence thought — flashed, never a transcript row.
-  lastAgentPresence?: { key: string; at: string };
+  lastAgentPresence?: { key: string; at: string; text?: string; textAt?: string };
   gateProgress?: GateProgress;
   // Pictures of the build, newest first.
   media?: BuildMediaItem[];

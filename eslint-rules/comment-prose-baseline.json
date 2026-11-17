@@ -603,7 +603,6 @@
     "apps/world/src/snapshot-store.ts": 224,
     "packages/contract/src/frame-limiter.ts": 34,
     "packages/contract/src/job-state.ts": 15,
-    "packages/contract/src/submission-status.ts": 13,
     "packages/zone-core/src/cage.test.ts": 720,
     "packages/zone-core/src/cage.ts": 1441,
     "packages/zone-core/src/contract.test.ts": 251,

@@ -1,6 +1,12 @@
 // Vendor-neutral dispatch, observation, cancellation and live activity.
 import type { AgentObservation } from '../creation/job-state.js';
 
+export interface AgentActivity {
+  key: string;
+  at: string;
+  summary?: { at: string; en: string; pl: string };
+}
+
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
@@ -79,7 +85,7 @@ export interface DispatchResult {
 }
 
 export interface AgentBackend {
-  readActivity?(ref: string): Promise<{ key: string; at: string } | null>;
+  readActivity?(ref: string, since?: string): Promise<AgentActivity | null>;
   /** Stable name, recorded on the job so a build's provenance survives a backend switch. */
   readonly name: string;
   readonly shell?: boolean;

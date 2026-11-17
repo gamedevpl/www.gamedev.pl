@@ -486,23 +486,34 @@ no network, and assertions that the credential never reaches a URL.
 
 ## Activity through the existing progress status
 
-Anthropic rounds expose actual tool activity independently of `report_progress`.
-The existing submission status request reads the latest relevant vendor event for
-an active round viewed by a game member. It returns a closed activity vocabulary
-in the existing `lastAgentPresence` and `lastAgentSignalAt` fields: reading files,
-editing files, running a command, using a tool, working, idle, or stopped.
-Tool arguments, output, model messages, and reasoning never reach this status.
+Anthropic rounds expose activity independently of `report_progress`. The existing
+member-only status read fetches at most twenty recent relevant session events with
+a 1.5-second timeout and a shared five-second cache. The current session reference
+and round start bound the read's evidence. Other providers retain their current behavior.
 
-The vendor read requests one event, uses a 1.5-second timeout, and shares concurrent
-reads and a five-second cache per session. Failure leaves ordinary progress intact.
-There is no separate browser connection, background subscriber, or Firestore write.
-Updates arrive at the existing status poll cadence, not as a per-event live trace.
+When new local tool evidence exists, `claude-haiku-5-5` can produce a short English
+and Polish summary in one request using the managed provider's existing credential.
+Thinking is disabled, effort is low, output is capped, and the request times out after
+four seconds. At most twelve recent local tool calls/results and 8,000 serialized
+characters are supplied. Credential patterns are redacted; private-file contents,
+MCP payloads, model messages and reasoning are excluded. Tool results need a matching
+call. The model treats snippets as untrusted data and must cite supplied event IDs.
+Its wording is an interpretation, not an independent verification of success.
 
-Fresh activity replaces stale opening copy and the queued label. Events older than
-90 seconds, from before this round, or older than channel signals are ignored.
-Idle and stopped events suppress the running indicator but do not seal the round.
-`report_progress` still carries authored updates; activity is not a percentage or
-proof of successful delivery. Other providers retain their current progress behavior.
+The per-session/round cache shares in-flight work across viewers. A new summary attempt
+requires new evidence and thirty seconds since the previous attempt; failures consume
+that batch too, so ordinary polls cannot repeatedly charge for the same failed input.
+This cache is process-local and bounded: another instance or a cold start may repeat
+an attempt. Logs record model, outcome, token counts and duration, never evidence or
+summary text. These operational calls are not added to the creator's credit ledger.
+
+The existing `lastAgentPresence` carries optional localized `text` and its evidence
+`textAt`. Welcome and Studio label it as an activity summary. Its timestamp is never
+advanced by generating or rereading it, and it expires after ninety seconds even if
+newer tool activity continues. Newer authored progress takes precedence over an older
+summary. Missing, malformed or failed summaries leave the coarse activity available.
+Idle/stopped sessions suppress both generation and the running indicator without sealing
+the round. There is no new browser connection, background subscriber or Firestore write.
 
 ## Attached Studio play recordings
 
