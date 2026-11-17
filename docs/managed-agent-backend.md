@@ -486,10 +486,16 @@ no network, and assertions that the credential never reaches a URL.
 
 ## Activity through the existing progress status
 
+The status read uses the current round's stored channel signal (including MCP
+`start`) to show that a waiting round has started. This survives reloads, quiet
+periods and provider outages. A new round cannot inherit the previous one's
+signal. A late first dispatch acknowledgement only advances a still-queued job
+of the same generation.
+
 Anthropic rounds expose activity independently of `report_progress`. The existing
 member-only status read fetches at most twenty recent relevant session events with
 a 1.5-second timeout and a shared five-second cache. The current session reference
-and round start bound the read's evidence. Other providers retain their current behavior.
+and round start bound the read's evidence. Providers without session events still use channel signals.
 
 When new local tool evidence exists, `claude-haiku-5-5` can produce a short English
 and Polish summary in one request using the managed provider's existing credential.

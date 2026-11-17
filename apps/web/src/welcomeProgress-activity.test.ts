@@ -22,3 +22,14 @@ it('shows current tool activity over an old opening report, but preserves newer 
   status.lastAgentPresence = { key: 'managed_idle', at };
   expect(welcomeStatusLabel(status, t)).toBe('statusView.presence.managed_idle');
 });
+
+it('does not claim the agent is still joining five minutes after its only signal', () => {
+  const at = new Date(Date.now() - 300_000).toISOString();
+  const status: SubmissionStatus = {
+    status: 'building',
+    phase: 'building',
+    lastAgentSignalAt: at,
+    lastAgentPresence: { key: 'joining_round', at },
+  };
+  expect(welcomeProgressMessage(status, t)).toBe('welcome.agentStarted');
+});

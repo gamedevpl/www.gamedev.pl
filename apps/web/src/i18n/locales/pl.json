@@ -1105,6 +1105,8 @@
     "edit": "Zmień"
   },
   "welcome": {
+    "buildStartedLabel": "Budowa rozpoczęta",
+    "agentStarted": "Agent rozpoczął budowę gry. Kolejna aktualizacja pojawi się tutaj.",
     "dialogLabel": "Twoja gra się zaczyna",
     "stepLabel": "Budowanie",
     "stepLabelReady": "Gotowa do gry",

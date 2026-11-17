@@ -1,4 +1,4 @@
-import { attachAgentActivity, type ReadAgentActivity } from './status-agent-activity.js';
+import { applyRoundStartSignal, attachAgentActivity, type ReadAgentActivity } from './status-agent-activity.js';
 import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
@@ -403,6 +403,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     };
     if (!record) return finishReceiptStatus(next, record, viewerOwns);
     next.roundStartedAt = record.roundStartedAt ?? record.createdAt;
+    applyRoundStartSignal(next, record);
     // Must clear stale keys too — a resumed agent drops agentEndedAt/stall.
     if (record.lastAgentSignalAt) next.lastAgentSignalAt = record.lastAgentSignalAt;
     else delete next.lastAgentSignalAt;

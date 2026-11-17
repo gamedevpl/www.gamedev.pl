@@ -4,6 +4,19 @@ import type { AgentActivity } from '../agent-surface/agent-backend.js';
 
 export type ReadAgentActivity = (backend: string, ref: string, since: string) => Promise<AgentActivity | null>;
 
+export function applyRoundStartSignal(status: SubmissionStatusResponse, record: SubmissionRecord): void {
+  if (
+    status.status === 'queued' &&
+    !record.abandonedAt &&
+    !record.agentEndedAt &&
+    ['queued', 'dispatched', 'building'].includes(record.state ?? 'queued') &&
+    Date.parse(record.lastAgentSignalAt ?? '') >= Date.parse(record.roundStartedAt ?? record.createdAt)
+  ) {
+    status.status = 'building';
+    status.phase = 'building';
+  }
+}
+
 // Activity shares the progress response; it never becomes a chat message.
 export async function attachAgentActivity(
   status: SubmissionStatusResponse,

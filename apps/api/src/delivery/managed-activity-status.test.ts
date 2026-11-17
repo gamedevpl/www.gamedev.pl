@@ -56,3 +56,23 @@ it('ignores stale activity, previous rounds and vendor failures without losing s
   readAgentActivity.mockResolvedValue({ key: 'managed_idle', at: new Date(now).toISOString() });
   expect((await poll('owner')).lastAgentPresence?.key).toBe('managed_idle');
 });
+
+it('remembers a silent start across reloads and provider outages, only for the round that started', async () => {
+  const { store, poll, readAgentActivity } = await setup();
+  readAgentActivity.mockRejectedValue(new Error('offline'));
+  expect((await poll('owner')).status).toBe('queued');
+  const at = new Date().toISOString();
+  await store.touchLastAgentSignalAt(42, at, { key: 'joining_round' }, { roundGeneration: 1 });
+  expect(await poll('owner')).toMatchObject({ status: 'building', phase: 'building', lastAgentSignalAt: at });
+
+  const reloaded = createBuildStatusAssembler({
+    store,
+    now: () => Date.parse(at) + 20 * 60_000,
+    isPresenceEventText: () => false,
+  });
+  const reload = () => reloaded.attachBuildEvents({ status: 'queued', phase: 'dispatched' }, 42, 'en', 'owner');
+  expect(await reload()).toMatchObject({ status: 'building', phase: 'building', stall: 'quiet' });
+  expect(await store.listBuildEvents(42)).toHaveLength(0);
+  await store.bumpRoundGeneration(42);
+  expect((await reload()).status).toBe('queued');
+});

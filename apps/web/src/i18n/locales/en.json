@@ -1095,6 +1095,8 @@
     "edit": "Edit"
   },
   "welcome": {
+    "buildStartedLabel": "Build started",
+    "agentStarted": "The agent started this build. Its next update will appear here.",
     "dialogLabel": "Your game is starting",
     "stepLabel": "Building",
     "stepLabelReady": "Ready to Play",

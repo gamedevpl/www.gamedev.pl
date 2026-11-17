@@ -1,4 +1,5 @@
 import type { SubmissionStatus } from './submissionApi.js';
+import { presenceThought } from './surfaces/studio/presenceThought.js';
 import { welcomeActivityMessage } from './welcomeActivityMessage.js';
 
 export function welcomeProgressMessage(status: SubmissionStatus | null, translate: (key: string) => string): string {
@@ -12,7 +13,7 @@ export function welcomeProgressMessage(status: SubmissionStatus | null, translat
   const note = status.progress?.note?.trim();
   if (note) return note;
 
-  const presenceKey = status.lastAgentPresence?.key;
+  const presenceKey = presenceThought(status)?.key;
   if (presenceKey) {
     const presence = translate(`statusView.presence.${presenceKey}`);
     if (presence && !presence.startsWith('statusView.presence.')) return presence;
@@ -22,6 +23,7 @@ export function welcomeProgressMessage(status: SubmissionStatus | null, translat
     return translate(`statusView.phases.${status.phase}`);
   }
 
+  if (status.phase === 'building' && status.lastAgentSignalAt) return translate('welcome.agentStarted');
   return translate(`statusView.states.${status.status}.description`);
 }
 
@@ -33,5 +35,6 @@ export function welcomeStatusLabel(status: SubmissionStatus | null, translate: (
   if (status.phase === 'dispatched') {
     return translate('statusView.phaseLabels.dispatched');
   }
+  if (status.phase === 'building' && status.lastAgentSignalAt) return translate('welcome.buildStartedLabel');
   return translate(`statusView.states.${status.status}.label`);
 }
