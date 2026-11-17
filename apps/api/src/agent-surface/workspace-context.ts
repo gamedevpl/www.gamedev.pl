@@ -109,8 +109,8 @@ export function requestSourceLines(inlined: KickoffInlined | undefined): string[
   ];
 }
 
-// A new game must play, on a phone too.
+// 2026-11-17: a capture won through a shipped debug key.
 export const NEW_GAME_CHECKS = [
   'A new game must play on a phone: read input through `GameKit.createInput`, whose on-screen pad is on by default, and describe it in `GAME.json`’s `howToPlay.touch`. Turn the pad off only when touch arrives another way (tap play through `input.consumeClick()`, or phones as party controllers): then pass `{ touch: false }` to `createInput` and set `howToPlay.touch` to `false` or to the real touch control, and say so in `end.summary`.',
-  'Before the first preview, give `CAPTURE.json` asserts on the core loop (reaching the goal, winning, losing; the kit’s SKILL.md has the schema) and run the capture after your last edit. Fix what it shows broken, then submit even if polish remains.',
+  'Before the first preview, give `CAPTURE.json` asserts on the core loop (reaching the goal, winning, losing; the kit’s SKILL.md has the schema) and run the capture after your last edit. The capture must reach a win and a loss with the controls a player has: no debug key, cheat or test-only branch may exist in the game, for the capture or otherwise. If a whole match is too long to script, shorten that capture’s match by what the capture schema and the editor’s tunables allow (fewer units, less health). Fix what it shows broken, then submit even if polish remains.',
 ];
