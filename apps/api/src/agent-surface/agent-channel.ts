@@ -1456,6 +1456,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(advisories.audioFitHint ? { audioFitHint: advisories.audioFitHint } : {}),
           ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
@@ -1563,6 +1564,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(advisories.audioFitHint ? { audioFitHint: advisories.audioFitHint } : {}),
           ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
         });
       } catch (error) {
@@ -1732,22 +1734,22 @@ export async function registerAgentChannelRoutes(
               })
             ).typecheckHint
           : undefined;
-        const audioHint = gameJson
-          ? (
-              await stageAdvisories({
-                kitFileStore,
-                gamesStore: options.gamesStore,
-                store: store!,
-                record,
-                slug,
-                jobId,
-                roundGeneration,
-                engineRef: record.roundKitEngineRef,
-                path: gameJson.path,
-                content: gameJson.content,
-              })
-            ).audioHint
+        const gameJsonAdvisories = gameJson
+          ? await stageAdvisories({
+              kitFileStore,
+              gamesStore: options.gamesStore,
+              store: store!,
+              record,
+              slug,
+              jobId,
+              roundGeneration,
+              engineRef: record.roundKitEngineRef,
+              path: gameJson.path,
+              content: gameJson.content,
+            })
           : undefined;
+        const audioHint = gameJsonAdvisories?.audioHint;
+        const audioFitHint = gameJsonAdvisories?.audioFitHint;
 
         const first = files[0]!;
         return reply.send({
@@ -1769,6 +1771,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(typecheckHint ? { typecheckHint } : {}),
           ...(audioHint ? { audioHint } : {}),
+          ...(audioFitHint ? { audioFitHint } : {}),
           ...(stagedBudgetWarning(staged) ? { budgetHint: stagedBudgetWarning(staged)! } : {}),
           ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });

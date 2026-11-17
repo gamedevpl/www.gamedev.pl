@@ -104,6 +104,7 @@ import {
 } from './creation/typecheck-preflight.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
+import { withAudioProfileLog } from './delivery/audio-profile-log.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
 import {
   canTransition,
@@ -1834,7 +1835,7 @@ export async function registerSubmissionRoutes(
           },
         })
       : null;
-  const sourceDelivery =
+  const baseSourceDelivery =
     store && stagedPreviewStore
       ? createSourceDeliveryService({
           store,
@@ -1859,6 +1860,9 @@ export async function registerSubmissionRoutes(
           typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
         })
       : undefined;
+  const sourceDelivery =
+    baseSourceDelivery &&
+    withAudioProfileLog(baseSourceDelivery, { store: store!, kitFileStore: kitFileStoreForDelivery, log: app.log });
 
   const agentSurface: AgentSurfaceSeams = {
     channel: {
