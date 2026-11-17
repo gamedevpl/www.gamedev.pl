@@ -1,18 +1,11 @@
-// The seam every coding-agent backend plugs into.
-//
-// Today there is exactly one way a build gets made: an issue is created, a workflow
-// assigns the Copilot bot, and creator feedback is relayed by a second workflow under a
-// licensed human's PAT. None of that is a *product* decision — it is the shape of one
-// vendor's integration, and it leaks into the submission API, the games repo's workflows,
-// and two more PATs.
-//
-// This interface is where that shape stops. A backend knows how to start work, resume it,
-// observe it and stop it; everything else — the job state machine, the build channel, the
-// gate, the store, review, publication — is backend-agnostic and must stay that way. The
-// test of the seam is Backend B (an SDK agent in a runtime we operate): introducing it
-// should change this file's implementations and nothing else.
-
+// Vendor differences stop here; lifecycle, delivery and publication stay backend-agnostic.
 import type { AgentObservation } from '../creation/job-state.js';
+
+export interface AgentActivity {
+  key: string;
+  at: string;
+  summary?: { at: string; en: string; pl: string };
+}
 
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
@@ -92,6 +85,7 @@ export interface DispatchResult {
 }
 
 export interface AgentBackend {
+  readActivity?(ref: string, since?: string): Promise<AgentActivity | null>;
   /** Stable name, recorded on the job so a build's provenance survives a backend switch. */
   readonly name: string;
   readonly shell?: boolean;

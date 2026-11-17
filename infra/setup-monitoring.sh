@@ -332,6 +332,10 @@ ensure_log_metric moderation_unavailable \
   'Moderation could not decide (credits, timeout, or provider error). Backs alert A35.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND (jsonPayload.msg=\"moderation unavailable\" OR jsonPayload.msg=\"moderation billing exhausted\" OR textPayload:\"Moderation failed or timed out\" OR textPayload:\"moderation billing exhausted\" OR jsonPayload.message:\"Moderation failed or timed out\" OR jsonPayload.message:\"moderation billing exhausted\")"
 
+ensure_log_metric managed_activity_summary_calls \
+  'Haiku activity-summary attempts, including failures; token usage stays in the matching log.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"managed activity summary\""
+
 # knowledge_query calls (KQ-10). The message string is the contract with
 # apps/api/src/knowledge-metrics.ts, asserted from both sides by knowledge-metrics.test.ts.
 # Backs A26 below: a cost-runaway guard on the SEARCH_ADD_ON_LLM generative add-on, which is

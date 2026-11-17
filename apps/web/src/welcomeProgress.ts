@@ -1,39 +1,41 @@
 import type { SubmissionStatus } from './submissionApi.js';
+import { isManagedStop, presenceThought } from './surfaces/studio/presenceThought.js';
+import { silentStart, welcomeActivityMessage } from './welcomeActivityMessage.js';
 
-// Prefer live agent words over canned labels.
 export function welcomeProgressMessage(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
 
-  // Newest-first from API; sort by createdAt if order drifts.
+  if (status.gateProgress) return translate('statusView.phases.gating');
+  if (isManagedStop(status.lastAgentPresence?.key)) return '';
   const latest = [...(status.events ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const activity = welcomeActivityMessage(status, translate);
+  if (activity) return activity;
   if (latest?.text?.trim()) return latest.text.trim();
 
   const note = status.progress?.note?.trim();
   if (note) return note;
 
-  const presenceKey = status.lastAgentPresence?.key;
+  const presenceKey = presenceThought(status)?.key;
   if (presenceKey) {
     const presence = translate(`statusView.presence.${presenceKey}`);
     if (presence && !presence.startsWith('statusView.presence.')) return presence;
   }
 
-  if (status.phase === 'dispatched') {
-    return translate('statusView.phases.dispatched');
-  }
-  if (status.phase === 'submitted') {
-    return translate('statusView.phases.submitted');
-  }
-  if (status.phase === 'ready_for_review') {
-    return translate('statusView.phases.ready_for_review');
+  if (['dispatched', 'submitted', 'ready_for_review'].includes(status.phase ?? '')) {
+    return translate(`statusView.phases.${status.phase}`);
   }
 
+  if (silentStart(status)) return translate('welcome.agentStarted');
   return translate(`statusView.states.${status.status}.description`);
 }
 
 export function welcomeStatusLabel(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
-  if (status.phase === 'dispatched') {
-    return translate('statusView.phaseLabels.dispatched');
+  if (status.gateProgress) return translate(`statusView.gateProgress.${status.gateProgress.stage}`);
+  if (isManagedStop(status.lastAgentPresence?.key)) {
+    return translate(`statusView.presence.${status.lastAgentPresence!.key}`);
   }
+  if (status.phase === 'dispatched') return translate('statusView.phaseLabels.dispatched');
+  if (silentStart(status)) return translate('welcome.buildStartedLabel');
   return translate(`statusView.states.${status.status}.label`);
 }

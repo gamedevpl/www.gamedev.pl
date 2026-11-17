@@ -1105,6 +1105,8 @@
     "edit": "Zmień"
   },
   "welcome": {
+    "buildStartedLabel": "Budowa rozpoczęta",
+    "agentStarted": "Agent rozpoczął budowę gry. Kolejna aktualizacja pojawi się tutaj.",
     "dialogLabel": "Twoja gra się zaczyna",
     "stepLabel": "Budowanie",
     "stepLabelReady": "Gotowa do gry",
@@ -1345,7 +1347,15 @@
       "dispatched": "Uruchamianie agenta"
     },
     "updatedAgo": "aktualizacja {{time}}",
+    "activitySummary": "Podsumowanie aktywności:",
     "presence": {
+      "managed_reading_files": "Czyta pliki projektu…",
+      "managed_editing_files": "Pisze kod…",
+      "managed_running_commands": "Wykonuje polecenie…",
+      "managed_using_tools": "Korzysta z narzędzia…",
+      "managed_working": "Agent pracuje…",
+      "managed_idle": "Agent chwilowo nie pracuje.",
+      "managed_ended": "Sesja agenta została zatrzymana.",
       "joining_round": "Dołączanie do rundy…",
       "reading_brief": "Czytanie briefu…",
       "loading_seed": "Ładowanie szkicu startowego…",

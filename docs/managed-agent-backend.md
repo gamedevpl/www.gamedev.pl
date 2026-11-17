@@ -484,6 +484,64 @@ agent we happen to run.
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.
 
+## Activity through the existing progress status
+
+The status read uses the current round's stored channel signal (including MCP
+`start`) to show that a waiting round has started. This survives reloads, quiet
+periods and provider outages. A new round cannot inherit the previous one's
+signal. A late first dispatch acknowledgement only advances a still-queued job
+of the same generation.
+
+Anthropic rounds expose activity independently of `report_progress`. The existing
+member-only status read fetches at most twenty recent relevant session events with
+a 1.5-second timeout and a shared five-second cache. The current session reference
+and round start bound the read's evidence. Providers without session events still use channel signals.
+
+When new local tool evidence exists, `claude-haiku-5-5` can produce a short English
+and Polish summary in one request using the managed provider's existing credential.
+Thinking is disabled, effort is low, output is capped, and the request times out after
+eight seconds. It runs in the background: status returns coarse activity and any
+still-fresh prior summary without waiting; a later poll sees the new result. A separate
+in-flight guard prevents overlapping summaries. This is best-effort process work, not
+a durable job: a terminated instance can lose it. At most twelve recent local tool
+calls/results and 8,000 serialized characters are supplied. Credential patterns are redacted; private-file contents,
+MCP payloads, model messages and reasoning are excluded. Tool results need a matching
+call. The model treats snippets as untrusted data and must cite supplied event IDs.
+Structured JSON output constrains the response shape; local validation still checks
+lengths and evidence IDs. Empty evidence IDs mean no useful summary. Its wording is
+an interpretation, not an independent verification of success.
+
+The per-session/round cache shares in-flight work across viewers. A new summary attempt
+requires new evidence and thirty seconds since the previous attempt; failures consume
+that batch too, so ordinary polls cannot repeatedly charge for the same failed input.
+This cache is process-local and bounded: another instance or a cold start may repeat
+an attempt. Logs record model, outcome, token counts and duration, never evidence or
+summary text. Outcomes distinguish HTTP errors, refusal, timeout, malformed JSON,
+invalid schema, unsupported evidence and insufficient evidence. The monitoring setup
+defines `managed_activity_summary_calls` alongside other model-call counters; token
+counts in the same logs support usage totals. Applying monitoring configuration is a
+separate deployment step. These operational calls are not added to the creator's
+credit ledger.
+
+The existing `lastAgentPresence` carries optional localized `text` and its evidence
+`textAt`. Welcome and Studio label it as an activity summary. Its timestamp is never
+advanced by generating or rereading it, and it expires after ninety seconds even if
+newer tool activity continues. Newer authored progress takes precedence over an older
+summary. Missing, malformed or failed summaries leave the coarse activity available.
+Idle/stopped sessions suppress both generation and the running indicator without sealing
+the round. There is no new browser connection, background subscriber or Firestore write.
+
+### Events query verification
+
+The official Python SDK's [event list parameters](https://github.com/anthropics/anthropic-sdk-python/blob/3fa305d99c4a1b8017bce15b1f1378a5871ca057/src/anthropic/types/beta/sessions/event_list_params.py)
+explicitly support `order: "asc" | "desc"`, sorted by `processed_at`, with `asc`
+as the default. The activity read sends `order=desc`, `limit=20` and `types[]`.
+In the [live check on 2026-11-17](https://github.com/gamedevpl/www.gamedev.pl/pull/2125#discussion_r4604238357),
+the filtered query returned HTTP 200 in 383 ms. All 20 event IDs matched the newest
+20 of 145 matching events independently read in ascending order, in reverse order.
+A separate live Haiku request using eight events produced valid English and Polish
+summaries with matching evidence IDs in 2,872 ms. These timings are single observations.
+
 ## Attached Studio play recordings
 
 Creators can explicitly attach a frozen journal from Studio gameplay to a managed

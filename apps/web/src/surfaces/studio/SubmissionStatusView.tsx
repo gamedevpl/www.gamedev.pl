@@ -35,7 +35,7 @@ import { FeedbackPanel } from './FeedbackPanel.js';
 import { BuildProgressPanel } from './BuildProgressPanel.js';
 import { buildActivityFeed, type PendingRevision } from './buildActivityFeed.js';
 import { BuildHeartbeat } from './BuildHeartbeat.js';
-import { presenceThought } from './presenceThought.js';
+import { isManagedStop, presenceThought, presenceThoughtLabel } from './presenceThought.js';
 import { ThreadStream } from './ThreadStream.js';
 import { ThreadContextBar } from './ThreadContextBar.js';
 import { AbandonControl } from './AbandonControl.js';
@@ -107,6 +107,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   if (isAwaitingOwnAgent(status)) return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
   if (status.gateProgress) return true;
+  if (isManagedStop(status.lastAgentPresence?.key)) return false;
   if (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt)) return false;
   return true;
 }
@@ -744,7 +745,7 @@ export function SubmissionStatusView({
     const workingThought = gateThought ? null : status && agentWorking ? presenceThought(status) : null;
     const workingThoughtLabel =
       gateThought?.label ||
-      (workingThought != null ? t(`statusView.presence.${workingThought.key}`, { defaultValue: '' }) : '');
+      (workingThought != null ? presenceThoughtLabel(workingThought, (key) => t(key, { defaultValue: '' })) : '');
     const workingPhaseLabel =
       status && agentWorking
         ? gateThought

@@ -1,4 +1,3 @@
-// AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { withoutRetiredPaths } from '@gamedevpl/contract';
 import { endedExplicitlySince, isManagedIdleBlockedOnAction, isUnnudgeableManagedIdleError } from './managed-idle.js';
@@ -220,6 +219,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
   return {
     name: backendName,
+    readActivity: options.provider.readActivity?.bind(options.provider),
     shell: options.provider.shell === true,
 
     seedDelivery(): SeedDelivery {

@@ -1,4 +1,4 @@
-// Anthropic Managed Agents adapter; the only vendor-shaped file.
+import { createAnthropicActivityReader } from './managed-anthropic-activity.js'; // Vendor details stay in adapters.
 import { z } from 'zod';
 import { WEB_TOOLS_OFF } from './managed-tool-filter.js';
 import {
@@ -60,8 +60,7 @@ const VaultCredentialSchema = z.object({
 });
 
 function toSession(parsed: z.infer<typeof SessionSchema>): ManagedSession {
-  const usage = parsed.usage;
-  // Cache reads are input tokens too.
+  const usage = parsed.usage; // Cache reads are input tokens too.
   const inputTokens =
     (usage?.input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0);
   const outputTokens = usage?.output_tokens ?? 0;
@@ -153,6 +152,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
 
   return {
     vendor: ANTHROPIC_VENDOR,
+    readActivity: createAnthropicActivityReader(config),
     model: config.model,
     supportsSeedFiles: false,
     shell: true,

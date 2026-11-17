@@ -1095,6 +1095,8 @@
     "edit": "Edit"
   },
   "welcome": {
+    "buildStartedLabel": "Build started",
+    "agentStarted": "The agent started this build. Its next update will appear here.",
     "dialogLabel": "Your game is starting",
     "stepLabel": "Building",
     "stepLabelReady": "Ready to Play",
@@ -1335,7 +1337,15 @@
       "dispatched": "Starting agent"
     },
     "updatedAgo": "updated {{time}}",
+    "activitySummary": "Activity summary:",
     "presence": {
+      "managed_reading_files": "Reading project files…",
+      "managed_editing_files": "Writing code…",
+      "managed_running_commands": "Running a command…",
+      "managed_using_tools": "Using a tool…",
+      "managed_working": "Agent is working…",
+      "managed_idle": "Agent is currently idle.",
+      "managed_ended": "Agent session has stopped.",
       "joining_round": "Joining the build round…",
       "reading_brief": "Reading the build brief…",
       "loading_seed": "Loading the seed draft…",

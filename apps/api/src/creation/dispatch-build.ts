@@ -204,24 +204,17 @@ export function createDispatcher(deps: DispatcherDeps) {
         });
       }
       await recordSessionCost(input.jobId, result.ref, selected, input.log);
-      // Dispatch is fire-and-forget; a self agent can deliver first.
-
-      // The write does not refuse regressions, so an unconditional one would
-
-      // yank a submitted job back and reopen the double-close hazard.
-
-      // Advance only when the walk allows; refs and cost are durable anyway.
-      const latest = await store.getSubmission(input.jobId);
-      const from = latest?.state ?? 'queued';
-      if (canTransition(from, 'dispatched')) {
-        await store.recordJobTransition(input.jobId, {
+      // A fast agent may already have reported or delivered during dispatch.
+      await store.recordJobTransition(
+        input.jobId,
+        {
           to: 'dispatched',
           at: new Date(now()).toISOString(),
           by: 'system',
           reason: `dispatched_to_${selected.name}`,
-        });
-      }
-      // Otherwise the agent already advanced past dispatch; do not regress.
+        },
+        { state: 'queued', roundGeneration },
+      );
       return true;
     } catch (error) {
       // A failed dispatch leaves the job queued, which the operator queue reports.
