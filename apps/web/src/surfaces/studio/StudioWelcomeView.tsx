@@ -273,7 +273,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
                   progress={status?.progress ?? null}
                   events={status?.events ?? []}
                   loaded={status != null}
-                  dedupeNoteAgainst={progress}
+                  showNote={false}
                 />
               </div>
             ) : null}

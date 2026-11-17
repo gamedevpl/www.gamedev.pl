@@ -18,7 +18,7 @@ it('labels generated activity and expires its text independently of newer tool e
       text: 'Zmieniono teren.',
     },
   };
-  expect(welcomeProgressMessage(status, t)).toBe('statusView.activitySummary Zmieniono teren.');
+  expect(welcomeProgressMessage(status, t)).toBe('Zmieniono teren.');
   expect(presenceThoughtLabel(presenceThought(status)!, t)).toBe('statusView.activitySummary Zmieniono teren.');
   vi.advanceTimersByTime(90_001);
   status.lastAgentPresence!.at = new Date().toISOString();

@@ -5,14 +5,12 @@ import { silentStart, welcomeActivityMessage } from './welcomeActivityMessage.js
 export function welcomeProgressMessage(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
 
-  if (status.gateProgress) return translate('statusView.phases.gating');
-  if (isManagedStop(status.lastAgentPresence?.key)) return '';
   const latest = [...(status.events ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const note = latest?.text?.trim() || status.progress?.note?.trim();
+  if (status.gateProgress) return note || translate('statusView.phases.gating');
+  if (isManagedStop(status.lastAgentPresence?.key)) return note || '';
   const activity = welcomeActivityMessage(status, translate);
   if (activity) return activity;
-  if (latest?.text?.trim()) return latest.text.trim();
-
-  const note = status.progress?.note?.trim();
   if (note) return note;
 
   const presenceKey = presenceThought(status)?.key;

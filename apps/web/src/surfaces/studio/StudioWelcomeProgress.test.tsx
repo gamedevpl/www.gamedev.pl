@@ -60,12 +60,33 @@ describe('StudioWelcomeView progress copy', () => {
     const dialog = await renderWelcome();
     const idle = i18n.t('statusView.presence.managed_idle');
     expect(dialog?.textContent?.split(idle).length).toBe(gate ? 1 : 2);
-    expect(dialog?.querySelector('.studio-details-progress-note')?.textContent).toContain('The level is ready.');
+    expect(dialog?.querySelector('.studio-welcome-progress-message')?.textContent).toBe('The level is ready.');
     expect(Boolean(dialog?.querySelector('.studio-welcome-progress.is-running'))).toBe(gate);
     if (gate)
       expect(dialog?.querySelector('.studio-welcome-progress-label')?.textContent).toContain(
         i18n.t('statusView.gateProgress.typecheck'),
       );
+  });
+
+  it('replaces the old planning note with a single activity update', async () => {
+    const at = new Date().toISOString();
+    getStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      lastAgentPresence: { key: 'managed_editing_files', at, textAt: at, text: 'The agent worked on aiming.' },
+      events: [
+        {
+          id: 'plan',
+          kind: 'step',
+          text: 'Building a turn-based game.',
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+      ],
+    });
+    const dialog = await renderWelcome();
+    expect(dialog?.querySelector('.studio-welcome-progress-message')?.textContent).toBe('The agent worked on aiming.');
+    expect(dialog?.textContent).not.toContain('Building a turn-based game.');
+    expect(dialog?.querySelector('.studio-details-progress-note')).toBeNull();
   });
 
   it('shows an agent message once and leaves no empty checklist divider', async () => {
@@ -104,7 +125,7 @@ describe('StudioWelcomeView progress copy', () => {
     expect(dialog?.textContent).toContain('Make the cube move');
   });
 
-  it('keeps a different note when the headline comes from a newer event', async () => {
+  it('shows the newest update without repeating an older note in the checklist', async () => {
     getStatus.mockResolvedValue({
       status: 'building',
       slug: 'cube-game',
@@ -116,6 +137,6 @@ describe('StudioWelcomeView progress copy', () => {
 
     const dialog = await renderWelcome();
     expect(dialog?.querySelector('.studio-welcome-progress-message')?.textContent).toBe('Adding controls.');
-    expect(dialog?.querySelector('.studio-details-progress-note')?.textContent).toContain('Drawing the board.');
+    expect(dialog?.textContent).not.toContain('Drawing the board.');
   });
 });
