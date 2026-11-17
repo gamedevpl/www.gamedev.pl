@@ -106,9 +106,11 @@ survives the session's model override; the pairing is checked again at session c
 `MANAGED_AGENT_MODEL` more capable than the advisor makes dispatch fail with a 400. A consultation
 is billed at the advisor's rates, counts against the session budget, and is sent the primary
 thread's conversation so far — so its cost grows through the round. The kickoff therefore numbers
-one consultation, for a plan, among the opening steps of a new game, and the system prompt allows
-none later, on a revision or on a gate repair. It has to be a numbered step: with the rule in the
-system prompt alone the builder skipped it under the clock, and with no rule it never consulted. The advice reaches the
+one consultation, for a plan, as the opening step right after the first progress report of a new
+game, and the system prompt allows none later, on a revision or on a gate repair. With the rule in
+the system prompt alone the builder skipped it, and it skipped a numbered step too while that step
+waited on the creator's images and the kickoff framed the time limit as a race; the kickoff now
+calls a long limit a safety net. The advice reaches the
 client as `redacted`, and the usage ledger records the session's tokens under the builder's
 model, advisor tokens included.
 
@@ -353,7 +355,9 @@ from `buildPrompt` follows the same flag:
 `kits/<engineRef>.tgz` (the round's pin, else `kits/current.json`) and the round's base
 sources (the same read as `get_sources`), and the adapter uploads them through the Files API
 as `kit.tgz` and `sources.tgz` file resources, deleting the originals once the session exists.
-The kickoff then gives one unpack-and-`npm ci` command instead of the download steps. When the
+The kickoff then gives one unpack command instead of the download steps; it starts `npm ci` in the
+background and logs its exit code and duration to `/tmp/npm-ci.log`, which the builder checks before
+its first typecheck, because a blocking install once held a round for over three minutes. When the
 kit is unpublished, the read fails, or the vendor refuses the files, the round starts without a
 workspace on the plain shell kickoff. Vendors without `workspaceArchiveDir` never load it.
 

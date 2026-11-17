@@ -50,7 +50,7 @@ const KNOWLEDGE_STEP =
 
 // 2026-11-16: left to the system prompt, this was skipped.
 const ADVISOR_STEP =
-  'Consult your advisor once, after you have looked at the creator’s images: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
+  'Consult your advisor now, before you open any kit or game file: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
 
 // 2026-11-16: the system prompt alone lost to the clock.
 const PROGRESS_POINTS =
@@ -81,5 +81,24 @@ export function openingSteps(
     'Before your first edit, in this order (each step is required and takes seconds; the clock is no reason to skip one):',
     ...steps.map((step, index) => `${index + 1}. ${step}`),
     ...(lane.workspace ? [PROGRESS_POINTS] : []),
+  ];
+}
+
+// 2026-11-17: at 20 minutes the builder still raced.
+export function clockLines(maxSeconds?: number): string[] {
+  const limit = !maxSeconds
+    ? 'a hard time limit'
+    : maxSeconds < 120
+      ? `${Math.floor(maxSeconds)} seconds`
+      : `${Math.floor(maxSeconds / 60)} minutes`;
+  return [
+    '## Time limit',
+    '',
+    `The session is cancelled after ${limit}; without \`submit_sources\` by then it delivers nothing.`,
+    maxSeconds && maxSeconds >= 900
+      ? 'That limit is a safety net, not a pace to keep: a new game takes six to nine minutes and a revision less, so there is time for every step below.'
+      : 'A typical revision takes minutes; the reads below, the creator’s images and a 2D capture take seconds each.',
+    '',
+    'Do not stop to describe what you will do: act through tool calls. Reads come first, edits after.',
   ];
 }

@@ -76,7 +76,9 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain(
       'the kickoff numbers one consultation among its opening steps, and it is required like the others',
     );
-    expect(shell).toContain('before your first source edit. Ask it for a plan');
+    expect(shell).toContain(
+      'right after your opening `report_progress`, before you open any kit or game file. Ask it for a plan',
+    );
     expect(shell).toContain('Do not consult it again in the round, and not at all on a revision or a gate repair');
     expect(builderSystemPrompt({ shell: false })).not.toContain('advisor');
   });
