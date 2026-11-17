@@ -25,7 +25,6 @@ const EVENT_TYPES = [
   'session.status_running',
   'session.status_idle',
   'session.status_terminated',
-  'session.error',
 ];
 
 // Neither arguments, results, model prose nor reasoning leave this adapter.
@@ -51,7 +50,6 @@ export function managedActivityFromEvent(value: unknown): ManagedActivity | null
       key = 'managed_idle';
       break;
     case 'session.status_terminated':
-    case 'session.error':
       key = 'managed_ended';
       break;
     case 'span.model_request_start':
@@ -74,6 +72,7 @@ export function createAnthropicActivityReader(config: ManagedProviderConfig, sum
       until: number;
       pending: boolean;
       value: Promise<ManagedActivity | null>;
+      summarizing: boolean;
       attemptedAt: number;
       through: number;
       summary?: ActivitySummary;
@@ -82,11 +81,13 @@ export function createAnthropicActivityReader(config: ManagedProviderConfig, sum
   return (sessionId: string, since?: string): Promise<ManagedActivity | null> => {
     const key = `${sessionId}:${since ?? ''}`;
     const cached = cache.get(key);
-    if (cached && (cached.pending || cached.until > Date.now())) return cached.value;
+    if (cached && (cached.pending || cached.until > Date.now()))
+      return cached.value.then((activity) => withSummary(activity, cached.summary));
     const entry = cached ?? {
       until: 0,
       pending: false,
       value: Promise.resolve(null),
+      summarizing: false,
       attemptedAt: -Infinity,
       through: -Infinity,
     };
@@ -97,15 +98,15 @@ export function createAnthropicActivityReader(config: ManagedProviderConfig, sum
       .finally(() => {
         entry.pending = false;
       });
-    if (cache.size >= 256) cache.delete(cache.keys().next().value!);
+    if (!cache.has(key) && cache.size >= 256) cache.delete(cache.keys().next().value!);
     cache.set(key, entry);
-    return entry.value;
+    return entry.value.then((activity) => withSummary(activity, entry.summary));
   };
 
   async function readLatest(
     sessionId: string,
     since: string | undefined,
-    entry: { attemptedAt: number; through: number; summary?: ActivitySummary },
+    entry: { summarizing: boolean; attemptedAt: number; through: number; summary?: ActivitySummary },
   ): Promise<ManagedActivity | null> {
     const root = (config.baseUrl ?? 'https://api.anthropic.com').replace(/\/$/, '');
     const query = new URLSearchParams({ beta: 'true', order: 'desc', limit: '20' });
@@ -131,18 +132,30 @@ export function createAnthropicActivityReader(config: ManagedProviderConfig, sum
     const fresh = recent.filter((event) => Date.parse(event.at) > entry.through);
     const contextIds = new Set(fresh.map((event) => event.toolUseId).filter(Boolean));
     const evidence = recent.filter((event) => fresh.includes(event) || contextIds.has(event.id));
-    if (!stopped && evidence.length && Date.now() - entry.attemptedAt >= 30_000) {
+    if (!stopped && !entry.summarizing && evidence.length && Date.now() - entry.attemptedAt >= 30_000) {
       entry.attemptedAt = Date.now();
       entry.through = Math.max(...evidence.map((event) => Date.parse(event.at)));
       // Failed batches are consumed too; polling must not repeat paid failures.
-      const summary = await summarize(config, evidence);
-      if (summary) entry.summary = summary;
+      entry.summarizing = true;
+      void Promise.resolve()
+        .then(() => summarize(config, evidence))
+        .then((summary) => {
+          if (summary) entry.summary = summary;
+        })
+        .catch(() => {})
+        .finally(() => {
+          entry.summarizing = false;
+        });
     }
-    return {
-      ...activity,
-      ...(!stopped && entry.summary && Date.now() - Date.parse(entry.summary.at) <= 90_000
-        ? { summary: entry.summary }
-        : {}),
-    };
+    return activity;
   }
+}
+
+function withSummary(activity: ManagedActivity | null, summary?: ActivitySummary): ManagedActivity | null {
+  if (!activity) return null;
+  const stopped = activity.key === 'managed_idle' || activity.key === 'managed_ended';
+  return {
+    ...activity,
+    ...(!stopped && summary && Date.now() - Date.parse(summary.at) <= 90_000 ? { summary } : {}),
+  };
 }

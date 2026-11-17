@@ -21,7 +21,9 @@ const privatePath = /(?:^|[/\\\s])(?:\.env|\.aws|\.ssh|credentials|secrets?)(?=[
 export function activityExcerpt(text: string, limit = 600): string {
   return text
     .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[redacted]')
-    .replace(/\b(?:sk|ghp|github_pat|xoxb|xoxp)[_-][A-Za-z0-9_-]{10,}/g, '[redacted]')
+    .replace(/\bmcp2_[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)?/g, '[redacted]')
+    .replace(/\b(?:sk|ghp|github_pat|xoxb|xoxp|member1)[_-][A-Za-z0-9_-]{10,}/g, '[redacted]')
+    .replace(/(x-gamedev-stage["']?\s*:\s*)[^\s"'`]+/gi, '$1[redacted]')
     .replace(/\bBearer\s+[^\s"'`]+/gi, 'Bearer [redacted]')
     .replace(
       /((?:api[_-]?key|session[_-]?key|authorization|password|secret|access[_-]?token|token)["']?\s*[:=]\s*)(?:"[^"\n]*"|'[^'\n]*'|[^\s,;}]+)/gi,

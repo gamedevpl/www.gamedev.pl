@@ -1,4 +1,4 @@
-// Vendor-neutral dispatch, observation, cancellation and live activity.
+// Vendor differences stop here; lifecycle, delivery and publication stay backend-agnostic.
 import type { AgentObservation } from '../creation/job-state.js';
 
 export interface AgentActivity {

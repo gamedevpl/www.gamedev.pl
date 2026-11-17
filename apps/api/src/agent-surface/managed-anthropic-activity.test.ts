@@ -18,6 +18,8 @@ describe('managed activity through status polling', () => {
     expect(managedActivityFromEvent(event('read'))?.key).toBe('managed_reading_files');
     expect(managedActivityFromEvent(event('PRIVATE'))?.key).toBe('managed_using_tools');
     expect(managedActivityFromEvent({ ...event(), type: 'agent.thinking' })).toBeNull();
+    expect(managedActivityFromEvent({ ...event(), type: 'session.error' })).toBeNull();
+    expect(managedActivityFromEvent({ ...event(), type: 'session.status_terminated' })?.key).toBe('managed_ended');
     expect(managedActivityFromEvent({ ...event(), type: 'agent.tool_result', content: 'PRIVATE' })).toEqual({
       at,
       key: 'managed_working',
@@ -42,6 +44,7 @@ describe('managed activity through status polling', () => {
     expect(url.searchParams.get('order')).toBe('desc');
     expect(url.searchParams.get('limit')).toBe('20');
     expect(url.searchParams.getAll('types[]')).toContain('agent.tool_use');
+    expect(url.searchParams.getAll('types[]')).not.toContain('session.error');
     expect(JSON.stringify(result)).not.toContain('PRIVATE');
     expect(url.href).not.toContain('test-key');
     vi.advanceTimersByTime(5001);

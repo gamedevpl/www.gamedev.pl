@@ -1437,18 +1437,17 @@ and add a row here.
 
 `progress_stale` sees only MCP calls. A managed shell session can make dozens of
 local reads, writes and checks between its opening report and upload without ever
-receiving the warning. The managed system prompt and kickoff therefore share
-`builder-progress.ts`: another report within 60 seconds or six tool calls (local
-calls included), plus implementation, verification and upload checkpoints. Report
-before a blocking operation and after it returns; finish with `end.summary` after
-the final submit. This is a prompt contract, not a runtime guarantee. Verify actual
-report spacing in session events; passing prompt tests cannot prove compliance.
+receiving the warning. Keep one builder reporting rule: the named checkpoints in
+`build-prompt-opening.ts` and the shell system prompt (first typecheck, each capture,
+before submission). Do not add another wall-clock/tool-count cadence beside it; the server's activity summaries
+cover silent stretches without additional builder MCP calls.
 
 Anthropic tool activity also decorates the existing submission status response through
 `lastAgentPresence`. Keep this on the progress/status path: the site uses Firebase
 Hosting rewrites, so a separate SSE transport can be buffered by the edge. Bound and
-cache the vendor read. Haiku may summarize sanitized recent local tool evidence in
-both languages; label this as generated activity, never authored chat. Preserve the
+cache the vendor read. Never await the summary in a status response: cache its
+background result for a later poll, with a separate in-flight guard. Haiku may
+summarize sanitized recent local tool evidence in both languages; label this as generated activity, never authored chat. Preserve the
 evidence timestamp, consume failed batches, and throttle new attempts independently
 of polling. The cache is per process, not a distributed once-only guarantee. Never
 send MCP credentials, reasoning or private-file contents to the summarizer. Do not

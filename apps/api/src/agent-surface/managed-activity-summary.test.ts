@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { activityEvidence } from './managed-activity-evidence.js';
+import { activityEvidence, activityExcerpt } from './managed-activity-evidence.js';
 import { summarizeActivity } from './managed-activity-summary.js';
 import { createAnthropicActivityReader } from './managed-anthropic-activity.js';
 
@@ -83,7 +84,13 @@ describe('Haiku summaries', () => {
     expect(request).toMatchObject({
       model: 'claude-haiku-5-5',
       thinking: { type: 'disabled' },
-      output_config: { effort: 'low' },
+      output_config: {
+        effort: 'low',
+        format: {
+          type: 'json_schema',
+          schema: { additionalProperties: false, required: ['en', 'pl', 'evidence_ids'] },
+        },
+      },
       max_tokens: 512,
     });
     expect(request.system).toContain('untrusted data');
@@ -91,6 +98,10 @@ describe('Haiku summaries', () => {
     expect(fetchImpl.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
     expect(console.info).toHaveBeenCalledWith(expect.stringContaining('"inputTokens":100'));
     expect(String(vi.mocked(console.info).mock.calls)).not.toContain('terrain');
+    const log = JSON.parse(String(vi.mocked(console.info).mock.calls[0][0]));
+    const monitoring = readFileSync(new URL('../../../../infra/setup-monitoring.sh', import.meta.url), 'utf8');
+    expect(monitoring).toContain('ensure_log_metric managed_activity_summary_calls');
+    expect(monitoring).toContain(`jsonPayload.msg=\\"${log.msg}\\"`);
   });
 
   it.each([
@@ -113,7 +124,8 @@ describe('shared summary cadence', () => {
     const summarize = vi.fn().mockResolvedValueOnce(summary).mockResolvedValue(null);
     const read = createAnthropicActivityReader(config(fetchImpl), summarize);
     const [a, b] = await Promise.all([read('session'), read('session')]);
-    expect(a?.summary).toEqual(summary);
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await read('session'))?.summary).toEqual(summary);
     expect(b).toEqual(a);
     expect(summarize).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -132,7 +144,7 @@ describe('shared summary cadence', () => {
     expect(summarize).toHaveBeenCalledTimes(2);
   });
 
-  it('does not summarize idle sessions or reenter an in-flight summary', async () => {
+  it('returns status before Haiku resolves and exposes completion on the next cached poll', async () => {
     let finish!: (value: typeof summary) => void;
     const summarize = vi.fn().mockImplementation(
       () =>
@@ -143,16 +155,67 @@ describe('shared summary cadence', () => {
     let events: unknown[] = [tool()];
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ data: events }));
     const read = createAnthropicActivityReader(config(fetchImpl), summarize);
-    const first = read('session');
-    await vi.waitFor(() => expect(summarize).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(6000);
-    const second = read('session');
+    expect(await read('session')).toEqual({ at, key: 'managed_editing_files' });
+    expect(await read('session')).toEqual({ at, key: 'managed_editing_files' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(31_000);
+    events = [tool('two', new Date().toISOString())];
+    expect((await read('session'))?.summary).toBeUndefined();
+    expect(summarize).toHaveBeenCalledTimes(1);
     finish(summary);
-    await Promise.all([first, second]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await read('session'))?.summary).toEqual(summary);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
     events = [{ ...tool('idle', new Date().toISOString()), type: 'session.status_idle' }, tool()];
     await vi.advanceTimersByTimeAsync(5001);
     expect((await read('session'))?.summary).toBeUndefined();
     expect(summarize).toHaveBeenCalledTimes(1);
   });
+
+  it('retains attempt history when refreshing a full cache', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ data: [tool()] }));
+    const summarize = vi.fn().mockResolvedValue(null);
+    const read = createAnthropicActivityReader(config(fetchImpl), summarize);
+    for (let i = 0; i < 256; i++) await read(String(i));
+    await vi.advanceTimersByTimeAsync(6000);
+    await read('255');
+    await read('0');
+    expect(summarize).toHaveBeenCalledTimes(256);
+  });
+
+  it('keeps activity available after a background rejection without retrying consumed evidence', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ data: [tool()] }));
+    const summarize = vi.fn().mockRejectedValue(new Error('unavailable'));
+    const read = createAnthropicActivityReader(config(fetchImpl), summarize);
+    expect((await read('session'))?.key).toBe('managed_editing_files');
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect((await read('session'))?.key).toBe('managed_editing_files');
+    expect(summarize).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('redacts bare platform capabilities and the staging header before truncation', () => {
+  for (const value of ['mcp2_Abcdef0123456789.Signature0123456789', 'member1_Abcdef0123456789']) {
+    expect(activityExcerpt(`KEY=${value} node s.js`)).toBe('KEY=[redacted] node s.js');
+    expect(activityExcerpt(value, 8)).toBe('[redacte');
+  }
+  expect(activityExcerpt('curl -H "x-gamedev-stage: abc123456789"')).not.toContain('abc123456789');
+});
+
+it.each([
+  [Response.json({}, { status: 429 }), 'http_error'],
+  [Response.json({ stop_reason: 'refusal' }), 'refusal'],
+  [Response.json({ stop_reason: 'max_tokens' }), 'incomplete'],
+  [Response.json({ stop_reason: 'end_turn', content: [{ type: 'text', text: '```json\n{}\n```' }] }), 'invalid_json'],
+  [
+    Response.json({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '{"en":"","pl":"","evidence_ids":[]}' }],
+    }),
+    'insufficient_evidence',
+  ],
+])('distinguishes model failure outcomes without logging payloads', async (response, outcome) => {
+  const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response);
+  expect(await summarizeActivity(config(fetchImpl), activityEvidence([tool()]))).toBeNull();
+  expect(console.info).toHaveBeenCalledWith(expect.stringContaining(`"outcome":"${outcome}"`));
 });

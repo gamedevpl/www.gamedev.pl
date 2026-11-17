@@ -526,7 +526,6 @@ const FILE_BUCKET = {
   'example-files': 'agent-surface',
   'build-prompt': 'agent-surface',
   'build-prompt-opening': 'agent-surface',
-  'builder-progress': 'agent-surface',
   'managed-anthropic-activity': 'agent-surface',
   'managed-activity-evidence': 'agent-surface',
   'managed-activity-summary': 'agent-surface',

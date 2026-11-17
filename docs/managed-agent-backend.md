@@ -494,18 +494,28 @@ and round start bound the read's evidence. Other providers retain their current 
 When new local tool evidence exists, `claude-haiku-5-5` can produce a short English
 and Polish summary in one request using the managed provider's existing credential.
 Thinking is disabled, effort is low, output is capped, and the request times out after
-four seconds. At most twelve recent local tool calls/results and 8,000 serialized
-characters are supplied. Credential patterns are redacted; private-file contents,
+four seconds. It runs in the background: status returns coarse activity and any
+still-fresh prior summary without waiting; a later poll sees the new result. A separate
+in-flight guard prevents overlapping summaries. This is best-effort process work, not
+a durable job: a terminated instance can lose it. At most twelve recent local tool
+calls/results and 8,000 serialized characters are supplied. Credential patterns are redacted; private-file contents,
 MCP payloads, model messages and reasoning are excluded. Tool results need a matching
 call. The model treats snippets as untrusted data and must cite supplied event IDs.
-Its wording is an interpretation, not an independent verification of success.
+Structured JSON output constrains the response shape; local validation still checks
+lengths and evidence IDs. Empty evidence IDs mean no useful summary. Its wording is
+an interpretation, not an independent verification of success.
 
 The per-session/round cache shares in-flight work across viewers. A new summary attempt
 requires new evidence and thirty seconds since the previous attempt; failures consume
 that batch too, so ordinary polls cannot repeatedly charge for the same failed input.
 This cache is process-local and bounded: another instance or a cold start may repeat
 an attempt. Logs record model, outcome, token counts and duration, never evidence or
-summary text. These operational calls are not added to the creator's credit ledger.
+summary text. Outcomes distinguish HTTP errors, refusal, timeout, malformed JSON,
+invalid schema, unsupported evidence and insufficient evidence. The monitoring setup
+defines `managed_activity_summary_calls` alongside other model-call counters; token
+counts in the same logs support usage totals. Applying monitoring configuration is a
+separate deployment step. These operational calls are not added to the creator's
+credit ledger.
 
 The existing `lastAgentPresence` carries optional localized `text` and its evidence
 `textAt`. Welcome and Studio label it as an activity summary. Its timestamp is never
@@ -514,6 +524,19 @@ newer tool activity continues. Newer authored progress takes precedence over an 
 summary. Missing, malformed or failed summaries leave the coarse activity available.
 Idle/stopped sessions suppress both generation and the running indicator without sealing
 the round. There is no new browser connection, background subscriber or Firestore write.
+
+### Events query verification
+
+The official Python SDK's [event list parameters](https://github.com/anthropics/anthropic-sdk-python/blob/3fa305d99c4a1b8017bce15b1f1378a5871ca057/src/anthropic/types/beta/sessions/event_list_params.py)
+explicitly support `order: "asc" | "desc"`, sorted by `processed_at`, with `asc`
+as the default. The activity read sends `order=desc`, `limit=20` and `types[]`.
+This source was checked on 2026-11-17; it verifies the documented contract, not a
+live endpoint response. The exported session verifies event shapes and result IDs,
+not which page this query selects. A live-session check remains outstanding because
+the development workspace has no Anthropic credential. Before merge, run the exact
+query against a session with more than twenty matching events and compare its first
+and last timestamps with the session's newest events. Do not call a hand-sliced export
+a captured endpoint fixture.
 
 ## Attached Studio play recordings
 
