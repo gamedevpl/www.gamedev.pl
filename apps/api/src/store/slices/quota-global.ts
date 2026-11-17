@@ -54,6 +54,17 @@ export interface GlobalQuotaStore {
   // Reconciles a reservation against usage; never refused, floors at 0.
   adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number>;
 
+  // Site-mascot tokens everyone together has spent on `dateStr`.
+  getGlobalAssistantTokenCount(dateStr: string): Promise<number>;
+
+  // Same reserve-then-reconcile pair, for the site mascot's server model.
+  checkAndIncrementGlobalAssistantTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }>;
+  adjustGlobalAssistantTokens(dateStr: string, delta: number): Promise<number>;
+
   // Paid query embeddings everyone together has spent on `dateStr`.
   getGlobalSearchEmbeddingCount(dateStr: string): Promise<number>;
 
@@ -80,6 +91,7 @@ export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
   private globalChats = new Map<string, number>();
   private globalManagedBuilds = new Map<string, number>();
   private globalTabCompleteTokens = new Map<string, number>();
+  private globalAssistantTokens = new Map<string, number>();
   private globalSearchEmbeddings = new Map<string, number>();
   private globalOptionImages = new Map<string, number>();
   private globalGateRuns = new Map<string, number>();
@@ -203,6 +215,32 @@ export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
     const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
     const next = Math.max(0, current + delta);
     this.globalTabCompleteTokens.set(dateStr, next);
+    return next;
+  }
+
+  async getGlobalAssistantTokenCount(dateStr: string): Promise<number> {
+    return this.globalAssistantTokens.get(dateStr) ?? 0;
+  }
+
+  async checkAndIncrementGlobalAssistantTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalAssistantTokens.get(dateStr) ?? 0;
+    const next = current + tokens;
+    // Refuse a reservation that would itself cross the cap.
+    if (next > limit) {
+      return { allowed: false, current };
+    }
+    this.globalAssistantTokens.set(dateStr, next);
+    return { allowed: true, current: next };
+  }
+
+  async adjustGlobalAssistantTokens(dateStr: string, delta: number): Promise<number> {
+    const current = this.globalAssistantTokens.get(dateStr) ?? 0;
+    const next = Math.max(0, current + delta);
+    this.globalAssistantTokens.set(dateStr, next);
     return next;
   }
 
@@ -444,6 +482,46 @@ export class FirestoreGlobalQuotaStore implements GlobalQuotaStore {
       const current = typeof value === 'number' ? value : 0;
       const next = Math.max(0, current + delta);
       transaction.set(ref, { tabCompleteTokens: next }, { merge: true });
+      return next;
+    });
+  }
+
+  async getGlobalAssistantTokenCount(dateStr: string): Promise<number> {
+    const snap = await this.globalUsageRef(dateStr).get();
+    const value = snap.data()?.assistantTokens;
+    return typeof value === 'number' ? value : 0;
+  }
+
+  async checkAndIncrementGlobalAssistantTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.assistantTokens;
+      const current = typeof value === 'number' ? value : 0;
+      const nextVal = current + tokens;
+
+      // Refuse a reservation that would itself cross the cap.
+      if (nextVal > limit) {
+        return { allowed: false, current };
+      }
+
+      transaction.set(ref, { assistantTokens: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async adjustGlobalAssistantTokens(dateStr: string, delta: number): Promise<number> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.assistantTokens;
+      const current = typeof value === 'number' ? value : 0;
+      const next = Math.max(0, current + delta);
+      transaction.set(ref, { assistantTokens: next }, { merge: true });
       return next;
     });
   }

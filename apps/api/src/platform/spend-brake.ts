@@ -13,6 +13,8 @@ const PAUSEABLE = {
   editing: { editingPaused: true },
   chat: { chatPaused: true },
   tabComplete: { tabCompletePaused: true },
+  // The site mascot: optional, so it rests early.
+  assistant: { assistantPaused: true },
   search: { searchPaused: true },
   gate: { gatePaused: true },
   seeding: { seedingMode: 'off' },
@@ -80,8 +82,8 @@ export interface BrakeNotification {
 // Graded by how far over: the agent first, the pennies last.
 export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
   if (spent >= 1.5) return Object.keys(PAUSEABLE) as PauseableLane[];
-  if (spent >= 1.25) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture', 'video', 'media'];
-  if (spent >= 1) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture'];
+  if (spent >= 1.25) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture', 'assistant', 'video', 'media'];
+  if (spent >= 1) return ['managed', 'seeding', 'dreams', 'gate', 'remoteCapture', 'assistant'];
   if (forecast >= 1) return ['managed'];
   return [];
 }

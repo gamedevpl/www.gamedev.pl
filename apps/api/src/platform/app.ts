@@ -44,6 +44,7 @@ import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notif
 import { createFollowerFanout } from '../notifications/game-follow-notify.js';
 import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
+import { registerSiteAssistantRoutes, type SiteAssistantRoutesOptions } from '../community/site-assistant.js';
 import { registerTextProposalRoutes } from '../community/proposal-text-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
@@ -169,6 +170,8 @@ export interface BuildAppOptions {
   editorAssistant?: EditorAssistant;
   // Ghost-text completer (TA-01). Defaults to Vertex; stubbed in tests.
   tabCompleter?: TabCompleter;
+  // The site mascot's model and limits; tests pass fakes.
+  siteAssistant?: Partial<Omit<SiteAssistantRoutesOptions, 'store' | 'sessionSecret'>>;
   multiplayerRoutes?: MultiplayerRoutesOptions;
   /** Seams for play-session telemetry; defaults to a live catalog-backed slug gate. */
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
@@ -1063,6 +1066,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
   const oauthSessionSecret = configuredSessionSecret ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
+  registerSiteAssistantRoutes(app, { store, sessionSecret: oauthSessionSecret, ...options.siteAssistant });
   registerOAuthAuthorizationServerRoutes(app, {
     store,
     sessionSecret: oauthSessionSecret,

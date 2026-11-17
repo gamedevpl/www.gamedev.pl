@@ -46,6 +46,7 @@ export function emptyUsageCounters(): UsageCounters {
     chats: 0,
     managedBuilds: 0,
     tabCompletes: 0,
+    assistantPrompts: 0,
     searchQueries: 0,
     worldWrites: 0,
     optionImages: 0,
@@ -151,6 +152,11 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailyChatCap
           : (this.creationLimits?.globalDailyChatCap ?? null),
       tabCompletePaused: patch.tabCompletePaused ?? this.creationLimits?.tabCompletePaused ?? false,
+      assistantPaused: patch.assistantPaused ?? this.creationLimits?.assistantPaused ?? false,
+      globalDailyAssistantTokenCap:
+        patch.globalDailyAssistantTokenCap !== undefined
+          ? patch.globalDailyAssistantTokenCap
+          : (this.creationLimits?.globalDailyAssistantTokenCap ?? null),
       searchPaused: patch.searchPaused ?? this.creationLimits?.searchPaused ?? false,
       gatePaused: patch.gatePaused ?? this.creationLimits?.gatePaused ?? false,
       globalDailyGateRunCap:
@@ -320,6 +326,9 @@ export class FirestoreQuotaStore implements QuotaStore {
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
       tabCompletePaused: data?.tabCompletePaused === true,
+      assistantPaused: data?.assistantPaused === true,
+      globalDailyAssistantTokenCap:
+        typeof data?.globalDailyAssistantTokenCap === 'number' ? data.globalDailyAssistantTokenCap : null,
       globalDailyTabCompleteTokenCap:
         typeof data?.globalDailyTabCompleteTokenCap === 'number' ? data.globalDailyTabCompleteTokenCap : null,
       searchPaused: data?.searchPaused === true,
@@ -380,6 +389,11 @@ export class FirestoreQuotaStore implements QuotaStore {
         globalDailyChatCap:
           patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
         tabCompletePaused: patch.tabCompletePaused ?? existing.tabCompletePaused ?? false,
+        assistantPaused: patch.assistantPaused ?? existing.assistantPaused ?? false,
+        globalDailyAssistantTokenCap:
+          patch.globalDailyAssistantTokenCap !== undefined
+            ? patch.globalDailyAssistantTokenCap
+            : (existing.globalDailyAssistantTokenCap ?? null),
         searchPaused: patch.searchPaused ?? existing.searchPaused ?? false,
         gatePaused: patch.gatePaused ?? existing.gatePaused ?? false,
         globalDailyGateRunCap:

@@ -296,6 +296,8 @@ jobs:
           SEED_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_PICK_MAX_OUTPUT_TOKENS }}
           SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
           SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
+          SITE_ASSISTANT: ${{ vars.SITE_ASSISTANT }}
+          SITE_ASSISTANT_MODEL: ${{ vars.SITE_ASSISTANT_MODEL }}
           TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
           LOCAL_TAB_COMPLETE: ${{ vars.LOCAL_TAB_COMPLETE || 'true' }}
           TELEMETRY_BACKEND: ${{ vars.TELEMETRY_BACKEND }}
@@ -500,6 +502,15 @@ jobs:
           fi
           if [ -n "$TAB_COMPLETE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
+          fi
+
+          # The site mascot's server model: off unless set, like TAB_COMPLETE above.
+          SITE_ASSISTANT_VAL="${SITE_ASSISTANT}"
+          if [ -n "$SITE_ASSISTANT_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|SITE_ASSISTANT=${SITE_ASSISTANT_VAL}"
+          fi
+          if [ -n "$SITE_ASSISTANT_MODEL" ]; then
+            ENV_VARS="${ENV_VARS}|SITE_ASSISTANT_MODEL=${SITE_ASSISTANT_MODEL}"
           fi
 
           # Where raw play and visit telemetry live: unset is Firestore, "dual" writes
