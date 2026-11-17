@@ -48,5 +48,10 @@ it('keeps a fresh checkpoint over a later coarse pulse, then allows a supported 
   expect(welcomeStatusLabel(status, t)).toBe('statusView.states.building.label');
   expect(welcomeProgressMessage(status, t)).toBe('The controls work.');
   status.lastAgentPresence = { ...status.lastAgentPresence!, text: 'Edited the map.', textAt: at };
-  expect(welcomeProgressMessage(status, t)).toBe('statusView.activitySummary Edited the map.');
+  expect(welcomeProgressMessage(status, t)).toBe('The controls work.');
+  status.events![0].createdAt = new Date(Date.now() - 31_000).toISOString();
+  expect(welcomeProgressMessage(status, t)).toBe('Edited the map.');
+  status.events![0].text = 'The bridge is ready.';
+  status.events![0].createdAt = new Date().toISOString();
+  expect(welcomeProgressMessage(status, t)).toBe('The bridge is ready.');
 });

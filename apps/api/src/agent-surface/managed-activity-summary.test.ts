@@ -105,6 +105,19 @@ describe('Haiku summaries', () => {
   });
 
   it.each([
+    {
+      stop_reason: 'end_turn',
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            en: 'The agent worked on aiming.',
+            pl: 'Agent ' + 'czytał '.repeat(12),
+            evidence_ids: ['one'],
+          }),
+        },
+      ],
+    },
     { stop_reason: 'max_tokens', content: [] },
     { stop_reason: 'end_turn', content: [{ type: 'text', text: 'not json' }] },
     {

@@ -9,7 +9,7 @@ export function BuildProgressChecklist({
   events,
   loaded,
   emptyLabel,
-  dedupeNoteAgainst,
+  showNote = true,
 }: {
   progress: BuildProgress | null;
   events: BuildEvent[];
@@ -17,8 +17,7 @@ export function BuildProgressChecklist({
   loaded: boolean;
   // Empty-state label for when there's no checklist or note yet.
   emptyLabel?: string;
-  // A parent may already show this line as its headline.
-  dedupeNoteAgainst?: string;
+  showNote?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -27,8 +26,7 @@ export function BuildProgressChecklist({
   const doneCount = reported?.done ?? checklist.filter((item) => item.checked).length;
   const totalCount = reported?.total ?? checklist.length;
   // Native rounds lack a checklist — the agent's note is the signal.
-  const rawNote = events[0]?.text ?? progress?.note;
-  const note = rawNote?.trim() === dedupeNoteAgainst?.trim() ? null : rawNote;
+  const note = showNote ? (events[0]?.text ?? progress?.note) : null;
   const currentStep = checklist.find((item) => !item.checked);
 
   if (totalCount === 0 && !note) {

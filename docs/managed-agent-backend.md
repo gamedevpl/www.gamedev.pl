@@ -524,7 +524,7 @@ separate deployment step. These operational calls are not added to the creator's
 credit ledger.
 
 The existing `lastAgentPresence` carries optional localized `text` and its evidence
-`textAt`. Welcome and Studio label it as an activity summary. Its timestamp is never
+`textAt`. Studio labels generated summaries. Welcome shows one update: a creator-facing report for at least 30 seconds, then newer observed activity if available. Summaries use plain language (at most 12 words per language). Its timestamp is never
 advanced by generating or rereading it, and it expires after ninety seconds even if
 newer tool activity continues. Newer authored progress takes precedence over an older
 summary. Missing, malformed or failed summaries leave the coarse activity available.

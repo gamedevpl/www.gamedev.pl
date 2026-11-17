@@ -6,8 +6,8 @@ export function welcomeActivityMessage(status: SubmissionStatus, t: (key: string
   const latest = Math.max(0, ...(status.events ?? []).map((event) => Date.parse(event.createdAt)));
   if (!live?.key.startsWith('managed_') || isManagedStop(live.key)) return null;
   const thought = presenceThought(status);
-  if (!thought || thought.at < latest || (!thought.text && Date.now() - latest < 30_000)) return null;
-  return presenceThoughtLabel(thought, t);
+  if (!thought || thought.at < latest || Date.now() - latest < 30_000) return null;
+  return thought.text ?? presenceThoughtLabel(thought, t);
 }
 
 export function silentStart(status: SubmissionStatus): boolean {
