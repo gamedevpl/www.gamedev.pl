@@ -120,16 +120,20 @@ export function registerSiteAssistantRoutes(app: FastifyInstance, options: SiteA
   const promptQuota = () => resolveDailyAssistantPromptQuota(options.dailyPromptQuota);
 
   // Admits the request, or answers it and returns undefined.
-  function admit(request: FastifyRequest, reply: FastifyReply): AgentBackend | undefined {
+  function admit(request: FastifyRequest, reply: FastifyReply, infoProbe = false): AgentBackend | undefined {
     reply.header('cache-control', 'no-store');
     const ready = siteAssistantEnabled() ? getBackend() : null;
-    if (!ready) {
+    if (!ready && !infoProbe) {
       reply.status(404).send({ error: 'not found' });
       return undefined;
     }
     if (!checkUserAccess(request, reply)) return undefined;
     if (!sessionWriteAllowed(request)) {
       reply.status(403).send({ error: 'cross-site request refused' });
+      return undefined;
+    }
+    if (!ready) {
+      reply.send({ name: 'gamedev.pl', inputs: [], available: false, enabled: false });
       return undefined;
     }
     return ready;
@@ -157,7 +161,7 @@ export function registerSiteAssistantRoutes(app: FastifyInstance, options: SiteA
   }
 
   app.get(`${SITE_ASSISTANT_BASE_PATH}/info`, async (request, reply) => {
-    const ready = admit(request, reply);
+    const ready = admit(request, reply, true);
     if (!ready) return reply;
     const response = await forward(ready, request, reply, '/info');
     const info = (await response.json()) as Record<string, unknown>;
