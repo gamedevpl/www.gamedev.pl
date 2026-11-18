@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BuildBrief } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
 import { InMemoryStore } from '../platform/store.js';
-import { inlinedBy, kickoffContextLines, loadKickoffContext } from './workspace-context.js';
+import { inlinedBy, kickoffContextLines, loadKickoffContext, NEW_GAME_CHECKS } from './workspace-context.js';
 
 const BRIEF = {
   jobId: 3,
@@ -77,5 +77,13 @@ describe('kickoff context', () => {
       'none',
     );
     expect(inlinedBy(long)).toMatchObject({ inbox: false, messages: false });
+  });
+
+  // 2026-11-18: one capture script cannot both win and lose.
+  it('asks the capture for the win and a separate plan for the loss', () => {
+    const checks = NEW_GAME_CHECKS.join(' ');
+    expect(checks).toContain('must reach the win `ACCEPTANCE.json` names');
+    expect(checks).not.toContain('a win and a loss');
+    expect(checks).toContain('check the loss with a second short plan');
   });
 });

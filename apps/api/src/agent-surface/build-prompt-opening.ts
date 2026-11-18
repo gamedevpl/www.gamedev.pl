@@ -50,7 +50,7 @@ const KNOWLEDGE_STEP =
 
 // 2026-11-16: left to the system prompt, this was skipped.
 const ADVISOR_STEP =
-  'Consult your advisor now, before you open any kit or game file: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
+  'Consult your advisor now, before you open any kit or game file: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and how to check losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
 
 // 2026-11-17: the advisor planned before seeing references.
 const REFERENCES_STEP = '`read` every mounted reference image, so the advisor plans the look you were shown.';
