@@ -104,7 +104,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          ...openingSteps(brief, { workspace: Boolean(workspace), mountedSources: Boolean(mountedSources), inlined }),
+          ...openingSteps(brief, lane),
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
     ...(mountedSources || inlined?.noFiles ? [] : GET_SOURCES),
