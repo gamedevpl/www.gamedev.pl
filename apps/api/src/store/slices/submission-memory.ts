@@ -1,5 +1,5 @@
 import { assertAgentRound } from './agent-round-write.js';
-import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import { permitsRecoveryClaim, isAbandonedRecovery, isOwnerArchived } from './recovery-admission.js';
 import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
@@ -105,7 +105,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const publication = await this.publication?.getPublication(slug);
     if (this.blocked(slug)) return false;
     if (!permitsRecoveryClaim(this.recoveryAdmissions.get(slug), recovery?.admissionNonce)) return false;
-    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    const archived = isOwnerArchived(publication);
     if (publication && !(sourceJobId !== null && archived)) return false;
     const target = this.submissions.get(jobId);
     const records = [...this.submissions.values()].filter((r) => r.slug === slug);

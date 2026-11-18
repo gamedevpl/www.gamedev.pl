@@ -11,6 +11,20 @@ for (const [name, make] of [
   ['memory', () => new InMemoryStore()],
   ['firestore', () => new FirestoreStore(fakeFirestore().db)],
 ] as const) {
+  it(name + ' cancels a pending transfer atomically and refuses subsequent offers', async () => {
+    const store = make();
+    await store.ensureGameAccess(slug, uid, at, at);
+    const revision = (await store.getGameAccess(slug))!.accessRevision;
+    const recipient = 'g:recipient';
+    await store.createGameTransferInvitation(slug, uid, recipient, revision, at);
+    const offer = (await store.getActiveGameTransfer(slug, at))!;
+    expect(offer.status).toBe('pending');
+    await store.gameTrash.change(slug, uid, 'trash', at);
+    expect((await store.getActiveGameTransfer(slug, at))?.status).toBe('cancelled');
+    expect(await store.acceptGameTransferInvitation(slug, recipient, at, offer.invitationId)).toBeNull();
+    expect(await store.createGameTransferInvitation(slug, uid, recipient, revision, at)).toBe('stale_owner');
+    expect((await store.getGameAccess(slug))?.ownerUid).toBe(uid);
+  });
   it(name + ' guards every round and keeps the original purge deadline on retries', async () => {
     const store = make();
     for (const id of [1, 2]) {

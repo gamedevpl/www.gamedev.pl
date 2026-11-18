@@ -122,6 +122,11 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
     this.submissions,
     this.publicationStore.publications,
     (slug) => this.gameAccessStore.access.get(slug)?.ownerUid,
+    (slug, at) => {
+      const transfers = this.gameTransferStore.transfers;
+      const offer = transfers.get(slug);
+      if (offer?.status === 'pending') transfers.set(slug, { ...offer, status: 'cancelled', respondedAt: at });
+    },
     (slug) => {
       this.gameAccessStore.access.delete(slug);
       this.gameAdmissionStore.gameAgentKeys.delete(slug);
@@ -136,7 +141,7 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
   );
   protected gameTransferStore = new InMemoryGameTransferStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
-    (slug) => this.gameAccessStore.access.get(slug) ?? null,
+    (slug) => (this.gameTrash.blocked(slug) ? null : (this.gameAccessStore.access.get(slug) ?? null)),
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
     (slug, record) => this.gameAccessStore.access.set(slug, record),

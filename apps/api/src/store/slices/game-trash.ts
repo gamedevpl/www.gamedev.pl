@@ -70,6 +70,9 @@ export class FirestoreGameTrash implements GameTrashStore {
         records.some((row) => !row.abandonedAt && !!row.draftSharedAt),
       );
       if (action === 'trash') {
+        const invitation = this.db.collection('gameTransfers').doc(slug);
+        if ((await tx.get(invitation)).data()?.status === 'pending')
+          tx.update(invitation, { status: 'cancelled', respondedAt: at });
         tx.set(game, { trash: entry(slug, uid, at) }, { merge: true });
       } else {
         tx.update(game, {
@@ -134,6 +137,7 @@ export class MemoryGameTrash implements GameTrashStore {
     private rounds: Map<number, SubmissionRecord>,
     private publications: Map<string, PublicationRecord>,
     private owner: (slug: string) => string | undefined,
+    private cancelTransfer: (slug: string, at: string) => void,
     private forgetAccess: (slug: string) => void,
   ) {}
 
@@ -147,8 +151,10 @@ export class MemoryGameTrash implements GameTrashStore {
       publication,
       rows.some((row) => !row.abandonedAt && !!row.draftSharedAt),
     );
-    if (action === 'trash') this.entries.set(slug, entry(slug, uid, at));
-    else
+    if (action === 'trash') {
+      this.entries.set(slug, entry(slug, uid, at));
+      this.cancelTransfer(slug, at);
+    } else
       this.publications.set(slug, {
         ...publication!,
         state: 'archived',

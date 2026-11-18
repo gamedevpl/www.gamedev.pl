@@ -1,5 +1,5 @@
 import { writeAgentRoundVersion, writeAgentRoundShared } from './agent-round-write.js';
-import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import { permitsRecoveryClaim, isAbandonedRecovery, isOwnerArchived } from './recovery-admission.js';
 import type { GuardedFirestore } from '../shelf-guard-firestore.js';
 import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
@@ -178,7 +178,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       if (game.data()?.trash || game.data()?.purged) return false;
       if (!permitsRecoveryClaim(game.data()?.recoveryAdmission, recovery?.admissionNonce)) return false;
       const publication = game.data()?.publication;
-      const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+      const archived = isOwnerArchived(publication);
       if (publication && !(sourceJobId !== null && archived)) return false;
       const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
       const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];

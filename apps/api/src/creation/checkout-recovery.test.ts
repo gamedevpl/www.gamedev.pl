@@ -192,7 +192,7 @@ it('recovers creator-archived publications while preserving the archived publica
   await f.store.setSubmissionPublishedAt(recovered.jobId, '2026-01-03');
   await f.store.recordJobTransition(recovered.jobId, { to: 'published', at: '2026-01-03', by: 'operator' });
   await f.store.setPublication({ slug: 'sky', state: 'published', currentVersion: 'v2', publishedAt: '2026-01-03' });
-  await f.store.archivePublication('sky', 'deleted by creator', '2026-01-04');
+  await f.store.archivePublication('sky', 'unpublished by owner', '2026-01-04');
   expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'archived' });
   expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
     200,
