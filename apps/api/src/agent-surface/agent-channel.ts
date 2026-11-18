@@ -63,6 +63,7 @@ import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
+import { winProofProblem } from './win-proof-hint.js';
 import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
@@ -2103,11 +2104,15 @@ export async function registerAgentChannelRoutes(
           !files.some((file) => file.path === 'CAPTURE.json') &&
           Boolean(await store?.getGameDreamsWantedAt(slug).catch(() => null)) &&
           !(await store?.getGameDreamsOffAt(slug).catch(() => null));
+        const winUnproven = winProofProblem(files, {
+          firstDelivery: !record.previewVersion && !record.deliveredVersion,
+        });
         return reply.send({
           accepted: true,
           mode,
           delivery: { slug, version },
           ...(captureMissing ? { captureMissing: true } : {}),
+          ...(winUnproven ? { winUnproven } : {}),
           // True when Cloud Build accepted the create (build id and/or accepted:true).
           // False only when the trigger was missing or failed — not when the id was
           // unparseable from an otherwise successful create.

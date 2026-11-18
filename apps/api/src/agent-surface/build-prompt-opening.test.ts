@@ -85,6 +85,7 @@ describe('clockLines', () => {
     const long = clockLines(1200).join('\n');
     expect(long).toContain('cancelled after 20 minutes');
     expect(long).toContain('a safety net, not a pace to keep');
+    expect(long).toContain('not for an early `end`');
     expect(long).not.toContain('Do not reply with a plan');
     expect(clockLines(90).join('\n')).toContain('A typical revision takes minutes');
     expect(clockLines().join('\n')).toContain('cancelled after a hard time limit');

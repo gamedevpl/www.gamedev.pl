@@ -89,7 +89,7 @@ export function openingSteps(
   ];
 }
 
-// 2026-11-17: at 20 minutes the builder still raced.
+// 2026-11-18: it ended at minute 9 of 20, winless.
 export function clockLines(maxSeconds?: number): string[] {
   const limit = !maxSeconds
     ? 'a hard time limit'
@@ -101,7 +101,7 @@ export function clockLines(maxSeconds?: number): string[] {
     '',
     `The session is cancelled after ${limit}; without \`submit_sources\` by then it delivers nothing.`,
     maxSeconds && maxSeconds >= 900
-      ? 'That limit is a safety net, not a pace to keep: a new game takes six to nine minutes and a revision less, so there is time for every step below.'
+      ? 'That limit is a safety net, not a pace to keep: a new game takes six to nine minutes and a revision less, so there is time for every step below. The time that leaves is for the win the capture owes and for what the spec names, not for an early `end`.'
       : 'A typical revision takes minutes; the reads below, the creator’s images and a 2D capture take seconds each.',
     '',
     'Do not stop to describe what you will do: act through tool calls. Reads come first, edits after.',

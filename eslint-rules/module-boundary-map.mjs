@@ -550,6 +550,7 @@ const FILE_BUCKET = {
   'capture-notice': 'agent-surface',
   'capture-plan-steps': 'agent-surface',
   'staged-file-hint': 'agent-surface',
+  'win-proof-hint': 'agent-surface',
   'kit-upcoming-rules': 'agent-surface',
   'staged-budget': 'agent-surface',
 
