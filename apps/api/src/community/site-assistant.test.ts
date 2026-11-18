@@ -100,7 +100,7 @@ it('rests when the operator pauses the lane, without spending a prompt', async (
   const refused = await f.turn();
   expect(refused.statusCode).toBe(429);
   expect(f.generate).not.toHaveBeenCalled();
-  expect((await f.store.getUsage(UID, f.today)).assistantPrompts).toBe(0);
+  expect((await f.store.getUsage(UID, f.today)).assistantPrompts ?? 0).toBe(0);
 });
 
 it('refuses once the shared daily token cap cannot hold another call', async () => {

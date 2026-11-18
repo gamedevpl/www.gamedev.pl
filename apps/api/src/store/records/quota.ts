@@ -120,7 +120,7 @@ export interface UsageCounters {
   // Ghost-text completion calls today (TA-01), one per model call.
   tabCompletes: number;
   // Prompts sent to the site mascot's server model today.
-  assistantPrompts: number;
+  assistantPrompts?: number;
   // Semantic catalog searches today, one per paid query embedding. Signed-in only.
   searchQueries: number;
   // World entries written today; each moderates its text fields.

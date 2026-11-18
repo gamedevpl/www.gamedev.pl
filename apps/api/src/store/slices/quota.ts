@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { mergeTokenLaneLimits, readTokenLaneLimits } from './assistant-quota.js';
 import { MANAGED_AGENT_VENDORS } from '@gamedevpl/contract';
 import type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters } from '../records/quota.js';
 import type { User } from '../records/identity.js';
@@ -46,7 +47,6 @@ export function emptyUsageCounters(): UsageCounters {
     chats: 0,
     managedBuilds: 0,
     tabCompletes: 0,
-    assistantPrompts: 0,
     searchQueries: 0,
     worldWrites: 0,
     optionImages: 0,
@@ -151,12 +151,7 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.globalDailyChatCap !== undefined
           ? patch.globalDailyChatCap
           : (this.creationLimits?.globalDailyChatCap ?? null),
-      tabCompletePaused: patch.tabCompletePaused ?? this.creationLimits?.tabCompletePaused ?? false,
-      assistantPaused: patch.assistantPaused ?? this.creationLimits?.assistantPaused ?? false,
-      globalDailyAssistantTokenCap:
-        patch.globalDailyAssistantTokenCap !== undefined
-          ? patch.globalDailyAssistantTokenCap
-          : (this.creationLimits?.globalDailyAssistantTokenCap ?? null),
+      ...mergeTokenLaneLimits(patch, this.creationLimits),
       searchPaused: patch.searchPaused ?? this.creationLimits?.searchPaused ?? false,
       gatePaused: patch.gatePaused ?? this.creationLimits?.gatePaused ?? false,
       globalDailyGateRunCap:
@@ -167,10 +162,6 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.globalDailySearchEmbeddingCap !== undefined
           ? patch.globalDailySearchEmbeddingCap
           : (this.creationLimits?.globalDailySearchEmbeddingCap ?? null),
-      globalDailyTabCompleteTokenCap:
-        patch.globalDailyTabCompleteTokenCap !== undefined
-          ? patch.globalDailyTabCompleteTokenCap
-          : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
       globalDailyOptionImageCap:
         patch.globalDailyOptionImageCap !== undefined
           ? patch.globalDailyOptionImageCap
@@ -325,12 +316,7 @@ export class FirestoreQuotaStore implements QuotaStore {
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
-      tabCompletePaused: data?.tabCompletePaused === true,
-      assistantPaused: data?.assistantPaused === true,
-      globalDailyAssistantTokenCap:
-        typeof data?.globalDailyAssistantTokenCap === 'number' ? data.globalDailyAssistantTokenCap : null,
-      globalDailyTabCompleteTokenCap:
-        typeof data?.globalDailyTabCompleteTokenCap === 'number' ? data.globalDailyTabCompleteTokenCap : null,
+      ...readTokenLaneLimits(data),
       searchPaused: data?.searchPaused === true,
       gatePaused: data?.gatePaused === true,
       globalDailyGateRunCap: typeof data?.globalDailyGateRunCap === 'number' ? data.globalDailyGateRunCap : null,
@@ -388,12 +374,7 @@ export class FirestoreQuotaStore implements QuotaStore {
         chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
         globalDailyChatCap:
           patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
-        tabCompletePaused: patch.tabCompletePaused ?? existing.tabCompletePaused ?? false,
-        assistantPaused: patch.assistantPaused ?? existing.assistantPaused ?? false,
-        globalDailyAssistantTokenCap:
-          patch.globalDailyAssistantTokenCap !== undefined
-            ? patch.globalDailyAssistantTokenCap
-            : (existing.globalDailyAssistantTokenCap ?? null),
+        ...mergeTokenLaneLimits(patch, existing),
         searchPaused: patch.searchPaused ?? existing.searchPaused ?? false,
         gatePaused: patch.gatePaused ?? existing.gatePaused ?? false,
         globalDailyGateRunCap:
@@ -404,10 +385,6 @@ export class FirestoreQuotaStore implements QuotaStore {
           patch.globalDailySearchEmbeddingCap !== undefined
             ? patch.globalDailySearchEmbeddingCap
             : (existing.globalDailySearchEmbeddingCap ?? null),
-        globalDailyTabCompleteTokenCap:
-          patch.globalDailyTabCompleteTokenCap !== undefined
-            ? patch.globalDailyTabCompleteTokenCap
-            : (existing.globalDailyTabCompleteTokenCap ?? null),
         globalDailyOptionImageCap:
           patch.globalDailyOptionImageCap !== undefined
             ? patch.globalDailyOptionImageCap

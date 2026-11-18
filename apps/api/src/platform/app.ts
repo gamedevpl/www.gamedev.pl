@@ -45,6 +45,7 @@ import { createFollowerFanout } from '../notifications/game-follow-notify.js';
 import { createGitHubClient } from '../catalog/github-client.js';
 import { registerProposalRoutes } from '../community/proposal-routes.js';
 import { registerSiteAssistantRoutes, type SiteAssistantRoutesOptions } from '../community/site-assistant.js';
+import { resolveSessionSecret } from './session-secret.js';
 import { registerTextProposalRoutes } from '../community/proposal-text-routes.js';
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
@@ -1059,12 +1060,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Domain proof for the ChatGPT/Codex plugin submission. 404s until the portal issues a
   // token and it is configured — see openai-apps-challenge.ts.
   registerOpenAiAppsChallengeRoute(app);
-  const configuredSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
-  // A forgeable session is an account takeover; refuse to serve rather than fall back.
-  if (!configuredSessionSecret && process.env.NODE_ENV === 'production') {
-    throw new Error('SESSION_SECRET is required to sign sessions in production');
-  }
-  const oauthSessionSecret = configuredSessionSecret ?? 'dev-session-secret-change-me';
+  const oauthSessionSecret = resolveSessionSecret(options.sessionSecret);
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
   registerSiteAssistantRoutes(app, { store, sessionSecret: oauthSessionSecret, ...options.siteAssistant });
   registerOAuthAuthorizationServerRoutes(app, {

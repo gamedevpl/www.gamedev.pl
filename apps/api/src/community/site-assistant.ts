@@ -22,7 +22,7 @@ export const SITE_ASSISTANT_BASE_PATH = '/api/assistant';
 // Off unless the deploy says otherwise; the page then keeps to Nano.
 export const siteAssistantEnabled = (env: NodeJS.ProcessEnv = process.env) => env.SITE_ASSISTANT === 'true';
 
-// Every tool runs in the visitor's page, with the visitor's own rights.
+// Every tool runs in the page, with the visitor's rights.
 export const SITE_ASSISTANT_PAGE_TOOLS = [
   {
     name: 'search_games',
@@ -162,7 +162,7 @@ export function registerSiteAssistantRoutes(app: FastifyInstance, options: SiteA
     const info = (await response.json()) as Record<string, unknown>;
     if (response.ok && info.available === true && request.user!.tier !== 'trusted') {
       const usage = await store.getUsage(request.user!.uid, today());
-      if (usage.assistantPrompts >= promptQuota()) {
+      if ((usage.assistantPrompts ?? 0) >= promptQuota()) {
         return reply.send({ ...info, available: false, resetsAt: tomorrow() });
       }
     }

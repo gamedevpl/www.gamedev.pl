@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BootGate } from './BootGate.js';
 import { AuthProvider } from './AuthContext.js';
+import { SiteAssistant } from './SiteAssistant.js';
 import { platform } from './platform/index.js';
 import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
@@ -33,6 +34,7 @@ void (async () => {
     <React.StrictMode>
       <AuthProvider>
         <BootGate />
+        <SiteAssistant />
       </AuthProvider>
     </React.StrictMode>,
   );
