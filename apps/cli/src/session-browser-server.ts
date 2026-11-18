@@ -97,6 +97,7 @@ export async function startSessionBrowser(
   });
   let origin = '';
   let sequence = 0;
+  const recentMessageIds: string[] = [];
   let preview: { url: string; abort: AbortController; source: PreviewSource } | undefined;
   let sourceId = 0;
   const liveGame = createLiveGame(() => sourceId);
@@ -230,6 +231,7 @@ export async function startSessionBrowser(
           detached: options.detached === true,
           sessionId,
           sequence,
+          recentMessageIds,
           sourceId,
           hasPreview: Boolean(preview),
           actions: Object.keys(WORKBENCH_ACTIONS),
@@ -403,7 +405,13 @@ export async function startSessionBrowser(
           return;
         }
         const result = dispatch(parsed.data.command);
-        reply(200, result.done ? await result.done : result);
+        const receipt = result.done ? await result.done : result;
+        const { kind, id } = parsed.data.command;
+        if (receipt.status === 'accepted' && (kind === 'input' || kind === 'queue') && !recentMessageIds.includes(id)) {
+          recentMessageIds.push(id);
+          if (recentMessageIds.length > 16) recentMessageIds.shift();
+        }
+        reply(200, { ...receipt, sequence });
         return;
       }
       reply(404, { error: 'Not found' });

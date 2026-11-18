@@ -40,7 +40,10 @@ export function createSessionCommands(
         ? { ...previous.result, ...(previous.done ? { done: previous.done } : {}) }
         : { id, status: 'conflict' };
     if (!Number.isSafeInteger(generation) || generation < 0) return { id, status: 'invalid' };
-    if ((command.kind === 'input' || command.kind === 'queue') && (!command.text.trim() || command.text.length > 8000))
+    if (
+      (command.kind === 'input' || command.kind === 'queue') &&
+      ((!command.text.trim() && !command.attachments?.length) || command.text.length > 8000)
+    )
       return { id, status: 'invalid' };
     if (
       (command.kind === 'input' || command.kind === 'queue') &&
@@ -65,7 +68,9 @@ export function createSessionCommands(
       if (!attachmentText || (command.kind === 'input' && (state.question || state.choices.length)))
         return { id, status: 'invalid' };
       try {
-        text += attachmentText(command.attachments);
+        const evidence = attachmentText(command.attachments);
+        if (!text.trim()) text = command.attachments.length === 1 ? 'Attached file' : 'Attached files';
+        text += evidence;
       } catch {
         return { id, status: 'invalid' };
       }

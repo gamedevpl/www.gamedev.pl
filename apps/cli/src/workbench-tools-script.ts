@@ -1,13 +1,13 @@
 export const WORKBENCH_TOOLS_SCRIPT = String.raw`
-let attachments=[];try{const saved=sessionStorage.getItem('play-attachments');if(saved&&saved.length<16000)attachments=JSON.parse(saved).slice(0,8);}catch{}
+let attachments=[];try{const saved=sessionStorage.getItem('play-attachments');if(saved&&saved.length<16000)attachments=JSON.parse(saved).filter(item=>!item.sent).slice(0,8);}catch{}
 const device=crypto.randomUUID();
-const staged=()=>attachments.filter(a=>!a.sent);
+let uploading=0;
 function tray(){
   sessionStorage.setItem('play-attachments',JSON.stringify(attachments.map(({thumbnail,...meta})=>meta)));
   el('attachments').replaceChildren();
   for(const item of attachments){
     const card=document.createElement('div');
-    card.className='attachment-card'+(item.sent?' attachment-sent':'');
+    card.className='attachment-card';
     const preview=document.createElement('div');preview.className='attachment-preview';
     if(item.thumbnail){
       const img=document.createElement('img');img.src=item.thumbnail;img.alt=item.name;preview.append(img);
@@ -21,13 +21,6 @@ function tray(){
     const meta=document.createElement('span');meta.className='attachment-meta';
     meta.textContent=item.purpose+' · '+Math.round(item.bytes/1024)+' KB';
     details.append(name,meta);
-    if(item.sent){
-      const actions=document.createElement('div');actions.className='attachment-actions';
-      const status=document.createElement('span');status.className='attachment-status';status.textContent='Sent ✓';
-      const again=document.createElement('button');again.type='button';again.className='attachment-again';
-      again.textContent='Attach again';again.setAttribute('aria-label','Attach '+item.name+' again');
-      again.onclick=()=>{item.sent=false;tray();};actions.append(status,again);details.append(actions);
-    }
     const remove=document.createElement('button');remove.type='button';remove.className='attachment-remove';
     remove.textContent='×';remove.title='Remove '+item.name;remove.setAttribute('aria-label',remove.title);
     remove.onclick=()=>{attachments=attachments.filter(a=>a.id!==item.id);tray();};
@@ -35,10 +28,13 @@ function tray(){
   }
 }
 async function attach(name,mime,data,purpose='diagnostic',shown=revision) {
-  if(staged().length>=8)throw Error('Up to 8 attachments per request');
-  const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);
-  if(attachments.length>=8)attachments.splice(attachments.findIndex(a=>a.sent),1);
-  if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;attachments.push(item);tray();return item;
+  if(attachments.length+uploading>=8)throw Error('Up to 8 attachments per request');
+  uploading++;
+  try {
+    const item=await api('/artifacts',{name,mime,data,purpose,revision:shown,device,capturedAt:new Date().toISOString()},30000);
+    if(mime.startsWith('image/'))item.thumbnail='data:'+mime+';base64,'+data;
+    attachments.push(item);tray();return item;
+  } finally { uploading--; }
 }
 function base64(bytes){let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out);}
 async function upload(file){

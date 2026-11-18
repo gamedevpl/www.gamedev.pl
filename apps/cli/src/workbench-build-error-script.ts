@@ -32,7 +32,7 @@ el('build-error-fix').onclick=async()=>{
   const failed=failedBuild,session=state.sessionId;
   fixingBuild=true;buildErrorControls();
   try{
-    let item=buildAttachment?.sourceId===failed.sourceId&&buildAttachment.error===failed.error?staged().find(a=>a.id===buildAttachment.id):undefined;
+    let item=buildAttachment?.sourceId===failed.sourceId&&buildAttachment.error===failed.error?attachments.find(a=>a.id===buildAttachment.id):undefined;
     if(!item){
       const text='Local preview build failed\nGame: '+state.identity+'\nLast successful build: '+(failed.revision||'none')+'\n\n'+failed.error;
       item=await attach('build-error.txt','text/plain',base64(new TextEncoder().encode(text)),'diagnostic',failed.revision);
