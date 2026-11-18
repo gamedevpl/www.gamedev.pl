@@ -175,6 +175,8 @@ export type ChannelControlBody = {
   };
   // Sketches wanted, yet the delivery has no CAPTURE.json.
   captureMissing?: boolean;
+  // The delivery's own files do not show a win reached.
+  winUnproven?: string;
 };
 
 function stopFromChannel(body: ChannelControlBody): {
@@ -218,6 +220,8 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
         'then submit again.',
     });
   }
+  const unproven = typeof body.winUnproven === 'string' ? body.winUnproven.trim() : '';
+  if (unproven) warnings.push({ code: 'no_win', message: unproven });
   return warnings;
 }
 
@@ -280,6 +284,7 @@ export const WARNINGS_PROP = {
             'reference_unseen',
             'inbox_unacked',
             'capture_plan_missing',
+            'no_win',
           ],
         },
         message: { type: 'string' },
