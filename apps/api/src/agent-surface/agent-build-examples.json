@@ -2,50 +2,78 @@
   {
     "slug": "rook-rush",
     "title": "Rook Rush",
-    "genre": "arcade",
+    "genre": "realtime board hybrid",
     "modules": ["input", "drawing", "gfx", "ui", "effects", "audio", "editor"],
-    "whyReference": "HMR-ready game structure: retained boot services, replaceable simulation/HUD and managed theme updates."
+    "whyReference": "Default HMR-ready game structure: retained boot services, replaceable simulation/HUD, managed theme updates, and dark clockwork board visual style."
   },
   {
     "slug": "block-cascade",
     "title": "Block Cascade",
     "genre": "puzzle",
-    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio"],
-    "whyReference": "Canonical defineGame / canvas 2D worked example — clear game loop, input, and win/lose."
+    "modules": ["input", "collision", "grid", "rng", "drawing", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "Canonical defineGame / canvas 2D puzzle example — clear game loop, DAS/ARR keyboard handling, grid/rng, and 80s neon arcade lightbox styling."
   },
   {
     "slug": "arena-tag",
     "title": "Arena Tag",
     "genre": "party",
-    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio", "party"],
-    "whyReference": "Party / local-multiplayer reference — GameKit.party slots, handoff, and shared-screen play."
+    "modules": ["input", "gamepad", "collision", "drawing", "actors", "gfx", "ui", "effects", "audio", "party", "editor"],
+    "whyReference": "Party / local-multiplayer reference — GameKit.party 2-4 player slots, gamepad + phone controller handoff, and shared-screen play."
   },
   {
-    "slug": "crate-keeper",
-    "title": "Crate Keeper",
-    "genre": "puzzle",
-    "modules": ["input", "collision", "world", "gameplay", "drawing", "gfx", "effects", "audio", "save"],
-    "whyReference": "Save / progress reference — persistent levels and GameKit.save without inventing storage."
+    "slug": "plumbers-one-level-platformer",
+    "title": "Plumber's One-Level Platformer",
+    "genre": "platformer",
+    "modules": ["input", "collision", "gameplay", "drawing", "actors", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "Daylight 16-bit retro side-scrolling platformer — GameKit.createPlatformerKinematics, scrolling camera, jumping/stomping, and bright sky palette."
   },
   {
-    "slug": "party-realm",
-    "title": "Party Realm",
-    "genre": "party",
-    "modules": ["input", "collision", "drawing", "gfx", "effects", "audio", "party"],
-    "whyReference": "Larger party-mode composition — multiple mini-activities sharing one party session."
+    "slug": "four-seasons-farm",
+    "title": "Four Seasons Farm",
+    "genre": "farming sim",
+    "modules": ["input", "collision", "drawing", "actors", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "Warm daylight cozy simulation — pure pointer/touch controls, sidebar tool UI, tile plot economy, and day/season cycle."
   },
   {
-    "slug": "biplane-skirmish",
-    "title": "Biplane Skirmish",
-    "genre": "flight combat",
-    "modules": ["input", "drawing", "gfx", "gfx3d", "effects", "audio", "zone"],
-    "whyReference": "Zone + Scene3D reference — shared-space play without assuming repo neighbors."
+    "slug": "circus-cat",
+    "title": "Kotek w Cyrku",
+    "genre": "arcade",
+    "modules": ["input", "gamepad", "collision", "drawing", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "Portrait mobile-first arcade game — 1950s painted vintage circus illustration, gamepad + touch controls, and tight stage/combo pacing."
   },
   {
-    "slug": "football-3d",
-    "title": "Football 3D",
-    "genre": "sports",
-    "modules": ["input", "drawing", "gfx", "effects", "audio"],
-    "whyReference": "Sports / camera composition reference — a readable non-puzzle game loop agents can study."
+    "slug": "shadow-infiltrator",
+    "title": "Shadow Infiltrator",
+    "genre": "stealth",
+    "modules": ["input", "collision", "ai", "gameplay", "drawing", "actors", "gfx", "ui", "effects", "audio", "editor"],
+    "whyReference": "Top-down stealth / action reference — GameKit ai patrol states, vision cones, 8-way movement, and tactical blueprint readability."
+  },
+  {
+    "slug": "gem-swap-rush",
+    "title": "Gem Swap Rush",
+    "genre": "match-3 puzzle",
+    "modules": ["input", "collision", "world", "grid", "drawing", "gfx", "ui", "effects", "audio", "sensing", "editor"],
+    "whyReference": "1920s Art Deco tilt puzzle — sensing (tilt) + keyboard controls, world/grid state, and rich EditorKit v2 content collections with validation."
+  },
+  {
+    "slug": "lost-terminal",
+    "title": "Lost Terminal",
+    "genre": "interface adventure",
+    "modules": ["input", "drawing", "gfx", "ui", "effects", "audio", "save", "editor"],
+    "whyReference": "Diegetic retro-OS interface adventure — GameKit.save persistence, clickable file/panel UI, and narrative puzzle progression."
+  },
+  {
+    "slug": "neon-corridor",
+    "title": "Neon Corridor",
+    "genre": "first-person shooter",
+    "modules": ["input", "drawing", "gfx", "ui", "gfx3d", "effects", "audio", "editor"],
+    "whyReference": "Lean Scene3D indoor FPS starter — GameKit.createScene3dGame({ genre: 'fps-corridor' }), mouselook + touch FPS, and dark neon bloom lighting."
+  },
+  {
+    "slug": "quack-arena",
+    "title": "Quackgrounds",
+    "genre": "3D first-person arena shooter",
+    "modules": ["input", "drawing", "gfx", "ui", "gfx3d", "effects", "audio", "zone", "editor"],
+    "whyReference": "Daylight outdoor textured Scene3D FPS arena — GameKit.createScene3dGame, bots, radar HUD, shared sim helper, and zone multiplayer."
   }
 ]
