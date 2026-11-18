@@ -18,9 +18,9 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 let fetchMock: ReturnType<typeof vi.fn>;
 
-async function mount(path: string, status = 200) {
+async function mount(path: string, status = 200, body: Record<string, unknown> = {}) {
   window.history.replaceState(null, '', path);
-  fetchMock = vi.fn(async () => new Response('{}', { status }));
+  fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
   vi.stubGlobal('fetch', fetchMock);
   root = createRoot(container);
   await act(async () => {
@@ -59,6 +59,9 @@ describe('SiteAssistant', () => {
   });
 
   it('stays away while the server has the assistant switched off', async () => {
+    await mount('/', 200, { name: 'gamedev.pl', inputs: [], available: false, enabled: false });
+    expect(launcher()).toBeNull();
+    act(() => root?.unmount());
     await mount('/', 404);
     expect(launcher()).toBeNull();
   });

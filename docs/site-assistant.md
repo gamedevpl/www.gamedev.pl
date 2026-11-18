@@ -32,5 +32,6 @@ there is one, and otherwise says the mascot is resting.
 - The conversation travels in a token sealed with a key derived from `SESSION_SECRET`.
 - Logs carry counts (`site_assistant_turn`), never the conversation's text.
 
-The model key is the Anthropic one the seed provider already uses. Without a key the
-route answers 404 and the mascot stays hidden.
+The model key is the Anthropic one the seed provider already uses. Without a key (or while
+`SITE_ASSISTANT` is off), `/api/assistant/turn` answers 404, `/api/assistant/info` answers
+200 with `enabled: false` (so pages never log a 404 probe error), and the mascot stays hidden.

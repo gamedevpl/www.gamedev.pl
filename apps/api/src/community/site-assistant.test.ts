@@ -76,7 +76,10 @@ it('is off until the deploy flag turns it on', async () => {
   const f = await fixture();
   vi.stubEnv('SITE_ASSISTANT', undefined);
   expect((await f.turn()).statusCode).toBe(404);
-  expect((await f.info()).statusCode).toBe(404);
+  const info = await f.info();
+  expect(info.statusCode).toBe(200);
+  expect(info.json()).toEqual({ name: 'gamedev.pl', inputs: [], available: false, enabled: false });
+  expect((await f.app.inject({ method: 'GET', url: '/api/assistant/info' })).statusCode).toBe(401);
   expect(f.generate).not.toHaveBeenCalled();
 });
 

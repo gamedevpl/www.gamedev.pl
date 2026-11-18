@@ -59,7 +59,9 @@ function currentView(): AppRoute['view'] {
 async function siteAssistantOffered(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE}/api/assistant/info`, { credentials: 'same-origin' });
-    return response.ok;
+    if (!response.ok) return false;
+    const info = (await response.json()) as { enabled?: boolean };
+    return info.enabled !== false;
   } catch {
     return false;
   }
