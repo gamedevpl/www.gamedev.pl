@@ -1,0 +1,87 @@
+.site-assistant {
+  position: fixed;
+  right: 16px;
+  /* Lifted over the install and update bars while one shows. */
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--site-assistant-lift, 0px));
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* A game on screen owns the whole viewport. */
+body.player-open .site-assistant {
+  display: none;
+}
+
+.site-assistant-launcher,
+.site-assistant-panel {
+  pointer-events: auto;
+}
+
+.site-assistant-launcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 50%;
+  background: var(--panel-card);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.site-assistant-launcher:hover,
+.site-assistant.is-open .site-assistant-launcher {
+  border-color: var(--turquoise);
+}
+
+.site-assistant-launcher:hover {
+  transform: translateY(-2px);
+}
+
+.site-assistant-launcher:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
+.site-assistant-panel {
+  width: min(380px, calc(100vw - 32px));
+  height: min(520px, calc(100dvh - 120px - var(--site-assistant-lift, 0px)));
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.site-assistant-panel[hidden] {
+  display: none;
+}
+
+.site-assistant-chat {
+  height: 100%;
+}
+
+.site-assistant-empty,
+.site-assistant-loading {
+  margin: 0;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-assistant-launcher {
+    transition: none;
+  }
+}

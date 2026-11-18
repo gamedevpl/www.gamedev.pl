@@ -361,6 +361,15 @@
     "about": "About",
     "withContributions": "with contributions from"
   },
+  "siteAssistant": {
+    "label": "Site assistant",
+    "open": "Ask the mascot",
+    "close": "Close the assistant",
+    "loading": "Waking up…",
+    "placeholder": "Ask about games on gamedev.pl",
+    "empty": "Hi! Tell me what you feel like playing and I will find a game for you.",
+    "resting": "I am resting right now. Come back later."
+  },
   "bottomCta": {
     "headline": "Have your own game idea?",
     "sub": "Describe it above and an AI agent will build it live for everyone to play.",

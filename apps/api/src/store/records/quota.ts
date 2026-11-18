@@ -56,6 +56,10 @@ export interface CreationLimits {
   globalDailySearchEmbeddingCap?: number | null;
   // Shared daily token ceiling for ghost-text completion, everyone together.
   globalDailyTabCompleteTokenCap?: number | null;
+  // Refuse the site mascot's server model; the page falls back or rests.
+  assistantPaused?: boolean;
+  // Shared daily token ceiling for the site mascot, everyone together.
+  globalDailyAssistantTokenCap?: number | null;
   // Daily CreatorQA tile requests, everyone together. Zero turns the route off.
   globalDailyOptionImageCap?: number | null;
   // Daily tile requests one creator may spend; null uses the floor.
@@ -115,6 +119,8 @@ export interface UsageCounters {
   managedBuilds: number;
   // Ghost-text completion calls today (TA-01), one per model call.
   tabCompletes: number;
+  // Prompts sent to the site mascot's server model today.
+  assistantPrompts?: number;
   // Semantic catalog searches today, one per paid query embedding. Signed-in only.
   searchQueries: number;
   // World entries written today; each moderates its text fields.

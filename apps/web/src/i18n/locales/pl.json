@@ -361,6 +361,15 @@
     "about": "O grze",
     "withContributions": "ze zmianami od"
   },
+  "siteAssistant": {
+    "label": "Asystent strony",
+    "open": "Zapytaj maskotkę",
+    "close": "Zamknij asystenta",
+    "loading": "Budzę się…",
+    "placeholder": "Zapytaj o gry na gamedev.pl",
+    "empty": "Cześć! Powiedz, w co masz ochotę zagrać, a znajdę ci grę.",
+    "resting": "Teraz odpoczywam. Wróć później."
+  },
   "bottomCta": {
     "headline": "Masz własny pomysł na grę?",
     "sub": "Opisz go powyżej, a agent AI zbuduje grywalną wersję w przeglądarce.",

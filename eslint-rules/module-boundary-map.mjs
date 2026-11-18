@@ -35,6 +35,11 @@ const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  'session-csrf': 'platform',
+  'session-secret': 'platform',
+  'site-assistant': 'community',
+  'site-assistant-limiter': 'community',
+  'site-assistant-deploy-flag': 'community',
   'api-kit-compatibility': 'platform',
   'api-kit-input': 'platform',
   'api-kit-retention': 'platform',

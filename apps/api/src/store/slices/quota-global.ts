@@ -1,7 +1,7 @@
-import type { Firestore } from '@google-cloud/firestore';
 import { bumpShard, shardedCount, spendShard } from './quota-shards.js';
+import { FirestoreAssistantQuota, MemoryAssistantQuota, type AssistantQuotaStore } from './assistant-quota.js';
 
-export interface GlobalQuotaStore {
+export interface GlobalQuotaStore extends AssistantQuotaStore {
   // How many submissions everyone together has made on `dateStr`.
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
 
@@ -74,7 +74,7 @@ export interface GlobalQuotaStore {
   checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
 }
 
-export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
+export class InMemoryGlobalQuotaStore extends MemoryAssistantQuota implements GlobalQuotaStore {
   private globalSubmissions = new Map<string, number>();
   private globalEdits = new Map<string, number>();
   private globalChats = new Map<string, number>();
@@ -250,9 +250,7 @@ export class InMemoryGlobalQuotaStore implements GlobalQuotaStore {
   }
 }
 
-export class FirestoreGlobalQuotaStore implements GlobalQuotaStore {
-  constructor(private db: Firestore) {}
-
+export class FirestoreGlobalQuotaStore extends FirestoreAssistantQuota implements GlobalQuotaStore {
   // The day's shared allowance -- one document per UTC day.
   private globalUsageRef(dateStr: string) {
     return this.db.collection('globalUsage').doc(dateStr);

@@ -1039,6 +1039,22 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
     return this.globalQuotaStore.adjustGlobalTabCompleteTokens(dateStr, delta);
   }
 
+  async getGlobalAssistantTokenCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalAssistantTokenCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalAssistantTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalAssistantTokens(dateStr, tokens, limit);
+  }
+
+  async adjustGlobalAssistantTokens(dateStr: string, delta: number): Promise<number> {
+    return this.globalQuotaStore.adjustGlobalAssistantTokens(dateStr, delta);
+  }
+
   async getGlobalEditCount(dateStr: string): Promise<number> {
     return this.globalQuotaStore.getGlobalEditCount(dateStr);
   }
