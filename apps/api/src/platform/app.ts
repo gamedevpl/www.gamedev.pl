@@ -1027,22 +1027,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Following a game: a subscription rather than a bookmark. The count is public,
   // the follower list is not, and the only message it sends is "new version".
   await registerGameFollowRoutes(app, { store, ...options.gameFollowRoutes });
+  const deletionClock = options.accountDeletionRoutes?.now ?? Date.now;
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
     internalAuthVerifier:
       options.accountDeletionRoutes?.internalAuthVerifier ??
       createInternalAuthVerifierFromEnv(process.env, 'accountDeletionSweep'),
-    now: options.accountDeletionRoutes?.now,
+    now: deletionClock,
     graceMs: options.accountDeletionRoutes?.graceMs,
     reapGames: (onError) =>
-      reapTrashedGames(
-        store,
-        gamesStore,
-        submissionSeams.repoPublishedForRemoval,
-        (options.accountDeletionRoutes?.now ?? Date.now)(),
-        onError,
-      ),
+      reapTrashedGames(store, gamesStore, submissionSeams.repoPublishedForRemoval, deletionClock(), onError),
     eraseMemoryStore: options.accountDeletionRoutes?.eraseMemoryStore ?? createCreatorMemoryEraserFromEnv(process.env),
   });
   // An alert can pause a lane itself.
