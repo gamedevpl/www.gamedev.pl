@@ -60,25 +60,6 @@
   color: var(--muted);
   font-size: 11px;
 }
-.attachment-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  font-size: 11px;
-}
-.attachment-status {
-  color: var(--muted);
-  white-space: nowrap;
-}
-.attachment-again {
-  min-height: 28px;
-  padding: 2px 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--turquoise);
-  font-size: 11px;
-}
 .attachment-remove {
   align-self: start;
   width: 28px;

@@ -1,3 +1,5 @@
+import { PROMPT_MARKER } from 'genaicode/app-agent';
+import { EVIDENCE_MARKER } from './workbench-evidence.js';
 import { WORKBENCH_ONBOARDING_SCRIPT } from './workbench-onboarding-script.js';
 import { WORKBENCH_PLAYER_SCRIPT } from './workbench-player-script.js';
 import { WORKBENCH_NAVIGATION_SCRIPT } from './workbench-navigation-script.js';
@@ -43,6 +45,31 @@ function reconcilePending(sessionId) {
     el('feedback').textContent='Session changed. The previous request was not resent. Your draft and staged attachments are preserved; check the previous outcome before sending again.';
   }
 }
+const outgoing = new Map();
+function agentMessageCount(agent, text, files) {
+  const userMarker = ${JSON.stringify(PROMPT_MARKER)}, evidenceMarker = ${JSON.stringify(EVIDENCE_MARKER)};
+  const matches = prompt => {
+    const message = prompt.split(userMarker).at(-1);
+    const [caption, evidence] = message.split(evidenceMarker);
+    if (files.length) return (!text || caption.trim()===text) && files.every(id=>evidence?.includes('"id":'+JSON.stringify(id)));
+    return !evidence && caption.trim()===text;
+  };
+  let count = 0;
+  for (const turn of [...(agent?.history ?? []), ...(agent?.session?.turns ?? [])]) {
+    if (matches(turn.prompt)) count++;
+    for (const entry of turn.entries) if (entry.kind==='input' && matches(entry.text)) count++;
+  }
+  return count;
+}
+function publishConversation(follow=false) {
+  for (const [id,item] of outgoing) {
+    const mirrored = item.occurrence !== undefined && agentMessageCount(state.agent,item.text,item.files) >= item.occurrence;
+    const awaitingTurn = item.occurrence !== undefined && state.agent && state.mode==='busy';
+    const received = state.recentMessageIds?.includes(id) || state.sequence >= item.sequence;
+    if (item.sessionId !== state.sessionId || mirrored || (received && !awaitingTurn)) outgoing.delete(id);
+  }
+  window.dispatchEvent(new CustomEvent('play-session', {detail: {follow,outgoing:[...outgoing.values()],lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent,deliveries:state.deliveries||[]}}));
+}
 function render(next) {
   reconcilePending(next.sessionId);
   const old = state;
@@ -56,7 +83,7 @@ function render(next) {
   el('identity').textContent = state.identity;
   el('game-name').textContent = state.identity || 'gamedev.pl';
   el('destination').textContent = actionQuestion ? 'Review the pending action above' : state.question || state.choices.length ? 'Answering the current question' : state.agent ? 'To: ' + state.agent.agent + ' · edits, checks and asks before delivery' : state.mode === 'busy' && state.localTask ? 'Queue → session assistant after ' + state.localTask : 'To: session assistant · builder chosen before execution';
-  window.dispatchEvent(new CustomEvent('play-session', {detail: {lines: state.lines,diffs:state.diffs,readDiff:id=>api('/diff/'+id),workspace:state.workspace,agent:state.agent,deliveries:state.deliveries||[]}}));
+  publishConversation();
   el('task').textContent = (state.mode === 'busy' || state.approvalPending ? [state.activity, ...state.live] : []).filter(Boolean).join('\n');
   el('task').dataset.tone = /^(?:blocked|failed|error)\b/i.test(state.activity) ? 'red' : '';
   el('queue').textContent = state.queued.length ? 'Queued (' + state.queued.length + ')\n' + state.queued.map((v, i) => (i + 1) + '. ' + v).join('\n') : '';
@@ -88,10 +115,32 @@ async function deliver() {
   try {
     const result = await api('/commands', attempt.envelope);
     if(pending!==attempt)return;
+    const command = attempt.envelope.command;
+    const echo = outgoing.get(command.id);
     if (result.status === 'accepted') {
-      if (pending.envelope.command.kind === 'stop') { stopping = pending.envelope.command.taskId; el('feedback').textContent = 'Stop requested. Waiting for the task to exit.'; }
-      else { const sent = pending.envelope.command.attachments ?? []; for (const a of attachments) if (sent.includes(a.id)) a.sent = true; if (pending.clearDraft && draft.value === pending.text) {draft.value = '';sessionStorage.removeItem('play-draft');} tray(); const withFiles = sent.length ? ' with ' + sent.length + (sent.length === 1 ? ' attachment' : ' attachments') : ''; el('feedback').textContent = pending.envelope.command.kind === 'queue' ? (pending.steer ? (state?.agent ? 'Message submitted; see delivery status above' : 'Accepted by the agent') : 'Queued after the current task; stopping will discard it') + withFiles + '.' : 'Request accepted' + withFiles + '.'; }
-    } else el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
+      if(echo) echo.sequence = result.sequence;
+      if (command.kind === 'stop') {
+        stopping = command.taskId;
+        el('feedback').textContent = 'Stop requested. Waiting for the task to exit.';
+      } else {
+        const sent = command.attachments ?? [];
+        attachments = attachments.filter(item => !sent.includes(item.id));
+        if (attempt.clearDraft && draft.value === attempt.text) {
+          draft.value = '';
+          sessionStorage.removeItem('play-draft');
+        }
+        tray();
+        const withFiles = sent.length ? ' with ' + sent.length + (sent.length===1 ? ' attachment' : ' attachments') : '';
+        const status = command.kind !== 'queue' ? 'Request accepted'
+          : !attempt.steer ? 'Queued after the current task; stopping will discard it'
+          : state?.agent ? 'Message submitted; see delivery status above' : 'Accepted by the agent';
+        el('feedback').textContent = status + withFiles + '.';
+      }
+    } else {
+      outgoing.delete(command.id);
+      el('feedback').textContent = result.status === 'stale' ? 'The task or question changed. Review the current state and send again.' : 'Request refused: ' + result.status + '. Your draft is preserved.';
+    }
+    if(echo)publishConversation();
     pending = undefined;sessionStorage.removeItem('play-pending');
   } catch {
     if(pending!==attempt)return;
@@ -102,11 +151,35 @@ async function deliver() {
 function send(command, clearActionDraft=false) {
   if (!online || !state || pending || sending) return;
   liveHello();liveSend({type:'live:select'});
-  pending = {envelope: {version:1, sessionId:state.sessionId, command:{...command, ...((command.kind==='input'&&!state.question&&!state.choices.length&&state.mode!=='pick'||command.kind==='queue')&&staged().length?{attachments:staged().map(a=>a.id)}:{}), id:crypto.randomUUID()}}, text:draft.value, attachmentIds:staged().map(a=>a.id), steer:command.kind==='queue'&&!!state.canSteer, clearDraft:state.mode !== 'pick'&&(command.kind!=='action'||clearActionDraft)};
+  const message = command.kind==='queue' || (command.kind==='input' && !state.question && !state.choices.length && state.mode!=='pick');
+  const id = crypto.randomUUID();
+  const files = message ? attachments.map(a=>a.id) : [];
+  pending = {
+    envelope: {version:1, sessionId:state.sessionId, command:{...command, id, ...(files.length ? {attachments:files} : {})}},
+    text: draft.value,
+    steer: command.kind==='queue' && !!state.canSteer,
+    clearDraft: state.mode!=='pick' && (command.kind!=='action' || clearActionDraft)
+  };
+  if(message) {
+    const label = [command.text.trim(), ...attachments.map(a=>'📎 '+a.name)].filter(Boolean).join(' · ');
+    const text = command.text.trim();
+    let occurrence;
+    if ((state.agent?.history?.length || state.agent?.session?.turns?.length) && (command.kind==='input' || state.canSteer)) {
+      occurrence = agentMessageCount(state.agent,text,files)+1;
+      for (const earlier of outgoing.values()) {
+        if (earlier.occurrence && earlier.text===text && earlier.files.join()===files.join())
+          occurrence=Math.max(occurrence,earlier.occurrence+1);
+      }
+    }
+    outgoing.set(id,{id,sessionId:state.sessionId,label,text,files,occurrence});
+    el('feedback').textContent='Sending…';
+    publishConversation(true);
+  }
   sessionStorage.setItem('play-pending',JSON.stringify(pending));void deliver();
 }
 el('composer').onsubmit = event => {
-  event.preventDefault(); if (!draft.value.trim() || !state || el('send').disabled) return;
+  event.preventDefault(); if (!state || el('send').disabled) return;
+  if (!draft.value.trim() && (!attachments.length || state.question || state.choices.length)) return;
   if (!state.question && !state.choices.length && draft.value.trimStart().startsWith('/')) { submitSlash(); return; }
   send(state.mode === 'busy' ? {kind:'queue', taskId:state.taskId, text:draft.value} : {kind:'input', promptId:state.promptId, text:draft.value});
 };

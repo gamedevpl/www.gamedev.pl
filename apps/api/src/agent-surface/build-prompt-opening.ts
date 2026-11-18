@@ -52,6 +52,9 @@ const KNOWLEDGE_STEP =
 const ADVISOR_STEP =
   'Consult your advisor now, before you open any kit or game file: ask what to build first, what to leave out, and what `CAPTURE.json` has to prove about winning and losing, then build to its answer. It answers in seconds and is the only consultation of the round. If no advisor answers, plan it yourself and go on.';
 
+// 2026-11-17: the advisor planned before seeing references.
+const REFERENCES_STEP = '`read` every mounted reference image, so the advisor plans the look you were shown.';
+
 // 2026-11-16: the system prompt alone lost to the clock.
 const PROGRESS_POINTS =
   'While you build, call `report_progress` at each of these points, one sentence in the creator’s language (each is required; the clock is no reason to skip one): when the game first typechecks, after each capture, saying what the frames showed, and just before `submit_sources`.';
@@ -59,7 +62,7 @@ const PROGRESS_POINTS =
 // Reads the kickoff already carries are not asked for again.
 export function openingSteps(
   brief: BuildBrief,
-  lane: { workspace: boolean; mountedSources: boolean; inlined?: KickoffInlined },
+  lane: { workspace?: unknown; mountedSources?: unknown; mountedReferences?: boolean; inlined?: KickoffInlined },
 ): string[] {
   // get_brief stays: start names it as the next call.
   const reads = [
@@ -70,12 +73,14 @@ export function openingSteps(
     ...(lane.workspace ? [] : ['`get_kit`']),
   ];
   const list = reads.length > 1 ? `${reads.slice(0, -1).join(', ')} and ${reads.at(-1)}` : reads[0];
+  const advise = lane.workspace && !brief.feedback && !brief.gateRepair;
   const steps = [
     `\`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`.`,
     ...(list ? [`${list}.`] : []),
     ...(lane.workspace ? [KNOWLEDGE_STEP] : []),
     'One short `report_progress`, in the creator’s language, of what you will change, before you open any kit or game file.',
-    ...(lane.workspace && !brief.feedback && !brief.gateRepair ? [ADVISOR_STEP] : []),
+    ...(advise && lane.mountedReferences ? [REFERENCES_STEP] : []),
+    ...(advise ? [ADVISOR_STEP] : []),
   ];
   return [
     'Before your first edit, in this order (each step is required and takes seconds; the clock is no reason to skip one):',

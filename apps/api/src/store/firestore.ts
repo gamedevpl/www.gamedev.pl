@@ -95,9 +95,11 @@ import { discoveryJournalStoreFor, type DiscoveryRowsStore, type DiscoveryRow } 
 import type { DailyTelemetryAggregate } from '../platform/telemetry-daily.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
+import { FirestoreGameTrash } from './slices/game-trash.js';
 import { createGuardedFirestore, FieldValue, Firestore, type GuardedFirestore } from './shelf-guard-firestore.js';
 
 export class FirestoreStore extends PlayJournalFacade implements Store {
+  readonly gameTrash: FirestoreGameTrash;
   private db: GuardedFirestore;
   private telemetryStore: TelemetryStore;
   private discoveryJournalStore: DiscoveryRowsStore;
@@ -143,6 +145,7 @@ export class FirestoreStore extends PlayJournalFacade implements Store {
   constructor(db?: Firestore) {
     super();
     this.db = createGuardedFirestore(db ?? new Firestore());
+    this.gameTrash = new FirestoreGameTrash(this.db);
     this.telemetryStore = telemetryStoreFor(new FirestoreTelemetryStore(this.db));
     this.listTelemetryEventsAcross = this.telemetryStore.listTelemetryEventsAcross;
     this.discoveryJournalStore = discoveryJournalStoreFor();

@@ -281,10 +281,7 @@ export function CreatorStudioView({
     };
   }, [user]);
 
-  // A handoff belongs to the game the creator was on when they asked for the improvement.
-  // The moment the selected game changes — a shelf pick, a deep link, an Up — that thread
-  // is no longer on screen, so drop the override and let the newly selected game show its
-  // own current tip.
+  // A handoff belongs to the selected game.
   useEffect(() => {
     setHandoffToken(null);
   }, [selected]);
@@ -294,8 +291,6 @@ export function CreatorStudioView({
     setEditorSurfaceMode('docked');
     setEditorController(null);
   }, [activeGame?.token]);
-  // The token the thread is actually showing: the new job's after an improvement handoff,
-  // otherwise the selected game's own.
   const threadToken = handoffToken ?? activeGame?.token ?? null;
   // Playtest must follow the same handoff: if it kept the published shelf record, pause
   // feedback would call submitImprovement on the old token and open a second concurrent
@@ -1152,6 +1147,15 @@ export function CreatorStudioView({
                                     ),
                                   );
                                 }}
+                                onUnpublished={() =>
+                                  setGames((prev) =>
+                                    prev.map((game) =>
+                                      game.slug === activeGame.slug
+                                        ? { ...game, live: false, draftShared: false, livePublishedAt: undefined }
+                                        : game,
+                                    ),
+                                  )
+                                }
                                 onRemoved={async (token) => {
                                   const abandonedSlug = activeGame.slug;
                                   const abandonedTitle = activeGame.title;
@@ -1162,13 +1166,10 @@ export function CreatorStudioView({
                                   const fallbackToken = (list: readonly StudioGame[]) =>
                                     sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
                                   try {
-                                    // Pass the slug so a live sibling below the shelf
-                                    // ceiling is still returned (same deep-link path as
-                                    // Open in Studio).
+                                    // Include published siblings beyond the shelf limit.
                                     const shelfPage = await fetchStudioGames(abandonedSlug);
                                     applyShelfPage(shelfPage, abandonedSlug);
-                                    // The creator may have picked another game while this
-                                    // awaited.
+                                    // Keep selections made during the refresh.
                                     if (selectedRef.current !== null) return;
                                     const sibling =
                                       abandonedSlug &&

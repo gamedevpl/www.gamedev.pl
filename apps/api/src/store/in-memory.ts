@@ -68,6 +68,7 @@ import { InMemoryIdentityStore } from './slices/identity.js';
 import { InMemoryNotificationsStore } from './slices/notifications.js';
 import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
+import { MemoryGameTrash } from './slices/game-trash.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGameAccessStore } from './slices/game-access.js';
 import { erasedIncarnation } from './records/game-access.js';
@@ -116,7 +117,22 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
     () => this.submissions.values(),
   );
   private submissions: GuardedSubmissions = new GuardedSubmissions(() => this.shelfGuard.hooks());
-  private publicationStore = new InMemoryPublicationStore();
+  private publicationStore = new InMemoryPublicationStore((slug) => this.gameTrash.blocked(slug));
+  readonly gameTrash: MemoryGameTrash = new MemoryGameTrash(
+    this.submissions,
+    this.publicationStore.publications,
+    (slug) => this.gameAccessStore.access.get(slug)?.ownerUid,
+    (slug, at) => {
+      const transfers = this.gameTransferStore.transfers;
+      const offer = transfers.get(slug);
+      if (offer?.status === 'pending') transfers.set(slug, { ...offer, status: 'cancelled', respondedAt: at });
+    },
+    (slug) => {
+      this.gameAccessStore.access.delete(slug);
+      this.gameAdmissionStore.gameAgentKeys.delete(slug);
+      this.dropDerivedAccessMany([slug]);
+    },
+  );
   protected gameAccessStore: InMemoryGameAccessStore = new InMemoryGameAccessStore(
     (uid) => this.identityStore.users.has(uid),
     (ownerUid, at) => this.shelfGuard.tombstoneAt(ownerUid, at),
@@ -125,7 +141,7 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
   );
   protected gameTransferStore = new InMemoryGameTransferStore(
     (uid) => this.gameAccessStore.erasedAt.get(uid) ?? null,
-    (slug) => this.gameAccessStore.access.get(slug) ?? null,
+    (slug) => (this.gameTrash.blocked(slug) ? null : (this.gameAccessStore.access.get(slug) ?? null)),
     (uid) => this.identityStore.users.get(uid) ?? null,
     (code) => this.identityStore.recipientCodes.get(code)?.uid ?? null,
     (slug, record) => this.gameAccessStore.access.set(slug, record),
@@ -162,7 +178,11 @@ export class InMemoryStore extends PlayJournalFacade implements Store {
   private roundsStore = new InMemoryRoundsStore(this.submissions, this.gameAccessStore.access, this.erasedIncarnation);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions, this.erasedIncarnation);
-  protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
+  protected submissionStore = new InMemorySubmissionStore(
+    this.submissions,
+    this.publicationStore,
+    this.gameTrash.blocked,
+  );
   protected gameMembershipStore = new InMemoryGameMembershipStore(
     (slug) => this.gameAccessStore.access.get(slug) ?? null,
     (slug, record) => this.gameAccessStore.access.set(slug, record),

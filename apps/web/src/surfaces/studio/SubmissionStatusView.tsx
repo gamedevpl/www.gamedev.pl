@@ -1199,7 +1199,15 @@ export function SubmissionStatusView({
               <a className="inline-link" href="/">
                 {t('statusView.backHome')}
               </a>
-              {!TERMINAL_STATUSES.has(status.status) ? <AbandonControl token={token} /> : null}
+              {!TERMINAL_STATUSES.has(status.status) ? (
+                status.slug ? (
+                  <a className="inline-link" href={studioPath(status.slug, 'details')}>
+                    {t('studioPanel.overview.manage')}
+                  </a>
+                ) : (
+                  <AbandonControl token={token} />
+                )
+              ) : null}
             </div>
           </>
         ) : null}

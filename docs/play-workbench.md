@@ -448,8 +448,8 @@ the session budget is 128 MB and 100 artifacts. Generated names, SHA-256 hashes,
 revision, device and capture time keep evidence associated with the shown build.
 References and intended game assets are separate choices; uploading does not change
 source files. Draft text, staged references and uncertain command receipts survive a
-browser refresh within the same session. Attachments remain staged until explicitly removed,
-including across assistant clarification turns and subsequent tasks.
+browser refresh within the same session. Send accepts a screenshot without a caption. The composer clears only the attachments
+in an accepted message. Files stay staged across clarification answers and failed sends.
 
 Agent conversation history shows image evidence as thumbnails. Click a thumbnail to
 open the original image in a separate tab. Image reads require the local session token;

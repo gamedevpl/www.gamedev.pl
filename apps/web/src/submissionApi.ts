@@ -238,8 +238,16 @@ export async function abandonSubmission(token: string): Promise<void> {
   invalidateSubmissionStatus(token);
 }
 
-export async function deleteGame(token: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/delete-game`, {
+export function deleteGame(token: string, confirmation: string) {
+  return changeGame(token, 'delete-game', { confirmation });
+}
+export function unpublishGame(token: string) {
+  return changeGame(token, 'unpublish', {});
+}
+async function changeGame(token: string, action: 'delete-game' | 'unpublish', body: object): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/${action}`, {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
     method: 'POST',
     credentials: 'include',
   });

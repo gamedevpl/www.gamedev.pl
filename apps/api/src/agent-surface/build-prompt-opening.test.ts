@@ -61,6 +61,15 @@ describe('openingSteps', () => {
     expect(openingSteps(BRIEF, { ...lane, workspace: false }).join('\n')).not.toContain('advisor');
   });
 
+  // 2026-11-17: the advisor planned before seeing references.
+  it('reads mounted reference images before the advisor', () => {
+    const lane = { workspace: true, mountedSources: true, mountedReferences: true, inlined: { noFiles: true } };
+    const steps = openingSteps(BRIEF, lane).join('\n');
+    expect(steps).toMatch(/\n5\. `read` every mounted reference image.*\n6\. Consult your advisor now/s);
+    expect(openingSteps(BRIEF, { ...lane, mountedReferences: false }).join('\n')).not.toContain('reference image');
+    expect(openingSteps({ ...BRIEF, feedback: 'faster' }, lane).join('\n')).not.toContain('reference image');
+  });
+
   // 2026-11-16: one report in a six-minute round.
   it('names required progress points on a mounted workspace', () => {
     const lane = { workspace: true, mountedSources: true };

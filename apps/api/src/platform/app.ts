@@ -50,6 +50,7 @@ import { registerTextProposalRoutes } from '../community/proposal-text-routes.js
 import { resolveProposalBase } from '../community/proposal-base.js';
 import { registerDreamSettingRoutes } from '../creation/dream-setting-routes.js';
 import { resolveSnapshotReader, type GameSnapshotStore } from '../catalog/published-slugs-source.js';
+import { reapTrashedGames } from './game-trash-reaper.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerSpendBrakeRoutes, type SpendBrakeRoutesOptions } from './spend-brake.js';
 import type { CreatorCodeRoutesOptions } from '../creation/creator-code.js';
@@ -803,17 +804,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.seedDispatchRoutes,
   });
 
-  // The break-and-nudge loop's own clock (game-health.ts). A published game serves from a
-  // frozen bundle, so a moving engine never breaks what players load — what it breaks is
-  // the game's ability to be rebuilt, and only a re-run of the gate can tell us that
-  // happened. This is what makes the loop autonomous: the console's Re-gate button is a
-  // human noticing, and nobody was going to notice every time GameKit moved.
+  // Scheduled health checks rebuild against the current engine.
   await registerHealthSweepRoutes(app, {
     store,
     gamesStore,
     gateTrigger,
-    // The same client the submission routes resolved: one place holds the games-repo
-    // credential, and "what is today's engine commit" is a games-repo read like any other.
     githubClient: submissionSeams.githubClient ?? undefined,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'healthSweep'),
     // Matches run-gate.ts's `--health`, which checks against the branch rather than the
@@ -1036,14 +1031,17 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Following a game: a subscription rather than a bookmark. The count is public,
   // the follower list is not, and the only message it sends is "new version".
   await registerGameFollowRoutes(app, { store, ...options.gameFollowRoutes });
+  const deletionClock = options.accountDeletionRoutes?.now ?? Date.now;
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
     internalAuthVerifier:
       options.accountDeletionRoutes?.internalAuthVerifier ??
       createInternalAuthVerifierFromEnv(process.env, 'accountDeletionSweep'),
-    now: options.accountDeletionRoutes?.now,
+    now: deletionClock,
     graceMs: options.accountDeletionRoutes?.graceMs,
+    reapGames: (onError) =>
+      reapTrashedGames(store, gamesStore, submissionSeams.repoPublishedForRemoval, deletionClock(), onError),
     eraseMemoryStore: options.accountDeletionRoutes?.eraseMemoryStore ?? createCreatorMemoryEraserFromEnv(process.env),
   });
   // An alert can pause a lane itself.

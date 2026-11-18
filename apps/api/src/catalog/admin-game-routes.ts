@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { registerAdminTrashRoutes } from './admin-trash-routes.js';
 import { parseSpecTitle } from './github-client.js';
 import { startHealthCheck, type HealthGateTrigger } from './game-health.js';
 import { runSlugBackfill, type SlugClaimProbe } from './slug-backfill.js';
@@ -16,6 +17,7 @@ export interface AdminGameRoutesOptions {
   gamesStore?: GamesStore;
   onSourcesDelivered?: HealthGateTrigger;
   invalidatePublishedGameCaches: (slug: string) => void;
+  repoPublished: (slug: string) => Promise<boolean>;
   isSlugClaimed: SlugClaimProbe;
   confirmSlugClaim: (jobId: number, slug: string, title: string) => Promise<string | null>;
 
@@ -23,7 +25,6 @@ export interface AdminGameRoutesOptions {
   readCatalogFresh?: () => Promise<ReadonlyArray<{ slug: string }>>;
 }
 
-// Operator's published-games shelf: list, re-gate, delete, backfills.
 export async function registerAdminGameRoutes(app: FastifyInstance, options: AdminGameRoutesOptions): Promise<void> {
   const {
     store,
@@ -37,7 +38,8 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     readCatalogFresh,
   } = options;
 
-  // Manual trigger of the break-and-nudge loop, against the *current* engine.
+  registerAdminTrashRoutes(app, options);
+
   app.post<{ Params: { slug: string } }>('/api/admin/games/:slug/regate', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
@@ -59,22 +61,22 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
   });
 
   app.post<{ Params: { slug: string }; Body: { reason?: string } }>(
-    '/api/admin/games/:slug/delete',
+    '/api/admin/games/:slug/unpublish',
     async (request, reply) => {
       if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
       if (!store) return reply.status(503).send({ error: 'store_unavailable' });
 
       const slug = request.params.slug;
+      if (await options.repoPublished(slug)) return reply.status(409).send({ error: 'unpublish_repo_first' });
       const publication = await store.getPublication(slug);
       if (!publication) return reply.status(404).send({ error: 'not_found' });
-      if (!isPublished(publication)) {
+      if (!isPublished(publication))
         return reply.status(409).send({ error: 'not_published', state: publication.state });
-      }
 
       const reason =
         typeof request.body?.reason === 'string' && request.body.reason.trim()
           ? request.body.reason.trim()
-          : 'deleted by operator';
+          : 'unpublished by operator';
       await store.archivePublication(slug, reason, new Date(now()).toISOString());
       invalidatePublishedGameCaches(slug);
 
@@ -101,9 +103,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
 
     const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
 
-    // Both lanes plus drafts, and the repo catalog none of them lists.
-
-    // Unreadable or stale catalog means unknown coverage, so the pass refuses.
+    // Backfill needs fresh coverage of both catalog lanes and drafts.
     if (!readCatalogFresh) return reply.status(503).send({ error: 'catalog_unavailable' });
     let catalogEntries: ReadonlyArray<{ slug: string }>;
     try {

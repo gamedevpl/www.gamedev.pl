@@ -1,0 +1,60 @@
+main:
+  params: [request]
+  steps:
+    - validate:
+        switch:
+          - condition: ${request.bucket != sys.get_env("GAMES_STORE_BUCKET") or not(text.match_regex(request.slug, "^[a-z0-9][a-z0-9-]*$"))}
+            raise: "Invalid game target"
+    - configure:
+        assign:
+          - slug: ${request.slug}
+          - prefix: ${"games/" + slug + "/"}
+          - objects: ${"https://storage.googleapis.com/storage/v1/b/" + sys.get_env("GAMES_STORE_BUCKET") + "/o"}
+    - readGame:
+        call: http.get
+        args:
+          url: ${"https://firestore.googleapis.com/v1/projects/" + sys.get_env("GOOGLE_CLOUD_PROJECT_ID") + "/databases/(default)/documents/games/" + slug}
+          auth: {type: OAuth2}
+        result: game
+    - requireTrash:
+        switch:
+          - condition: ${map.get(game.body, ["fields","trash","mapValue","fields","slug","stringValue"]) != slug or map.get(game.body, ["fields","publication","mapValue","fields","state","stringValue"]) == "published"}
+            raise: "Only offline games in trash can be purged"
+    - list:
+        call: http.get
+        args:
+          url: ${objects}
+          auth: {type: OAuth2}
+          query: {prefix: "${prefix}", versions: true, maxResults: 50, fields: "items(name,generation),nextPageToken"}
+        result: page
+    - erase:
+        parallel:
+          concurrency_limit: 8
+          for:
+            value: object
+            in: ${default(map.get(page.body,"items"), [])}
+            steps:
+              - checkPrefix:
+                  switch:
+                    - condition: ${text.substring(object.name, 0, len(prefix)) != prefix}
+                      raise: "Unexpected object prefix"
+              - deleteObject:
+                  try:
+                    call: http.delete
+                    args:
+                      url: ${objects + "/" + text.url_encode(object.name)}
+                      query: {generation: "${object.generation}", ifGenerationMatch: "${object.generation}"}
+                      auth: {type: OAuth2}
+                  except:
+                    as: error
+                    steps:
+                      - ignoreMissing:
+                          switch:
+                            - condition: ${map.get(error,"code") != 404}
+                              raise: ${error}
+    - more:
+        switch:
+          - condition: ${map.get(page.body,"nextPageToken") != null}
+            next: list
+    - done:
+        return: ${slug}

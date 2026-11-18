@@ -3343,8 +3343,9 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.jobId, secret)}/abandon`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/delete-game`,
       headers: authHeaders,
+      payload: { confirmation: job.slug },
     });
 
     expect(response.statusCode).toBe(200);
@@ -5997,7 +5998,7 @@ describe('games published from the store rather than the repo', () => {
 
     const del = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/comet-courier/delete'),
+      url: opsUrl('/api/admin/games/comet-courier/unpublish'),
       headers: opsHeaders('g:boss'),
     });
     expect(del.statusCode).toBe(200);
@@ -7246,22 +7247,18 @@ describe('creator deletes their own published game', () => {
     return { app, authHeaders, store };
   }
 
-  it('archives the publication and leaves nothing else touched', async () => {
+  it('requires unpublishing and exact confirmation before moving a game to trash', async () => {
     const { app, authHeaders, store } = await appWithPublishedSubmission('g:test-user');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/submissions/${mintToken(1_000_099, secret)}/delete-game`,
-      headers: authHeaders,
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge' });
-    expect(await store.getPublication('sky-dodge')).toMatchObject({
-      state: 'archived',
-      takedownReason: 'deleted by creator',
-    });
-
+    const url = `/api/submissions/${mintToken(1_000_099, secret)}`;
+    const post = (action: string, confirmation?: string) =>
+      app.inject({ method: 'POST', url: url + '/' + action, headers: authHeaders, payload: { confirmation } });
+    expect((await post('delete-game', 'sky-dodge')).statusCode).toBe(409);
+    expect((await post('unpublish')).statusCode).toBe(200);
+    expect((await store.getSubmission(1_000_099))?.abandonedAt).toBeUndefined();
+    expect((await post('delete-game', 'Sky-Dodge')).statusCode).toBe(400);
+    expect((await post('delete-game', 'sky-dodge')).statusCode).toBe(200);
+    expect(await store.gameTrash.list()).toMatchObject([{ slug: 'sky-dodge' }]);
+    expect((await store.getSubmission(1_000_099))?.abandonedAt).toBeTruthy();
     await app.close();
   });
 
@@ -7277,21 +7274,6 @@ describe('creator deletes their own published game', () => {
 
     expect(response.statusCode).toBe(403);
     expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'published' });
-
-    await app.close();
-  });
-
-  it('refuses a game that is not currently published', async () => {
-    const { app, authHeaders, store } = await appWithPublishedSubmission('g:test-user', 'archived');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: `/api/submissions/${mintToken(1_000_099, secret)}/delete-game`,
-      headers: authHeaders,
-    });
-
-    expect(response.statusCode).toBe(409);
-    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'archived' });
 
     await app.close();
   });
@@ -7332,7 +7314,7 @@ describe('creator deletes their own published game', () => {
 
     const fromNewOwner = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(1_000_101, secret)}/delete-game`,
+      url: `/api/submissions/${mintToken(1_000_101, secret)}/unpublish`,
       headers: getAuthHeaders('g:new-owner'),
     });
     expect(fromNewOwner.statusCode).toBe(200);
@@ -7369,7 +7351,7 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      url: opsUrl('/api/admin/games/sky-dodge/unpublish'),
       headers: opsHeaders('g:someone-else'),
     });
     expect(response.statusCode).toBe(404);
@@ -7382,7 +7364,7 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/never-published/delete'),
+      url: opsUrl('/api/admin/games/never-published/unpublish'),
       headers: opsHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(404);
@@ -7395,7 +7377,7 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      url: opsUrl('/api/admin/games/sky-dodge/unpublish'),
       headers: opsHeaders('g:boss'),
     });
 
@@ -7411,7 +7393,7 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      url: opsUrl('/api/admin/games/sky-dodge/unpublish'),
       headers: { ...opsHeaders('g:boss'), 'content-type': 'application/json' },
       payload: { reason: 'infringing assets' },
     });
@@ -7431,14 +7413,14 @@ describe('operator deletes a published game', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: opsUrl('/api/admin/games/sky-dodge/delete'),
+      url: opsUrl('/api/admin/games/sky-dodge/unpublish'),
       headers: opsHeaders('g:boss'),
     });
 
     expect(response.statusCode).toBe(200);
     expect(await store.getPublication('sky-dodge')).toMatchObject({
       state: 'archived',
-      takedownReason: 'deleted by operator',
+      takedownReason: 'unpublished by operator',
     });
 
     await app.close();

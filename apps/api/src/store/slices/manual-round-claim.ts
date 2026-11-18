@@ -15,6 +15,7 @@ export async function claimManualRoundSlug(
     const rows = await tx.get(db.collection('submissions').where('slug', '==', slug));
     const claim = db.collection('games').doc(slug);
     const game = await tx.get(claim);
+    if (game.data()?.trash || game.data()?.purged) return false;
     if (
       !target.exists ||
       !permitsRecoveryClaim(game.data()?.recoveryAdmission, admissionNonce) ||

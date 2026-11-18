@@ -205,7 +205,7 @@ export async function registerCreatorStudioRoutes(
       }),
     );
 
-    const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => {
+    const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt, draftShared }) => {
       const access = tip.slug ? accessBySlug.get(tip.slug) : undefined;
       const viewerRole = access ? viewerRoleOnGame(access, uid) : 'owner';
       const ownerUid = access?.owner.kind === 'creator' ? access.owner.uid : null;
@@ -223,7 +223,7 @@ export async function registerCreatorStudioRoutes(
         ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
         ...(tip.slug && publishedVersions.has(tip.slug) ? { publishedVersion: publishedVersions.get(tip.slug) } : {}),
         ...(tip.slug && notLiveSlugs.has(tip.slug) ? { live: false as const } : {}),
-        ...(tip.draftSharedAt ? { draftShared: true } : {}),
+        ...(draftShared ? { draftShared: true } : {}),
         ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
         ...(codeSurfaceEnabled() ? { codeSurface: true } : {}),
         ...(viewerRole ? { viewerRole } : {}),

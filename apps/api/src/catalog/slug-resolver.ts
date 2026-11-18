@@ -23,8 +23,7 @@ export function createSlugResolver(options: SlugResolverOptions): SlugResolver {
       try {
         const existing = await store.getSubmissionBySlug(slug);
         if (existing && existing.jobId !== except) return true;
-        const publication = await store.getPublication(slug);
-        if (publication) return true;
+        if (await store.gameTrash.reservesSlug(slug)) return true;
       } catch {
         // Fall through: an unavailable store must not block creation.
       }

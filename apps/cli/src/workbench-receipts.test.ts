@@ -3,7 +3,7 @@ import { expect, it, vi } from 'vitest';
 import { SESSION_BROWSER_SCRIPT } from './session-browser-script.js';
 
 it.each(['ordinary', 'question', 'choice'])(
-  'marks staged evidence sent only once a %s answer sends it',
+  'clears only attachments included in the accepted request when a %s answer sends',
   async (kind) => {
     const fields = new Map<string, { textContent: string }>();
     const attachments = [{ id: 'image' }, { id: 'trace' }];
@@ -31,7 +31,8 @@ it.each(['ordinary', 'question', 'choice'])(
       sessionStorage: { setItem: vi.fn(), removeItem: vi.fn() },
       controls: () => {},
       tray: () => {},
-      staged: () => attachments.filter((a: { sent?: boolean }) => !a.sent),
+      outgoing: new Map(),
+      publishConversation: vi.fn(),
       el: (id: string) => {
         if (!fields.has(id)) fields.set(id, { textContent: '' });
         return fields.get(id);
@@ -44,9 +45,7 @@ it.each(['ordinary', 'question', 'choice'])(
     client.send({ kind: 'input', promptId: 1, text: draft.value });
     expect(context.liveSend).toHaveBeenCalledWith({ type: 'live:select' });
     await vi.waitFor(() => expect(context.pending).toBeUndefined());
-    expect(context.attachments.map((a: { sent?: boolean }) => Boolean(a.sent))).toEqual(
-      kind === 'ordinary' ? [true, true] : [false, false],
-    );
+    expect(context.attachments).toEqual(kind === 'ordinary' ? [] : attachments);
     expect(draft.value).toBe(kind === 'choice' ? 'Fix this image' : '');
     const sent = (api.mock.calls[0] as unknown as [string, { command: object }])[1].command;
     if (kind === 'ordinary') expect(sent).toHaveProperty('attachments', ['image', 'trace']);
@@ -105,7 +104,8 @@ it.each(['restored', 'late acceptance', 'late failure'])(
       sessionStorage: { removeItem: vi.fn(), setItem: vi.fn() },
       crypto: { randomUUID: () => 'fresh-command' },
       tray: vi.fn(),
-      staged: () => context.attachments,
+      window: { dispatchEvent: vi.fn() },
+      CustomEvent,
       el: (id: string) => {
         if (!fields.has(id)) fields.set(id, { textContent: '', disabled: false, children: [] });
         return fields.get(id)!;

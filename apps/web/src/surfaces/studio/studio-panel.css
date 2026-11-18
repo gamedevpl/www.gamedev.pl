@@ -20,20 +20,39 @@
   font-weight: 600;
 }
 
-.studio-abandon-block {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  width: 100%;
+.studio-removal-menu summary {
+  padding: 12px 0;
+  color: var(--muted);
+  cursor: pointer;
 }
 
-.studio-abandon-hint {
-  margin: 0;
-  max-width: 28rem;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  color: var(--muted);
+.studio-removal-dialog {
+  width: min(420px, calc(100% - 2rem));
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.studio-slug-confirm {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.studio-slug-confirm input {
+  min-width: 0;
+  padding: 0.5rem;
+  font: inherit;
+}
+.studio-removal-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.studio-removal-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+}
+
+.studio-removal-dialog .qa-confirm-actions {
+  flex-wrap: wrap;
 }
 
 .status-delete {
@@ -56,22 +75,6 @@
 .status-delete.is-danger {
   color: #f87171;
   font-weight: 600;
-}
-
-.studio-delete-block {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  width: 100%;
-}
-
-.studio-delete-hint {
-  margin: 0;
-  max-width: 28rem;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  color: var(--muted);
 }
 
 /* CREATOR CONTROL PANEL (/studio)

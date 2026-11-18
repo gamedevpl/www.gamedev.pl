@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Play chat shows outgoing messages immediately, accepts screenshots without a caption, and clears sent attachments from the composer (#2134).
+
 ## 0.69.0 — 2026-11-15
 
 ### Added
