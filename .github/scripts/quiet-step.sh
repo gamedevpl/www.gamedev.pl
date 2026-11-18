@@ -52,6 +52,9 @@ else
       -e 't' \
       -e 's/^((FAIL|ERROR)[[:space:]]+((smoke|trace|build|accept|playtest|validate|agency)[[:space:]]+)?[a-z0-9-]+).*/\1/p' \
     | sort -u | head -n 40 | sed 's/^/       /' || true
+  # Which gate stage failed: a tool name, a duration and an exit code, never source.
+  grep -E '^gate: [a-z0-9:-]+: [0-9.]+s, exit [1-9][0-9]*$' "$log" \
+    | sort -u | head -n 20 | sed 's/^/       /' || true
   echo "::error title=${label} failed::Exit ${code}. Output is withheld from this public log; rerun it in the games repo at the gated SHA."
 fi
 exit "$code"
