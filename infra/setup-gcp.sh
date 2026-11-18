@@ -715,6 +715,8 @@ grant_gate_with_retry gcloud iam service-accounts add-iam-policy-binding "${RUN_
   --project="$PROJECT_ID"
 echo "    Cloud Run may signBlob as itself for games-store signed URLs."
 
+PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" GAMES_STORE_BUCKET="$STORE_BUCKET" APP_SA="$RUN_SA" "$SCRIPT_DIR/setup-game-trash.sh"
+
 echo "==> 10/10 Ensuring delayed account-deletion cleanup infrastructure"
 PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" "$SCRIPT_DIR/setup-account-deletion.sh"
 

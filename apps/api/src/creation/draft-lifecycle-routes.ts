@@ -7,12 +7,14 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { ShareRefusal } from '../delivery/draft-share-gate.js';
+import { isActiveBuildRound } from './job-state.js';
 import { isPublished } from '../platform/publication-state.js';
 import { closeJob } from './close-job.js';
 
 export interface DraftLifecycleRoutesOptions {
   store?: Store;
   // Injected: creation asks delivery for the verdict, never reaches for it.
+  repoPublished: (slug: string) => Promise<boolean>;
   refuseShare?: (record: SubmissionRecord) => Promise<{ error: ShareRefusal; message: string } | null>;
   now: () => number;
   submissionTokenSecret?: string;
@@ -94,7 +96,13 @@ export async function registerDraftLifecycleRoutes(
         if (refusal) return reply.status(409).send(refusal);
       }
 
-      await store.setDraftShared(jobId, parsedBody.data.shared ? new Date(now()).toISOString() : null);
+      if (parsedBody.data.shared) await store.setDraftShared(jobId, new Date(now()).toISOString());
+      else {
+        const rounds = await store.listSubmissionsBySlug(record.slug);
+        await Promise.all(
+          rounds.filter((round) => round.draftSharedAt).map((round) => store.setDraftShared(round.jobId, null)),
+        );
+      }
       return reply.send({ shared: parsedBody.data.shared, slug: record.slug });
     },
   );
@@ -137,6 +145,15 @@ export async function registerDraftLifecycleRoutes(
         return reply.send({ ok: true, alreadyAbandoned: true });
       }
 
+      if (record.publishedAt || record.state === 'published')
+        return reply.status(409).send({ error: 'unpublish_first' });
+      if (
+        record.slug &&
+        !isPublished(await store.getPublication(record.slug)) &&
+        !(await options.repoPublished(record.slug))
+      ) {
+        return reply.status(409).send({ error: 'confirm_game_removal_in_studio' });
+      }
       await closeJob(
         { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache },
         { record, to: 'canceled', by: 'creator', reason: 'abandoned', log: request.log },
@@ -146,51 +163,64 @@ export async function registerDraftLifecycleRoutes(
     },
   );
 
-  app.post(
-    '/api/submissions/:token/delete-game',
-    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return reply;
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let jobId: number;
-      try {
-        jobId = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
+  for (const action of ['unpublish', 'trash'] as const)
+    app.post(
+      '/api/submissions/:token/' + (action === 'trash' ? 'delete-game' : 'unpublish'),
+      { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+      async (request, reply) => {
+        if (!submissionTokenSecret) {
+          return reply.status(503).send({ error: 'submissions are not configured' });
         }
-        throw error;
-      }
+        if (!checkUserAccess(request, reply)) return reply;
+        if (!store) {
+          return reply.status(503).send({ error: 'submissions are not configured' });
+        }
 
-      const record = await store.getSubmission(jobId);
-      if (!record) {
-        return reply.status(403).send({ error: 'only the creator can delete this game' });
-      }
-      if (!record.slug) {
-        return reply.status(409).send({ error: 'this game has no address yet' });
-      }
-      // Not record.ownerUid — a slug transfer can move ownership on.
-      if (!(await creatorOwnsSlug(store, record.slug, request.user!.uid))) {
-        return reply.status(403).send({ error: 'only the creator can delete this game' });
-      }
+        const token = z.string().parse((request.params as { token?: string }).token);
+        let jobId: number;
+        try {
+          jobId = verifyToken(token, submissionTokenSecret);
+        } catch (error) {
+          if (error instanceof InvalidTokenError) {
+            return reply.status(400).send({ error: 'invalid submission token' });
+          }
+          throw error;
+        }
 
-      const publication = await store.getPublication(record.slug);
-      if (!isPublished(publication)) {
-        return reply.status(409).send({ error: 'not_published' });
-      }
+        const record = await store.getSubmission(jobId);
+        if (!record) {
+          return reply.status(403).send({ error: 'only the creator can delete this game' });
+        }
+        if (!record.slug) {
+          return reply.status(409).send({ error: 'this game has no address yet' });
+        }
+        // Not record.ownerUid — a slug transfer can move ownership on.
+        if (!record.abandonedAt && !(await creatorOwnsSlug(store, record.slug, request.user!.uid))) {
+          return reply.status(403).send({ error: 'only the creator can delete this game' });
+        }
 
-      await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
-      invalidatePublishedGameCaches(record.slug);
-      invalidateStatusCache(jobId);
+        if (action === 'trash' && (request.body as { confirmation?: string } | null)?.confirmation !== record.slug) {
+          return reply.status(400).send({ error: 'slug_confirmation_required' });
+        }
+        if (await options.repoPublished(record.slug)) return reply.status(409).send({ error: 'unpublish_repo_first' });
+        const rounds = await store.listSubmissionsBySlug(record.slug);
+        await store.gameTrash.change(record.slug, request.user!.uid, action, new Date(now()).toISOString());
+        invalidatePublishedGameCaches(record.slug);
+        for (const round of rounds) {
+          invalidateStatusCache(round.jobId);
+          if (
+            action === 'trash' &&
+            !round.abandonedAt &&
+            (isActiveBuildRound(round) || round.dispatch?.workspace || round.dispatch?.seedWorkspace)
+          ) {
+            await closeJob(
+              { store, now, backendForRecord, releaseWorkspace, invalidateStatusCache },
+              { record: round, to: 'canceled', by: 'creator', reason: 'game_deleted', log: request.log },
+            );
+          }
+        }
 
-      return reply.send({ ok: true, slug: record.slug });
-    },
-  );
+        return reply.send({ ok: true, slug: record.slug });
+      },
+    );
 }

@@ -43,6 +43,7 @@ async function renderPanel(game: Partial<StudioShelfGame>, pane: 'overview' | 'b
         onSwitchToPlatform={vi.fn(async () => {})}
         onPlay={vi.fn()}
         onDraftSharedChange={vi.fn()}
+        onUnpublished={vi.fn()}
         onRemoved={vi.fn()}
       />,
     );

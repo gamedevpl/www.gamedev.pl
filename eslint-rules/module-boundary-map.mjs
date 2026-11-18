@@ -290,6 +290,7 @@ const FILE_BUCKET = {
 
   // creation: jobs, rounds, dispatch, seed, refine
   'draft-lifecycle-routes': 'creation',
+  'game-trash-reaper': 'platform',
   'close-job': 'platform',
   'handoff-seal-routes': 'creation',
   'feedback-request': 'creation',
@@ -566,6 +567,7 @@ const FILE_BUCKET = {
   'audio-profile': 'delivery',
   'audio-profile-log': 'delivery',
   'games-store': 'delivery',
+  'purge-game-objects': 'delivery',
   'stored-version-history': 'delivery',
   'storage-write-retry': 'delivery',
   'games-store-raster': 'delivery',
@@ -603,6 +605,7 @@ const FILE_BUCKET = {
 
   // catalog: github-client, snapshots, assemble, play
   'admin-game-routes': 'catalog',
+  'admin-trash-routes': 'catalog',
   'game-play-route': 'catalog',
   'assembled-game-cache': 'catalog',
   'slug-resolver': 'catalog',

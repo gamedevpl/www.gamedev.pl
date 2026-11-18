@@ -24,7 +24,8 @@ export interface PublicationStore {
 }
 
 export class InMemoryPublicationStore implements PublicationStore {
-  private publications = new Map<string, PublicationRecord>();
+  constructor(private blocked: (slug: string) => boolean = () => false) {}
+  readonly publications = new Map<string, PublicationRecord>();
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
     const record = this.publications.get(slug);
@@ -32,6 +33,7 @@ export class InMemoryPublicationStore implements PublicationStore {
   }
 
   async setPublication(record: PublicationRecord): Promise<void> {
+    if (this.blocked(record.slug)) throw Object.assign(new Error('game_deleted'), { statusCode: 409 });
     this.publications.set(record.slug, { ...record });
   }
 
@@ -76,7 +78,12 @@ export class FirestorePublicationStore implements PublicationStore {
 
   async setPublication(record: PublicationRecord): Promise<void> {
     // Merged onto the game doc -- votes/feedback/scorecards already live there too.
-    await this.db.collection('games').doc(record.slug).set({ publication: record }, { merge: true });
+    const ref = this.db.collection('games').doc(record.slug);
+    await this.db.runTransaction(async (tx) => {
+      const data = (await tx.get(ref)).data();
+      if (data?.trash || data?.purged) throw Object.assign(new Error('game_deleted'), { statusCode: 409 });
+      tx.set(ref, { publication: record }, { merge: true });
+    });
   }
 
   async setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean> {

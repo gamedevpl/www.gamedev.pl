@@ -298,10 +298,10 @@ export interface Store
     GameMembershipStore,
     GameQuotaStore,
     OAuthStore,
-    CliChatStore {}
+    CliChatStore {
+  readonly gameTrash: import('../store/slices/game-trash.js').GameTrashStore;
+}
 
-// The two implementations moved to ./store/in-memory.js and ./store/firestore.js.
-
-// Re-exported here so every importer keeps the one name it already uses.
+// Keep both store implementations available through their original import.
 export { InMemoryStore } from '../store/in-memory.js';
 export { FirestoreStore } from '../store/firestore.js';
