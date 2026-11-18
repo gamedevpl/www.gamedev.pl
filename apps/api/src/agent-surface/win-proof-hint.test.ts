@@ -41,6 +41,14 @@ describe('winProofProblem', () => {
     expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toBeNull();
   });
 
+  it('takes a oneOf whose every member meets the objective', () => {
+    const acceptance = { objective: 'Win', achieved: [{ field: 'state', equals: 'won' }] };
+    const only = plan([{ waitFor: { field: 'state', oneOf: ['won'], maxFrames: 600 } }]);
+    const either = plan([{ waitFor: { field: 'state', oneOf: ['won', 'lost'], maxFrames: 600 } }]);
+    expect(winProofProblem(files(acceptance, only), { firstDelivery: true })).toBeNull();
+    expect(winProofProblem(files(acceptance, either), { firstDelivery: true })).toContain('"state"');
+  });
+
   it('reads numeric objectives by their bounds', () => {
     const acceptance = { objective: 'Score ten', achieved: [{ field: 'score', atLeast: 10 }] };
     const short = plan([{ assert: { field: 'score', greaterThanOrEqual: 3 } }]);

@@ -41,6 +41,10 @@ const num = (value: unknown): number | null => (typeof value === 'number' && Num
 // True when the capture condition holding means the objective's does.
 function implies(capture: Json, objective: Json): boolean {
   if (capture.field !== objective.field) return false;
+  if (Array.isArray(capture.oneOf)) {
+    const { oneOf, ...rest } = capture;
+    return oneOf.length > 0 && oneOf.every((value) => implies({ ...rest, equals: value }, objective));
+  }
   if ('equals' in objective) return 'equals' in capture && capture.equals === objective.equals;
   const exact = num(capture.equals);
   const floor = num(objective.atLeast) ?? num(objective.greaterThanOrEqual);
