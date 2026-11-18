@@ -28,10 +28,7 @@ function scripted(actions: unknown, found: Json[] = []): Json[] {
       const condition = action[kind];
       if (isObject(condition) && typeof condition.field === 'string') found.push(condition);
     }
-    if (isObject(action.repeat)) {
-      if (isObject(action.repeat.until)) found.push(action.repeat.until);
-      scripted(action.repeat.actions, found);
-    }
+    if (isObject(action.repeat)) scripted(action.repeat.actions, found);
   }
   return found;
 }

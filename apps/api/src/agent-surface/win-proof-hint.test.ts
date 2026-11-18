@@ -37,8 +37,9 @@ describe('winProofProblem', () => {
     const acceptance = { objective: 'Win', achieved: [{ field: 'state', equals: 'won' }] };
     const lossOnly = plan([{ waitFor: { field: 'state', equals: 'lost', maxFrames: 900 } }]);
     expect(winProofProblem(files(acceptance, lossOnly), { firstDelivery: true })).toContain('"state"');
+    // Not every replay runner enforces repeat.until yet.
     const until = plan([{ repeat: { times: 9, until: { field: 'state', equals: 'won' }, actions: [{ wait: 5 }] } }]);
-    expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toBeNull();
+    expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toContain('"state"');
   });
 
   it('takes a oneOf whose every member meets the objective', () => {
