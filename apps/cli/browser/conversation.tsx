@@ -12,6 +12,8 @@ import type { Delivery } from '../src/session-delivery.js';
 import { playLines } from './play-lines.js';
 
 type Snapshot = {
+  follow?: boolean;
+  outgoing?: { id: string; label: string }[];
   lines: string[];
   diffs?: SessionDiffInfo[];
   readDiff?: (id: number) => Promise<SessionDiff>;
@@ -22,6 +24,7 @@ type Snapshot = {
 };
 
 export function Conversation() {
+  const [outgoing, setOutgoing] = useState<NonNullable<Snapshot['outgoing']>>([]);
   const [game, setGame] = useState(false);
   const [lines, setLines] = useState<string[]>([]);
   const [diffs, setDiffs] = useState<SessionDiffInfo[]>([]);
@@ -34,11 +37,13 @@ export function Conversation() {
     [],
   );
   const latestDiff = useRef(0);
-  const { ref: box, onScroll } = useFollowScroll(lines, 40);
+  const { ref: box, onScroll, follow } = useFollowScroll(outgoing.length ? outgoing : lines, 40);
   useEffect(() => {
     const update = (event: Event) => {
       const data = (event as CustomEvent<Snapshot>).detail;
       const next = data.lines;
+      if (data.follow) follow();
+      setOutgoing(data.outgoing ?? []);
       setGame(data.workspace?.mode === 'game');
       setLines((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next));
       setDiffs(data.diffs ?? []);
@@ -53,7 +58,13 @@ export function Conversation() {
     };
     window.addEventListener('play-session', update);
     return () => window.removeEventListener('play-session', update);
-  }, []);
+  }, [follow]);
+  const outgoingMessages = outgoing.map(({ id, label }) => (
+    <article key={id} className="message user play-outgoing" aria-label="Outgoing message">
+      <span className="message-author">You</span>
+      <p>{label}</p>
+    </article>
+  ));
   const messages = sessionMessages(lines, diffs);
   // Keep the transcript visible until the agent receives its first turn.
   const awaitingFirstTurn =
@@ -65,6 +76,7 @@ export function Conversation() {
     return (
       <>
         <AgentConversation
+          outgoing={outgoingMessages}
           state={agent}
           log={sessionMessages(playLines(lines, agent, deliveries), diffs)}
           diffs={diffs}
@@ -78,7 +90,8 @@ export function Conversation() {
     <>
       <div id="conversation" ref={box} tabIndex={0} aria-label="Conversation" onScroll={onScroll}>
         <SessionMessages messages={messages} diffs={diffs} openDiff={setSelected} />
-        {!messages.some((message) => message.kind !== 'output') && (
+        {outgoingMessages}
+        {!outgoing.length && !messages.some((message) => message.kind !== 'output') && (
           <div className="conversation-welcome">
             <h2>{game ? 'What shall we change?' : 'What would you like to make?'}</h2>
             <p>
@@ -192,12 +205,14 @@ function AgentConversation({
   diffs,
   openDiff,
   deliveries,
+  outgoing,
 }: {
   state: AppAgentState;
   log: SessionMessage[];
   diffs: SessionDiffInfo[];
   openDiff: (diff: SessionDiffInfo) => void;
   deliveries: Delivery[];
+  outgoing: React.ReactNode;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>(() => {
@@ -286,6 +301,7 @@ function AgentConversation({
           </div>
         }
       />
+      {outgoing}
       {deliveries.length > 0 && (
         <details className="play-deliveries" aria-label="Message delivery">
           <summary>

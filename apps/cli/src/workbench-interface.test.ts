@@ -1,63 +1,10 @@
 import { JSDOM } from 'jsdom';
-import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { PLAY_STYLE } from './generated/play-ui.js';
 import { SESSION_BROWSER_PAGE } from './session-browser-page.js';
+import { workbenchFixture as fixture } from '../test/workbench-interface-fixture.js';
 import type { AppAgentState, SessionEntry } from 'genaicode/react';
 
-const windows: JSDOM[] = [];
-afterEach(() => {
-  for (const dom of windows.splice(0)) dom.window.close();
-});
-function fixture(status = 200, mode?: string) {
-  const state = {
-    sessionId: 'one',
-    workspace: mode ? { mode, slug: mode === 'game' ? 'racer' : '', suggestedSlug: 'racer' } : undefined,
-    sourceId: 0,
-    hasPreview: false,
-    mode: 'prompt',
-    promptId: 1,
-    taskId: 0,
-    identity: 'Existing game',
-    activity: 'Ready',
-    localTask: '',
-    question: '',
-    choices: [],
-    lines: ['› Turn the car red', '◆ Choose your builder.'],
-    live: [],
-    queued: [],
-    history: ['Turn the car red'],
-    actions: ['status'],
-    actionCommands: { status: '/status' },
-    addresses: [],
-    agent: undefined as AppAgentState | undefined,
-  };
-  const requests: string[] = [];
-  const dom = new JSDOM(SESSION_BROWSER_PAGE, {
-    url: 'http://localhost/#' + 'a'.repeat(64),
-    runScripts: 'dangerously',
-    pretendToBeVisual: true,
-    beforeParse(window) {
-      window.fetch = vi.fn(async (path: string) => {
-        requests.push(path);
-        return {
-          ok: status === 200,
-          status,
-          json: async () => (path === '/commands' ? { status: 'accepted' } : { ...state }),
-        };
-      }) as unknown as typeof fetch;
-      window.AbortSignal.timeout = (() => new window.AbortController().signal) as typeof AbortSignal.timeout;
-      window.confirm = () => true;
-    },
-  });
-  windows.push(dom);
-  return { dom, state, requests, doc: dom.window.document };
-}
-// Pay the cold JSDOM parse once, outside any single test's timeout.
-beforeAll(async () => {
-  const { doc } = fixture();
-  await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));
-  for (const dom of windows.splice(0)) dom.window.close();
-}, 30_000);
 it('mounts working controls and opens chat without making the game inert or replacing it', async () => {
   const { doc } = fixture();
   await vi.waitFor(() => expect(doc.getElementById('connection')!.textContent).toBe('Connected · ready'));

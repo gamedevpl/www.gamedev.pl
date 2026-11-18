@@ -285,3 +285,9 @@ body[data-compact='true'] #conversation.play-agent:has(.play-agent-progress) {
   outline: 3px solid var(--tone-cyan);
   outline-offset: 3px;
 }
+
+#conversation.play-agent > .play-outgoing {
+  margin: 4px 14px 4px 24px;
+  max-height: 35%;
+  overflow: auto;
+}

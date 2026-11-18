@@ -75,13 +75,13 @@ it('keeps attachment retries idempotent and does not use media to answer choices
     id: 'media',
     kind: 'input' as const,
     promptId: session.get().promptId,
-    text: 'Fix this',
+    text: '',
     attachments: ['a'],
   };
   expect(dispatch(command).status).toBe('accepted');
   expect(dispatch(command).status).toBe('accepted');
   expect(resolve).toHaveBeenCalledOnce();
-  expect(await prompt).toContain('Evidence: local-file');
+  expect(await prompt).toBe('Attached file\nEvidence: local-file');
   expect(dispatch({ ...command, attachments: ['b'] }).status).toBe('conflict');
   const choice = session.prompt(['Yes'], 'Confirm');
   expect(dispatch({ ...command, id: 'choice', promptId: session.get().promptId, text: 'Yes' }).status).toBe('invalid');
