@@ -64,7 +64,7 @@ import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creatio
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
 import { winProofProblem } from './win-proof-hint.js';
-import { resolveAuthorizedRoundBaseVersion } from '../platform/round-base-version.js';
+import { resolveAuthorizedRoundBaseVersion, resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
@@ -2104,9 +2104,9 @@ export async function registerAgentChannelRoutes(
           !files.some((file) => file.path === 'CAPTURE.json') &&
           Boolean(await store?.getGameDreamsWantedAt(slug).catch(() => null)) &&
           !(await store?.getGameDreamsOffAt(slug).catch(() => null));
-        const winUnproven = winProofProblem(files, {
-          firstDelivery: !record.previewVersion && !record.deliveredVersion,
-        });
+        // A sibling round or the publication is a base too.
+        const base = store ? await resolveRoundBaseVersion(store, record, slug).catch(() => 'unknown') : 'unknown';
+        const winUnproven = winProofProblem(files, { firstDelivery: !base });
         return reply.send({
           accepted: true,
           mode,

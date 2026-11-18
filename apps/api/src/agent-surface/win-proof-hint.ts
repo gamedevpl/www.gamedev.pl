@@ -20,17 +20,35 @@ function isObject(value: unknown): value is Json {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function scriptedFields(actions: unknown, fields: Set<string>): Set<string> {
-  if (!Array.isArray(actions)) return fields;
+function scripted(actions: unknown, found: Json[] = []): Json[] {
+  if (!Array.isArray(actions)) return found;
   for (const action of actions) {
     if (!isObject(action)) continue;
     for (const kind of ['assert', 'waitFor'] as const) {
       const condition = action[kind];
-      if (isObject(condition) && typeof condition.field === 'string') fields.add(condition.field);
+      if (isObject(condition) && typeof condition.field === 'string') found.push(condition);
     }
-    if (isObject(action.repeat)) scriptedFields(action.repeat.actions, fields);
+    if (isObject(action.repeat)) {
+      if (isObject(action.repeat.until)) found.push(action.repeat.until);
+      scripted(action.repeat.actions, found);
+    }
   }
-  return fields;
+  return found;
+}
+
+const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+// True when the capture condition holding means the objective's does.
+function implies(capture: Json, objective: Json): boolean {
+  if (capture.field !== objective.field) return false;
+  if ('equals' in objective) return 'equals' in capture && capture.equals === objective.equals;
+  const exact = num(capture.equals);
+  const floor = num(objective.atLeast) ?? num(objective.greaterThanOrEqual);
+  const ceiling = num(objective.atMost) ?? num(objective.lessThanOrEqual);
+  if (floor === null && ceiling === null) return false;
+  const low = exact ?? num(capture.greaterThanOrEqual) ?? num(capture.greaterThan);
+  const high = exact ?? num(capture.lessThanOrEqual) ?? num(capture.lessThan);
+  return (floor === null || (low !== null && low >= floor)) && (ceiling === null || (high !== null && high <= ceiling));
 }
 
 // Null when the files show a win, or cannot say.
@@ -52,11 +70,12 @@ export function winProofProblem(files: readonly SourceFile[], opts: { firstDeliv
   if (!opts.firstDelivery) return null;
   const capture = parseObject(files, 'CAPTURE.json');
   if (!capture || !Array.isArray(capture.script)) return null;
-  const scripted = scriptedFields(capture.script, new Set<string>());
-  const named = achieved.map((condition) => condition.field).filter((field) => typeof field === 'string');
-  if (named.length === 0 || named.some((field) => scripted.has(field as string))) return null;
+  const conditions = scripted(capture.script);
+  if (achieved.some((objective) => conditions.some((condition) => implies(condition, objective)))) return null;
+  const named = achieved.map((objective) => objective.field).filter((field) => typeof field === 'string');
+  if (named.length === 0) return null;
   return (
-    `CAPTURE.json never asserts or waits for the win ACCEPTANCE.json names (${named.map((field) => `"${String(field)}"`).join(', ')}), ` +
+    `CAPTURE.json never asserts or waits for a condition ACCEPTANCE.json names (${named.map((field) => `"${String(field)}"`).join(', ')}), ` +
     'so nothing shows the game can be won. Script the capture to that state with the controls a player has ' +
     '(maxFrames up to fps * 120), then submit again.'
   );

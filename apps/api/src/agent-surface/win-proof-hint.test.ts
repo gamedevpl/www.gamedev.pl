@@ -33,6 +33,22 @@ describe('winProofProblem', () => {
     expect(winProofProblem(files(acceptance, nested), { firstDelivery: true })).toBeNull();
   });
 
+  it('does not take a loss on the same field for the win', () => {
+    const acceptance = { objective: 'Win', achieved: [{ field: 'state', equals: 'won' }] };
+    const lossOnly = plan([{ waitFor: { field: 'state', equals: 'lost', maxFrames: 900 } }]);
+    expect(winProofProblem(files(acceptance, lossOnly), { firstDelivery: true })).toContain('"state"');
+    const until = plan([{ repeat: { times: 9, until: { field: 'state', equals: 'won' }, actions: [{ wait: 5 }] } }]);
+    expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toBeNull();
+  });
+
+  it('reads numeric objectives by their bounds', () => {
+    const acceptance = { objective: 'Score ten', achieved: [{ field: 'score', atLeast: 10 }] };
+    const short = plan([{ assert: { field: 'score', greaterThanOrEqual: 3 } }]);
+    const enough = plan([{ assert: { field: 'score', greaterThanOrEqual: 12 } }]);
+    expect(winProofProblem(files(acceptance, short), { firstDelivery: true })).toContain('"score"');
+    expect(winProofProblem(files(acceptance, enough), { firstDelivery: true })).toBeNull();
+  });
+
   it('stays silent when it cannot tell', () => {
     expect(winProofProblem([], { firstDelivery: true })).toBeNull();
     expect(winProofProblem([{ path: 'ACCEPTANCE.json', content: '{' }], { firstDelivery: true })).toBeNull();
