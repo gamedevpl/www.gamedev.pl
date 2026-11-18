@@ -6,9 +6,7 @@ import { OperatorAccountDeletionError } from './erase-account.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import type { Store } from './store.js';
 
-const DeleteAccountBody = z.object({
-  confirmation: z.literal('DELETE'),
-});
+const DeleteAccountBody = z.object({ confirmation: z.literal('DELETE') });
 
 export interface AccountDeletionRoutesOptions {
   store: Store;
@@ -16,13 +14,12 @@ export interface AccountDeletionRoutesOptions {
   internalAuthVerifier: InternalAuthVerifier;
   now?: () => number;
   graceMs?: number;
+  reapGames?: (onError: (slug: string, error: unknown) => void) => Promise<number>;
   eraseMemoryStore?: (vendor: string, storeId: string) => Promise<void>;
 }
 
-/** Self-service scheduling plus the OIDC-authenticated delayed cleanup sweep. */
 export function registerAccountDeletionRoutes(app: FastifyInstance, options: AccountDeletionRoutesOptions): void {
   const { store, adminUids, internalAuthVerifier } = options;
-
   app.delete('/api/me/account', async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
     if (request.authMethod !== 'session') return reply.status(404).send({ error: 'not_found' });
@@ -74,13 +71,16 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
           'account deletion sweep skipped operator accounts awaiting demotion',
         );
       }
+      const gameFailures =
+        (await options.reapGames?.((slug, err) => request.log.error({ slug, err }, 'game trash purge failed'))) ?? 0;
       const payload = {
+        ...(gameFailures ? { gameFailures } : {}),
         scanned: result.scanned,
         deleted: result.deleted,
         failed: result.failures.length,
         operatorAccountsSkipped: result.operatorAccountsSkipped.length,
       };
-      return result.failures.length > 0 ? reply.status(500).send(payload) : reply.send(payload);
+      return result.failures.length > 0 || gameFailures ? reply.status(500).send(payload) : reply.send(payload);
     },
   );
 }

@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon, type PixelIconName } from '../../PixelIcon.js';
 import { formatRelativeTime, formatSeconds } from '../../relativeTime.js';
 import type { GameHealth } from '../../healthApi.js';
-import { abandonSubmission, deleteGame } from '../../submissionApi.js';
+import { StudioRemovalActions } from './StudioRemovalActions.js';
 import type { StudioScorecard } from '../../studioApi.js';
 import { isStudioGamePublished, isStudioGameShelfLive, type StudioShelfGame } from '../../studioShelf.js';
 import { ContributionsSetting } from '../../ContributionsSetting.js';
@@ -52,6 +51,7 @@ export function DetailsPanel({
   onSwitchToPlatform,
   onPlay,
   onDraftSharedChange,
+  onUnpublished,
   onRemoved,
   onLeftGame,
 }: {
@@ -77,6 +77,7 @@ export function DetailsPanel({
   onSwitchToPlatform: () => Promise<void>;
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
+  onUnpublished: () => void;
   onRemoved: (token: string) => void | Promise<void>;
   onLeftGame?: () => void;
 }) {
@@ -86,41 +87,7 @@ export function DetailsPanel({
   const catalogLive = isStudioGameShelfLive(game);
   const publishedAt = game.publishedAt ?? game.livePublishedAt;
   const isOwner = game.viewerRole !== 'editor';
-  const [abandonArmed, setAbandonArmed] = useState(false);
-  const [abandoning, setAbandoning] = useState(false);
-  const [deleteArmed, setDeleteArmed] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const shotToken = mediaToken ?? game.token;
-
-  async function handleAbandon() {
-    if (!abandonArmed) {
-      setAbandonArmed(true);
-      return;
-    }
-    setAbandoning(true);
-    try {
-      await abandonSubmission(game.token);
-      await onRemoved(game.token);
-    } catch {
-      setAbandoning(false);
-      setAbandonArmed(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      return;
-    }
-    setDeleting(true);
-    try {
-      await deleteGame(game.token);
-      await onRemoved(game.token);
-    } catch {
-      setDeleting(false);
-      setDeleteArmed(false);
-    }
-  }
 
   const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
   const showBuild = game.lastKnownStatus !== 'abandoned';
@@ -207,40 +174,6 @@ export function DetailsPanel({
                     <PixelIcon name="wrench" size={12} /> {t('studioPanel.overview.openBuild')}
                   </button>
                 ) : null}
-                {!publishedJob && game.lastKnownStatus !== 'abandoned' && isOwner ? (
-                  <div className="studio-abandon-block">
-                    {abandonArmed && !catalogLive ? (
-                      <p className="studio-abandon-hint">{t('studioPanel.overview.abandonHintRemove')}</p>
-                    ) : null}
-                    <button
-                      type="button"
-                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-                      onClick={() => void handleAbandon()}
-                      disabled={abandoning}
-                    >
-                      {abandonArmed
-                        ? t(
-                            catalogLive
-                              ? 'studioPanel.overview.abandonConfirmKeepLive'
-                              : 'studioPanel.overview.abandonConfirmRemove',
-                          )
-                        : t(catalogLive ? 'studioPanel.overview.abandon' : 'studioPanel.overview.abandonRemove')}
-                    </button>
-                  </div>
-                ) : null}
-                {catalogLive && game.lastKnownStatus !== 'abandoned' && isOwner ? (
-                  <div className="studio-delete-block">
-                    {deleteArmed ? <p className="studio-delete-hint">{t('studioPanel.overview.deleteHint')}</p> : null}
-                    <button
-                      type="button"
-                      className={`status-delete${deleteArmed ? ' is-danger' : ''}`}
-                      onClick={() => void handleDelete()}
-                      disabled={deleting}
-                    >
-                      {deleteArmed ? t('studioPanel.overview.deleteConfirm') : t('studioPanel.overview.delete')}
-                    </button>
-                  </div>
-                ) : null}
               </div>
             </section>
 
@@ -266,6 +199,17 @@ export function DetailsPanel({
             <ContributionsSetting slug={game.slug} />
             <ProposalReviewPanel scope="mine" slug={game.slug} />
           </div>
+        ) : null}
+
+        {activePane === 'overview' && isOwner && showBuild && (!publishedJob || catalogLive) ? (
+          <StudioRemovalActions
+            key={JSON.stringify([game.token, publishedJob, catalogLive])}
+            game={game}
+            publishedJob={publishedJob}
+            catalogLive={catalogLive}
+            onUnpublished={onUnpublished}
+            onRemoved={onRemoved}
+          />
         ) : null}
 
         {activePane === 'connect' ? (

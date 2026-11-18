@@ -33,6 +33,7 @@ export async function bindSubmissionSlug(
     const rows = await tx.get(db.collection('submissions').where('slug', '==', slug));
     const claim = db.collection('games').doc(slug);
     const game = await tx.get(claim);
+    if (game.data()?.trash || game.data()?.purged) throw Object.assign(new Error('game_deleted'), { statusCode: 409 });
     const holder = rows.docs
       .map((d) => fromStoredSubmission(d.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];

@@ -1,5 +1,5 @@
 import { assertAgentRound } from './agent-round-write.js';
-import { permitsRecoveryClaim, isAbandonedRecovery } from './recovery-admission.js';
+import { permitsRecoveryClaim, isAbandonedRecovery, isOwnerArchived } from './recovery-admission.js';
 import { canClaimManualRound } from './manual-round-claim.js';
 import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
@@ -12,6 +12,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
   constructor(
     private submissions: Map<number, SubmissionRecord>,
     private publication?: Pick<PublicationStore, 'getPublication'>,
+    private blocked: (slug: string) => boolean = () => false,
   ) {}
 
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -63,6 +64,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
     admissionNonce?: string,
   ): Promise<boolean> {
     const publication = await this.publication?.getPublication(slug);
+    if (this.blocked(slug)) return false;
     const target = this.submissions.get(jobId);
     if (
       !target ||
@@ -101,8 +103,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
     recovery?: { key: string; spec: string; locale: string; admissionNonce?: string },
   ): Promise<boolean> {
     const publication = await this.publication?.getPublication(slug);
+    if (this.blocked(slug)) return false;
     if (!permitsRecoveryClaim(this.recoveryAdmissions.get(slug), recovery?.admissionNonce)) return false;
-    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    const archived = isOwnerArchived(publication);
     if (publication && !(sourceJobId !== null && archived)) return false;
     const target = this.submissions.get(jobId);
     const records = [...this.submissions.values()].filter((r) => r.slug === slug);
@@ -155,6 +158,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
         statusCode: 409,
       });
     }
+    if (this.blocked(slug)) throw Object.assign(new Error('game_deleted'), { statusCode: 409 });
     assertRecoveryBinding(jobId, holder, this.recoveryAdmissions.get(slug), admissionNonce);
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });
@@ -200,6 +204,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
     const sub = this.submissions.get(jobId);
     assertAgentRound(sub, generation);
     if (!sub) return;
+    if (at && sub.abandonedAt) throw Object.assign(new Error('round_closed'), { statusCode: 409 });
     const next = { ...sub };
     if (at) next.draftSharedAt = at;
     else delete next.draftSharedAt;

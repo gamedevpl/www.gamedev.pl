@@ -6,10 +6,8 @@ export const MAX_OWNER_GAMES = 50;
 export interface OwnerGame {
   /** Newest job for this game — what the shelf shows and what tokens address. */
   tip: SubmissionRecord;
-  /**
-   * Publish time from a sibling job when the tip is not published but the game is
-   * still live in the catalog. Never copied onto `tip.publishedAt`.
-   */
+  draftShared?: true;
+  // Sibling publication history belongs to the game, never the tip.
   catalogPublishedAt?: string;
 }
 
@@ -59,6 +57,7 @@ export function collapseJobsToOwnerGames(jobs: readonly SubmissionRecord[], mode
 
     const publishedSibling = sorted.find(hasPublishedAt);
     const ownerGame: OwnerGame = { tip };
+    if (sorted.some((job) => job.draftSharedAt)) ownerGame.draftShared = true;
     if (publishedSibling && !tip.publishedAt) {
       ownerGame.catalogPublishedAt = publishedSibling.publishedAt;
     }

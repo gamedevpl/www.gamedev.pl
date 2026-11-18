@@ -1,3 +1,4 @@
+import { isPublishedEntry } from '@gamedevpl/contract';
 import { acknowledgeHandoff } from './creation/builder-handoff.js';
 import type { BuilderHandoffAckInput, BuilderHandoffOutcome } from './creation/builder-handoff-ack.js';
 import { runDreamWorker, type DreamWorkInput } from './creation/dream-worker.js';
@@ -346,6 +347,7 @@ export interface SubmissionRoutesHandle {
    * The public media route gives this source priority over migrated store bytes, so
    * profile cards must use the same winner or they can advertise a stale filename.
    */
+  repoPublishedForRemoval: (slug: string) => Promise<boolean>;
   getRepoPublishedCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
   // Published with SPEC listed: false, so reachable by link only.
   isSlugUnlistedPublished: (slug: string) => Promise<boolean>;
@@ -1257,6 +1259,8 @@ export async function registerSubmissionRoutes(
     isSlugPublished: catalogRoutes.isSlugPublished,
   });
 
+  const repoPublishedForRemoval = async (slug: string) =>
+    (await catalogRoutes.readCatalogFresh()).some((entry) => entry.slug === slug && isPublishedEntry(entry));
   await registerAdminGameRoutes(app, {
     store,
     adminUids,
@@ -1266,6 +1270,7 @@ export async function registerSubmissionRoutes(
     invalidatePublishedGameCaches,
     isSlugClaimed,
     confirmSlugClaim,
+    repoPublished: repoPublishedForRemoval,
     readCatalogFresh: catalogRoutes.readCatalogFresh,
   });
   await registerModerationFlagRoutes(app, {
@@ -1298,6 +1303,7 @@ export async function registerSubmissionRoutes(
   await registerDraftLifecycleRoutes(app, {
     store,
     refuseShare,
+    repoPublished: repoPublishedForRemoval,
     now,
     submissionTokenSecret,
     githubClient,
@@ -1914,6 +1920,7 @@ export async function registerSubmissionRoutes(
     ...(agentBackends.defaultVendor ? { defaultVendor: agentBackends.defaultVendor } : {}),
     configuredSeedProviders: [...configuredSeedProviders],
     defaultSeedProvider: seedProviderEnv.defaultProvider,
+    repoPublishedForRemoval,
     getRepoPublishedCatalogEntry: catalogRoutes.getPublishedCatalogEntry,
     isSlugUnlistedPublished: catalogRoutes.isSlugUnlistedPublished,
     startImprovementRound,

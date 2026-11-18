@@ -1,4 +1,4 @@
-import { isAbandonedRecovery } from '../store/slices/recovery-admission.js';
+import { isAbandonedRecovery, isOwnerArchived } from '../store/slices/recovery-admission.js';
 import { isCanonicalSlug } from '../platform/slug-policy.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { randomUUID } from 'node:crypto';
@@ -38,7 +38,7 @@ export function registerCheckoutRecovery(
   const inspect = async (slug: string, uid: string) => {
     const holder = await deps.store!.getSubmissionBySlug(slug);
     const publication = await deps.store!.getPublication(slug);
-    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    const archived = isOwnerArchived(publication);
     if ((publication && !archived) || (await deps.isSlugPublished(slug))) return { kind: 'occupied' as const };
     if (!holder) return { kind: publication ? ('occupied' as const) : ('missing' as const) };
     if (

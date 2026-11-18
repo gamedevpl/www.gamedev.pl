@@ -70,13 +70,14 @@ export async function writeAgentRoundShared(
   at: string | null,
   generation?: number,
 ): Promise<void> {
-  await writeAgentRoundDocuments(db, jobId, generation, [
-    {
-      ref: db.collection('submissions').doc(String(jobId)),
-      merge: true,
-      data: { draftSharedAt: at ?? FieldValue.delete() },
-    },
-  ]);
+  const ref = db.collection('submissions').doc(String(jobId));
+  await db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const round = doc.data() as SubmissionRecord | undefined;
+    assertAgentRound(round, generation);
+    if (!round || (at && round.abandonedAt)) throw Object.assign(new Error('round_closed'), { statusCode: 409 });
+    tx.update(ref, { draftSharedAt: at ?? FieldValue.delete() });
+  });
 }
 
 export async function writeAgentSeed(

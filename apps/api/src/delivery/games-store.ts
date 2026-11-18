@@ -1,3 +1,4 @@
+import { runTrashWorkflow } from './purge-game-objects.js';
 import { retryStorageWrite } from './storage-write-retry.js';
 import { listStoredVersions } from './stored-version-history.js';
 import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
@@ -513,6 +514,7 @@ type StagingManifest = {
 };
 
 export interface GamesStore {
+  purgeGame?(slug: string): Promise<void>;
   /** Writes a candidate version's sources. Returns the version id assigned. */
   putCandidateSources(input: {
     slug: string;
@@ -1122,6 +1124,10 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       return body ? sourceFileContentFromObject(path, body) : null;
     },
 
+    async purgeGame(slug) {
+      assertSlug(slug);
+      await runTrashWorkflow(bucket, slug);
+    },
     async listVersions(slug, opts) {
       assertSlug(slug);
       return listStoredVersions({

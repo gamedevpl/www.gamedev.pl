@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { parsePathRoute } from '../../core/router.js';
 import i18n from '../../i18n/index.js';
@@ -10,6 +10,7 @@ import type { StudioGame, StudioGamesResponse, StudioScorecard } from '../../stu
 
 const abandonSubmission = vi.fn();
 const deleteGame = vi.fn();
+const unpublishGame = vi.fn();
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
 const fetchStudioScorecards = vi.fn();
@@ -31,6 +32,7 @@ vi.mock('../../submissionApi', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(async () => ({ media: [] })),
     abandonSubmission: (...args: unknown[]) => abandonSubmission(...args),
+    unpublishGame: (...args: unknown[]) => unpublishGame(...args),
     deleteGame: (...args: unknown[]) => deleteGame(...args),
   };
 });
@@ -50,6 +52,23 @@ vi.mock('../../studioApi', async () => {
     setDraftShared: (...args: unknown[]) => setDraftShared(...args),
     submitImprovement: vi.fn(),
   };
+});
+
+// jsdom lacks the native dialog methods.
+beforeAll(() => {
+  Object.assign(HTMLDialogElement.prototype, {
+    showModal(this: HTMLDialogElement) {
+      this.open = true;
+    },
+    close(this: HTMLDialogElement) {
+      this.open = false;
+    },
+  });
+});
+
+afterAll(() => {
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
+  Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
 });
 
 function studioShelf(games: StudioGame[], truncated = false, totalGames?: number): StudioGamesResponse {
@@ -1632,6 +1651,14 @@ describe('CreatorStudioView — what players think', () => {
   });
 });
 
+async function typeSlug(container: HTMLElement, slug: string) {
+  const input = container.querySelector('dialog input')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, slug);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 describe('CreatorStudioView abandon', () => {
   beforeEach(() => {
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -1672,16 +1699,23 @@ describe('CreatorStudioView abandon', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'neon-draft', selectedTab: 'details' });
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
-    expect(abandon?.textContent).toContain('Remove this game from Studio');
+    const menu = abandon!.closest('details')!;
+    expect(menu.open).toBe(false);
+    menu.querySelector('summary')!.click();
+    expect(abandon?.textContent).toContain('Move to trash');
 
-    await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await act(async () => abandon!.click());
 
-    expect(container.querySelector('.studio-abandon-hint')?.textContent).toContain('This draft was never published');
-    expect(container.querySelector('.status-abandon')?.textContent).toContain(
-      'Yes, remove it — the game leaves Studio',
-    );
+    const dialog = container.querySelector('dialog[open]')!;
+    expect(dialog.textContent).toContain('Neon Draft');
+    expect(dialog.textContent).toContain('after 14 days');
+    expect(document.activeElement?.textContent).toBe('Cancel');
+    expect(dialog.querySelector<HTMLButtonElement>('.qa-confirm-discard')!.disabled).toBe(true);
+    await act(async () => abandon!.click());
+    expect(abandonSubmission).not.toHaveBeenCalled();
+    await act(async () => dialog.querySelector('button')!.click());
+    expect(container.querySelector('dialog')).toBeNull();
+    expect(abandonSubmission).not.toHaveBeenCalled();
 
     root.unmount();
   });
@@ -1706,14 +1740,9 @@ describe('CreatorStudioView abandon', () => {
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
     expect(abandon?.textContent).toContain('Abandon this build');
 
-    await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await act(async () => abandon!.click());
 
-    expect(container.querySelector('.studio-abandon-hint')).toBeNull();
-    expect(container.querySelector('.status-abandon')?.textContent).toContain(
-      'Yes, abandon — discard this round (live game stays)',
-    );
+    expect(container.querySelector('dialog')?.textContent).toContain('The published game will stay available');
 
     root.unmount();
   });
@@ -1747,13 +1776,9 @@ describe('CreatorStudioView abandon', () => {
     });
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => abandon!.click());
     await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
     expect(abandonSubmission).toHaveBeenCalledWith('token-improve');
@@ -1789,16 +1814,13 @@ describe('CreatorStudioView abandon', () => {
     });
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => abandon!.click());
+    await typeSlug(container, 'neon-draft');
     await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
-    expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
+    expect(deleteGame).toHaveBeenCalledWith('token-draft', 'neon-draft');
     expect(onNavigate).toHaveBeenCalledWith('/studio');
 
     root.unmount();
@@ -1845,16 +1867,13 @@ describe('CreatorStudioView abandon', () => {
     followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => abandon!.click());
+    await typeSlug(container, 'neon-draft');
     await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
-    expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
+    expect(deleteGame).toHaveBeenCalledWith('token-draft', 'neon-draft');
     expect(onNavigate).toHaveBeenCalledWith('/studio');
     expect(container.querySelector('.studio-detail')).not.toBeNull();
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Other Game');
@@ -1900,13 +1919,10 @@ describe('CreatorStudioView abandon', () => {
     followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => abandon!.click());
+    await typeSlug(container, 'neon-draft');
     await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/studio');
@@ -1960,13 +1976,10 @@ describe('CreatorStudioView abandon', () => {
     followStudioNavigation(root, onNavigate);
 
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => abandon!.click());
+    await typeSlug(container, 'neon-draft');
     await act(async () => {
-      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
     // Pick a game before the pending refetch's fallback selection lands.
@@ -2031,7 +2044,7 @@ describe('CreatorStudioView delete', () => {
     document.body.innerHTML = '';
   });
 
-  it('offers delete, not abandon, on a published game', async () => {
+  it('offers unpublish on a published game', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     fetchStudioGames.mockResolvedValue(
@@ -2054,21 +2067,19 @@ describe('CreatorStudioView delete', () => {
 
     expect(container.querySelector('.status-abandon')).toBeNull();
     const del = container.querySelector<HTMLButtonElement>('.status-delete');
-    expect(del?.textContent).toContain('Delete this game');
+    expect(del?.textContent).toContain('Unpublish');
 
-    await act(async () => {
-      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    await act(async () => del!.click());
 
-    expect(container.querySelector('.studio-delete-hint')?.textContent).toContain(
-      'takes the game off the site immediately',
-    );
-    expect(container.querySelector('.status-delete')?.textContent).toContain('Yes, delete it — the game goes offline');
+    const dialog = container.querySelector('dialog[open]')!;
+    expect(dialog.textContent).toContain('Global Thermonuclear Strategy');
+    expect(dialog.textContent).toContain('will stay in your Studio');
+    expect(deleteGame).not.toHaveBeenCalled();
 
     root.unmount();
   });
 
-  it('offers delete alongside abandon while an improvement round is open on a live game', async () => {
+  it('offers unpublish alongside abandon while an improvement round is open on a live game', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     fetchStudioGames.mockResolvedValue(
@@ -2090,53 +2101,12 @@ describe('CreatorStudioView delete', () => {
     const del = container.querySelector<HTMLButtonElement>('.status-delete');
     expect(del).not.toBeNull();
 
+    await act(async () => del!.click());
     await act(async () => {
-      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-delete.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('dialog .qa-confirm-discard')!.click();
     });
 
-    expect(deleteGame).toHaveBeenCalledWith('token-improve');
-
-    root.unmount();
-  });
-
-  it('deletes the game and refetches the shelf', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage('en');
-    const live = {
-      token: 'token-gts',
-      title: 'Global Thermonuclear Strategy',
-      createdAt: '2026-07-02T00:00:00.000Z',
-      lastKnownStatus: 'published' as const,
-      slug: 'global-thermonuclear-strategy',
-      publishedAt: '2026-07-02T00:00:00.000Z',
-    };
-    fetchStudioGames.mockResolvedValueOnce(studioShelf([live]));
-    fetchStudioGames.mockResolvedValueOnce(studioShelf([]));
-
-    const { container, root, onNavigate } = await renderStudio({
-      selectedGame: 'global-thermonuclear-strategy',
-      selectedTab: 'details',
-    });
-
-    const del = container.querySelector<HTMLButtonElement>('.status-delete');
-    await act(async () => {
-      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.status-delete.is-danger')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(deleteGame).toHaveBeenCalledWith('token-gts');
-    expect(fetchStudioGames).toHaveBeenCalledTimes(2);
-    expect(fetchStudioGames).toHaveBeenLastCalledWith('global-thermonuclear-strategy');
-    expect(onNavigate).toHaveBeenCalledWith('/studio');
+    expect(unpublishGame).toHaveBeenCalledWith('token-improve');
 
     root.unmount();
   });

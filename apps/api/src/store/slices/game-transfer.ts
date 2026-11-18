@@ -266,6 +266,8 @@ export class FirestoreGameTransferStore implements GameTransferStore {
         codeRef ? tx.get(codeRef) : Promise.resolve(null),
       ]);
 
+      const game = (await tx.get(this.db.collection('games').doc(slug))).data();
+      if (game?.trash || game?.purged) return 'stale_owner';
       // Re-read at commit time, not the route's earlier code lookup.
       const sender = senderSnap.exists ? (senderSnap.data() as { createdAt?: string }) : null;
       const recipient = recipientSnap.exists

@@ -1,5 +1,12 @@
 import type { SubmissionRecord } from '../records/submission.js';
 
+export function isOwnerArchived(publication?: { state?: string; takedownReason?: string } | null): boolean {
+  return (
+    publication?.state === 'archived' &&
+    (publication.takedownReason === 'deleted by creator' || publication.takedownReason === 'unpublished by owner')
+  );
+}
+
 export interface RecoveryAdmission {
   nonce: string;
   until: number;
