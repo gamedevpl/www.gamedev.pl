@@ -55,16 +55,12 @@ export function createSiteAssistantLimiter(options: SiteAssistantLimiterOptions)
   let cache: { value: CreationLimits | null; expiresAt: number } | null = null;
   let counted: { dateStr: string; value: number; expiresAt: number } | null = null;
 
-  // Tokens this process holds per day, oldest day first.
-  const holds = new Map<string, number>();
-  function heldOn(reserved: number): string {
-    for (const [dateStr, held] of holds) {
-      if (held < reserved || reserved <= 0) continue;
-      if (held === reserved) holds.delete(dateStr);
-      else holds.set(dateStr, held - reserved);
-      return dateStr;
-    }
-    return today();
+  // Holds of calls still running, oldest first, each with its day.
+  const holds: { key: string | undefined; tokens: number; dateStr: string }[] = [];
+  // The backend names no call: match a hold by key and size.
+  function heldOn(key: string | undefined, reserved: number): string {
+    const index = holds.findIndex((hold) => hold.key === key && hold.tokens === reserved);
+    return index < 0 ? today() : holds.splice(index, 1)[0]!.dateStr;
   }
 
   // Null means unknown: the document was never readable, so refuse.
@@ -106,7 +102,7 @@ export function createSiteAssistantLimiter(options: SiteAssistantLimiterOptions)
       }
     },
 
-    async reserve(_key, tokens) {
+    async reserve(key, tokens) {
       const value = await limits();
       if (!value || value.paused || value.cap <= 0) return { ok: false };
       const dateStr = today();
@@ -126,7 +122,7 @@ export function createSiteAssistantLimiter(options: SiteAssistantLimiterOptions)
             'global daily site assistant token cap is over 80% reserved',
           );
         }
-        holds.set(dateStr, (holds.get(dateStr) ?? 0) + tokens);
+        holds.push({ key, tokens, dateStr });
         return { ok: true };
       } catch (error) {
         logWarn({ err: error, dateStr }, 'site assistant token counter unreachable; refusing the call');
@@ -135,8 +131,8 @@ export function createSiteAssistantLimiter(options: SiteAssistantLimiterOptions)
     },
 
     // Settles on the day that holds it, so midnight never loses usage.
-    async spend(_key, tokens, reserved) {
-      const dateStr = heldOn(reserved);
+    async spend(key, tokens, reserved) {
+      const dateStr = heldOn(key, reserved);
       try {
         await store.adjustGlobalAssistantTokens(dateStr, tokens - reserved);
       } catch (error) {

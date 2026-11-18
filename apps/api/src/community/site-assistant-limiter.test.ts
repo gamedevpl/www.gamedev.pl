@@ -85,4 +85,16 @@ describe('the site assistant limiter', () => {
     expect(await f.store.getGlobalAssistantTokenCount('2026-11-18')).toBe(150);
     expect(await f.store.getGlobalAssistantTokenCount('2026-11-19')).toBe(0);
   });
+
+  it('settles calls that straddle midnight and finish out of order, each on its day', async () => {
+    const f = fixture(5000);
+    f.setNow('2026-11-18T23:59:59Z');
+    await f.limiter.reserve('a', 1000);
+    f.setNow('2026-11-19T00:00:02Z');
+    await f.limiter.reserve('b', 600);
+    await f.limiter.spend('b', 100, 600);
+    await f.limiter.spend('a', 200, 1000);
+    expect(await f.store.getGlobalAssistantTokenCount('2026-11-18')).toBe(200);
+    expect(await f.store.getGlobalAssistantTokenCount('2026-11-19')).toBe(100);
+  });
 });
