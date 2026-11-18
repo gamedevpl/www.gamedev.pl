@@ -133,3 +133,33 @@ it('lets the model call only the tools pinned on the server', async () => {
   const request = f.generate.mock.calls[0]![0] as { tools?: { name: string }[] };
   expect((request.tools ?? []).map((tool) => tool.name)).toEqual(['search_games', 'open_game', 'open_page']);
 });
+
+it('answers over a real connection, and stops the model when the visitor leaves', async () => {
+  const f = await fixture([say('Still here.')]);
+  const address = await f.app.listen({ port: 0, host: '127.0.0.1' });
+  const post = (signal?: AbortSignal) =>
+    fetch(`${address}/api/assistant/turn`, {
+      method: 'POST',
+      headers: { ...f.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'hi' }),
+      signal,
+    });
+  // The request body ending must not read as the visitor leaving.
+  expect(await (await post()).text()).toContain('Still here.');
+
+  let seen: AbortSignal | undefined;
+  const stopped = new Promise<void>((resolve) => {
+    f.generate.mockImplementationOnce(async (request: { signal?: AbortSignal }) => {
+      seen = request.signal;
+      request.signal?.addEventListener('abort', () => resolve());
+      return await new Promise<never>(() => {});
+    });
+  });
+  const leaving = new AbortController();
+  const pending = post(leaving.signal).catch(() => undefined);
+  await vi.waitFor(() => expect(seen).toBeDefined());
+  leaving.abort();
+  await stopped;
+  await pending;
+  expect(seen!.aborted).toBe(true);
+});

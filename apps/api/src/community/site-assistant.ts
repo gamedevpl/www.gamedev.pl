@@ -138,7 +138,8 @@ export function registerSiteAssistantRoutes(app: FastifyInstance, options: SiteA
   async function forward(ready: AgentBackend, request: FastifyRequest, reply: FastifyReply, route: string) {
     // A visitor who leaves stops paying for the answer.
     const gone = new AbortController();
-    request.raw.once('close', () => {
+    // The response closing early is the disconnect; the request closing is not.
+    reply.raw.once('close', () => {
       if (!reply.raw.writableEnded) gone.abort();
     });
     const site = request.headers['sec-fetch-site'];

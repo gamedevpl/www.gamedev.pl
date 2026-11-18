@@ -90,4 +90,18 @@ describe('SiteAssistant', () => {
     expect(container.querySelector<HTMLElement>('.site-assistant-panel')!.hidden).toBe(true);
     expect(container.querySelector('.chat-stub')).not.toBeNull();
   });
+
+  it('moves over a bottom bar while one shows, and back when it leaves', async () => {
+    const bar = Object.assign(document.createElement('aside'), { className: 'app-update' });
+    bar.getBoundingClientRect = () => ({ height: 64 }) as DOMRect;
+    document.body.appendChild(bar);
+    await mount('/');
+    const aside = container.querySelector<HTMLElement>('.site-assistant')!;
+    expect(aside.style.getPropertyValue('--site-assistant-lift')).toBe('76px');
+    await act(async () => {
+      bar.remove();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(aside.style.getPropertyValue('--site-assistant-lift')).toBe('');
+  });
 });

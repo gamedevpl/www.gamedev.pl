@@ -1,7 +1,8 @@
 .site-assistant {
   position: fixed;
   right: 16px;
-  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  /* Lifted over the install and update bars while one shows. */
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--site-assistant-lift, 0px));
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -54,7 +55,7 @@ body.player-open .site-assistant {
 
 .site-assistant-panel {
   width: min(380px, calc(100vw - 32px));
-  height: min(520px, calc(100dvh - 120px));
+  height: min(520px, calc(100dvh - 120px - var(--site-assistant-lift, 0px)));
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   background: var(--panel);
