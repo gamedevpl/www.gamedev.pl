@@ -56,7 +56,6 @@ export async function createGameArtifactBrowser(options: {
         failed(new Error(`Game JavaScript error: ${cause.message}`));
       });
       const probe = async () => {
-        // A real URL, not setContent: Chrome 158 aborts on srcdoc under about:blank.
         await page.route(HOST_PAGE_URL, (route) =>
           route.fulfill({
             contentType: 'text/html; charset=utf-8',
