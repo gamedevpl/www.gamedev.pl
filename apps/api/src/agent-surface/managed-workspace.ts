@@ -109,9 +109,9 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
   };
 }
 
-// 2026-11-17: a blocking install held one round for 199 s.
-// 2026-11-19: a builder dropped a second background command, so both share one.
+// 2026-11-19: the environment's Playwright package arrived without its browser.
 const BROWSER = `{ (playwright install --with-deps chromium || npx -y playwright install --with-deps chromium) >/tmp/chrome-install.log 2>&1; echo "chrome install exit $?" >>/tmp/chrome-install.log; } &`;
+// 2026-11-19: a builder skipped a second background command.
 const INSTALL = `nohup sh -c '${BROWSER} s=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log; wait' >/dev/null 2>&1 &`;
 const INSTALL_WAIT =
   'That installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself. The same line fetches the capture browser: only if `capture` reports no Chrome, `tail -1 /tmp/chrome-install.log` shows whether that fetch has finished.';
