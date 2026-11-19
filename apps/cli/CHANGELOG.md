@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.70.0 — 2026-11-19
+
 ### Added
 
 - Capture plans accept `repeat.until`: the loop stops once the condition holds and the capture fails if it never does, matching the Creator Kit.
