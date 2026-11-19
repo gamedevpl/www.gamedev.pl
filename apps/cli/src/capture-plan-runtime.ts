@@ -53,7 +53,7 @@ export type PlanAction =
   | { drag: PlanDrag }
   | { assert: PlanCondition }
   | { waitFor: PlanCondition }
-  | { repeat: { times: number; actions: PlanAction[] } };
+  | { repeat: { times: number; until?: PlanCondition; actions: PlanAction[] } };
 
 export interface CapturePlan {
   seed: number;
@@ -174,7 +174,20 @@ export async function runCapturePlan(plan: CapturePlan, driver: PlanDriver): Pro
         }
         if (!matched) throw new Error(`waitFor timed out at frame ${frame}: ${conditionLabel(action.waitFor)}`);
       } else if ('repeat' in action) {
-        for (let index = 0; index < action.repeat.times; index++) await runActions(action.repeat.actions);
+        const until = action.repeat.until;
+        let met = until === undefined;
+        for (let index = 0; index < action.repeat.times; index++) {
+          if (until !== undefined && evaluateCondition(await driver.snapshot(), until)) {
+            met = true;
+            break;
+          }
+          await runActions(action.repeat.actions);
+        }
+        if (!met && until !== undefined && !evaluateCondition(await driver.snapshot(), until)) {
+          throw new Error(
+            `repeat gave up at frame ${frame} after ${action.repeat.times} rounds: ${conditionLabel(until)}`,
+          );
+        }
       }
     }
   }

@@ -36,12 +36,20 @@ it.each([
   { script: [{ assert: { field: 'x', equals: 1, notEquals: 0 } }] },
   { script: [{ waitFor: { field: 'x', equals: 1 } }] },
   { script: [{ press: { key: 'a', frames: 0 } }] },
+  { script: [{ repeat: { times: 2, until: { field: 'x' }, actions: [{ wait: 1 }] } }] },
   { script: [{ repeat: { times: 500, actions: [{ repeat: { times: 500, actions: [{ wait: 0 }] } }] } }] },
   { fps: 1, maxFrames: 601, script: [{ wait: 1 }] },
   { seed: -1, script: [{ wait: 1 }] },
   { url: 'file:///etc/passwd', script: [{ wait: 1 }] },
 ])('rejects executable, ambiguous or unbounded plans: %j', (raw) => {
   expect(() => parseScenario(raw)).toThrow();
+});
+
+it('accepts a repeat that stops on a condition', () => {
+  const plan = parseScenario({
+    script: [{ repeat: { times: 40, until: { field: 'state', equals: 'won' }, actions: [{ wait: 15 }] } }],
+  });
+  expect(plan.script[0]).toMatchObject({ repeat: { until: { field: 'state', equals: 'won' } } });
 });
 
 it('bounds nesting before recursive schema validation', () => {

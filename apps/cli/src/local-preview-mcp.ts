@@ -58,7 +58,7 @@ const TOOLS = [
               minProperties: 1,
               maxProperties: 1,
               description:
-                'One action: {wait:frames}, {tap:key|{key,code?}}, {press:{key,code?,frames}}, {keyDown:key}, {keyUp:key}, {click:point}, {move:point}, {drag:{from:point,to:point,frames}}, {capture:name}, {assert:condition}, {waitFor:{...condition,maxFrames}}, {repeat:{times,actions}}. Point: normalized {x,y} in 0..1, or {fromMetadata:{x:field,y:field}} in canvas pixels. Condition: {field,equals|notEquals|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|oneOf}. No JavaScript.',
+                'One action: {wait:frames}, {tap:key|{key,code?}}, {press:{key,code?,frames}}, {keyDown:key}, {keyUp:key}, {click:point}, {move:point}, {drag:{from:point,to:point,frames}}, {capture:name}, {assert:condition}, {waitFor:{...condition,maxFrames}}, {repeat:{times,until?:condition,actions}}. Point: normalized {x,y} in 0..1, or {fromMetadata:{x:field,y:field}} in canvas pixels. Condition: {field,equals|notEquals|greaterThan|greaterThanOrEqual|lessThan|lessThanOrEqual|oneOf}. No JavaScript.',
             },
           },
         },

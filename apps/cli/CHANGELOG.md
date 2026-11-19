@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Capture plans accept `repeat.until`: the loop stops once the condition holds and the capture fails if it never does, matching the Creator Kit.
+
 ### Fixed
 
 - Play chat shows outgoing messages immediately, accepts screenshots without a caption, and clears sent attachments from the composer (#2134).

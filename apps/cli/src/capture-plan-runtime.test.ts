@@ -87,3 +87,17 @@ it('retains strict Creator Kit condition types, null values and missing-field se
   expect(evaluateCondition({}, { field: 'missing', notEquals: 1 })).toBe(true);
   expect(evaluateCondition({ value: false }, { field: 'value', oneOf: [false, null] })).toBe(true);
 });
+
+it('ends a repeat once its until condition holds and fails when it never does', async () => {
+  const repeatUntil = (times: number): CapturePlan => ({
+    seed: 1,
+    fps: 30,
+    maxFrames: 20,
+    script: [{ repeat: { times, until: { field: 'frame', greaterThanOrEqual: 3 }, actions: [{ wait: 1 }] } }],
+  });
+  expect(await runCapturePlan(repeatUntil(10), conformanceDriver().driver)).toEqual({ frames: 3 });
+  expect(await runCapturePlan(repeatUntil(3), conformanceDriver().driver)).toEqual({ frames: 3 });
+  await expect(runCapturePlan(repeatUntil(2), conformanceDriver().driver)).rejects.toThrow(
+    'repeat gave up at frame 2 after 2 rounds: frame greaterThanOrEqual 3',
+  );
+});
