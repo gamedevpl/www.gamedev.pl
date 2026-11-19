@@ -79,6 +79,8 @@ The DSL supports `wait`, `tap`, `press`, `keyDown`, `keyUp`, `click`, `move`, `d
 `{fromMetadata:{x:"fieldX",y:"fieldY"}}` in canvas pixels. Conditions accept exactly
 one of `equals`, `notEquals`, `greaterThan`, `greaterThanOrEqual`, `lessThan`,
 `lessThanOrEqual`, or `oneOf`; `waitFor` also requires `maxFrames`.
+`repeat` may carry an `until` condition: the loop stops once it holds, and the
+plan fails when it still does not hold after `times` rounds.
 
 Validation bounds inline requests to 64 KiB and 2000 expanded actions. Local
 `CAPTURE.json` files may use 2 MiB and 20000 expanded actions, accommodating

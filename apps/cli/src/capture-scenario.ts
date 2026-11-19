@@ -50,7 +50,11 @@ const action: z.ZodType<PlanAction> = z.lazy(() =>
     z
       .object({
         repeat: z
-          .object({ times: z.number().int().min(1).max(500), actions: z.array(action).min(1).max(FILE_ACTIONS) })
+          .object({
+            times: z.number().int().min(1).max(500),
+            until: condition.optional(),
+            actions: z.array(action).min(1).max(FILE_ACTIONS),
+          })
           .strict(),
       })
       .strict(),
