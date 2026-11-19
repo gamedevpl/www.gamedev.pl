@@ -229,11 +229,10 @@ describe('CreatorQA', () => {
     expect(find('.btn-create-now')).not.toBeNull();
     const values = [...findAll('.qa-review-value')].map((row) => row.textContent ?? '');
     expect(values[0]).toContain('Rock Dodger');
-    expect(values[1]).toContain('AI decides');
-    expect(find('.qa-review-unset')).not.toBeNull();
+    expect(find('.qa-review-unset').textContent).toContain('AI decides');
 
     // Edit goes back to the stage that sets that answer.
-    await click(findAll('.qa-review-edit')[1]);
+    await click(find('.qa-review-edit[aria-label$="What visual style fits best?"]'));
     expect(heading()).toContain('What visual style');
 
     await act(async () => root.unmount());

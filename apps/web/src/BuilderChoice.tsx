@@ -2,6 +2,7 @@ import type { BuilderUnavailableReason } from '@gamedevpl/contract';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BuilderKind } from './builderKind.js';
+import { PixelIcon } from './PixelIcon.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 export type { BuilderUnavailableReason } from '@gamedevpl/contract';
@@ -52,46 +53,42 @@ export function BuilderChoice({
         {t('builder.legend')}
       </legend>
       <div className="builder-choice-options" role="radiogroup" aria-label={t('builder.legend')}>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === 'platform'}
-          aria-disabled={platformUnavailable ? true : undefined}
-          aria-describedby={platformUnavailable ? noteId : undefined}
-          className={`builder-choice-option${value === 'platform' ? ' is-selected' : ''}${
-            platformUnavailable ? ' is-unavailable' : ''
-          }`}
-          disabled={disabled}
-          title={platformUnavailable ? t(`builder.platform.unavailable.detail.${platformUnavailable}`) : undefined}
-          onClick={() => select('platform')}
-        >
-          <span className="builder-choice-option-title">
-            {t('builder.platform.title')}
-            {platformUnavailable && (
-              <span className="builder-choice-option-badge">
-                {t(`builder.platform.unavailable.badge.${platformUnavailable}`)}
+        {(['platform', 'self'] as const).map((kind) => {
+          const unavailable = kind === 'platform' ? platformUnavailable : undefined;
+          const selected = value === kind;
+          return (
+            <button
+              key={kind}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-disabled={unavailable ? true : undefined}
+              aria-describedby={unavailable ? noteId : undefined}
+              className={`builder-choice-option${selected ? ' is-selected' : ''}${unavailable ? ' is-unavailable' : ''}`}
+              disabled={disabled}
+              title={unavailable ? t(`builder.platform.unavailable.detail.${unavailable}`) : undefined}
+              onClick={() => select(kind)}
+            >
+              {hideLegend && (
+                <span className="qa-builder-symbols">
+                  <PixelIcon name={kind === 'platform' ? 'gamepad' : 'code'} size={28} />
+                  {selected && <PixelIcon name="check" size={16} />}
+                </span>
+              )}
+              <span className="builder-choice-option-title">
+                {t(`builder.${kind}.title`)}
+                {unavailable && (
+                  <span className="builder-choice-option-badge">
+                    {t(`builder.platform.unavailable.badge.${unavailable}`)}
+                  </span>
+                )}
               </span>
-            )}
-          </span>
-          <span className="builder-choice-option-detail">
-            {platformUnavailable ? (
-              <span id={noteId}>{t(`builder.platform.unavailable.note.${platformUnavailable}`)}</span>
-            ) : (
-              t('builder.platform.detail')
-            )}
-          </span>
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={value === 'self'}
-          className={`builder-choice-option${value === 'self' ? ' is-selected' : ''}`}
-          disabled={disabled}
-          onClick={() => select('self')}
-        >
-          <span className="builder-choice-option-title">{t('builder.self.title')}</span>
-          <span className="builder-choice-option-detail">{t('builder.self.detail')}</span>
-        </button>
+              <span className="builder-choice-option-detail" id={unavailable ? noteId : undefined}>
+                {unavailable ? t(`builder.platform.unavailable.note.${unavailable}`) : t(`builder.${kind}.detail`)}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </fieldset>
   );
