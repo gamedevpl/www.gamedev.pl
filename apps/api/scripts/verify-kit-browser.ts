@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createGitHubClient } from '../src/catalog/github-client.js';
 import { createGameArtifactBrowser } from '../src/catalog/game-artifact-browser.js';
+import { demoteHotStarterToOrdinary } from '../src/platform/api-kit-input.js';
 import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
 function required(name: string): string {
@@ -50,6 +51,16 @@ export async function verifyInstalledKit(options: {
     const starter = path.join(kitDir, 'starters', 'block-cascade');
     for (const slug of ['ordinary-probe', 'hot-probe']) {
       await cp(starter, path.join(workspace, 'games', slug), { recursive: true });
+    }
+    const ordinaryRoot = path.join(workspace, 'games', 'ordinary-probe');
+    const ordinary = demoteHotStarterToOrdinary(
+      await readFile(path.join(ordinaryRoot, 'GAME.json'), 'utf8'),
+      await readFile(path.join(ordinaryRoot, 'game.ts'), 'utf8'),
+    );
+    if (ordinary) {
+      await writeFile(path.join(ordinaryRoot, 'GAME.json'), ordinary.manifest);
+      await writeFile(path.join(ordinaryRoot, '__ordinary-boot.ts'), ordinary.bootModule);
+      await writeFile(path.join(ordinaryRoot, 'game.ts'), ordinary.game);
     }
     const hotRoot = path.join(workspace, 'games', 'hot-probe');
     const manifest = JSON.parse(await readFile(path.join(hotRoot, 'GAME.json'), 'utf8')) as Record<string, unknown>;

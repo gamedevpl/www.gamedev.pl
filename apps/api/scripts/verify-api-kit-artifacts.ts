@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { createGitHubClient } from '../src/catalog/github-client.js';
 import { createGameArtifactBrowser } from '../src/catalog/game-artifact-browser.js';
+import { demoteHotStarterToOrdinary } from '../src/platform/api-kit-input.js';
 import { assembleGameHtml, projectFromSources } from '../src/platform/assemble.js';
 
 export type ApiKitInput = {
@@ -17,6 +18,17 @@ export async function verifyApiKitArtifacts(input: ApiKitInput, executablePath: 
   for (const slug of input.modes) {
     for (const [name, bytes] of files) {
       if (name.startsWith(starter)) files.set(`games/${slug}/${name.slice(starter.length)}`, bytes);
+    }
+  }
+  if (input.modes.includes('ordinary-probe')) {
+    const ordinary = demoteHotStarterToOrdinary(
+      files.get('games/ordinary-probe/GAME.json')!.toString('utf8'),
+      files.get('games/ordinary-probe/game.ts')!.toString('utf8'),
+    );
+    if (ordinary) {
+      files.set('games/ordinary-probe/GAME.json', Buffer.from(ordinary.manifest));
+      files.set('games/ordinary-probe/__ordinary-boot.ts', Buffer.from(ordinary.bootModule));
+      files.set('games/ordinary-probe/game.ts', Buffer.from(ordinary.game));
     }
   }
   if (input.modes.includes('hot-probe')) {

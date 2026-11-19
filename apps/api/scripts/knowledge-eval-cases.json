@@ -320,5 +320,45 @@
     "scope": "examples",
     "expect": ["games/molehill-mutiny/"],
     "terms": ["createDirtLand", "carve"]
+  },
+  {
+    "id": "scene3d-fps-examples",
+    "kind": "example",
+    "query": "3D first-person shooter or arena game using createScene3dGame",
+    "scope": "examples",
+    "expect": ["games/neon-corridor/", "games/quack-arena/"],
+    "terms": ["createScene3dGame"]
+  },
+  {
+    "id": "platformer-coyote-examples",
+    "kind": "example",
+    "query": "2D side-scrolling platformer with coyote time and jump buffer",
+    "scope": "examples",
+    "expect": ["games/plumbers-one-level-platformer/"],
+    "terms": ["coyote", "jumpBuffer"]
+  },
+  {
+    "id": "raycaster-view-examples",
+    "kind": "example",
+    "query": "first-person 2.5D raycaster wall rendering with castView",
+    "scope": "examples",
+    "expect": ["games/castle-raycaster/"],
+    "terms": ["castView", "raycastView"]
+  },
+  {
+    "id": "voice-meter-examples",
+    "kind": "example",
+    "query": "voice controlled runner reading microphone loudness with createVoiceMeter",
+    "scope": "examples",
+    "expect": ["games/shout-dash/"],
+    "terms": ["createVoiceMeter"]
+  },
+  {
+    "id": "tilt-sensing-examples",
+    "kind": "example",
+    "query": "device tilt sensing puzzle with createSensing",
+    "scope": "examples",
+    "expect": ["games/gem-swap-rush/"],
+    "terms": ["createSensing", "tilt"]
   }
 ]

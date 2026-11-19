@@ -21,7 +21,7 @@ export function buildGeneratePrompt(input: {
     '- game.ts default-exports a boot function accepting GameKitGameBuilder<Round>. Configure retained input/audio/services and init there; return the supplied builder without calling start() or creating another builder.',
     '- game/behavior.ts default-exports update, render and snapshot callbacks; put HUD and simulation helpers in its graph. Keep module initialization inert and create services in boot/setup. The compiler starts the game.',
     '- Keep initial state creation and owned services separate from replaceable gameplay and HUD code. See the HMR-ready file shape even when a genre reference uses an older startup style.',
-    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. Every seed must ship compiled EDITOR.json with at least three meaningful tunables or one content collection. EDITOR.ts is local authoring source and must never be delivered. Keep generated artifacts in sync and have the game consume game/editor-content.ts.',
+    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. audio.music must name a shared catalog track or a custom track shipped in music.json. Every seed must ship compiled EDITOR.json with at least three meaningful tunables or one content collection. EDITOR.ts is local authoring source and must never be delivered. Keep generated artifacts in sync and have the game consume game/editor-content.ts.',
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
@@ -50,7 +50,7 @@ export function buildGeneratePrompt(input: {
       ? ['=== ENGINE / DOCS CONTEXT (excerpts, not files — do not write these back) ===', input.knowledgeContext, '']
       : []),
     '=== TARGET GAME ===',
-    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, ACCEPTANCE.json,`,
+    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, optional music.json, ACCEPTANCE.json,`,
     '  EDITOR.json, EDITOR.content.json, game.ts, and game/*.ts modules.',
     `- SPEC.md frontmatter must be valid and carry title: ${input.title} and slug: ${input.slug}.`,
     `- GAME.json.hot.id must be "${input.slug}"; do not retain a reference game's hot identity.`,
