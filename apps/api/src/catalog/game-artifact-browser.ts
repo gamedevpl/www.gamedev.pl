@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { chromium, type Browser } from 'playwright-core';
 import { gameHtmlHash, type GameArtifact, type VerifyGameArtifact } from './game-artifact.js';
 
+const HOST_PAGE_URL = 'http://game-artifact-host.test/';
+
 type GamePage = {
   __GAME_HARNESS__?: { ready?: boolean; frame?: number };
   document: { querySelector(selector: string): { width: number; height: number } | null };
@@ -54,9 +56,13 @@ export async function createGameArtifactBrowser(options: {
         failed(new Error(`Game JavaScript error: ${cause.message}`));
       });
       const probe = async () => {
-        await page.setContent(
-          '<iframe sandbox="allow-scripts allow-pointer-lock" style="width:100%;height:700px"></iframe>',
+        await page.route(HOST_PAGE_URL, (route) =>
+          route.fulfill({
+            contentType: 'text/html; charset=utf-8',
+            body: '<iframe sandbox="allow-scripts allow-pointer-lock" style="width:100%;height:700px"></iframe>',
+          }),
         );
+        await page.goto(HOST_PAGE_URL);
         await page.locator('iframe').evaluate((node, html) => {
           (node as unknown as { srcdoc: string }).srcdoc = html;
         }, artifact.html);

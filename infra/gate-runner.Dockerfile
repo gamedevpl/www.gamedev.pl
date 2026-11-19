@@ -30,17 +30,29 @@
 # faster — and one that would be discovered as a failing gate rather than a failing build.
 FROM node:22
 
-# Chromium from apt rather than a per-run Playwright/Puppeteer download: the capture
-# harness expects a browser on PATH, and one install at image build time beats a fetch
-# inside every gate run.
+# Google Chrome stable from Google's apt repo rather than Debian's `chromium`, or a
+# per-run Playwright/Puppeteer download: the capture harness expects a browser on PATH,
+# and one install at image build time beats a fetch inside every gate run. Debian's
+# package trails upstream security releases, sometimes by weeks; this image runs
+# untrusted game code, so the browser follows Chrome stable on every rebuild. The .deb
+# ships SwiftShader (libvk_swiftshader.so) and ANGLE, which software WebGL capture needs,
+# and its own setuid chrome-sandbox, so chromium-sandbox is no longer needed.
+# CHROME_MIN_MAJOR fails the build if the repo ever serves an older browser.
 #
 # iptables is for one rule: the runner refuses the sandbox user's traffic to the metadata
 # server (apps/api/src/delivery/gate-sandbox.ts). chromium-sandbox is the setuid helper
 # Chrome falls back to when the build host gives it no user namespaces; best effort,
 # because the package name is the one part of this line a base-image bump can move.
+ARG CHROME_MIN_MAJOR=157
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends ffmpeg chromium git ca-certificates iptables \
- && (apt-get install -y -qq --no-install-recommends chromium-sandbox || echo "no chromium-sandbox package") \
+ && apt-get install -y -qq --no-install-recommends ffmpeg git ca-certificates iptables curl gnupg \
+ && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+ && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+ && apt-get update -qq \
+ && apt-get install -y -qq --no-install-recommends google-chrome-stable \
+ && test -f /opt/google/chrome/libvk_swiftshader.so \
+ && major="$(google-chrome --version | sed -E 's/[^0-9]*([0-9]+)\..*/\1/')" \
+ && echo "google-chrome major ${major}" && [ "${major}" -ge "${CHROME_MIN_MAJOR}" ] \
  && rm -rf /var/lib/apt/lists/*
 
 # The user candidate code runs as. The runner starts as root (Cloud Build runs steps that
@@ -53,9 +65,8 @@ RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin 
 # inline step (keep the three in step — here, infra/cloudbuild-gate.yaml, and
 # apps/api/src/delivery/gate-trigger.ts):
 #
-#   1. Debian installs the browser as `chromium`, while the capture harness defaults to
-#      spawning `google-chrome` — "a browser is on PATH" is not enough, it has to be
-#      under a name the harness looks for, or capture dies on ENOENT.
+#   1. The capture harness defaults to spawning `google-chrome`; the shim keeps one
+#      path (GAME_CAPTURE_CHROME) for every caller, whichever browser package is in.
 #   2. Chrome refuses to start as root without --no-sandbox, and `tools/capture.ts`
 #      neither adds that flag nor takes it from the environment. The gate now runs the
 #      browser as the `gate` user, so the shim adds --no-sandbox only when it is still
@@ -63,7 +74,7 @@ RUN useradd --uid 10001 --user-group --no-create-home --shell /usr/sbin/nologin 
 #      on this host and set GATE_CHROME_NO_SANDBOX=1. Fixed here rather than in the games
 #      repo on purpose: capture.ts is hashed whole into `captureSourceHash`, so touching
 #      it restages the media of every published game — a catalog-wide recapture.
-RUN chrome_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome)" \
+RUN chrome_bin="$(command -v google-chrome || command -v chromium || command -v chromium-browser)" \
  && printf '#!/bin/sh\nif [ "$(id -u)" = 0 ] || [ "${GATE_CHROME_NO_SANDBOX:-}" = 1 ]; then exec "%s" --no-sandbox "$@"; fi\nexec "%s" "$@"\n' "$chrome_bin" "$chrome_bin" > /usr/local/bin/gate-chrome \
  && chmod +x /usr/local/bin/gate-chrome
 

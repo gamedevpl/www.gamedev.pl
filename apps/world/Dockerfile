@@ -21,7 +21,7 @@
 # Pinned to a patch release, unlike the app image's floating tag. The app image is
 # rebuilt on every deploy; this one only when its inputs change (see deploy.yml), so a
 # floating tag would not pick up a Node security release. Bump both stages together.
-FROM node:22.23.4-slim AS builder
+FROM node:22.23.5-slim AS builder
 WORKDIR /app
 
 # node-gyp needs python3, make and a C++ compiler to build isolated-vm.
@@ -40,7 +40,7 @@ RUN npm run build -w @gamedevpl/contract \
  && npm run build -w @gamedevpl/world
 
 # ---- runtime: prod deps only + built output ----
-FROM node:22.23.4-slim AS runtime
+FROM node:22.23.5-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     HOST=0.0.0.0

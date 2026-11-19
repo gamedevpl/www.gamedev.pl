@@ -93,6 +93,6 @@ if (process.argv[2] === '--container') {
   if ((await readFile('/verifier/api-ref.txt', 'utf8')).trim() !== input.consumerSha) {
     throw new Error('API verifier image has a different source identity');
   }
-  const result = await verifyApiKitArtifacts(input, '/usr/bin/chromium');
+  const result = await verifyApiKitArtifacts(input, '/usr/bin/google-chrome');
   await writeFile('/result/receipt.json', JSON.stringify(result) + '\n', { mode: 0o644 });
 }
