@@ -1,16 +1,18 @@
 import path from 'node:path';
 
-const TOP_LEVEL_ALLOWED = new Set([
+export const SEED_TOP_LEVEL_FILES: readonly string[] = [
   'SPEC.md',
   'GAME.json',
   'music.json',
+  'EDITOR.json',
+  'EDITOR.content.json',
   'game.ts',
   'index.html',
   'style.css',
   'ACCEPTANCE.json',
-  'EDITOR.json',
-  'EDITOR.content.json',
-]);
+];
+
+const TOP_LEVEL_ALLOWED = new Set(SEED_TOP_LEVEL_FILES);
 
 export function normalizeSeedPath(relative: string, slug: string): string {
   let normalized = relative.trim().replaceAll('\\', '/').replace(/^\.\//, '');

@@ -1,5 +1,6 @@
 import { fetchGamesRepoArchive, type GamesRepoArchive } from '../platform/games-repo-archive.js';
 import { ArchiveLimitError } from '../platform/tar.js';
+import { SEED_TOP_LEVEL_FILES } from './seed-paths.js';
 
 export const SEED_SCAFFOLD_SLUG = 'rook-rush';
 
@@ -13,24 +14,13 @@ function seedInclude(relativePath: string): boolean {
   const match = /^games\/[^/]+\/(.+)$/.exec(relativePath);
   if (!match) return false;
   const path = match[1];
-  return GAME_TOP_LEVEL_FILES.includes(path) || (path.startsWith('game/') && path.endsWith('.ts'));
+  return SEED_TOP_LEVEL_FILES.includes(path) || (path.startsWith('game/') && path.endsWith('.ts'));
 }
-
-const GAME_TOP_LEVEL_FILES = [
-  'SPEC.md',
-  'GAME.json',
-  'music.json',
-  'EDITOR.json',
-  'EDITOR.content.json',
-  'game.ts',
-  'index.html',
-  'style.css',
-  'ACCEPTANCE.json',
-];
 
 const MAX_REFERENCE_FILE_BYTES = 80_000;
 
 const CONTEXT_SCAFFOLD_BUDGET = 10_000;
+const SCAFFOLD_PRIORITY = ['GAME.json', 'music.json', 'game.ts', 'game/boot.ts', 'game/behavior.ts'];
 
 export interface SeedContext {
   catalogIndex: string;
@@ -87,7 +77,7 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
 
   function listGameFiles(root: string): string[] {
     const prefix = `${root}/`;
-    const top = GAME_TOP_LEVEL_FILES.map((name) => `${prefix}${name}`).filter((path) => index.read(path) !== null);
+    const top = SEED_TOP_LEVEL_FILES.map((name) => `${prefix}${name}`).filter((path) => index.read(path) !== null);
     const modules = index.paths
       .filter((path) => path.startsWith(`${prefix}game/`) && path.endsWith('.ts'))
       .sort((a, b) => a.localeCompare(b));
@@ -113,13 +103,12 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
     catalogIndex: published.map((entry) => `${entry.slug} — ${entry.title} — ${entry.genre}`).join('\n'),
     // Withdrawn games must not shape new drafts.
     scaffold: slugs.has(SEED_SCAFFOLD_SLUG)
-      ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }, [
-          'GAME.json',
-          'music.json',
-          'game.ts',
-          'game/boot.ts',
-          'game/behavior.ts',
-        ])
+      ? renderTree(
+          `games/${SEED_SCAFFOLD_SLUG}`,
+          'games/<slug>',
+          { remaining: CONTEXT_SCAFFOLD_BUDGET },
+          SCAFFOLD_PRIORITY,
+        )
       : '',
     kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
