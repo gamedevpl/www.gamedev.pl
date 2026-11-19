@@ -100,6 +100,8 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('npm ci --ignore-scripts');
     expect(lines).toContain('cd /workspace/gamedevpl-creator-kit; nohup sh -c');
     expect(lines).toContain('`tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`');
+    expect(lines).toContain("& nohup sh -c '(playwright install --with-deps chromium ||");
+    expect(lines).toContain('`tail -1 /tmp/chrome-install.log`');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).not.toContain('do not call `get_sources`');
     expect(lines).toContain('Submit with kitEngineRef eng_new');
