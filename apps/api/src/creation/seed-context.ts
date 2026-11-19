@@ -19,6 +19,7 @@ function seedInclude(relativePath: string): boolean {
 const GAME_TOP_LEVEL_FILES = [
   'SPEC.md',
   'GAME.json',
+  'music.json',
   'EDITOR.json',
   'EDITOR.content.json',
   'game.ts',
@@ -29,7 +30,7 @@ const GAME_TOP_LEVEL_FILES = [
 
 const MAX_REFERENCE_FILE_BYTES = 80_000;
 
-const CONTEXT_SCAFFOLD_BUDGET = 8_000;
+const CONTEXT_SCAFFOLD_BUDGET = 10_000;
 
 export interface SeedContext {
   catalogIndex: string;
@@ -114,6 +115,7 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
     scaffold: slugs.has(SEED_SCAFFOLD_SLUG)
       ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }, [
           'GAME.json',
+          'music.json',
           'game.ts',
           'game/boot.ts',
           'game/behavior.ts',

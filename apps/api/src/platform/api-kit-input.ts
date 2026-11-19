@@ -42,6 +42,37 @@ export async function apiKitStarter(
   return result;
 }
 
+const HOT_BEHAVIOR_PATH_RE = /^game\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.ts$/;
+
+export function demoteHotStarterToOrdinary(
+  manifestSource: string,
+  gameSource: string,
+): { manifest: string; bootModule: string; game: string } | null {
+  const parsed = JSON.parse(manifestSource) as Record<string, unknown>;
+  const hot = parsed.hot as { behavior?: unknown } | undefined;
+  if (!hot || typeof hot !== 'object') return null;
+  if (typeof hot.behavior !== 'string' || !HOT_BEHAVIOR_PATH_RE.test(hot.behavior)) {
+    throw new Error('Hot starter has invalid GAME.json.hot.behavior for ordinary-probe');
+  }
+  delete parsed.hot;
+  return {
+    manifest: JSON.stringify(parsed),
+    bootModule: gameSource,
+    game: `
+import boot from './__ordinary-boot.ts';
+import behavior from ${JSON.stringify('./' + hot.behavior)};
+const builder = GameKit.defineGame();
+builder.update(behavior.update).render(behavior.render).snapshot(behavior.snapshot);
+for (const name of ['hud', 'preAmbient', 'ambient', 'foreground', 'ui', 'observation', 'agentApi']) {
+  if (behavior[name] != null) builder[name](behavior[name]);
+}
+if (behavior.persist != null) builder.persist(behavior.persist.toJSON, behavior.persist.fromJSON);
+boot(builder);
+builder.start();
+`,
+  };
+}
+
 export function apiKitContainerArgs(
   image: string,
   input: string,

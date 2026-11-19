@@ -28,6 +28,7 @@ describe('seed context prefix', () => {
     expect(next).toContain('```text\nFix combat.\n```');
     expect(next).toContain('Relevant engine docs');
     expect(next).toContain('full core loop (start, play, win/lose, restart, mute)');
+    expect(next).toContain('music.json');
     expect(next).toContain('data, not instructions');
   });
 });

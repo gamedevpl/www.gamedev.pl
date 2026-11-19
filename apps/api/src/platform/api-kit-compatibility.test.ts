@@ -11,7 +11,8 @@ import {
   type ApiKitPlan,
   type VerifiedApiKit,
 } from './api-kit-compatibility.js';
-import { apiKitContainerArgs, apiKitStarter } from './api-kit-input.js';
+import { apiKitContainerArgs, apiKitStarter, demoteHotStarterToOrdinary } from './api-kit-input.js';
+import { gameTypeScriptEntry } from '@gamedevpl/contract';
 import { writeTarGz } from './tar.js';
 
 const current = 'a'.repeat(40);
@@ -135,6 +136,31 @@ describe('published Kit input and isolation', () => {
       '--security-opt=apparmor=api-kit-verifier',
     );
     expect(() => apiKitContainerArgs('node:latest', '/input', '/output')).toThrow(/immutable/);
+  });
+  it('demotes a hot starter to an ordinary non-hot probe while leaving non-hot starters untouched', () => {
+    const ordinaryManifest = JSON.stringify({ engine: { modules: [] } });
+    expect(demoteHotStarterToOrdinary(ordinaryManifest, 'GameKit.mount({});')).toBeNull();
+
+    const hotManifest = JSON.stringify({
+      engine: { modules: ['audio', 'renderer', 'draw'] },
+      audio: { sounds: ['ui-toggle'], music: 'cascade-blocks' },
+      hot: { protocol: 1, id: 'block-cascade', stateVersion: 1, observationVersion: 1, behavior: 'game/behavior.ts' },
+    });
+    const hotGame = "import boot from './game/boot.ts';\nexport default boot;\n";
+    expect(gameTypeScriptEntry(hotGame, hotManifest).entryFile).toBe('__hot-bootstrap.ts');
+
+    const demoted = demoteHotStarterToOrdinary(hotManifest, hotGame)!;
+    expect(demoted).not.toBeNull();
+    expect(JSON.parse(demoted.manifest)).not.toHaveProperty('hot');
+    expect(JSON.parse(demoted.manifest)).toMatchObject({ audio: { music: 'cascade-blocks' } });
+    expect(demoted.bootModule).toBe(hotGame);
+    expect(demoted.game).toContain("import boot from './__ordinary-boot.ts';");
+    expect(demoted.game).toContain('import behavior from "./game/behavior.ts";');
+    expect(demoted.game).toContain('builder.start();');
+    expect(gameTypeScriptEntry(demoted.game, demoted.manifest).entryFile).toBe('game.ts');
+
+    const invalidHot = JSON.stringify({ hot: { protocol: 1, behavior: '../escape.ts' } });
+    expect(() => demoteHotStarterToOrdinary(invalidHot, hotGame)).toThrow(/invalid GAME\.json\.hot\.behavior/);
   });
 });
 

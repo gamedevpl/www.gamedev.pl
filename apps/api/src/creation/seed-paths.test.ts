@@ -11,6 +11,7 @@ describe('seed path containment', () => {
     for (const allowed of [
       'SPEC.md',
       'GAME.json',
+      'music.json',
       'game.ts',
       'index.html',
       'style.css',

@@ -25,6 +25,7 @@ const FILES: Record<string, string> = {
   [`games/${SEED_SCAFFOLD_SLUG}/game.ts`]: "import { startGame } from './game/runtime.ts';\n",
   [`games/${SEED_SCAFFOLD_SLUG}/game/runtime.ts`]: 'export function startGame() {}\n',
   'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n',
+  'games/apex-sprint/music.json': '{"version":1,"tracks":{"sprint-theme":{"bpm":132}}}\n',
   'games/apex-sprint/EDITOR.ts': 'export default {};\n',
   'games/apex-sprint/EDITOR.json': '{"version":2}\n',
   'games/apex-sprint/EDITOR.content.json': '{"params":{}}\n',
@@ -61,6 +62,7 @@ describe('buildSeedContext', () => {
     const rendered = buildSeedContext(indexOf(FILES))!.renderReferences(['apex-sprint'], 100_000);
 
     expect(rendered).toContain('--- games/apex-sprint/SPEC.md ---');
+    expect(rendered).toContain('--- games/apex-sprint/music.json ---');
     expect(rendered).toContain('--- games/apex-sprint/game.ts ---');
     expect(rendered).toContain('--- games/apex-sprint/EDITOR.json ---');
     // Sorted so the same picks always produce the same prompt; a prompt that varies run
@@ -127,6 +129,7 @@ describe('createArchiveSeedContextSource', () => {
     const second = await source.load();
 
     expect(first?.hasGame('apex-sprint')).toBe(true);
+    expect(first?.renderReferences(['apex-sprint'], 100_000)).toContain('--- games/apex-sprint/music.json ---');
     expect(first?.kitDeclaration).toContain('interface GameKitDraw');
     expect(second).toBe(first);
     expect(downloads).toBe(1);

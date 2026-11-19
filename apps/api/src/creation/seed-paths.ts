@@ -3,6 +3,7 @@ import path from 'node:path';
 const TOP_LEVEL_ALLOWED = new Set([
   'SPEC.md',
   'GAME.json',
+  'music.json',
   'game.ts',
   'index.html',
   'style.css',
