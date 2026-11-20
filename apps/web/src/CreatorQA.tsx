@@ -7,6 +7,7 @@ import { CreatorQADiscardModal } from './CreatorQADiscardModal.js';
 import { CreatorQAOptions } from './CreatorQAOptions.js';
 import { hasCreatorQaProgress } from './creatorQaProgress.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
+import './creator-qa-layout.css';
 import { CreatorQAReviewList } from './CreatorQAReviewList.js';
 import { CreatorQASubmittingCard } from './CreatorQASubmittingCard.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -448,7 +449,7 @@ export function CreatorQA({
       </div>
 
       <div className="qa-wizard-scroller" ref={scrollerRef}>
-        <div className="qa-stage" key={stepIndex}>
+        <div className="qa-stage" data-stage={stage.kind} key={stepIndex}>
           {stage.kind === 'name' && (
             <>
               <p className="qa-stage-eyebrow">{t('qa.eyebrowIdea')}</p>
@@ -561,6 +562,7 @@ export function CreatorQA({
                 submitting={submitting}
                 questions={questions}
                 builder={builder}
+                preview={pickVisualTarget(questions, optionImages, selectedAnswers)}
                 reviewIndex={reviewIndex}
                 answerFor={answerFor}
                 goTo={goTo}

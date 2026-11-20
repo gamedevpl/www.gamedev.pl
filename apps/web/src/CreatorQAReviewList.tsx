@@ -2,11 +2,14 @@ import { useTranslation } from 'react-i18next';
 import type { BuilderKind } from './builderKind.js';
 import type { QAQuestion } from './CreatorQA.js';
 
+import type { QaVisualTarget } from './qaVisualTarget.js';
+
 interface CreatorQAReviewListProps {
   title: string;
   submitting: boolean;
   questions: QAQuestion[];
   builder: BuilderKind;
+  preview?: QaVisualTarget;
   reviewIndex: number;
   answerFor: (id: string) => string;
   goTo: (index: number) => void;
@@ -17,6 +20,7 @@ export function CreatorQAReviewList({
   submitting,
   questions,
   builder,
+  preview,
   reviewIndex,
   answerFor,
   goTo,
@@ -25,8 +29,11 @@ export function CreatorQAReviewList({
 
   return (
     <dl className={`qa-review${submitting ? ' is-submitting' : ''}`}>
-      <div className="qa-review-row">
-        <dt className="qa-review-label">{t('qa.nameLabel')}</dt>
+      <div className="qa-review-row qa-review-name">
+        <dt className="qa-review-label">
+          {preview && <img className="qa-review-thumb" src={preview.dataUrl} alt="" />}
+          {t('qa.nameLabel')}
+        </dt>
         <dd className="qa-review-value">
           <span>{title.trim()}</span>
           <button
@@ -35,6 +42,22 @@ export function CreatorQAReviewList({
             disabled={submitting}
             onClick={() => goTo(0)}
             aria-label={`${t('qa.edit')}: ${t('qa.nameLabel')}`}
+          >
+            {t('qa.edit')}
+          </button>
+        </dd>
+      </div>
+
+      <div className="qa-review-row">
+        <dt className="qa-review-label">{t('builder.legend')}</dt>
+        <dd className="qa-review-value">
+          <span>{t(builder === 'self' ? 'builder.self.title' : 'builder.platform.title')}</span>
+          <button
+            type="button"
+            className="qa-review-edit"
+            disabled={submitting}
+            onClick={() => goTo(reviewIndex - 1)}
+            aria-label={`${t('qa.edit')}: ${t('builder.legend')}`}
           >
             {t('qa.edit')}
           </button>
@@ -61,22 +84,6 @@ export function CreatorQAReviewList({
           </div>
         );
       })}
-
-      <div className="qa-review-row">
-        <dt className="qa-review-label">{t('builder.legend')}</dt>
-        <dd className="qa-review-value">
-          <span>{t(builder === 'self' ? 'builder.self.title' : 'builder.platform.title')}</span>
-          <button
-            type="button"
-            className="qa-review-edit"
-            disabled={submitting}
-            onClick={() => goTo(reviewIndex - 1)}
-            aria-label={`${t('qa.edit')}: ${t('builder.legend')}`}
-          >
-            {t('qa.edit')}
-          </button>
-        </dd>
-      </div>
     </dl>
   );
 }

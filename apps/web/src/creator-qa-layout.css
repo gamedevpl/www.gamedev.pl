@@ -1,0 +1,127 @@
+.qa-stage[data-stage='builder'],
+.qa-stage[data-stage='review'],
+.qa-stage:has(.qa-options--art) {
+  max-width: 1120px;
+  height: fit-content;
+}
+
+.qa-stage .builder-choice-options {
+  gap: 12px;
+}
+
+.qa-stage .builder-choice-option {
+  min-width: 0;
+  padding: clamp(16px, 2vw, 24px);
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+
+.qa-stage .builder-choice-option.is-selected {
+  background: color-mix(in srgb, var(--turquoise) 8%, var(--panel));
+}
+
+.qa-builder-symbols {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+
+.is-selected .qa-builder-symbols {
+  color: var(--turquoise);
+}
+
+.qa-stage .qa-review {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qa-review-name {
+  position: relative;
+}
+
+.qa-review-name:has(.qa-review-thumb) {
+  padding-inline-start: 92px;
+}
+
+.qa-review-thumb {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 68px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.qa-review-name .qa-review-value > span {
+  font-weight: 700;
+}
+
+.qa-review-row {
+  overflow-wrap: anywhere;
+}
+
+.qa-stage .qa-options--art .qa-option {
+  position: relative;
+  grid-template-areas: 'art' 'text';
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+.qa-stage .qa-options--art .qa-option__tick {
+  position: absolute;
+  grid-area: auto;
+  top: 10px;
+  left: 10px;
+  margin: 0;
+  background-color: var(--panel);
+}
+
+.qa-stage .qa-options--art .qa-option--selected .qa-option__tick {
+  background-color: var(--turquoise);
+}
+
+.qa-stage .qa-options--art .qa-option__text {
+  margin-inline: 16px;
+}
+
+@media (max-width: 640px) {
+  .qa-stage .qa-review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .qa-stage .builder-choice-option {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    column-gap: 14px;
+    align-content: center;
+  }
+
+  .qa-builder-symbols {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    gap: 4px;
+    margin: 0;
+  }
+
+  .qa-stage .qa-options--art {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-auto-columns: min(82%, 300px);
+    align-items: stretch;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding: 4px;
+  }
+
+  .qa-options--art > * {
+    scroll-snap-align: start;
+  }
+}
