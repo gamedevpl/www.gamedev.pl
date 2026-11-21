@@ -6,6 +6,7 @@ import { readCheckoutSlug } from './checkout.js';
 import { formatError } from './errors.js';
 import type { handleReplLine } from './repl.js';
 import { formatSubmitLines, submitGame } from './submit.js';
+import { parseEntryFlag } from './publish-slice.js';
 import { deliverySummary } from './delivery-summary.js';
 import { VerificationError, runLadderAsync } from './verify.js';
 import { DeliveryValidationError } from './delivery-validation.js';
@@ -164,6 +165,7 @@ export async function submitRepl(input: Input, line: string): Promise<void> {
       input.workshop?.slug === slug && realpathSync(input.workshop.root) === realpathSync(dest)
         ? input.workshop
         : undefined;
+    const entry = parseEntryFlag(parsed.flags.entry);
     const delivery: Delivery = {
       api: input.api,
       slug,
@@ -173,6 +175,8 @@ export async function submitRepl(input: Input, line: string): Promise<void> {
       interactive: true,
       takeover: parsed.flags.takeover === true,
       summary: deliverySummary(parsed.flags.summary),
+      ...(entry ? { entry } : {}),
+      ...(parsed.flags['dry-run'] === true ? { dryRun: true } : {}),
       run: ws?.run,
       onProgress: input.onActivity ?? input.write,
     };

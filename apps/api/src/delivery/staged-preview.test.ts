@@ -232,6 +232,9 @@ describe('hasPlayableOverlay', () => {
 });
 
 describe('createStagedPreviewPublisher', () => {
+  const expectAssembled = (fn: unknown, overlay: unknown) =>
+    expect(fn).toHaveBeenCalledWith('main', 'comet-courier', overlay, { entry: 'publish' });
+
   it('assembles the staged tree and stores it as a playable preview', async () => {
     const { publisher, previews, getGameSources } = harness();
 
@@ -243,11 +246,7 @@ describe('createStagedPreviewPublisher', () => {
     expect(decoded(previews[0]!)).toContain('console.log("play")');
     // The engine half comes from the ref; every game file comes from the overlay, which
     // is what lets this render a game that lives in no branch at all.
-    expect(getGameSources).toHaveBeenCalledWith(
-      'main',
-      'comet-courier',
-      expect.objectContaining({ 'game.ts': 'export {};' }),
-    );
+    expectAssembled(getGameSources, expect.objectContaining({ 'game.ts': 'export {};' }));
   });
 
   it('assembles a one-file owner edit against an already-delivered game (CE-12a)', async () => {
@@ -377,7 +376,7 @@ describe('createStagedPreviewPublisher', () => {
     });
 
     expect(await publisher.publishNow(7)).toBe('published');
-    expect(getGameSources).toHaveBeenCalledWith('main', 'comet-courier', {
+    expectAssembled(getGameSources, {
       'index.html': '<div id="game-root"></div>',
       'game.ts': 'edited entry',
       'style.css': 'body{margin:0}',
@@ -393,11 +392,7 @@ describe('createStagedPreviewPublisher', () => {
     });
 
     expect(await publisher.publishNow(7)).toBe('published');
-    expect(getGameSources).toHaveBeenCalledWith(
-      'main',
-      'comet-courier',
-      expect.objectContaining({ 'style.css': 'restyled', 'game.ts': 'export {};' }),
-    );
+    expectAssembled(getGameSources, expect.objectContaining({ 'style.css': 'restyled', 'game.ts': 'export {};' }));
   });
 
   it('layers over the generated seed while the agent is still replacing it', async () => {
@@ -412,9 +407,8 @@ describe('createStagedPreviewPublisher', () => {
     });
 
     expect(await publisher.publishNow(7)).toBe('published');
-    expect(getGameSources).toHaveBeenCalledWith(
-      'main',
-      'comet-courier',
+    expectAssembled(
+      getGameSources,
       expect.objectContaining({ 'game.ts': 'agent entry', 'index.html': '<div id="game-root"></div>' }),
     );
   });
@@ -597,7 +591,10 @@ describe('createStagedPreviewPublisher', () => {
     });
 
     expect(outcome).toBe('published');
-    expect(getGameSources).toHaveBeenCalledWith('main', 'comet-courier', expect.any(Object), { noRefFallback: true });
+    expect(getGameSources).toHaveBeenCalledWith('main', 'comet-courier', expect.any(Object), {
+      noRefFallback: true,
+      entry: 'publish',
+    });
     expect(putDerivedArtifact).toHaveBeenCalledWith(
       'comet-courier',
       'v20260823T120000Z-abcdef',

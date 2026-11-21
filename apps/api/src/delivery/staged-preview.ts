@@ -270,7 +270,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     // Every game file comes from the overlay; the ref supplies `shared/` alone. That is
     // what lets this render a game which exists in no branch and no repository — which is
     // every self-build game, and the reason this could not simply read a ref.
-    const sources = await options.githubClient.getGameSources(options.engineRef, slug, overlay);
+    const sources = await options.githubClient.getGameSources(options.engineRef, slug, overlay, { entry: 'publish' });
     if (!sources) return 'incomplete';
 
     const assembleStartedAt = Date.now();
@@ -434,7 +434,10 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       }
 
       const engineRef = input.kitEngineRef || options.engineRef;
-      const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
+      const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, {
+        noRefFallback: true,
+        entry: 'publish',
+      });
       if (!sources) {
         options.log.warn({ jobId, version }, 'candidate preview incomplete: sources did not resolve');
         return 'incomplete';

@@ -55,7 +55,7 @@ function readSlugFile(cwd: string): string | null {
 
 function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: SubmitResult): void {
   if (result.kind === 'delivered') writeBase(cwd, result.version, trackedTree(cwd, slug, result.files));
-  else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
+  else if (result.kind === 'nothing') writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
 }
 
 async function reconcilePushUnlocked(input: {
@@ -90,7 +90,7 @@ async function reconcilePushUnlocked(input: {
     const pushed = localGameFiles(dest, input.slug);
     const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
     try {
-      if (input.scope && input.layout) {
+      if (input.scope && input.layout && result.kind !== 'dry-run') {
         const version = result.kind === 'delivered' ? result.version : result.sync.version;
         const synced = await synchronizeGitDelivery({
           ...input,
