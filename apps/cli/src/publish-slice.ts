@@ -1,4 +1,4 @@
-import { DELIVERY_FIXED_FILES, isDeliverablePath } from '@gamedevpl/contract';
+import { DELIVERY_FIXED_FILES, isDeliverablePath, isRasterSourcePath } from '@gamedevpl/contract';
 import {
   copyFileSync,
   existsSync,
@@ -45,6 +45,11 @@ export function resolvePushTarget(
   flagSlug: string | null,
 ): { dest: string; slug: string } | null {
   const target = requestedArg ? resolve(cwd, requestedArg) : cwd;
+  const sourceRoot = dirname(dirname(target));
+  const generated = target === join(sourceRoot, '.gamedev/local') ? sourceProject(sourceRoot) : null;
+  if (generated) {
+    return { dest: sourceRoot, slug: flagSlug ?? generated.slug };
+  }
   const directSlug = readCheckoutSlug(target);
   if (directSlug) {
     return { dest: target, slug: flagSlug ?? directSlug };
@@ -112,7 +117,12 @@ function extractRelativeSpecifiers(source: string): string[] {
   return found;
 }
 
-function resolveLocalModule(sourceRoot: string, fromRel: string, specifier: string): string | null {
+function resolveLocalModule(
+  sourceRoot: string,
+  fromRel: string,
+  specifier: string,
+  overrides?: Map<string, TreeFile>,
+): string | null {
   const joined = posix.normalize(posix.join(posix.dirname(fromRel), specifier));
   if (joined.startsWith('../') || joined === '..') {
     if (joined.includes('/shared/sim/')) return null;
@@ -127,25 +137,41 @@ function resolveLocalModule(sourceRoot: string, fromRel: string, specifier: stri
     candidates.push(`${joined}.ts`, `${joined}/index.ts`, `${joined}.json`);
   }
   for (const candidate of candidates) {
+    if (overrides?.has(candidate)) return candidate;
     const abs = join(sourceRoot, candidate);
     if (existsSync(abs) && lstatSync(abs).isFile()) return candidate;
   }
   throw new CliError(`Module "${specifier}" imported by ${fromRel} was not found.`, EXIT_REFUSED);
 }
 
-export function collectReachableModules(sourceRoot: string, entry: string): string[] {
+export function collectReachableModules(
+  sourceRoot: string,
+  entry: string,
+  overrides?: Map<string, TreeFile>,
+): string[] {
   const entryAbs = join(sourceRoot, entry);
-  if (!existsSync(entryAbs) || !lstatSync(entryAbs).isFile()) {
+  if (!overrides?.has('game.ts') && (!existsSync(entryAbs) || !lstatSync(entryAbs).isFile())) {
     throw new CliError(`Entry file "${entry}" was not found in ${sourceRoot}.`, EXIT_INPUT);
   }
   const visited = new Set<string>([entry]);
   const queue = [entry];
+  if (overrides) {
+    for (const rel of overrides.keys()) {
+      if (rel.endsWith('.ts') && !visited.has(rel)) {
+        visited.add(rel);
+        queue.push(rel);
+      }
+    }
+  }
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (!current.endsWith('.ts')) continue;
-    const content = readFileSync(join(sourceRoot, current), 'utf8');
+    const content =
+      current === entry
+        ? (overrides?.get('game.ts')?.content ?? readFileSync(entryAbs, 'utf8'))
+        : (overrides?.get(current)?.content ?? readFileSync(join(sourceRoot, current), 'utf8'));
     for (const specifier of extractRelativeSpecifiers(content)) {
-      const target = resolveLocalModule(sourceRoot, current, specifier);
+      const target = resolveLocalModule(sourceRoot, current, specifier, overrides);
       if (target && !visited.has(target)) {
         visited.add(target);
         queue.push(target);
@@ -176,6 +202,26 @@ function collectOverrideFiles(overrideRoot: string, binaryRasters: boolean): Tre
   return files;
 }
 
+function manifestRasterPaths(gameJsonContent: string | undefined): string[] {
+  if (!gameJsonContent) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(gameJsonContent);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  const images = (parsed as { images?: unknown }).images;
+  if (!images || typeof images !== 'object' || Array.isArray(images)) return [];
+  const paths: string[] = [];
+  for (const value of Object.values(images as Record<string, unknown>)) {
+    if (typeof value === 'string' && isRasterSourcePath(value)) {
+      paths.push(value);
+    }
+  }
+  return paths;
+}
+
 export function buildPublishSlice(
   dest: string,
   slug: string,
@@ -183,7 +229,10 @@ export function buildPublishSlice(
 ): { files: TreeFile[]; entry: string; overrideDir?: string } {
   const sourceRoot = gameSourceRoot(dest, slug);
   const binaryRasters = gameSourcePath(dest, slug) === 'src';
-  const reachable = collectReachableModules(sourceRoot, entry);
+  const stem = entry.replace(/\.ts$/, '');
+  const overrides = stem === 'game' ? [] : collectOverrideFiles(join(sourceRoot, stem), binaryRasters);
+  const overrideMap = new Map(overrides.map((file) => [file.path, file]));
+  const reachable = collectReachableModules(sourceRoot, entry, overrideMap);
   const map = new Map<string, TreeFile>();
 
   for (const fixed of NON_CODE_FIXED) {
@@ -193,20 +242,31 @@ export function buildPublishSlice(
     }
   }
 
-  const entryContent = readFileSync(join(sourceRoot, entry), 'utf8');
+  const entryContent = overrideMap.get('game.ts')?.content ?? readFileSync(join(sourceRoot, entry), 'utf8');
   map.set('game.ts', { path: 'game.ts', content: entryContent });
 
   for (const mod of reachable) {
     if (mod === 'game.ts' || mod === entry) continue;
     if (!isDeliverablePath(mod)) continue;
-    const abs = join(sourceRoot, mod);
-    map.set(mod, { path: mod, content: readGameContent(abs, mod, binaryRasters) });
+    const override = overrideMap.get(mod);
+    if (override) {
+      map.set(mod, override);
+    } else {
+      const abs = join(sourceRoot, mod);
+      map.set(mod, { path: mod, content: readGameContent(abs, mod, binaryRasters) });
+    }
   }
 
-  const stem = entry.replace(/\.ts$/, '');
-  const overrides = stem === 'game' ? [] : collectOverrideFiles(join(sourceRoot, stem), binaryRasters);
   for (const file of overrides) {
     map.set(file.path, file);
+  }
+
+  for (const relPath of manifestRasterPaths(map.get('GAME.json')?.content)) {
+    if (map.has(relPath)) continue;
+    const abs = join(sourceRoot, relPath);
+    if (existsSync(abs) && lstatSync(abs).isFile()) {
+      map.set(relPath, { path: relPath, content: readGameContent(abs, relPath, binaryRasters) });
+    }
   }
 
   const files = [...map.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -254,7 +314,7 @@ export function stagePublishSlice(dest: string, slug: string, files: TreeFile[])
     }
   }
 
-  writeGameFiles(stageRoot, slug, files, { binaryRasters: false });
+  writeGameFiles(stageRoot, slug, files, { binaryRasters: gameSourcePath(dest, slug) === 'src' });
   return stageRoot;
 }
 

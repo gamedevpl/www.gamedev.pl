@@ -93,6 +93,23 @@ describe('resolvePushTarget', () => {
       slug: 'knights',
     });
   });
+
+  it('maps a source project generated .gamedev/local runtime back to the canonical source root', () => {
+    const repo = makeTemp('gdpl-source-runtime-');
+    writeFiles(repo, {
+      'gamedev-kit.json': JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64) }),
+      'src/SPEC.md': '---\nslug: airtime\n---\n',
+      '.gamedev/local/.gamedev-slug': 'airtime',
+    });
+    expect(resolvePushTarget(undefined, join(repo, '.gamedev/local'), null)).toEqual({
+      dest: repo,
+      slug: 'airtime',
+    });
+    expect(resolvePushTarget('.gamedev/local', repo, null)).toEqual({
+      dest: repo,
+      slug: 'airtime',
+    });
+  });
 });
 
 describe('collectReachableModules & buildPublishSlice', () => {
@@ -145,6 +162,33 @@ describe('collectReachableModules & buildPublishSlice', () => {
     expect(byPath.get('game/editor-content.ts')).toContain('tourSeconds: 16');
     expect(byPath.has('game/settlement/village.ts')).toBe(false);
     expect(byPath.has('publish.ts')).toBe(false);
+  });
+
+  it('traces imports introduced by override modules and includes manifest-declared rasters', () => {
+    const root = makeTemp('gdpl-override-deps-');
+    writeFiles(root, {
+      'games/demo/SPEC.md': '# Demo\n',
+      'games/demo/GAME.json': JSON.stringify({ images: { hero: 'cast/hero.png', valley: 'scenes/valley.webp' } }),
+      'games/demo/cast/hero.png': 'aGVybw==',
+      'games/demo/scenes/valley.webp': 'dmFsbGV5',
+      'games/demo/game.ts': "import './game/settings.ts';\n",
+      'games/demo/game/settings.ts': "import { secret } from './secret.ts';\nexport const cfg = secret;\n",
+      'games/demo/game/secret.ts': 'export const secret = 1;\n',
+      'games/demo/game/extra.ts': 'export const extra = 2;\n',
+      'games/demo/publish.ts': "import { cfg } from './game/settings.ts';\nconsole.log(cfg);\n",
+      'games/demo/publish/GAME.json': JSON.stringify({ images: { valley: 'scenes/valley.webp' } }),
+      'games/demo/publish/game/settings.ts': "import { extra } from './extra.ts';\nexport const cfg = extra;\n",
+    });
+
+    const slice = buildPublishSlice(root, 'demo', 'publish.ts');
+    expect(slice.files.map((f) => f.path)).toEqual([
+      'GAME.json',
+      'SPEC.md',
+      'game.ts',
+      'game/extra.ts',
+      'game/settings.ts',
+      'scenes/valley.webp',
+    ]);
   });
 
   it('does not treat game/ as an override directory when entry is game.ts', () => {
