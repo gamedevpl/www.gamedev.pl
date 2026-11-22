@@ -52,7 +52,7 @@ import { assemblePublishedGameHtml, projectFromSources } from '../src/platform/a
 // Not the repo's dist/ build: ours adds serve policy and minification.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
   const client = createLocalGamesClient({ rootDir: harness });
-  const sources = await client.getGameSources('main', slug);
+  const sources = await client.getGameSources('main', slug, undefined, { entry: 'publish' });
   if (!sources) return null;
 
   const project: GameProject = projectFromSources(sources, sources.title ?? slug);

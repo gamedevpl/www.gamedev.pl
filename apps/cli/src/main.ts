@@ -28,13 +28,14 @@ import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
-import { checkoutGame, diffGame, findCheckout, readCheckoutSlug } from './checkout.js';
+import { checkoutGame, diffGame, findCheckout } from './checkout.js';
 import { formatCheckoutDiff, formatCheckoutStatus } from './checkout-display.js';
 import { colorCheckoutLines } from './checkout-style.js';
 import { wantsColor } from './renderer.js';
 import { connectGame } from './connect.js';
 import { runPluginsCommand } from './plugin-command.js';
 import { submitCommand } from './submit-command.js';
+import { parseEntryFlag, resolvePushTarget } from './publish-slice.js';
 import { deliverySummary } from './delivery-summary.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
@@ -331,20 +332,20 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'submit' || verb === 'push' || verb === 'publish') {
-      const requested = args[0] ?? process.cwd();
-      const here = findCheckout(requested);
-      const dest = here?.root ?? requested;
-      const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? here?.slug ?? readCheckoutSlug(dest);
-      if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
+      const target = resolvePushTarget(args[0], process.cwd(), typeof flags.slug === 'string' ? flags.slug : null);
+      if (!target) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
+      const entry = parseEntryFlag(flags.entry);
       await submitCommand({
         delivery: {
           api,
-          slug,
-          dest,
+          slug: target.slug,
+          dest: target.dest,
           force: flags.force === true,
           publish: verb === 'publish' || flags.publish === true,
           takeover: flags.takeover === true,
           summary: deliverySummary(flags.summary),
+          ...(entry ? { entry } : {}),
+          ...(flags['dry-run'] === true ? { dryRun: true } : {}),
         },
         io,
         asJson,

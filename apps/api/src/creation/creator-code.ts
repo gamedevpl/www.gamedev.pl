@@ -907,7 +907,7 @@ export async function registerCreatorCodeRoutes(
       }
 
       try {
-        const sources = await options.githubClient.getGameSources(engineRef, slug, overlay);
+        const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { entry: 'publish' });
         if (!sources) {
           return reply.status(409).send({ error: 'incomplete', message: 'sources do not compile yet' });
         }

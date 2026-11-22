@@ -1218,7 +1218,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       if (gameTs === null || manifestSource === null || gameShellCss === null || coreJs === null) {
         return null;
       }
-      const publishTs = options?.entry === 'publish' ? await gameFile('publish.ts') : null;
+      const rawPublishTs = options?.entry === 'publish' ? await gameFile('publish.ts') : null;
+      const publishTs = rawPublishTs?.trim() ? rawPublishTs : null;
 
       const title = specMd ? parseSpecTitle(specMd) : null;
 

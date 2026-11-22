@@ -30,7 +30,14 @@ import type { IgnoredHit } from './ignore.js';
 import { formatIgnoredNotice } from './working-copy.js';
 import { CliError, EXIT_REFUSED, EXIT_RED } from './exit-codes.js';
 import { assertLadderGreen, runLadder, runLadderAsync } from './verify.js';
-import { verificationSourceHash } from './verification-source.js';
+import { verificationFilesHash, verificationSourceHash } from './verification-source.js';
+import {
+  buildPublishSlice,
+  cleanupPublishSlice,
+  formatDryRunLines,
+  inspectPublishSlice,
+  preparePublishSlice,
+} from './publish-slice.js';
 import { deliveryProgress } from './delivery-progress.js';
 import { deliverySummary } from './delivery-summary.js';
 import { deliveryValidationError, rejectedStagedPaths, type RejectedUpload } from './delivery-validation.js';
@@ -38,6 +45,7 @@ import { deliveryValidationError, rejectedStagedPaths, type RejectedUpload } fro
 export type DeliverMode = 'preview' | 'publish';
 
 export type SubmitResult =
+  | { kind: 'dry-run'; files: TreeFile[]; entry?: string; ignored: IgnoredHit[] }
   | { kind: 'nothing'; sync: SyncResult; ignored: IgnoredHit[] }
   | {
       kind: 'delivered';
@@ -186,6 +194,8 @@ async function submitGameUnlocked(input: {
   force?: boolean;
   publish?: boolean;
   takeover?: boolean;
+  entry?: string;
+  dryRun?: boolean;
   summary?: string;
   expectedSession?: DeliverySession;
   rejectedUpload?: RejectedUpload;
@@ -196,16 +206,29 @@ async function submitGameUnlocked(input: {
   warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {
+  if (input.dryRun) {
+    const files = input.entry
+      ? buildPublishSlice(input.dest, input.slug, input.entry).files
+      : localGameFiles(input.dest, input.slug);
+    return {
+      kind: 'dry-run',
+      files,
+      ...(input.entry ? { entry: input.entry } : {}),
+      ignored: input.entry ? [] : ignoredGameFiles(input.dest, input.slug),
+    };
+  }
+  const sliced = input.entry ? buildPublishSlice(input.dest, input.slug, input.entry) : null;
+  const inspect = () => (sliced ? inspectPublishSlice(input.api, input.slug, sliced.files) : inspectGame(input));
   const summary = deliverySummary(input.summary);
   const progress = deliveryProgress(input.onProgress);
   progress('sources', 'Checking platform sources');
-  let recovered = isRecoveryReady(input.dest, input.slug);
-  let first = await inspectGame(input);
+  let recovered = sliced ? false : isRecoveryReady(input.dest, input.slug);
+  let first = await inspect();
   if (recovered && (await reconcileRecoveryDelivery(input.api, input.dest, input.slug, first.tree))) {
     writeBase(input.dest, first.tree.version, trackedTree(input.dest, input.slug, first.tree.files));
     clearRecoveryReady(input.dest);
     recovered = false;
-    first = await inspectGame(input);
+    first = await inspect();
   }
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, first.tree.version);
   if (
@@ -216,7 +239,7 @@ async function submitGameUnlocked(input: {
     !input.force &&
     !input.takeover
   ) {
-    return { kind: 'nothing', sync: first.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
+    return { kind: 'nothing', sync: first.sync, ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug) };
   }
   if (
     !input.force &&
@@ -225,21 +248,28 @@ async function submitGameUnlocked(input: {
     throw new CheckoutSyncError(first.sync);
   }
   await warnIfKitStale(input);
-  const sourceHash = verificationSourceHash(input.dest, input.slug);
+  const onStage = (message: string) => progress('verify', message);
+  const verifyCwd = sliced
+    ? await preparePublishSlice({ ...input, files: sliced.files, onStage: input.onProgress ? onStage : undefined })
+    : input.dest;
+  const sourceHash = sliced ? verificationFilesHash(sliced.files) : verificationSourceHash(input.dest, input.slug);
   const verification = {
-    cwd: input.dest,
+    cwd: verifyCwd,
     slug: input.slug,
     publish: input.publish === true,
     run: input.run,
-    onStage: (message: string) => progress('verify', message),
+    onStage,
   };
   const verify =
     input.onProgress || input.abort
       ? await runLadderAsync({ ...verification, abort: input.abort ?? new AbortController().signal })
       : runLadder(verification);
   input.abort?.throwIfAborted();
-  assertLadderGreen(verify, input.dest, sourceHash, input.slug);
-  if (verificationSourceHash(input.dest, input.slug) !== sourceHash)
+  assertLadderGreen(verify, verifyCwd, sourceHash, input.slug);
+  const afterHash = sliced
+    ? verificationFilesHash(buildPublishSlice(input.dest, input.slug, input.entry!).files)
+    : verificationSourceHash(input.dest, input.slug);
+  if (afterHash !== sourceHash)
     throw new CliError(
       'Sources changed during verification; result is stale. Nothing was sent.',
       EXIT_RED,
@@ -247,9 +277,13 @@ async function submitGameUnlocked(input: {
     );
 
   progress('recheck', 'Rechecking platform sources after local checks');
-  const latest = await inspectGame(input);
-  if (!input.force && latest.sync.kind === 'conflict') {
-    throw new CheckoutSyncError(latest.sync, 'platform changed during verify — ');
+  const latest = await inspect();
+  if (!input.force && (latest.sync.kind === 'conflict' || (sliced && latest.tree.version !== first.tree.version))) {
+    const conflict =
+      latest.sync.kind === 'conflict'
+        ? latest.sync
+        : { ...latest.sync, kind: 'conflict' as const, conflict: latest.sync.local };
+    throw new CheckoutSyncError(conflict, 'platform changed during verify — ');
   }
   if (
     latest.sync.kind === 'clean' &&
@@ -259,7 +293,7 @@ async function submitGameUnlocked(input: {
     !input.force &&
     !input.takeover
   ) {
-    return { kind: 'nothing', sync: latest.sync, ignored: ignoredGameFiles(input.dest, input.slug) };
+    return { kind: 'nothing', sync: latest.sync, ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug) };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
     throw new CheckoutSyncError(latest.sync);
@@ -268,20 +302,21 @@ async function submitGameUnlocked(input: {
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, latest.tree.version);
   progress('session', 'Preparing delivery session');
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
-  const remoteFiles = trackedTree(input.dest, input.slug, latest.tree.files);
+  const uploaded = sliced ? sliced.files : localGameFiles(input.dest, input.slug);
+  const remoteFiles = sliced ? latest.tree.files : trackedTree(input.dest, input.slug, latest.tree.files);
   const changedPaths =
     takenOver || recovered
       ? [
           ...new Set(
             [
-              ...localGameFiles(input.dest, input.slug),
+              ...uploaded,
               ...remoteFiles,
               ...(recovered ? recoveryPaths(input.dest).map((path) => ({ path })) : []),
             ].map((file) => file.path),
           ),
         ].sort()
       : input.force
-        ? changedPathsForced(localGameFiles(input.dest, input.slug), remoteFiles)
+        ? changedPathsForced(uploaded, remoteFiles)
         : latest.sync.local;
   const retryPaths = await rejectedStagedPaths(input.api, input.slug, input.rejectedUpload);
   const paths = [...new Set([...changedPaths, ...retryPaths])].sort();
@@ -312,7 +347,6 @@ async function submitGameUnlocked(input: {
       );
     }
   }
-  const uploaded = localGameFiles(input.dest, input.slug);
   const snapshot = hashesOf(uploaded);
   const localMap = new Map(uploaded.map((file) => [file.path, file]));
   const staged: string[] = [];
@@ -356,14 +390,18 @@ async function submitGameUnlocked(input: {
   if (recovered) clearRecoveryReady(input.dest);
   const version = delivered.version ?? latest.sync.version;
   let files = uploaded;
-  try {
-    progress('checkout', 'Delivery accepted — updating local checkout');
-    const tree = await fetchLatestTree(input.api, input.slug);
-    mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
-    files = trackedTree(input.dest, input.slug, tree.files);
-    writeBase(input.dest, tree.version, files);
-  } catch {
-    writeBase(input.dest, version, uploaded);
+  if (sliced) {
+    cleanupPublishSlice(input.dest, input.slug);
+  } else {
+    try {
+      progress('checkout', 'Delivery accepted — updating local checkout');
+      const tree = await fetchLatestTree(input.api, input.slug);
+      mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
+      files = trackedTree(input.dest, input.slug, tree.files);
+      writeBase(input.dest, tree.version, files);
+    } catch {
+      writeBase(input.dest, version, uploaded);
+    }
   }
   return {
     kind: 'delivered',
@@ -374,7 +412,7 @@ async function submitGameUnlocked(input: {
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
     staged,
     files,
-    ignored: ignoredGameFiles(input.dest, input.slug),
+    ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug),
   };
 }
 
@@ -418,6 +456,9 @@ function changedPathsForced(local: TreeFile[], remote: TreeFile[]): string[] {
 
 export function formatSubmitLines(result: SubmitResult, slug: string): string[] {
   const ignored = formatIgnoredNotice(result.ignored);
+  if (result.kind === 'dry-run') {
+    return [...formatDryRunLines(slug, result.files, result.entry), ...ignored];
+  }
   if (result.kind === 'nothing') {
     return [`nothing to deliver — working copy matches ${result.sync.version}`, ...ignored];
   }
@@ -449,5 +490,6 @@ export function submitGame(input: Parameters<typeof submitGameUnlocked>[0]): Ret
         },
       }
     : input;
+  if (input.dryRun) return submitGameUnlocked(delivery);
   return withCheckoutWriter(input.dest, () => submitGameUnlocked(delivery));
 }
