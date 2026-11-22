@@ -42,6 +42,12 @@ function writeFiles(root: string, files: Record<string, string>): void {
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 }
+const stubApi = (fetch: typeof globalThis.fetch) =>
+  createApi({
+    origin: 'https://www.gamedev.pl',
+    store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+    fetch,
+  });
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -235,25 +241,34 @@ describe('collectReachableModules & buildPublishSlice', () => {
     expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/imports publish.ts, which collides/);
   });
 
-  it('ignores import syntax inside strings/templates/regexes while keeping literal-template dynamic imports', () => {
+  it('handles strings/templates/regexes, constant dynamic import expressions, and refuses non-constant dynamic imports', () => {
     const root = makeTemp('gdpl-strings-');
     writeFiles(root, {
       'games/demo/SPEC.md': '# Demo\n',
       'games/demo/game/private.ts': 'export const secret = 1;\n',
       'games/demo/game/real.ts': 'export const ok = 2;\n',
       'games/demo/game/tpl-real.ts': 'export const tpl = 3;\n',
+      'games/demo/game/concat.ts': 'export const cat = 4;\n',
       'games/demo/publish.ts': [
         'const a = "import(\'./game/private.ts\')";',
         "const b = `\nimport { secret } from './game/private.ts';\nimport('./game/private.ts');\n`;",
         "const c = /import\\('.\\/game\\/private.ts'\\)/;",
         'const o = { import: (s: string) => s };',
         "o.import('./game/private.ts');",
-        "export const loaded = `${await import('./game/real.ts')}` + String(import(`./game/tpl-real.ts`));",
-        'console.log(a, b, c, loaded);',
+        "export const loaded = `${await import('./game/real.ts')}` + String(import(`./game/tpl-real.ts`)) + String(import('./game/' + 'concat.ts'));",
+        'console.log(a, b, c, loaded, import.meta.url);',
       ].join('\n'),
     });
     const slice = buildPublishSlice(root, 'demo', 'publish.ts');
-    expect(slice.files.map((f) => f.path)).toEqual(['SPEC.md', 'game.ts', 'game/real.ts', 'game/tpl-real.ts']);
+    expect(slice.files.map((f) => f.path)).toEqual([
+      'SPEC.md',
+      'game.ts',
+      'game/concat.ts',
+      'game/real.ts',
+      'game/tpl-real.ts',
+    ]);
+    writeFiles(root, { 'games/demo/publish.ts': 'const p = "./game/real.ts"; void import(p);\n' });
+    expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/constant string expression/);
   });
 
   it('rejects symlinked directories in imported modules and manifest raster paths', () => {
@@ -335,12 +350,8 @@ describe('submitGame with --entry and --dry-run', () => {
       'games/knights/publish.ts': "import { nature } from './game/preview/scene.ts';\nconsole.log(nature);\n",
       'games/knights/publish/SPEC.md': '# Preview\n',
     });
-    const api = createApi({
-      origin: 'https://www.gamedev.pl',
-      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async () => {
-        throw new Error('dry-run must not call network');
-      },
+    const api = stubApi(async () => {
+      throw new Error('dry-run must not call network');
     });
     const result = await submitGame({ api, slug: 'knights', dest: root, entry: 'publish.ts', dryRun: true });
     expect(result.kind).toBe('dry-run');
@@ -380,35 +391,30 @@ describe('submitGame with --entry and --dry-run', () => {
     ];
     let remoteVersion = 'v1';
 
-    const api = createApi({
-      origin: 'https://www.gamedev.pl',
-      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async (url, init) => {
-        const path = String(url);
-        if (path.endsWith('/versions') && !path.includes('/tree')) {
-          return json({ versions: [{ version: remoteVersion, createdAt: '2026-11-21', sourceFiles: [] }] });
-        }
-        if (path.includes('/tree')) return json({ version: remoteVersion, files: remoteFiles });
-        if (path.endsWith('/sources/session'))
-          return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
-        if (path.endsWith('/sources')) return json({ files: remoteFiles });
-        if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
-          const body = JSON.parse(String(init.body)) as { path: string; content: string };
-          stagedPuts.set(body.path, body.content);
-          return json({ accepted: true });
-        }
-        if (path.endsWith('/sources/stage/delete') && init?.method === 'POST') {
-          const body = JSON.parse(String(init.body)) as { path: string };
-          deletedPaths.push(body.path);
-          return json({ accepted: true });
-        }
-        if (path.endsWith('/sources/deliver')) {
-          remoteVersion = 'v2';
-          remoteFiles = [...stagedPuts.entries()].map(([p, c]) => ({ path: p, content: c }));
-          return json({ accepted: true, version: 'v2', mode: 'preview', gateStarted: true, buildId: 'b2' });
-        }
-        return json({}, 404);
-      },
+    const api = stubApi(async (url, init) => {
+      const path = String(url);
+      if (path.endsWith('/versions') && !path.includes('/tree')) {
+        return json({ versions: [{ version: remoteVersion, createdAt: '2026-11-21', sourceFiles: [] }] });
+      }
+      if (path.includes('/tree')) return json({ version: remoteVersion, files: remoteFiles });
+      if (path.endsWith('/sources/session')) return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
+      if (path.endsWith('/sources')) return json({ files: remoteFiles });
+      if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body)) as { path: string; content: string };
+        stagedPuts.set(body.path, body.content);
+        return json({ accepted: true });
+      }
+      if (path.endsWith('/sources/stage/delete') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { path: string };
+        deletedPaths.push(body.path);
+        return json({ accepted: true });
+      }
+      if (path.endsWith('/sources/deliver')) {
+        remoteVersion = 'v2';
+        remoteFiles = [...stagedPuts.entries()].map(([p, c]) => ({ path: p, content: c }));
+        return json({ accepted: true, version: 'v2', mode: 'preview', gateStarted: true, buildId: 'b2' });
+      }
+      return json({}, 404);
     });
 
     const result = await submitGame({
@@ -453,21 +459,15 @@ describe('submitGame with --entry and --dry-run', () => {
       'src/publish.ts': 'export const preview = true;\n',
     });
 
-    const api = createApi({
-      origin: 'https://www.gamedev.pl',
-      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async (url) => {
-        const path = String(url);
-        if (path.endsWith('/versions') && !path.includes('/tree')) return json({ versions: [] });
-        if (path.endsWith('/sources/session'))
-          return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
-        if (path.endsWith('/sources')) return json({ files: [] });
-        if (path.endsWith('/sources/stage')) return json({ accepted: true });
-        if (path.endsWith('/sources/deliver')) {
-          return json({ accepted: true, version: 'v1', mode: 'preview', gateStarted: true, buildId: 'b1' });
-        }
-        return json({}, 404);
-      },
+    const api = stubApi(async (url) => {
+      const path = String(url);
+      if (path.endsWith('/versions') && !path.includes('/tree')) return json({ versions: [] });
+      if (path.endsWith('/sources/session')) return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
+      if (path.endsWith('/sources')) return json({ files: [] });
+      if (path.endsWith('/sources/stage')) return json({ accepted: true });
+      if (path.endsWith('/sources/deliver'))
+        return json({ accepted: true, version: 'v1', mode: 'preview', gateStarted: true, buildId: 'b1' });
+      return json({}, 404);
     });
 
     const calls: Array<{ args: string[]; cwd: string; hasPkg: boolean }> = [];

@@ -1,3 +1,5 @@
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
+
 type Token = { kind: 'id' | 'str' | 'tpl' | 'punct' | 'other'; value: string };
 
 const REGEX_PREV_KEYWORDS = new Set([
@@ -168,6 +170,65 @@ function tokenizeModule(source: string): Token[] {
   return tokens;
 }
 
+function resolveConstantImportArg(tokens: Token[], openParen: number): { specifier: string | null; end: number } {
+  let depth = 0;
+  let end = openParen;
+  let firstArgEnd = -1;
+  for (let k = openParen; k < tokens.length; k += 1) {
+    const t = tokens[k]!;
+    if (t.kind === 'punct' && t.value === '(') depth += 1;
+    else if (t.kind === 'punct' && t.value === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        end = k;
+        if (firstArgEnd === -1) firstArgEnd = k;
+        break;
+      }
+    } else if (depth === 1 && t.kind === 'punct' && t.value === ',' && firstArgEnd === -1) {
+      firstArgEnd = k;
+    }
+  }
+  if (firstArgEnd === -1 || firstArgEnd <= openParen + 1) return { specifier: null, end };
+  const argTokens = tokens.slice(openParen + 1, firstArgEnd);
+  const afterClose = tokens[end + 1];
+  const looksLikeMethod =
+    (afterClose?.kind === 'punct' && afterClose.value === '{') ||
+    argTokens.some((t) => t.kind === 'punct' && t.value === ':');
+  if (looksLikeMethod) return { specifier: null, end };
+
+  let combined = '';
+  let expectValue = true;
+  let parenBalance = 0;
+  let valid = true;
+  for (const t of argTokens) {
+    if (t.kind === 'punct' && t.value === '(') {
+      if (!expectValue) {
+        valid = false;
+        break;
+      }
+      parenBalance += 1;
+    } else if (t.kind === 'punct' && t.value === ')') {
+      if (expectValue || parenBalance === 0) {
+        valid = false;
+        break;
+      }
+      parenBalance -= 1;
+    } else if (expectValue && (t.kind === 'str' || t.kind === 'tpl')) {
+      combined += t.value;
+      expectValue = false;
+    } else if (!expectValue && t.kind === 'punct' && t.value === '+') {
+      expectValue = true;
+    } else {
+      valid = false;
+      break;
+    }
+  }
+  if (!valid || expectValue || parenBalance !== 0) {
+    throw new CliError('Dynamic import(...) in --entry slice must use a constant string expression.', EXIT_REFUSED);
+  }
+  return { specifier: combined.startsWith('.') ? combined : null, end };
+}
+
 export function extractRelativeSpecifiers(source: string): string[] {
   const tokens = tokenizeModule(source);
   const found: string[] = [];
@@ -179,17 +240,11 @@ export function extractRelativeSpecifiers(source: string): string[] {
     const next = tokens[i + 1];
     if (!next) continue;
 
+    if (tok.value === 'import' && next.kind === 'punct' && next.value === '.') continue;
     if (tok.value === 'import' && next.kind === 'punct' && next.value === '(') {
-      const arg = tokens[i + 2];
-      const after = tokens[i + 3];
-      if (
-        (arg?.kind === 'str' || arg?.kind === 'tpl') &&
-        arg.value.startsWith('.') &&
-        after?.kind === 'punct' &&
-        ',)'.includes(after.value)
-      ) {
-        found.push(arg.value);
-      }
+      const { specifier, end } = resolveConstantImportArg(tokens, i + 1);
+      if (specifier) found.push(specifier);
+      i = end;
       continue;
     }
     if (tok.value === 'import' && next.kind === 'str') {
@@ -223,7 +278,7 @@ export function extractRelativeSpecifiers(source: string): string[] {
           i = j + 1;
           break;
         }
-        if (cur.kind === 'punct' && ';=('.includes(cur.value)) break;
+        if (cur.kind === 'punct' && ';=():?[]'.includes(cur.value)) break;
         if (cur.kind === 'id' && CLAUSE_STOP_IDS.has(cur.value)) break;
       }
       j += 1;
