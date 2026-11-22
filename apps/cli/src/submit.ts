@@ -13,8 +13,9 @@ import {
 } from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
-import { mkdirSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync, existsSync, lstatSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { warnIfKitStale } from './submit-kit-warning.js';
 import {
   inspectGame,
   ignoredGameFiles,
@@ -34,20 +35,23 @@ import { verificationFilesHash, verificationSourceHash } from './verification-so
 import {
   buildPublishSlice,
   cleanupPublishSlice,
+  deliveryVerificationHash,
   formatDryRunLines,
   inspectPublishSlice,
   preparePublishSlice,
+  resolveDeliveryEntry,
 } from './publish-slice.js';
 import { deliveryProgress } from './delivery-progress.js';
 import { deliverySummary } from './delivery-summary.js';
 import { deliveryValidationError, rejectedStagedPaths, type RejectedUpload } from './delivery-validation.js';
 
 export type DeliverMode = 'preview' | 'publish';
+type EntryMeta = { entry?: string; autoEntry?: boolean };
 
 export type SubmitResult =
-  | { kind: 'dry-run'; files: TreeFile[]; entry?: string; ignored: IgnoredHit[] }
-  | { kind: 'nothing'; sync: SyncResult; ignored: IgnoredHit[] }
-  | {
+  | ({ kind: 'dry-run'; files: TreeFile[]; ignored: IgnoredHit[] } & EntryMeta)
+  | ({ kind: 'nothing'; sync: SyncResult; ignored: IgnoredHit[] } & EntryMeta)
+  | ({
       kind: 'delivered';
       sync: SyncResult;
       version: string;
@@ -57,7 +61,7 @@ export type SubmitResult =
       staged: string[];
       files: TreeFile[];
       ignored: IgnoredHit[];
-    };
+    } & EntryMeta);
 
 type StageReply = { accepted?: boolean; error?: string; message?: string };
 
@@ -136,57 +140,6 @@ function mapHttpError(error: unknown): never {
   throw error instanceof CliError ? error : new CliError(message, EXIT_REFUSED);
 }
 
-function readEngineRef(path: string): string | null {
-  try {
-    const value = JSON.parse(readFileSync(path, 'utf8')) as { engineRef?: unknown };
-    const ref = typeof value.engineRef === 'string' ? value.engineRef : '';
-    return /^[a-f0-9]{40}$/i.test(ref) ? ref : null;
-  } catch {
-    return null;
-  }
-}
-
-function localKitRef(dest: string): string | null {
-  const sourcePin = join(dest, 'gamedev-kit.json');
-  if (existsSync(sourcePin)) return readEngineRef(sourcePin);
-  return readEngineRef(kitPath(dest, 'gamedev.lock'));
-}
-
-// Server typechecks the round pin, or current when unpinned.
-async function warnIfKitStale(input: {
-  api: ApiClient;
-  slug: string;
-  dest: string;
-  warn?: (line: string) => void;
-}): Promise<void> {
-  if (!input.warn) return;
-  const local = localKitRef(input.dest);
-  if (!local) return;
-  try {
-    const pending = input.api
-      .request<{ engineRef?: unknown; typecheckEngineRef?: unknown }>(
-        'GET',
-        `/api/me/studio/games/${input.slug}/workspace?kitOnly=true`,
-      )
-      .catch(() => null);
-    const lock = await Promise.race([pending, new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000))]);
-    const hex = (value: unknown) => (typeof value === 'string' && /^[a-f0-9]{7,64}$/i.test(value) ? value : '');
-    const current = hex(lock?.engineRef);
-    const target = hex(lock?.typecheckEngineRef) || current;
-    if (!target || target.toLowerCase() === local.toLowerCase()) return;
-    const short = (ref: string) => ref.slice(0, 12);
-    const follow =
-      current && target.toLowerCase() === current.toLowerCase()
-        ? ' Update before sending: gamedevpl kit update'
-        : ' This round keeps that Kit until it closes.';
-    input.warn(
-      `Warning: this checkout pins GameKit ${short(local)}, but the platform typechecks ${short(target)}. A local pass can still be refused.${follow}`,
-    );
-  } catch {
-    // A kit probe must not block delivery.
-  }
-}
-
 async function submitGameUnlocked(input: {
   api: ApiClient;
   slug: string;
@@ -195,6 +148,7 @@ async function submitGameUnlocked(input: {
   publish?: boolean;
   takeover?: boolean;
   entry?: string;
+  full?: boolean;
   dryRun?: boolean;
   summary?: string;
   expectedSession?: DeliverySession;
@@ -206,22 +160,21 @@ async function submitGameUnlocked(input: {
   warn?: (line: string) => void;
   abort?: AbortSignal;
 }): Promise<SubmitResult> {
+  const { entry, auto } = resolveDeliveryEntry(input.dest, input.slug, input.entry, input.full);
+  const entryMeta: EntryMeta = { ...(entry ? { entry } : {}), ...(auto ? { autoEntry: true } : {}) };
+  const sliced = entry ? buildPublishSlice(input.dest, input.slug, entry) : null;
+  const ignored = () => (sliced ? sliced.ignored : ignoredGameFiles(input.dest, input.slug));
   if (input.dryRun) {
-    const files = input.entry
-      ? buildPublishSlice(input.dest, input.slug, input.entry).files
-      : localGameFiles(input.dest, input.slug);
-    return {
-      kind: 'dry-run',
-      files,
-      ...(input.entry ? { entry: input.entry } : {}),
-      ignored: input.entry ? [] : ignoredGameFiles(input.dest, input.slug),
-    };
+    const files = sliced ? sliced.files : localGameFiles(input.dest, input.slug);
+    return { kind: 'dry-run', files, ...entryMeta, ignored: ignored() };
   }
-  const sliced = input.entry ? buildPublishSlice(input.dest, input.slug, input.entry) : null;
   const inspect = () => (sliced ? inspectPublishSlice(input.api, input.slug, sliced.files) : inspectGame(input));
   const summary = deliverySummary(input.summary);
   const progress = deliveryProgress(input.onProgress);
-  progress('sources', 'Checking platform sources');
+  progress(
+    'sources',
+    auto ? 'Using publish.ts (pass --full for all files) — checking sources' : 'Checking platform sources',
+  );
   let recovered = sliced ? false : isRecoveryReady(input.dest, input.slug);
   let first = await inspect();
   if (recovered && (await reconcileRecoveryDelivery(input.api, input.dest, input.slug, first.tree))) {
@@ -239,7 +192,12 @@ async function submitGameUnlocked(input: {
     !input.force &&
     !input.takeover
   ) {
-    return { kind: 'nothing', sync: first.sync, ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug) };
+    return {
+      kind: 'nothing',
+      sync: first.sync,
+      ...entryMeta,
+      ignored: ignored(),
+    };
   }
   if (
     !input.force &&
@@ -266,10 +224,7 @@ async function submitGameUnlocked(input: {
       : runLadder(verification);
   input.abort?.throwIfAborted();
   assertLadderGreen(verify, verifyCwd, sourceHash, input.slug);
-  const afterHash = sliced
-    ? verificationFilesHash(buildPublishSlice(input.dest, input.slug, input.entry!).files)
-    : verificationSourceHash(input.dest, input.slug);
-  if (afterHash !== sourceHash)
+  if (deliveryVerificationHash(input.dest, input.slug, input.entry, input.full, { entry }) !== sourceHash)
     throw new CliError(
       'Sources changed during verification; result is stale. Nothing was sent.',
       EXIT_RED,
@@ -293,7 +248,12 @@ async function submitGameUnlocked(input: {
     !input.force &&
     !input.takeover
   ) {
-    return { kind: 'nothing', sync: latest.sync, ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug) };
+    return {
+      kind: 'nothing',
+      sync: latest.sync,
+      ...entryMeta,
+      ignored: ignored(),
+    };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
     throw new CheckoutSyncError(latest.sync);
@@ -410,9 +370,10 @@ async function submitGameUnlocked(input: {
     mode,
     gateStarted: delivered.gateStarted === true,
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
+    ...entryMeta,
     staged,
     files,
-    ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug),
+    ignored: ignored(),
   };
 }
 
@@ -457,12 +418,14 @@ function changedPathsForced(local: TreeFile[], remote: TreeFile[]): string[] {
 export function formatSubmitLines(result: SubmitResult, slug: string): string[] {
   const ignored = formatIgnoredNotice(result.ignored);
   if (result.kind === 'dry-run') {
-    return [...formatDryRunLines(slug, result.files, result.entry), ...ignored];
+    return [...formatDryRunLines(slug, result.files, result.entry, result.autoEntry), ...ignored];
   }
+  const entryNote = result.autoEntry ? ['using publish.ts (pass --full to upload all files)'] : [];
   if (result.kind === 'nothing') {
-    return [`nothing to deliver — working copy matches ${result.sync.version}`, ...ignored];
+    return [...entryNote, `nothing to deliver — working copy matches ${result.sync.version}`, ...ignored];
   }
   const lines = [
+    ...entryNote,
     `static ladder green`,
     `staged ${result.staged.length} file${result.staged.length === 1 ? '' : 's'}`,
     `delivery accepted ${slug} @ ${result.version} (${result.mode})`,

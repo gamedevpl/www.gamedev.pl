@@ -106,6 +106,7 @@ const BOOLEAN_FLAGS = new Set([
   'no-pager',
   'ignore-case',
   'force',
+  'full',
   'dry-run',
   'recover',
   'publish',

@@ -404,3 +404,34 @@ it('keeps the selected --entry slice active during REPL verification recovery an
   expect(cwds.length).toBeGreaterThanOrEqual(4);
   expect(cwds.every((cwd) => cwd.endsWith('/.gamedev/publish-slice'))).toBe(true);
 });
+
+it('auto-defaults REPL /push recovery to publish.ts while keeping /verify on the full checkout', async () => {
+  const f = fixture();
+  writeFileSync(join(f.root, 'games', 'example', 'publish.ts'), 'export const preview = 1;\n');
+  const cwds: string[] = [];
+  let failNext = true;
+  f.ws.run = (_cmd, args, cwd) => {
+    cwds.push(cwd);
+    if (args.includes('check:static') && failNext) {
+      failNext = false;
+      return { status: 1, stderr: 'check error' };
+    }
+    return { status: 0, stderr: '' };
+  };
+  f.pick.mockImplementation(async (choices, question) => {
+    if (question.startsWith('Local checks')) {
+      expect(choices).toEqual(['Fix with agent', 'Check again', BACK]);
+      return 'Check again';
+    }
+    return BACK;
+  });
+  await f.run('/push');
+  expect(cwds.length).toBeGreaterThanOrEqual(4);
+  expect(cwds.every((cwd) => cwd.endsWith('/.gamedev/publish-slice'))).toBe(true);
+
+  cwds.length = 0;
+  failNext = true;
+  await f.run('/verify');
+  expect(cwds.length).toBeGreaterThanOrEqual(4);
+  expect(cwds.every((cwd) => cwd === f.root)).toBe(true);
+});

@@ -345,6 +345,7 @@ export async function runCli(
           takeover: flags.takeover === true,
           summary: deliverySummary(flags.summary),
           ...(entry ? { entry } : {}),
+          ...(flags.full === true ? { full: true } : {}),
           ...(flags['dry-run'] === true ? { dryRun: true } : {}),
         },
         io,

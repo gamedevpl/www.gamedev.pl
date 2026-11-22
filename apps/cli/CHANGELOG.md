@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl push`, `publish` and `submit` accept `--entry <file>` (e.g. `publish.ts`) to upload only modules reachable from that entry plus `<stem>/` overrides as `game.ts`, and `--dry-run` to preview the exact file list without uploading.
+- `gamedevpl push`, `publish` and `submit` default to slicing `publish.ts` (plus `publish/` overrides) whenever a non-empty `publish.ts` exists — pass `--full` to upload the entire game tree, `--entry <file>` to pick another entry, or `--dry-run` to preview the exact file list offline.
 
 ### Fixed
 

@@ -6,7 +6,13 @@ import { readCheckoutSlug } from './checkout.js';
 import { formatError } from './errors.js';
 import type { handleReplLine } from './repl.js';
 import { formatSubmitLines, submitGame } from './submit.js';
-import { buildPublishSlice, parseEntryFlag, preparePublishSlice } from './publish-slice.js';
+import {
+  buildPublishSlice,
+  deliveryVerificationHash,
+  parseEntryFlag,
+  preparePublishSlice,
+  resolveDeliveryEntry,
+} from './publish-slice.js';
 import { deliverySummary } from './delivery-summary.js';
 import { VerificationError, runLadderAsync } from './verify.js';
 import { DeliveryValidationError } from './delivery-validation.js';
@@ -31,10 +37,8 @@ function repairRequest(error: RepairableFailure): string {
   ].join('\n\n');
 }
 
-function deliverySourceHash(delivery: Delivery): string {
-  return delivery.entry
-    ? verificationFilesHash(buildPublishSlice(delivery.dest, delivery.slug, delivery.entry).files)
-    : verificationSourceHash(delivery.dest, delivery.slug);
+function deliverySourceHash(delivery: Delivery): string | null {
+  return deliveryVerificationHash(delivery.dest, delivery.slug, delivery.entry, delivery.full);
 }
 
 async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
@@ -46,7 +50,8 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
   input.write('Checking the local game…');
   try {
     return await withCheckoutWriter(delivery.dest, async () => {
-      const sliced = delivery.entry ? buildPublishSlice(delivery.dest, delivery.slug, delivery.entry) : null;
+      const { entry } = resolveDeliveryEntry(delivery.dest, delivery.slug, delivery.entry, delivery.full);
+      const sliced = entry ? buildPublishSlice(delivery.dest, delivery.slug, entry) : null;
       const hash = sliced ? verificationFilesHash(sliced.files) : verificationSourceHash(delivery.dest, delivery.slug);
       const cwd = sliced
         ? await preparePublishSlice({
@@ -67,7 +72,8 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
         onStage: input.onActivity ?? input.write,
       });
       if (controller.signal.aborted) return undefined;
-      if (deliverySourceHash(delivery) !== hash) return 'stale' as const;
+      if (deliveryVerificationHash(delivery.dest, delivery.slug, delivery.entry, delivery.full, { entry }) !== hash)
+        return 'stale' as const;
       return { ...result, sourceHash: hash, cwd };
     });
   } finally {
@@ -198,6 +204,7 @@ export async function submitRepl(input: Input, line: string): Promise<void> {
       takeover: parsed.flags.takeover === true,
       summary: deliverySummary(parsed.flags.summary),
       ...(entry ? { entry } : {}),
+      ...(parsed.flags.full === true ? { full: true } : {}),
       ...(parsed.flags['dry-run'] === true ? { dryRun: true } : {}),
       run: ws?.run,
       onProgress: input.onActivity ?? input.write,

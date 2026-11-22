@@ -63,7 +63,7 @@ async function localActionUnlocked(
           onActivity: ws.onActivity,
           telemetry: ws.telemetry,
         },
-        { api, slug: ws.slug, dest: ws.root, run: ws.run },
+        { api, slug: ws.slug, dest: ws.root, run: ws.run, full: true },
         failure,
         ws.pick,
         ws,
