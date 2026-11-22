@@ -381,3 +381,26 @@ it.each(['/verify', '/push', '/submit'])('ignores kept-local notes and media dur
   expect(f.writes()).toEqual([]);
   expect(readFileSync(notes, 'utf8')).toBe('notes edited during recovery');
 });
+
+it('keeps the selected --entry slice active during REPL verification recovery and Check again', async () => {
+  const f = fixture();
+  writeFileSync(join(f.root, 'games', 'example', 'publish.ts'), 'export const preview = 1;\n');
+  const cwds: string[] = [];
+  let attempt = 0;
+  f.ws.run = (_cmd, args, cwd) => {
+    cwds.push(cwd);
+    if (args.includes('check:static') && attempt++ === 0) return { status: 1, stderr: 'preview lint error' };
+    return { status: 0, stderr: '' };
+  };
+  f.pick.mockImplementation(async (choices, question) => {
+    if (question.startsWith('Local checks')) {
+      expect(choices).toEqual(['Fix with agent', 'Check again', BACK]);
+      return 'Check again';
+    }
+    return BACK;
+  });
+  await f.run('/push --entry publish.ts');
+  expect(f.lines.join('\n')).toContain('Local checks passed.');
+  expect(cwds.length).toBeGreaterThanOrEqual(4);
+  expect(cwds.every((cwd) => cwd.endsWith('/.gamedev/publish-slice'))).toBe(true);
+});

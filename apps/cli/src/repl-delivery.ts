@@ -1,12 +1,12 @@
 import { realpathSync } from 'node:fs';
-import { verificationSourceHash } from './verification-source.js';
+import { verificationFilesHash, verificationSourceHash } from './verification-source.js';
 import { parseArgv } from './argv.js';
 import { cliUsage } from './bin-name.js';
 import { readCheckoutSlug } from './checkout.js';
 import { formatError } from './errors.js';
 import type { handleReplLine } from './repl.js';
 import { formatSubmitLines, submitGame } from './submit.js';
-import { parseEntryFlag } from './publish-slice.js';
+import { buildPublishSlice, parseEntryFlag, preparePublishSlice } from './publish-slice.js';
 import { deliverySummary } from './delivery-summary.js';
 import { VerificationError, runLadderAsync } from './verify.js';
 import { DeliveryValidationError } from './delivery-validation.js';
@@ -31,6 +31,12 @@ function repairRequest(error: RepairableFailure): string {
   ].join('\n\n');
 }
 
+function deliverySourceHash(delivery: Delivery): string {
+  return delivery.entry
+    ? verificationFilesHash(buildPublishSlice(delivery.dest, delivery.slug, delivery.entry).files)
+    : verificationSourceHash(delivery.dest, delivery.slug);
+}
+
 async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
   const controller = new AbortController();
   const holder = ws?.abort ?? input.abort;
@@ -40,9 +46,20 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
   input.write('Checking the local game…');
   try {
     return await withCheckoutWriter(delivery.dest, async () => {
-      const hash = verificationSourceHash(delivery.dest, delivery.slug);
+      const sliced = delivery.entry ? buildPublishSlice(delivery.dest, delivery.slug, delivery.entry) : null;
+      const hash = sliced ? verificationFilesHash(sliced.files) : verificationSourceHash(delivery.dest, delivery.slug);
+      const cwd = sliced
+        ? await preparePublishSlice({
+            dest: delivery.dest,
+            slug: delivery.slug,
+            files: sliced.files,
+            run: ws?.run,
+            onStage: input.onActivity ?? input.write,
+            abort: controller.signal,
+          })
+        : delivery.dest;
       const result = await runLadderAsync({
-        cwd: delivery.dest,
+        cwd,
         slug: delivery.slug,
         publish: delivery.publish,
         run: ws?.run,
@@ -50,8 +67,8 @@ async function checkAgain(input: Input, delivery: Delivery, ws?: Workshop) {
         onStage: input.onActivity ?? input.write,
       });
       if (controller.signal.aborted) return undefined;
-      if (verificationSourceHash(delivery.dest, delivery.slug) !== hash) return 'stale' as const;
-      return { ...result, sourceHash: hash };
+      if (deliverySourceHash(delivery) !== hash) return 'stale' as const;
+      return { ...result, sourceHash: hash, cwd };
     });
   } finally {
     if (holder?.current === controller) holder.current = null;
@@ -74,8 +91,13 @@ export async function recoverVerification(
       error instanceof VerificationError ? { stage: error.stage } : undefined,
     );
   let diagnosticsCurrent = true;
-  const matchesDiagnostics = () =>
-    failure.sourceHash !== undefined && verificationSourceHash(delivery.dest, delivery.slug) === failure.sourceHash;
+  const matchesDiagnostics = () => {
+    try {
+      return failure.sourceHash !== undefined && deliverySourceHash(delivery) === failure.sourceHash;
+    } catch {
+      return false;
+    }
+  };
   record(failure);
   for (;;) {
     diagnosticsCurrent &&= matchesDiagnostics();
@@ -122,7 +144,7 @@ export async function recoverVerification(
     }
     if (!result.ok) {
       diagnosticsCurrent = true;
-      failure = new VerificationError(result, delivery.dest, result.sourceHash, delivery.slug);
+      failure = new VerificationError(result, result.cwd, result.sourceHash, delivery.slug);
       input.write(failure.message);
       record(failure);
       continue;
