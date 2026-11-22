@@ -25,12 +25,14 @@ import type { SyncResult, TreeFile } from './checkout-sync.js';
 import { childEnv } from './delegate.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { kitPath } from './kit-install.js';
+import { extractRelativeSpecifiers } from './publish-slice-imports.js';
 import { sourceKitWarnings } from './source-kit-diagnostics.js';
 import { gameSourcePath, gameSourceRoot, projectRuntimeRoot, sourceProject } from './source-project.js';
 import { sourceSetupArgs } from './source-project-runtime.js';
 import { VerificationError, type runLadder } from './verify.js';
 
 const NON_CODE_FIXED = new Set<string>(DELIVERY_FIXED_FILES.filter((file) => file !== 'game.ts' && file !== 'sim.ts'));
+const HOT_BEHAVIOR_PATTERN = /^game\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.ts$/;
 
 export function parseEntryFlag(raw: string | boolean | undefined): string | undefined {
   if (raw === undefined || raw === false) return undefined;
@@ -72,56 +74,6 @@ export function resolvePushTarget(
   return slug ? { dest, slug } : null;
 }
 
-function stripComments(source: string): string {
-  let out = '';
-  let quote = '';
-  for (let i = 0; i < source.length; i += 1) {
-    const ch = source[i]!;
-    const next = source[i + 1] ?? '';
-    if (quote) {
-      out += ch;
-      if (ch === '\\' && i + 1 < source.length) {
-        out += source[++i]!;
-        continue;
-      }
-      if (ch === quote) quote = '';
-      continue;
-    }
-    if (ch === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-      out += '\n';
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      i += 2;
-      while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i += 1;
-      i += 1;
-      out += ' ';
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') quote = ch;
-    out += ch;
-  }
-  return out;
-}
-
-function extractRelativeSpecifiers(source: string): string[] {
-  const clean = stripComments(source);
-  const found: string[] = [];
-  const patterns = [
-    /(?:^|[;\n])\s*(?:import|export)\s+(?:type\s+)?(?:[^'"`;{}]*?(?:\{[^}'"`]*\})?[^'"`;{}]*?)\s+from\s*['"](\.[^'"]+)['"]/g,
-    /(?:^|[;\n])\s*import\s+['"](\.[^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g,
-  ];
-  for (const regex of patterns) {
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(clean)) !== null) {
-      if (match[1]) found.push(match[1]);
-    }
-  }
-  return found;
-}
-
 function resolveLocalModule(
   sourceRoot: string,
   fromRel: string,
@@ -143,7 +95,7 @@ function resolveLocalModule(
   }
   for (const candidate of candidates) {
     if (overrides?.has(candidate)) return candidate;
-    const abs = join(sourceRoot, candidate);
+    const abs = kitPath(sourceRoot, candidate);
     if (existsSync(abs) && lstatSync(abs).isFile()) return candidate;
   }
   throw new CliError(`Module "${specifier}" imported by ${fromRel} was not found.`, EXIT_REFUSED);
@@ -153,13 +105,26 @@ export function collectReachableModules(
   sourceRoot: string,
   entry: string,
   overrides?: Map<string, TreeFile>,
+  extraRoots: string[] = [],
 ): string[] {
-  const entryAbs = join(sourceRoot, entry);
+  const entryAbs = kitPath(sourceRoot, entry);
   if (!overrides?.has('game.ts') && (!existsSync(entryAbs) || !lstatSync(entryAbs).isFile())) {
     throw new CliError(`Entry file "${entry}" was not found in ${sourceRoot}.`, EXIT_INPUT);
   }
   const visited = new Set<string>([entry]);
   const queue = [entry];
+  for (const root of extraRoots) {
+    if (!overrides?.has(root)) {
+      const abs = kitPath(sourceRoot, root);
+      if (!existsSync(abs) || !lstatSync(abs).isFile()) {
+        throw new CliError(`Manifest module "${root}" was not found in ${sourceRoot}.`, EXIT_REFUSED);
+      }
+    }
+    if (!visited.has(root)) {
+      visited.add(root);
+      queue.push(root);
+    }
+  }
   if (overrides) {
     for (const rel of overrides.keys()) {
       if (rel.endsWith('.ts') && !visited.has(rel)) {
@@ -174,7 +139,7 @@ export function collectReachableModules(
     const content =
       current === entry
         ? (overrides?.get('game.ts')?.content ?? readFileSync(entryAbs, 'utf8'))
-        : (overrides?.get(current)?.content ?? readFileSync(join(sourceRoot, current), 'utf8'));
+        : (overrides?.get(current)?.content ?? readFileSync(kitPath(sourceRoot, current), 'utf8'));
     for (const specifier of extractRelativeSpecifiers(content)) {
       const target = resolveLocalModule(sourceRoot, current, specifier, overrides);
       if (target === 'game.ts' && entry !== 'game.ts') {
@@ -193,7 +158,8 @@ export function collectReachableModules(
   return [...visited].sort();
 }
 
-function collectOverrideFiles(overrideRoot: string, binaryRasters: boolean): TreeFile[] {
+function collectOverrideFiles(sourceRoot: string, stem: string, binaryRasters: boolean): TreeFile[] {
+  const overrideRoot = kitPath(sourceRoot, stem);
   const files: TreeFile[] = [];
   if (!existsSync(overrideRoot) || !lstatSync(overrideRoot).isDirectory()) return files;
   const visit = (rel: string): void => {
@@ -213,24 +179,27 @@ function collectOverrideFiles(overrideRoot: string, binaryRasters: boolean): Tre
   return files;
 }
 
-function manifestRasterPaths(gameJsonContent: string | undefined): string[] {
-  if (!gameJsonContent) return [];
-  let parsed: unknown;
+function parseManifestObject(gameJsonContent: string | undefined): Record<string, unknown> | null {
+  if (!gameJsonContent) return null;
   try {
-    parsed = JSON.parse(gameJsonContent);
+    const parsed: unknown = JSON.parse(gameJsonContent);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
   } catch {
-    return [];
+    return null;
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
-  const images = (parsed as { images?: unknown }).images;
+}
+
+function manifestRasterPaths(manifest: Record<string, unknown> | null): string[] {
+  const images = manifest?.images;
   if (!images || typeof images !== 'object' || Array.isArray(images)) return [];
-  const paths: string[] = [];
-  for (const value of Object.values(images as Record<string, unknown>)) {
-    if (typeof value === 'string' && isRasterSourcePath(value)) {
-      paths.push(value);
-    }
-  }
-  return paths;
+  return Object.values(images as Record<string, unknown>).filter(
+    (value): value is string => typeof value === 'string' && isRasterSourcePath(value),
+  );
+}
+
+function manifestHotBehavior(manifest: Record<string, unknown> | null): string | null {
+  const behavior = (manifest?.hot as { behavior?: unknown } | undefined)?.behavior;
+  return typeof behavior === 'string' && HOT_BEHAVIOR_PATTERN.test(behavior) ? behavior : null;
 }
 
 export function buildPublishSlice(
@@ -241,40 +210,43 @@ export function buildPublishSlice(
   const sourceRoot = gameSourceRoot(dest, slug);
   const binaryRasters = gameSourcePath(dest, slug) === 'src';
   const stem = entry.replace(/\.ts$/, '');
-  const overrides = stem === 'game' ? [] : collectOverrideFiles(join(sourceRoot, stem), binaryRasters);
+  const overrides = stem === 'game' ? [] : collectOverrideFiles(sourceRoot, stem, binaryRasters);
   const overrideMap = new Map(overrides.map((file) => [file.path, file]));
-  const reachable = collectReachableModules(sourceRoot, entry, overrideMap);
+
+  const gameJsonAbs = kitPath(sourceRoot, 'GAME.json');
+  const effectiveGameJson =
+    overrideMap.get('GAME.json')?.content ??
+    (existsSync(gameJsonAbs) && lstatSync(gameJsonAbs).isFile() ? readFileSync(gameJsonAbs, 'utf8') : undefined);
+  const manifest = parseManifestObject(effectiveGameJson);
+  const hotBehavior = manifestHotBehavior(manifest);
+
+  const reachable = collectReachableModules(sourceRoot, entry, overrideMap, hotBehavior ? [hotBehavior] : []);
   const map = new Map<string, TreeFile>();
 
   for (const fixed of NON_CODE_FIXED) {
-    const abs = join(sourceRoot, fixed);
+    const abs = kitPath(sourceRoot, fixed);
     if (existsSync(abs) && lstatSync(abs).isFile()) {
       map.set(fixed, { path: fixed, content: readGameContent(abs, fixed, binaryRasters) });
     }
   }
 
-  const entryContent = overrideMap.get('game.ts')?.content ?? readFileSync(join(sourceRoot, entry), 'utf8');
+  const entryContent = overrideMap.get('game.ts')?.content ?? readFileSync(kitPath(sourceRoot, entry), 'utf8');
   map.set('game.ts', { path: 'game.ts', content: entryContent });
 
   for (const mod of reachable) {
     if (mod === 'game.ts' || mod === entry) continue;
     if (!isDeliverablePath(mod)) continue;
     const override = overrideMap.get(mod);
-    if (override) {
-      map.set(mod, override);
-    } else {
-      const abs = join(sourceRoot, mod);
-      map.set(mod, { path: mod, content: readGameContent(abs, mod, binaryRasters) });
-    }
+    map.set(mod, override ?? { path: mod, content: readGameContent(kitPath(sourceRoot, mod), mod, binaryRasters) });
   }
 
   for (const file of overrides) {
     map.set(file.path, file);
   }
 
-  for (const relPath of manifestRasterPaths(map.get('GAME.json')?.content)) {
+  for (const relPath of manifestRasterPaths(manifest)) {
     if (map.has(relPath)) continue;
-    const abs = join(sourceRoot, relPath);
+    const abs = kitPath(sourceRoot, relPath);
     if (existsSync(abs) && lstatSync(abs).isFile()) {
       map.set(relPath, { path: relPath, content: readGameContent(abs, relPath, binaryRasters) });
     }

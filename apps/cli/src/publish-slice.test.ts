@@ -1,4 +1,13 @@
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -219,6 +228,79 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'games/demo/publish.ts': "import { v } from './game/helper.ts';\nconsole.log(v);\n",
     });
     expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/collides with mapping --entry publish.ts/);
+  });
+
+  it('ignores import syntax inside strings, template literals, regexes, and property calls', () => {
+    const root = makeTemp('gdpl-strings-');
+    writeFiles(root, {
+      'games/demo/SPEC.md': '# Demo\n',
+      'games/demo/game/private.ts': 'export const secret = 1;\n',
+      'games/demo/game/real.ts': 'export const ok = 2;\n',
+      'games/demo/publish.ts': [
+        'const a = "import(\'./game/private.ts\')";',
+        "const b = `\nimport { secret } from './game/private.ts';\nimport('./game/private.ts');\n`;",
+        "const c = /import\\('.\\/game\\/private.ts'\\)/;",
+        'const o = { import: (s: string) => s };',
+        "o.import('./game/private.ts');",
+        "export const loaded = `${await import('./game/real.ts')}`;",
+        'console.log(a, b, c, loaded);',
+      ].join('\n'),
+    });
+
+    const slice = buildPublishSlice(root, 'demo', 'publish.ts');
+    expect(slice.files.map((f) => f.path)).toEqual(['SPEC.md', 'game.ts', 'game/real.ts']);
+  });
+
+  it('rejects symlinked directories in imported modules and manifest raster paths', () => {
+    const outside = makeTemp('gdpl-outside-');
+    writeFiles(outside, { 'private.ts': 'export const leak = 1;\n', 'secret.png': 'c2VjcmV0' });
+
+    const modRoot = makeTemp('gdpl-symlink-mod-');
+    writeFiles(modRoot, {
+      'games/demo/SPEC.md': '# Demo\n',
+      'games/demo/publish.ts': "import { leak } from './game/link/private.ts';\nconsole.log(leak);\n",
+    });
+    mkdirSync(join(modRoot, 'games/demo/game'), { recursive: true });
+    symlinkSync(outside, join(modRoot, 'games/demo/game/link'), 'dir');
+    expect(() => buildPublishSlice(modRoot, 'demo', 'publish.ts')).toThrow(/symbolic link/);
+
+    const imgRoot = makeTemp('gdpl-symlink-img-');
+    writeFiles(imgRoot, {
+      'games/demo/SPEC.md': '# Demo\n',
+      'games/demo/GAME.json': JSON.stringify({ images: { leak: 'scenes/link/secret.png' } }),
+      'games/demo/publish.ts': 'export const ok = 1;\n',
+    });
+    mkdirSync(join(imgRoot, 'games/demo/scenes'), { recursive: true });
+    symlinkSync(outside, join(imgRoot, 'games/demo/scenes/link'), 'dir');
+    expect(() => buildPublishSlice(imgRoot, 'demo', 'publish.ts')).toThrow(/symbolic link/);
+  });
+
+  it('traverses GAME.json.hot.behavior and its dependencies when declared in the effective manifest', () => {
+    const root = makeTemp('gdpl-hot-');
+    writeFiles(root, {
+      'games/demo/SPEC.md': '# Hot Demo\n',
+      'games/demo/GAME.json': JSON.stringify({
+        hot: { protocol: 1, id: 'demo', stateVersion: 1, observationVersion: 1, behavior: 'game/behavior.ts' },
+      }),
+      'games/demo/game.ts': 'export default function boot(b: unknown) { return b; }\n',
+      'games/demo/game/behavior.ts': "import { helper } from './helper.ts';\nexport default { update: helper };\n",
+      'games/demo/game/helper.ts': 'export const helper = () => {};\n',
+      'games/demo/game/unused.ts': 'export const unused = 1;\n',
+      'games/demo/publish.ts': 'export const teaser = 1;\n',
+      'games/demo/publish/GAME.json': JSON.stringify({ title: 'Demo Preview' }),
+    });
+
+    const fullHotSlice = buildPublishSlice(root, 'demo', 'game.ts');
+    expect(fullHotSlice.files.map((f) => f.path)).toEqual([
+      'GAME.json',
+      'SPEC.md',
+      'game.ts',
+      'game/behavior.ts',
+      'game/helper.ts',
+    ]);
+
+    const previewSlice = buildPublishSlice(root, 'demo', 'publish.ts');
+    expect(previewSlice.files.map((f) => f.path)).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
   });
 
   it('stages a self-contained slice with runtime links', () => {
