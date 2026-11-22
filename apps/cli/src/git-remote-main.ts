@@ -88,7 +88,7 @@ async function reconcilePushUnlocked(input: {
       );
     }
     const pushed = localGameFiles(dest, input.slug);
-    const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
+    const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest, full: true });
     try {
       if (input.scope && input.layout && result.kind !== 'dry-run') {
         const version = result.kind === 'delivered' ? result.version : result.sync.version;

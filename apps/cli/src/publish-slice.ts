@@ -24,11 +24,13 @@ import {
 import type { SyncResult, TreeFile } from './checkout-sync.js';
 import { childEnv } from './delegate.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { createIgnoreMatcher } from './ignore.js';
 import { kitPath } from './kit-install.js';
 import { extractRelativeSpecifiers } from './publish-slice-imports.js';
 import { sourceKitWarnings } from './source-kit-diagnostics.js';
 import { gameSourcePath, gameSourceRoot, projectRuntimeRoot, sourceProject } from './source-project.js';
 import { sourceSetupArgs } from './source-project-runtime.js';
+import { verificationFilesHash, verificationSourceHash } from './verification-source.js';
 import { VerificationError, type runLadder } from './verify.js';
 
 const NON_CODE_FIXED = new Set<string>(DELIVERY_FIXED_FILES.filter((file) => file !== 'game.ts' && file !== 'sim.ts'));
@@ -44,6 +46,49 @@ export function parseEntryFlag(raw: string | boolean | undefined): string | unde
     );
   }
   return value;
+}
+
+export function resolveDeliveryEntry(
+  dest: string,
+  slug: string,
+  explicitEntry: string | undefined,
+  full?: boolean,
+): { entry?: string; auto?: boolean } {
+  if (full && explicitEntry) {
+    throw new CliError('Cannot combine --full with --entry.', EXIT_INPUT);
+  }
+  if (explicitEntry) return { entry: explicitEntry };
+  if (full) return {};
+  const sourceRoot = gameSourceRoot(dest, slug);
+  if (!existsSync(sourceRoot) || lstatSync(sourceRoot).isSymbolicLink() || !lstatSync(sourceRoot).isDirectory()) {
+    return {};
+  }
+  const abs = join(sourceRoot, 'publish.ts');
+  let stat;
+  try {
+    stat = lstatSync(abs);
+  } catch {
+    return {};
+  }
+  if (!stat.isFile()) return {};
+  const prefix = gameSourcePath(dest, slug);
+  if (createIgnoreMatcher(dest).ignored(`${prefix}/publish.ts`, false)) return {};
+  if (!readFileSync(abs, 'utf8').trim()) return {};
+  return { entry: 'publish.ts', auto: true };
+}
+
+export function deliveryVerificationHash(
+  dest: string,
+  slug: string,
+  explicitEntry: string | undefined,
+  full: boolean | undefined,
+  expected?: { entry: string | undefined },
+): string | null {
+  const resolved = resolveDeliveryEntry(dest, slug, explicitEntry, full).entry;
+  if (expected && resolved !== expected.entry) return null;
+  return resolved
+    ? verificationFilesHash(buildPublishSlice(dest, slug, resolved).files)
+    : verificationSourceHash(dest, slug);
 }
 
 export function resolvePushTarget(
@@ -350,9 +395,9 @@ export function cleanupPublishSlice(dest: string, slug: string): void {
   rmSync(join(kitPath(dest, '.gamedev/publish-slice'), 'games', slug), { recursive: true, force: true });
 }
 
-export function formatDryRunLines(slug: string, files: TreeFile[], entry?: string): string[] {
+export function formatDryRunLines(slug: string, files: TreeFile[], entry?: string, autoEntry?: boolean): string[] {
   const bytes = files.reduce((sum, file) => sum + Buffer.byteLength(file.content, 'utf8'), 0);
-  const tag = entry ? ` (entry: ${entry})` : '';
+  const tag = entry ? ` (entry: ${entry}${autoEntry ? ', default — pass --full for all files' : ''})` : '';
   return [
     `dry-run ${slug}${tag}: ${files.length} file${files.length === 1 ? '' : 's'}, ${(bytes / 1024).toFixed(1)} KB`,
     ...files.map((file) => `  ${file.path}`),
