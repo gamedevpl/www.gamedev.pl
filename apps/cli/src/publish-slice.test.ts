@@ -253,6 +253,7 @@ describe('collectReachableModules & buildPublishSlice', () => {
         'const a = "import(\'./game/private.ts\')";',
         "const b = `\nimport { secret } from './game/private.ts';\nimport('./game/private.ts');\n`;",
         "const c = /import\\('.\\/game\\/private.ts'\\)/;",
+        'if (a) /[\'"]/g.test(a);',
         'const o = { import: (s: string) => s };',
         "o.import('./game/private.ts');",
         "export const loaded = `${await import('./game/real.ts')}` + String(import(`./game/tpl-real.ts`)) + String(import('./game/' + 'concat.ts'));",
@@ -325,6 +326,7 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'package.json': '{"name":"kit"}',
       'tsconfig.json': '{}',
       'kit.json': '{"version":"1.0.0"}',
+      'verify.mjs': 'process.exit(0);\n',
       'node_modules/.keep': '',
       'games/knights/SPEC.md': '# Preview\n',
       'games/knights/publish.ts': 'export const preview = 1;\n',
@@ -334,6 +336,7 @@ describe('collectReachableModules & buildPublishSlice', () => {
     const stageRoot = stagePublishSlice(relRoot, 'knights', slice.files);
     expect(readFileSync(join(stageRoot, 'games/knights/game.ts'), 'utf8')).toContain('preview = 1');
     expect(existsSync(join(stageRoot, 'package.json'))).toBe(true);
+    expect(existsSync(join(stageRoot, 'verify.mjs'))).toBe(true);
     expect(lstatSync(join(stageRoot, 'node_modules')).isSymbolicLink()).toBe(true);
     expect(existsSync(join(stageRoot, 'node_modules/.keep'))).toBe(true);
   });

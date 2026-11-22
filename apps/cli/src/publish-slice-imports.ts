@@ -1,12 +1,14 @@
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
-type Token = { kind: 'id' | 'str' | 'tpl' | 'punct' | 'other'; value: string };
+type Token = { kind: 'id' | 'str' | 'tpl' | 'punct' | 'other'; value: string; regexAfter?: boolean };
 
 const REGEX_PREV_KEYWORDS = new Set([
   'return',
   'throw',
   'case',
+  'default',
   'in',
+  'instanceof',
   'of',
   'typeof',
   'void',
@@ -17,6 +19,8 @@ const REGEX_PREV_KEYWORDS = new Set([
   'else',
   'do',
 ]);
+const CONTROL_PAREN_KEYWORDS = new Set(['if', 'while', 'for', 'with']);
+const BLOCK_PREV_KEYWORDS = new Set(['else', 'try', 'finally', 'do']);
 const CLAUSE_STOP_IDS = new Set([
   'const',
   'let',
@@ -34,14 +38,25 @@ const CLAUSE_STOP_IDS = new Set([
 
 function allowsRegex(prev: Token | undefined): boolean {
   if (!prev) return true;
+  if (prev.regexAfter !== undefined) return prev.regexAfter;
   if (prev.kind === 'id') return REGEX_PREV_KEYWORDS.has(prev.value);
   if (prev.kind === 'punct') return !')]}'.includes(prev.value);
+  return false;
+}
+
+function isBlockBrace(prev: Token | undefined): boolean {
+  if (!prev) return true;
+  if (prev.kind === 'id') return BLOCK_PREV_KEYWORDS.has(prev.value);
+  if (prev.kind === 'punct')
+    return prev.value === ';' || prev.value === '{' || prev.value === '}' || prev.value === ')' || prev.value === '=>';
   return false;
 }
 
 function tokenizeModule(source: string): Token[] {
   const tokens: Token[] = [];
   const tplBraceDepths: number[] = [];
+  const parenStack: boolean[] = [];
+  const braceStack: boolean[] = [];
   let braceDepth = 0;
   let i = 0;
 
@@ -145,8 +160,26 @@ function tokenizeModule(source: string): Token[] {
       i = end;
       continue;
     }
+    if (ch === '=' && next === '>') {
+      tokens.push({ kind: 'punct', value: '=>' });
+      i += 2;
+      continue;
+    }
+    if (ch === '(') {
+      const prev = tokens[tokens.length - 1];
+      parenStack.push(prev?.kind === 'id' && CONTROL_PAREN_KEYWORDS.has(prev.value));
+      tokens.push({ kind: 'punct', value: ch });
+      i += 1;
+      continue;
+    }
+    if (ch === ')') {
+      tokens.push({ kind: 'punct', value: ch, regexAfter: parenStack.pop() ?? false });
+      i += 1;
+      continue;
+    }
     if (ch === '{') {
       braceDepth += 1;
+      braceStack.push(isBlockBrace(tokens[tokens.length - 1]));
       tokens.push({ kind: 'punct', value: ch });
       i += 1;
       continue;
@@ -160,7 +193,7 @@ function tokenizeModule(source: string): Token[] {
         continue;
       }
       braceDepth = Math.max(0, braceDepth - 1);
-      tokens.push({ kind: 'punct', value: ch });
+      tokens.push({ kind: 'punct', value: ch, regexAfter: braceStack.pop() ?? true });
       i += 1;
       continue;
     }

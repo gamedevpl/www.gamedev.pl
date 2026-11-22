@@ -8,8 +8,8 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
-  unlinkSync,
 } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import type { ApiClient } from './api.js';
@@ -307,30 +307,38 @@ export async function preparePublishSlice(input: {
   return stagePublishSlice(input.dest, input.slug, input.files);
 }
 
+const STAGE_SKIP = new Set([
+  'games',
+  'src',
+  'dist',
+  'artifacts',
+  'gamedev.lock',
+  'gamedev-kit.json',
+  '.git',
+  '.gamedev',
+  '.gate-task-cache',
+  '.gate-run',
+  '.DS_Store',
+]);
+
 export function stagePublishSlice(dest: string, slug: string, files: TreeFile[]): string {
   const stageRoot = resolve(kitPath(dest, '.gamedev/publish-slice'));
-  rmSync(join(stageRoot, 'games', slug), { recursive: true, force: true });
+  rmSync(stageRoot, { recursive: true, force: true });
   mkdirSync(join(stageRoot, 'games', slug), { recursive: true });
 
   const runtime = resolve(projectRuntimeRoot(dest));
-  for (const file of ['package.json', 'tsconfig.json', 'kit.json']) {
-    const src = join(runtime, file);
-    if (existsSync(src) && lstatSync(src).isFile()) {
-      copyFileSync(src, join(stageRoot, file));
-    }
-  }
-  for (const dir of ['node_modules', 'shared', 'tools']) {
-    const src = join(runtime, dir);
-    const dst = join(stageRoot, dir);
-    if (!existsSync(src)) continue;
-    try {
-      if (lstatSync(dst).isSymbolicLink()) unlinkSync(dst);
-    } catch {
-      // Nothing to clear before symlinking.
-    }
-    if (!existsSync(dst)) {
-      mkdirSync(dirname(dst), { recursive: true });
-      symlinkSync(src, dst, 'dir');
+  if (existsSync(runtime) && lstatSync(runtime).isDirectory()) {
+    for (const entry of readdirSync(runtime, { withFileTypes: true })) {
+      if (STAGE_SKIP.has(entry.name) || entry.name.startsWith('.gamedev-')) continue;
+      const src = join(runtime, entry.name);
+      const dst = join(stageRoot, entry.name);
+      if (entry.isDirectory() || entry.isSymbolicLink()) {
+        if (!existsSync(src)) continue;
+        mkdirSync(dirname(dst), { recursive: true });
+        symlinkSync(src, dst, statSync(src).isDirectory() ? 'dir' : undefined);
+      } else if (entry.isFile()) {
+        copyFileSync(src, dst);
+      }
     }
   }
 
