@@ -211,6 +211,16 @@ describe('collectReachableModules & buildPublishSlice', () => {
     expect(() => collectReachableModules(join(root, 'games/demo'), 'publish.ts')).toThrow(/escapes the game/);
   });
 
+  it('refuses direct or indirect imports of game.ts when mapping another entry onto game.ts', () => {
+    const root = makeTemp('gdpl-collide-');
+    writeFiles(root, {
+      'games/demo/game.ts': 'export const full = 1;\n',
+      'games/demo/game/helper.ts': "import { full } from '../game.ts';\nexport const v = full;\n",
+      'games/demo/publish.ts': "import { v } from './game/helper.ts';\nconsole.log(v);\n",
+    });
+    expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/collides with mapping --entry publish.ts/);
+  });
+
   it('stages a self-contained slice with runtime links', () => {
     const root = makeTemp('gdpl-stage-');
     writeFiles(root, {
@@ -351,5 +361,57 @@ describe('submitGame with --entry and --dry-run', () => {
       run: () => ({ status: 0, stderr: '' }),
     });
     expect(second.kind).toBe('nothing');
+  });
+
+  it('prepares a source-project runtime before staging and verifying a publish slice', async () => {
+    const root = makeTemp('gdpl-src-slice-');
+    writeFiles(root, {
+      'package.json': JSON.stringify({ name: 'airtime-repo', scripts: { setup: 'echo setup' } }),
+      'gamedev-kit.json': JSON.stringify({ engineRef: 'a'.repeat(40), kitSha256: 'b'.repeat(64) }),
+      'src/SPEC.md': '---\nslug: airtime\n---\n',
+      'src/game.ts': 'export const full = true;\n',
+      'src/publish.ts': 'export const preview = true;\n',
+    });
+
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        const path = String(url);
+        if (path.endsWith('/versions') && !path.includes('/tree')) return json({ versions: [] });
+        if (path.endsWith('/sources/session'))
+          return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
+        if (path.endsWith('/sources')) return json({ files: [] });
+        if (path.endsWith('/sources/stage')) return json({ accepted: true });
+        if (path.endsWith('/sources/deliver')) {
+          return json({ accepted: true, version: 'v1', mode: 'preview', gateStarted: true, buildId: 'b1' });
+        }
+        return json({}, 404);
+      },
+    });
+
+    const calls: Array<{ args: string[]; cwd: string; hasPkg: boolean }> = [];
+    const result = await submitGame({
+      api,
+      slug: 'airtime',
+      dest: root,
+      entry: 'publish.ts',
+      run: (_cmd, args, cwd) => {
+        if (args.join(' ') === 'run setup') {
+          writeFiles(join(root, '.gamedev/local'), {
+            'package.json': '{"name":"kit"}',
+            'tsconfig.json': '{}',
+            'kit.json': '{"version":"1.0.0"}',
+            '.gamedev-slug': 'airtime',
+          });
+        }
+        calls.push({ args, cwd, hasPkg: existsSync(join(cwd, 'package.json')) });
+        return { status: 0, stderr: '' };
+      },
+    });
+
+    expect(result.kind).toBe('delivered');
+    expect(calls[0]).toEqual({ args: ['run', 'setup'], cwd: root, hasPkg: true });
+    expect(calls.slice(1).every((c) => c.cwd.endsWith('/.gamedev/publish-slice') && c.hasPkg)).toBe(true);
   });
 });

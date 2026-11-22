@@ -1,4 +1,5 @@
 import { DELIVERY_FIXED_FILES, isDeliverablePath, isRasterSourcePath } from '@gamedevpl/contract';
+import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
@@ -21,9 +22,13 @@ import {
   writeGameFiles,
 } from './checkout.js';
 import type { SyncResult, TreeFile } from './checkout-sync.js';
+import { childEnv } from './delegate.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { kitPath } from './kit-install.js';
+import { sourceKitWarnings } from './source-kit-diagnostics.js';
 import { gameSourcePath, gameSourceRoot, projectRuntimeRoot, sourceProject } from './source-project.js';
+import { sourceSetupArgs } from './source-project-runtime.js';
+import { VerificationError, type runLadder } from './verify.js';
 
 const NON_CODE_FIXED = new Set<string>(DELIVERY_FIXED_FILES.filter((file) => file !== 'game.ts' && file !== 'sim.ts'));
 
@@ -172,6 +177,12 @@ export function collectReachableModules(
         : (overrides?.get(current)?.content ?? readFileSync(join(sourceRoot, current), 'utf8'));
     for (const specifier of extractRelativeSpecifiers(content)) {
       const target = resolveLocalModule(sourceRoot, current, specifier, overrides);
+      if (target === 'game.ts' && entry !== 'game.ts') {
+        throw new CliError(
+          `Module "${current}" imports game.ts, which collides with mapping --entry ${entry} onto game.ts — move shared code into a module under game/.`,
+          EXIT_REFUSED,
+        );
+      }
       if (target && !visited.has(target)) {
         visited.add(target);
         queue.push(target);
@@ -285,6 +296,43 @@ export async function inspectPublishSlice(
       ? { kind: 'clean', version: tree.version, local: [], platform: [], conflict: [] }
       : { kind: 'local_only', version: tree.version, local: diff, platform: [], conflict: [] };
   return { sync, tree, ignored: [] };
+}
+
+export async function preparePublishSlice(input: {
+  dest: string;
+  slug: string;
+  files: TreeFile[];
+  run?: Parameters<typeof runLadder>[0]['run'];
+  onStage?: (message: string) => void;
+  abort?: AbortSignal;
+}): Promise<string> {
+  const setup = sourceSetupArgs(input.dest);
+  if (setup) {
+    if (input.run) {
+      input.onStage?.('Preparing repository sources for verification');
+      const prepared = input.run('npm', setup, input.dest, childEnv(process.env, ''));
+      if ((prepared.status ?? 1) !== 0) {
+        const detail = [prepared.stderr, prepared.stdout].filter(Boolean).join('\n');
+        throw new VerificationError({ stage: 'typecheck', detail }, input.dest, undefined, input.slug);
+      }
+    } else if (input.abort || input.onStage) {
+      const { prepareWorkspace } = await import('./prepare-workspace.js');
+      await prepareWorkspace({
+        cwd: input.dest,
+        env: process.env,
+        abort: input.abort ?? new AbortController().signal,
+        write: input.onStage ?? (() => {}),
+      });
+    } else {
+      const prepared = spawnSync('npm', setup, { cwd: input.dest, env: childEnv(process.env, ''), encoding: 'utf8' });
+      if ((prepared.status ?? 1) !== 0) {
+        const detail = [prepared.stderr, prepared.stdout].filter(Boolean).join('\n');
+        throw new VerificationError({ stage: 'typecheck', detail }, input.dest, undefined, input.slug);
+      }
+    }
+    sourceKitWarnings(input.dest).forEach((warning) => input.onStage?.(warning));
+  }
+  return stagePublishSlice(input.dest, input.slug, input.files);
 }
 
 export function stagePublishSlice(dest: string, slug: string, files: TreeFile[]): string {

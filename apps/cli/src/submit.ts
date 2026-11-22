@@ -36,7 +36,7 @@ import {
   cleanupPublishSlice,
   formatDryRunLines,
   inspectPublishSlice,
-  stagePublishSlice,
+  preparePublishSlice,
 } from './publish-slice.js';
 import { deliveryProgress } from './delivery-progress.js';
 import { deliverySummary } from './delivery-summary.js';
@@ -248,14 +248,17 @@ async function submitGameUnlocked(input: {
     throw new CheckoutSyncError(first.sync);
   }
   await warnIfKitStale(input);
-  const verifyCwd = sliced ? stagePublishSlice(input.dest, input.slug, sliced.files) : input.dest;
+  const onStage = (message: string) => progress('verify', message);
+  const verifyCwd = sliced
+    ? await preparePublishSlice({ ...input, files: sliced.files, onStage: input.onProgress ? onStage : undefined })
+    : input.dest;
   const sourceHash = sliced ? verificationFilesHash(sliced.files) : verificationSourceHash(input.dest, input.slug);
   const verification = {
     cwd: verifyCwd,
     slug: input.slug,
     publish: input.publish === true,
     run: input.run,
-    onStage: (message: string) => progress('verify', message),
+    onStage,
   };
   const verify =
     input.onProgress || input.abort
