@@ -220,7 +220,7 @@ describe('collectReachableModules & buildPublishSlice', () => {
     expect(() => collectReachableModules(join(root, 'games/demo'), 'publish.ts')).toThrow(/escapes the game/);
   });
 
-  it('refuses direct or indirect imports of game.ts when mapping another entry onto game.ts', () => {
+  it('refuses imports of game.ts or cyclic imports back to the renamed entry', () => {
     const root = makeTemp('gdpl-collide-');
     writeFiles(root, {
       'games/demo/game.ts': 'export const full = 1;\n',
@@ -228,6 +228,11 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'games/demo/publish.ts': "import { v } from './game/helper.ts';\nconsole.log(v);\n",
     });
     expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/collides with mapping --entry publish.ts/);
+    writeFiles(root, {
+      'games/demo/game/helper.ts': "import { tag } from '../publish.ts';\nexport const v = tag;\n",
+      'games/demo/publish.ts': "import { v } from './game/helper.ts';\nexport const tag = 1;\nconsole.log(v);\n",
+    });
+    expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/imports publish.ts, which collides/);
   });
 
   it('ignores import syntax inside strings/templates/regexes while keeping literal-template dynamic imports', () => {
@@ -383,15 +388,10 @@ describe('submitGame with --entry and --dry-run', () => {
         if (path.endsWith('/versions') && !path.includes('/tree')) {
           return json({ versions: [{ version: remoteVersion, createdAt: '2026-11-21', sourceFiles: [] }] });
         }
-        if (path.includes('/tree')) {
-          return json({ version: remoteVersion, files: remoteFiles });
-        }
-        if (path.endsWith('/sources/session')) {
+        if (path.includes('/tree')) return json({ version: remoteVersion, files: remoteFiles });
+        if (path.endsWith('/sources/session'))
           return json({ locked: false, canTakeOver: true, jobId: 1, generation: 1 });
-        }
-        if (path.endsWith('/sources')) {
-          return json({ files: remoteFiles });
-        }
+        if (path.endsWith('/sources')) return json({ files: remoteFiles });
         if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
           const body = JSON.parse(String(init.body)) as { path: string; content: string };
           stagedPuts.set(body.path, body.content);

@@ -127,7 +127,7 @@ export function collectReachableModules(
   }
   if (overrides) {
     for (const rel of overrides.keys()) {
-      if (rel.endsWith('.ts') && !visited.has(rel)) {
+      if (rel.endsWith('.ts') && rel !== 'game.ts' && !visited.has(rel)) {
         visited.add(rel);
         queue.push(rel);
       }
@@ -142,9 +142,9 @@ export function collectReachableModules(
         : (overrides?.get(current)?.content ?? readFileSync(kitPath(sourceRoot, current), 'utf8'));
     for (const specifier of extractRelativeSpecifiers(content)) {
       const target = resolveLocalModule(sourceRoot, current, specifier, overrides);
-      if (target === 'game.ts' && entry !== 'game.ts') {
+      if ((target === 'game.ts' || target === entry) && entry !== 'game.ts') {
         throw new CliError(
-          `Module "${current}" imports game.ts, which collides with mapping --entry ${entry} onto game.ts — move shared code into a module under game/.`,
+          `Module "${current}" imports ${target}, which collides with mapping --entry ${entry} onto game.ts — move shared code into a module under game/.`,
           EXIT_REFUSED,
         );
       }
