@@ -177,4 +177,47 @@ describe('default publish.ts entry and --full opt-out', () => {
       }),
     ).rejects.toThrow(/Sources changed during verification; result is stale/);
   });
+
+  it('honors ignore rules on publish overrides and refuses ignored slice dependencies or rasters', async () => {
+    const root = makeTemp('gdpl-slice-ignore-');
+    writeFiles(root, {
+      '.gamedevplignore': 'games/demo/publish/game/private.ts\n',
+      'games/demo/SPEC.md': '# Demo\n',
+      'games/demo/game.ts': 'export const full = 1;\n',
+      'games/demo/publish.ts': 'export const preview = 1;\n',
+      'games/demo/publish/SPEC.md': '# Preview\n',
+      'games/demo/publish/game/private.ts': 'export const secret = 1;\n',
+    });
+    const offlineApi = stubApi(async () => {
+      throw new Error('offline');
+    });
+
+    const dry = await submitGame({ api: offlineApi, slug: 'demo', dest: root, dryRun: true });
+    expect(dry.kind).toBe('dry-run');
+    if (dry.kind === 'dry-run') {
+      expect(dry.files.map((f) => f.path)).toEqual(['SPEC.md', 'game.ts']);
+      expect(dry.ignored.map((hit) => hit.path)).toEqual(['publish/game/private.ts']);
+      expect(formatSubmitLines(dry, 'demo').join('\n')).toContain('publish/game/private.ts');
+    }
+
+    rmSync(join(root, 'games/demo/publish/game/private.ts'));
+    writeFiles(root, {
+      '.gamedevplignore': 'games/demo/game/private.ts\n',
+      'games/demo/game/private.ts': 'export const secret = 1;\n',
+      'games/demo/publish.ts': "import { secret } from './game/private.ts';\nconsole.log(secret);\n",
+    });
+    await expect(submitGame({ api: offlineApi, slug: 'demo', dest: root, dryRun: true })).rejects.toThrow(
+      /Module "game\/private\.ts".*is ignored/,
+    );
+
+    writeFiles(root, {
+      '.gamedevplignore': 'games/demo/scenes/secret.png\n',
+      'games/demo/publish.ts': 'export const ok = 1;\n',
+      'games/demo/publish/GAME.json': JSON.stringify({ images: { bg: 'scenes/secret.png' } }),
+      'games/demo/scenes/secret.png': 'c2VjcmV0',
+    });
+    await expect(submitGame({ api: offlineApi, slug: 'demo', dest: root, dryRun: true })).rejects.toThrow(
+      /Image "scenes\/secret\.png" declared in GAME\.json is ignored/,
+    );
+  });
 });

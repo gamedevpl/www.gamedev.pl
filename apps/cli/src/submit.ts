@@ -162,13 +162,12 @@ async function submitGameUnlocked(input: {
 }): Promise<SubmitResult> {
   const { entry, auto } = resolveDeliveryEntry(input.dest, input.slug, input.entry, input.full);
   const entryMeta: EntryMeta = { ...(entry ? { entry } : {}), ...(auto ? { autoEntry: true } : {}) };
-  if (input.dryRun) {
-    const files = entry
-      ? buildPublishSlice(input.dest, input.slug, entry).files
-      : localGameFiles(input.dest, input.slug);
-    return { kind: 'dry-run', files, ...entryMeta, ignored: entry ? [] : ignoredGameFiles(input.dest, input.slug) };
-  }
   const sliced = entry ? buildPublishSlice(input.dest, input.slug, entry) : null;
+  const ignored = () => (sliced ? sliced.ignored : ignoredGameFiles(input.dest, input.slug));
+  if (input.dryRun) {
+    const files = sliced ? sliced.files : localGameFiles(input.dest, input.slug);
+    return { kind: 'dry-run', files, ...entryMeta, ignored: ignored() };
+  }
   const inspect = () => (sliced ? inspectPublishSlice(input.api, input.slug, sliced.files) : inspectGame(input));
   const summary = deliverySummary(input.summary);
   const progress = deliveryProgress(input.onProgress);
@@ -197,7 +196,7 @@ async function submitGameUnlocked(input: {
       kind: 'nothing',
       sync: first.sync,
       ...entryMeta,
-      ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug),
+      ignored: ignored(),
     };
   }
   if (
@@ -253,7 +252,7 @@ async function submitGameUnlocked(input: {
       kind: 'nothing',
       sync: latest.sync,
       ...entryMeta,
-      ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug),
+      ignored: ignored(),
     };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
@@ -374,7 +373,7 @@ async function submitGameUnlocked(input: {
     ...entryMeta,
     staged,
     files,
-    ignored: sliced ? [] : ignoredGameFiles(input.dest, input.slug),
+    ignored: ignored(),
   };
 }
 

@@ -17,6 +17,7 @@ import {
   changedPaths,
   fetchLatestTree,
   findCheckout,
+  readBase,
   readCheckoutSlug,
   readGameContent,
   writeGameFiles,
@@ -24,7 +25,7 @@ import {
 import type { SyncResult, TreeFile } from './checkout-sync.js';
 import { childEnv } from './delegate.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
-import { createIgnoreMatcher } from './ignore.js';
+import { createIgnoreMatcher, type IgnoredHit, type IgnoreMatch } from './ignore.js';
 import { kitPath } from './kit-install.js';
 import { extractRelativeSpecifiers } from './publish-slice-imports.js';
 import { sourceKitWarnings } from './source-kit-diagnostics.js';
@@ -46,6 +47,34 @@ export function parseEntryFlag(raw: string | boolean | undefined): string | unde
     );
   }
   return value;
+}
+
+type IgnoreFilter = (rel: string, directory?: boolean) => IgnoreMatch | null;
+
+function createSliceIgnoreFilter(dest: string, slug: string): IgnoreFilter {
+  const matcher = createIgnoreMatcher(dest);
+  const prefix = gameSourcePath(dest, slug);
+  const tracked = new Set(Object.keys(readBase(dest)?.files ?? {}).filter((p) => !p.split('/').includes('.git')));
+  const isTracked = (rel: string, directory: boolean): boolean => {
+    if (tracked.has(rel)) return true;
+    if (!directory) return false;
+    const dirPrefix = `${rel}/`;
+    for (const name of tracked) if (name.startsWith(dirPrefix)) return true;
+    return false;
+  };
+  const check = (rel: string, directory: boolean): IgnoreMatch | null => {
+    if (rel.split('/').includes('.git')) return { source: 'git', pattern: '.git' };
+    const match = matcher.ignored(`${prefix}/${rel}`, directory);
+    return match && !isTracked(rel, directory) ? match : null;
+  };
+  return (rel: string, directory = false): IgnoreMatch | null => {
+    const parts = rel.split('/');
+    for (let i = 1; i < parts.length; i += 1) {
+      const parent = check(parts.slice(0, i).join('/'), true);
+      if (parent) return parent;
+    }
+    return check(rel, directory);
+  };
 }
 
 export function resolveDeliveryEntry(
@@ -71,8 +100,7 @@ export function resolveDeliveryEntry(
     return {};
   }
   if (!stat.isFile()) return {};
-  const prefix = gameSourcePath(dest, slug);
-  if (createIgnoreMatcher(dest).ignored(`${prefix}/publish.ts`, false)) return {};
+  if (createSliceIgnoreFilter(dest, slug)('publish.ts', false)) return {};
   if (!readFileSync(abs, 'utf8').trim()) return {};
   return { entry: 'publish.ts', auto: true };
 }
@@ -124,6 +152,7 @@ function resolveLocalModule(
   fromRel: string,
   specifier: string,
   overrides?: Map<string, TreeFile>,
+  isIgnored?: IgnoreFilter,
 ): string | null {
   const joined = posix.normalize(posix.join(posix.dirname(fromRel), specifier));
   if (joined.startsWith('../') || joined === '..') {
@@ -141,7 +170,16 @@ function resolveLocalModule(
   for (const candidate of candidates) {
     if (overrides?.has(candidate)) return candidate;
     const abs = kitPath(sourceRoot, candidate);
-    if (existsSync(abs) && lstatSync(abs).isFile()) return candidate;
+    if (existsSync(abs) && lstatSync(abs).isFile()) {
+      const ignored = isIgnored?.(candidate, false);
+      if (ignored) {
+        throw new CliError(
+          `Module "${candidate}" imported by ${fromRel} is ignored (${ignored.pattern}). Unignore it or pass --full.`,
+          EXIT_REFUSED,
+        );
+      }
+      return candidate;
+    }
   }
   throw new CliError(`Module "${specifier}" imported by ${fromRel} was not found.`, EXIT_REFUSED);
 }
@@ -151,10 +189,17 @@ export function collectReachableModules(
   entry: string,
   overrides?: Map<string, TreeFile>,
   extraRoots: string[] = [],
+  isIgnored?: IgnoreFilter,
 ): string[] {
   const entryAbs = kitPath(sourceRoot, entry);
-  if (!overrides?.has('game.ts') && (!existsSync(entryAbs) || !lstatSync(entryAbs).isFile())) {
-    throw new CliError(`Entry file "${entry}" was not found in ${sourceRoot}.`, EXIT_INPUT);
+  if (!overrides?.has('game.ts')) {
+    if (!existsSync(entryAbs) || !lstatSync(entryAbs).isFile()) {
+      throw new CliError(`Entry file "${entry}" was not found in ${sourceRoot}.`, EXIT_INPUT);
+    }
+    const ignoredEntry = isIgnored?.(entry, false);
+    if (ignoredEntry) {
+      throw new CliError(`Entry file "${entry}" is ignored (${ignoredEntry.pattern}).`, EXIT_REFUSED);
+    }
   }
   const visited = new Set<string>([entry]);
   const queue = [entry];
@@ -163,6 +208,13 @@ export function collectReachableModules(
       const abs = kitPath(sourceRoot, root);
       if (!existsSync(abs) || !lstatSync(abs).isFile()) {
         throw new CliError(`Manifest module "${root}" was not found in ${sourceRoot}.`, EXIT_REFUSED);
+      }
+      const ignoredRoot = isIgnored?.(root, false);
+      if (ignoredRoot) {
+        throw new CliError(
+          `Manifest module "${root}" is ignored (${ignoredRoot.pattern}). Unignore it or pass --full.`,
+          EXIT_REFUSED,
+        );
       }
     }
     if (!visited.has(root)) {
@@ -186,7 +238,7 @@ export function collectReachableModules(
         ? (overrides?.get('game.ts')?.content ?? readFileSync(entryAbs, 'utf8'))
         : (overrides?.get(current)?.content ?? readFileSync(kitPath(sourceRoot, current), 'utf8'));
     for (const specifier of extractRelativeSpecifiers(content)) {
-      const target = resolveLocalModule(sourceRoot, current, specifier, overrides);
+      const target = resolveLocalModule(sourceRoot, current, specifier, overrides, isIgnored);
       if ((target === 'game.ts' || target === entry) && entry !== 'game.ts') {
         throw new CliError(
           `Module "${current}" imports ${target}, which collides with mapping --entry ${entry} onto game.ts — move shared code into a module under game/.`,
@@ -203,17 +255,39 @@ export function collectReachableModules(
   return [...visited].sort();
 }
 
-function collectOverrideFiles(sourceRoot: string, stem: string, binaryRasters: boolean): TreeFile[] {
+function collectOverrideFiles(
+  sourceRoot: string,
+  stem: string,
+  binaryRasters: boolean,
+  isIgnored: IgnoreFilter,
+  ignoredHits: IgnoredHit[],
+): TreeFile[] {
   const overrideRoot = kitPath(sourceRoot, stem);
   const files: TreeFile[] = [];
   if (!existsSync(overrideRoot) || !lstatSync(overrideRoot).isDirectory()) return files;
+  const rootIgnored = isIgnored(stem, true);
+  if (rootIgnored) {
+    ignoredHits.push({ path: stem, source: rootIgnored.source, pattern: rootIgnored.pattern, directory: true });
+    return files;
+  }
   const visit = (rel: string): void => {
     const dir = rel ? join(overrideRoot, rel) : overrideRoot;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith('.')) continue;
       const next = rel ? `${rel}/${entry.name}` : entry.name;
+      const sourceRel = `${stem}/${next}`;
       const abs = join(overrideRoot, next);
       if (entry.isSymbolicLink()) continue;
+      const match = isIgnored(sourceRel, entry.isDirectory());
+      if (match) {
+        ignoredHits.push({
+          path: sourceRel,
+          source: match.source,
+          pattern: match.pattern,
+          directory: entry.isDirectory(),
+        });
+        continue;
+      }
       if (entry.isDirectory()) visit(next);
       else if (entry.isFile() && isDeliverablePath(next)) {
         files.push({ path: next, content: readGameContent(abs, next, binaryRasters) });
@@ -251,28 +325,43 @@ export function buildPublishSlice(
   dest: string,
   slug: string,
   entry: string,
-): { files: TreeFile[]; entry: string; overrideDir?: string } {
+): { files: TreeFile[]; entry: string; ignored: IgnoredHit[]; overrideDir?: string } {
   const sourceRoot = gameSourceRoot(dest, slug);
   const binaryRasters = gameSourcePath(dest, slug) === 'src';
+  const isIgnored = createSliceIgnoreFilter(dest, slug);
+  const ignored: IgnoredHit[] = [];
   const stem = entry.replace(/\.ts$/, '');
-  const overrides = stem === 'game' ? [] : collectOverrideFiles(sourceRoot, stem, binaryRasters);
+  const overrides = stem === 'game' ? [] : collectOverrideFiles(sourceRoot, stem, binaryRasters, isIgnored, ignored);
   const overrideMap = new Map(overrides.map((file) => [file.path, file]));
 
   const gameJsonAbs = kitPath(sourceRoot, 'GAME.json');
   const effectiveGameJson =
     overrideMap.get('GAME.json')?.content ??
-    (existsSync(gameJsonAbs) && lstatSync(gameJsonAbs).isFile() ? readFileSync(gameJsonAbs, 'utf8') : undefined);
+    (!isIgnored('GAME.json', false) && existsSync(gameJsonAbs) && lstatSync(gameJsonAbs).isFile()
+      ? readFileSync(gameJsonAbs, 'utf8')
+      : undefined);
   const manifest = parseManifestObject(effectiveGameJson);
   const hotBehavior = manifestHotBehavior(manifest);
 
-  const reachable = collectReachableModules(sourceRoot, entry, overrideMap, hotBehavior ? [hotBehavior] : []);
+  const reachable = collectReachableModules(
+    sourceRoot,
+    entry,
+    overrideMap,
+    hotBehavior ? [hotBehavior] : [],
+    isIgnored,
+  );
   const map = new Map<string, TreeFile>();
 
   for (const fixed of NON_CODE_FIXED) {
     const abs = kitPath(sourceRoot, fixed);
-    if (existsSync(abs) && lstatSync(abs).isFile()) {
-      map.set(fixed, { path: fixed, content: readGameContent(abs, fixed, binaryRasters) });
+    if (!existsSync(abs) || !lstatSync(abs).isFile()) continue;
+    const match = isIgnored(fixed, false);
+    if (match) {
+      if (!overrideMap.has(fixed))
+        ignored.push({ path: fixed, source: match.source, pattern: match.pattern, directory: false });
+      continue;
     }
+    map.set(fixed, { path: fixed, content: readGameContent(abs, fixed, binaryRasters) });
   }
 
   const entryContent = overrideMap.get('game.ts')?.content ?? readFileSync(kitPath(sourceRoot, entry), 'utf8');
@@ -293,12 +382,16 @@ export function buildPublishSlice(
     if (map.has(relPath)) continue;
     const abs = kitPath(sourceRoot, relPath);
     if (existsSync(abs) && lstatSync(abs).isFile()) {
+      const match = isIgnored(relPath, false);
+      if (match) {
+        throw new CliError(`Image "${relPath}" declared in GAME.json is ignored (${match.pattern}).`, EXIT_REFUSED);
+      }
       map.set(relPath, { path: relPath, content: readGameContent(abs, relPath, binaryRasters) });
     }
   }
 
   const files = [...map.values()].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-  return { files, entry, ...(overrides.length > 0 ? { overrideDir: stem } : {}) };
+  return { files, entry, ignored, ...(overrides.length > 0 ? { overrideDir: stem } : {}) };
 }
 
 export async function inspectPublishSlice(
