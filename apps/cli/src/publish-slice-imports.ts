@@ -1,4 +1,4 @@
-type Token = { kind: 'id' | 'str' | 'punct' | 'other'; value: string };
+type Token = { kind: 'id' | 'str' | 'tpl' | 'punct' | 'other'; value: string };
 
 const REGEX_PREV_KEYWORDS = new Set([
   'return',
@@ -43,16 +43,18 @@ function tokenizeModule(source: string): Token[] {
   let braceDepth = 0;
   let i = 0;
 
-  const readTemplateChunk = (): void => {
+  const readTemplateChunk = (start: boolean): void => {
+    let val = '';
     while (i < source.length) {
       const ch = source[i]!;
       if (ch === '\\') {
+        if (start && i + 1 < source.length) val += source[i + 1]!;
         i += 2;
         continue;
       }
       if (ch === '`') {
         i += 1;
-        tokens.push({ kind: 'other', value: '`' });
+        tokens.push(start ? { kind: 'tpl', value: val } : { kind: 'other', value: '`' });
         return;
       }
       if (ch === '$' && source[i + 1] === '{') {
@@ -62,6 +64,7 @@ function tokenizeModule(source: string): Token[] {
         tplBraceDepths.push(braceDepth);
         return;
       }
+      if (start) val += ch;
       i += 1;
     }
   };
@@ -102,7 +105,7 @@ function tokenizeModule(source: string): Token[] {
     }
     if (ch === '`') {
       i += 1;
-      readTemplateChunk();
+      readTemplateChunk(true);
       continue;
     }
     if (ch === '/' && allowsRegex(tokens[tokens.length - 1])) {
@@ -151,7 +154,7 @@ function tokenizeModule(source: string): Token[] {
         tplBraceDepths.pop();
         braceDepth -= 1;
         i += 1;
-        readTemplateChunk();
+        readTemplateChunk(false);
         continue;
       }
       braceDepth = Math.max(0, braceDepth - 1);
@@ -179,7 +182,12 @@ export function extractRelativeSpecifiers(source: string): string[] {
     if (tok.value === 'import' && next.kind === 'punct' && next.value === '(') {
       const arg = tokens[i + 2];
       const after = tokens[i + 3];
-      if (arg?.kind === 'str' && arg.value.startsWith('.') && after?.kind === 'punct' && ',)'.includes(after.value)) {
+      if (
+        (arg?.kind === 'str' || arg?.kind === 'tpl') &&
+        arg.value.startsWith('.') &&
+        after?.kind === 'punct' &&
+        ',)'.includes(after.value)
+      ) {
         found.push(arg.value);
       }
       continue;

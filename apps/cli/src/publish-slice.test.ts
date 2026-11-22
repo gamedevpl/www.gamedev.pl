@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApi } from './api.js';
 import { writeBase } from './checkout.js';
@@ -230,31 +230,30 @@ describe('collectReachableModules & buildPublishSlice', () => {
     expect(() => buildPublishSlice(root, 'demo', 'publish.ts')).toThrow(/collides with mapping --entry publish.ts/);
   });
 
-  it('ignores import syntax inside strings, template literals, regexes, and property calls', () => {
+  it('ignores import syntax inside strings/templates/regexes while keeping literal-template dynamic imports', () => {
     const root = makeTemp('gdpl-strings-');
     writeFiles(root, {
       'games/demo/SPEC.md': '# Demo\n',
       'games/demo/game/private.ts': 'export const secret = 1;\n',
       'games/demo/game/real.ts': 'export const ok = 2;\n',
+      'games/demo/game/tpl-real.ts': 'export const tpl = 3;\n',
       'games/demo/publish.ts': [
         'const a = "import(\'./game/private.ts\')";',
         "const b = `\nimport { secret } from './game/private.ts';\nimport('./game/private.ts');\n`;",
         "const c = /import\\('.\\/game\\/private.ts'\\)/;",
         'const o = { import: (s: string) => s };',
         "o.import('./game/private.ts');",
-        "export const loaded = `${await import('./game/real.ts')}`;",
+        "export const loaded = `${await import('./game/real.ts')}` + String(import(`./game/tpl-real.ts`));",
         'console.log(a, b, c, loaded);',
       ].join('\n'),
     });
-
     const slice = buildPublishSlice(root, 'demo', 'publish.ts');
-    expect(slice.files.map((f) => f.path)).toEqual(['SPEC.md', 'game.ts', 'game/real.ts']);
+    expect(slice.files.map((f) => f.path)).toEqual(['SPEC.md', 'game.ts', 'game/real.ts', 'game/tpl-real.ts']);
   });
 
   it('rejects symlinked directories in imported modules and manifest raster paths', () => {
     const outside = makeTemp('gdpl-outside-');
     writeFiles(outside, { 'private.ts': 'export const leak = 1;\n', 'secret.png': 'c2VjcmV0' });
-
     const modRoot = makeTemp('gdpl-symlink-mod-');
     writeFiles(modRoot, {
       'games/demo/SPEC.md': '# Demo\n',
@@ -263,7 +262,6 @@ describe('collectReachableModules & buildPublishSlice', () => {
     mkdirSync(join(modRoot, 'games/demo/game'), { recursive: true });
     symlinkSync(outside, join(modRoot, 'games/demo/game/link'), 'dir');
     expect(() => buildPublishSlice(modRoot, 'demo', 'publish.ts')).toThrow(/symbolic link/);
-
     const imgRoot = makeTemp('gdpl-symlink-img-');
     writeFiles(imgRoot, {
       'games/demo/SPEC.md': '# Demo\n',
@@ -289,7 +287,6 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'games/demo/publish.ts': 'export const teaser = 1;\n',
       'games/demo/publish/GAME.json': JSON.stringify({ title: 'Demo Preview' }),
     });
-
     const fullHotSlice = buildPublishSlice(root, 'demo', 'game.ts');
     expect(fullHotSlice.files.map((f) => f.path)).toEqual([
       'GAME.json',
@@ -298,12 +295,11 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'game/behavior.ts',
       'game/helper.ts',
     ]);
-
     const previewSlice = buildPublishSlice(root, 'demo', 'publish.ts');
     expect(previewSlice.files.map((f) => f.path)).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
   });
 
-  it('stages a self-contained slice with runtime links', () => {
+  it('stages a self-contained slice with working runtime links even from a relative dest', () => {
     const root = makeTemp('gdpl-stage-');
     writeFiles(root, {
       'package.json': '{"name":"kit"}',
@@ -313,11 +309,13 @@ describe('collectReachableModules & buildPublishSlice', () => {
       'games/knights/SPEC.md': '# Preview\n',
       'games/knights/publish.ts': 'export const preview = 1;\n',
     });
-    const slice = buildPublishSlice(root, 'knights', 'publish.ts');
-    const stageRoot = stagePublishSlice(root, 'knights', slice.files);
+    const relRoot = relative(process.cwd(), root);
+    const slice = buildPublishSlice(relRoot, 'knights', 'publish.ts');
+    const stageRoot = stagePublishSlice(relRoot, 'knights', slice.files);
     expect(readFileSync(join(stageRoot, 'games/knights/game.ts'), 'utf8')).toContain('preview = 1');
     expect(existsSync(join(stageRoot, 'package.json'))).toBe(true);
     expect(lstatSync(join(stageRoot, 'node_modules')).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(stageRoot, 'node_modules/.keep'))).toBe(true);
   });
 });
 

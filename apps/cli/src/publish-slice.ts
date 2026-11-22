@@ -308,11 +308,11 @@ export async function preparePublishSlice(input: {
 }
 
 export function stagePublishSlice(dest: string, slug: string, files: TreeFile[]): string {
-  const stageRoot = kitPath(dest, '.gamedev/publish-slice');
+  const stageRoot = resolve(kitPath(dest, '.gamedev/publish-slice'));
   rmSync(join(stageRoot, 'games', slug), { recursive: true, force: true });
   mkdirSync(join(stageRoot, 'games', slug), { recursive: true });
 
-  const runtime = projectRuntimeRoot(dest);
+  const runtime = resolve(projectRuntimeRoot(dest));
   for (const file of ['package.json', 'tsconfig.json', 'kit.json']) {
     const src = join(runtime, file);
     if (existsSync(src) && lstatSync(src).isFile()) {
