@@ -66,7 +66,7 @@ describe('reserved installer routes', () => {
       expect(ps1.statusCode).toBe(200);
       expect(ps1.body).toContain('Get-FileHash');
       expect(ps1.body).toContain('Node 22.5');
-      expect(ps1.body).toContain("process.versions.node.split('.')[0]");
+      expect(ps1.body).toContain("process.versions.node.split('.').map(Number)");
       expect(ps1.body).toContain('too old');
       expect(ps1.body).toContain('node "%~dp0git-remote-gamedevpl" %*');
       expect(sh.body).not.toContain('ORIGIN=');
