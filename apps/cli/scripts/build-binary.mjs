@@ -27,7 +27,7 @@ await build({
   entryPoints: [join(root, 'src/main.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   format: 'esm',
   outfile: join(outDir, 'gamedevpl.mjs'),
   packages: 'bundle',

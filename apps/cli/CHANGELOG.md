@@ -7,10 +7,15 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- The CLI now needs Node 22.5 or newer.
+
 ### Added
 
 - `gamedevpl push`, `publish` and `submit` default to slicing `publish.ts` (plus `publish/` overrides) whenever a non-empty `publish.ts` exists — pass `--full` to upload the entire game tree, `--entry <file>` to pick another entry, or `--dry-run` to preview the exact file list offline.
 - Play: when the agent asks you to choose (Claude's questions, Codex in Plan mode), the browser shows a card with the options and the terminal offers them as a pick; answering in either place answers both.
+- Play: Codex, agy and other agents without built-in questions can ask you too, through the same card and terminal pick.
 
 ### Fixed
 
@@ -18,7 +23,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Internal
 
-- genaicode 2.54.0.
+- genaicode 3.1.0.
 
 ## 0.70.0 — 2026-11-19
 

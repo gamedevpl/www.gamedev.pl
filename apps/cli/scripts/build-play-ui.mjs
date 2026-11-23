@@ -185,7 +185,7 @@ const runtime = await build({
   entryPoints: [join(root, 'scripts/play-runtime-entry.mjs')],
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   format: 'esm',
   write: false,
   banner: { js: 'import {createRequire} from "node:module";const require=createRequire(import.meta.url);' },

@@ -51,7 +51,7 @@ describe('reserved installer routes', () => {
       expect(sh.body).toContain('shasum -a 256');
       expect(sh.body).toContain('GitHub Releases');
       expect(sh.body).toContain('$HOME/.local/bin');
-      expect(sh.body).toContain('Node 20');
+      expect(sh.body).toContain('Node 22.5');
       expect(sh.body).toContain('asset="gamedevpl"');
       expect(sh.body).toContain('git-remote-gamedevpl');
       expect(sh.body).toContain('gamedevpl.XXXXXX');
@@ -61,11 +61,11 @@ describe('reserved installer routes', () => {
       expect(page.body).toContain('gamedevpl login');
       expect(page.body).toContain('no token to copy');
       expect(page.body).toContain('encrypted file');
-      expect(page.body).toContain('Node 20');
+      expect(page.body).toContain('Node 22.5');
       const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
       expect(ps1.statusCode).toBe(200);
       expect(ps1.body).toContain('Get-FileHash');
-      expect(ps1.body).toContain('Node 20');
+      expect(ps1.body).toContain('Node 22.5');
       expect(ps1.body).toContain("process.versions.node.split('.')[0]");
       expect(ps1.body).toContain('too old');
       expect(ps1.body).toContain('node "%~dp0git-remote-gamedevpl" %*');

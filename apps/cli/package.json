@@ -19,11 +19,11 @@
     "predev": "node scripts/build-play-ui.mjs"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22.5"
   },
   "dependencies": {
     "@gamedevpl/contract": "*",
-    "genaicode": "^2.54.0",
+    "genaicode": "^3.1.0",
     "ink": "^5.2.1",
     "parse5": "^8.0.1",
     "qrcode": "^1.5.4",
