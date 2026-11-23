@@ -67,4 +67,21 @@ describe('askQuestions', () => {
     );
     expect(text).toBe('claude asks (1/2):\n[Style] Which?\n• Pixel — 8-bit');
   });
+
+  it('waits for the browser on typed questions after the picks', async () => {
+    const asked: string[][] = [];
+    const answers = await askQuestions(
+      'claude',
+      request([
+        { id: 'a', question: 'Which style?', options: [{ label: 'Pixel' }] },
+        { id: 't', question: 'What title?', options: [], freeText: true },
+      ]),
+      async (choices) => {
+        asked.push(choices);
+        return choices.length > 1 ? 'Pixel' : undefined;
+      },
+    );
+    expect(asked).toEqual([['Pixel', SKIP_QUESTION], [SKIP_QUESTION]]);
+    expect(answers).toBeUndefined();
+  });
 });

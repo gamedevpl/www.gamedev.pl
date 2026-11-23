@@ -29,11 +29,6 @@ export async function askQuestions(
   const answers: QuestionAnswers = {};
   // Typed and secret answers need the browser card.
   const pickable = (question: (typeof questions)[number]) => question.options.length > 0 && !question.secret;
-  if (!questions.some(pickable)) {
-    const text = questions.map((question, index) => questionPrompt(name, question, index, questions.length));
-    const choice = await ask([SKIP_QUESTION], [...text, 'Answer it in the browser, or skip it.'].join('\n\n'));
-    return choice === undefined ? undefined : answers;
-  }
   for (const [index, question] of questions.entries()) {
     if (!pickable(question)) continue;
     const labels = question.options.map((option) => option.label);
@@ -41,5 +36,11 @@ export async function askQuestions(
     if (choice === undefined) return undefined;
     if (labels.includes(choice)) answers[question.id] = [choice];
   }
-  return answers;
+  // The rest waits for the browser card unless skipped here.
+  const rest = questions.flatMap((question, index) =>
+    pickable(question) ? [] : [questionPrompt(name, question, index, questions.length)],
+  );
+  if (!rest.length) return answers;
+  const choice = await ask([SKIP_QUESTION], [...rest, 'Answer it in the browser, or skip it.'].join('\n\n'));
+  return choice === undefined ? undefined : answers;
 }
