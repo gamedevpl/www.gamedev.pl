@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.71.0 — 2026-11-23
+
 ### Breaking
 
 - The CLI now needs Node 22.5 or newer.
