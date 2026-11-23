@@ -3,8 +3,8 @@ import * as z from 'zod';
 import { formatError } from './errors.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
-// Picked labels or typed text, per question id.
-const answers = z.record(z.string().max(200), z.array(z.string().max(2000)).max(8));
+// Picked labels or typed text per question id; genaicode's limits.
+const answers = z.record(z.string().max(500), z.array(z.string().max(10_000)).max(21));
 
 // Browser chat answers to the Play agent; messages use /commands.
 const agentCommand = z.discriminatedUnion('kind', [
