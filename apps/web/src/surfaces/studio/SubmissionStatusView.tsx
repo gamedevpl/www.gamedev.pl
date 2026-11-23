@@ -20,6 +20,7 @@ import { NAVIGATE_EVENT, statusPath, studioPath } from '../../core/router.js';
 import { connectCardMode, selfStatusCopy, shouldShowConnectCard } from '../../selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { useLocalActivity } from './useLocalActivity.js';
+import { isRoundSealed } from './roundSealed.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
 import { recordStudioStep, type StudioStepDetail } from '../../visitTelemetry.js';
@@ -59,15 +60,10 @@ function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolea
   return shouldShowConnectCard(copyInputFromStatus(status));
 }
 
-/**
- * Whether the next message opens a new round (builder can be chosen) rather than
- * continuing the current one.
- */
 function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
-  // Agent ended (MCP `end`) or quiet self round: offer the platform handoff (API bumps
-  // round generation so the self agent's token dies — two agents must not write the same round).
-  // `agentEndedAt` unlocks even when stall later becomes `gate_not_started` for ops.
+  if (isRoundSealed(status)) return true;
+  // An ended self agent can hand off despite a later gate stall.
   if (
     status.builder === 'self' &&
     (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt))
@@ -81,7 +77,7 @@ function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean 
   if (status.status === 'needs_changes' && (failureReason === 'gate_red' || failureReason === 'kit_outdated')) {
     return false;
   }
-  return status.status === 'published' || status.status === 'needs_changes' || Boolean(status.failure);
+  return status.status === 'needs_changes' || Boolean(status.failure);
 }
 
 function resolveDefaultBuilder(token: string, status: SubmissionStatus | null | undefined): BuilderKind {
@@ -105,7 +101,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   if (!status) return false;
   if (TERMINAL_STATUSES.has(status.status)) return false;
   if (isAwaitingOwnAgent(status)) return false;
-  if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
+  if (isRoundSealed(status)) return false;
   if (status.gateProgress) return true;
   if (isManagedStop(status.lastAgentPresence?.key)) return false;
   if (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt)) return false;
