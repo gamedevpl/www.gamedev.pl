@@ -37,6 +37,7 @@ import { MAX_LOCAL_REPAIRS } from './repair-loop.js';
 import { runLadderAsync } from './verify.js';
 import { taskPermissionMode, type PermissionMode } from './agent-permissions.js';
 import { requestDetail } from './agent-approval.js';
+import { askQuestions } from './play-questions.js';
 import { playFallback, usableAgents, withRunSettings } from './play-brain-agents.js';
 export { withRunSettings };
 import { offerSubmit, readyToEdit, type Workshop } from './workshop.js';
@@ -318,6 +319,13 @@ export async function startPlayBrain(input: {
   const answer = async (state: AppAgentState, signal: AbortSignal) => {
     for (const request of state.session?.approvals ?? []) {
       const open = () => Boolean(agent.get().session?.approvals.some((item) => item.id === request.id));
+      if (request.kind === 'question') {
+        const answers = await askQuestions(name, request, (choices, text) => ask(choices, text, open, signal));
+        if (answers === undefined || !open()) continue;
+        if (Object.keys(answers).length) agent.answer(request.id, answers);
+        else agent.approve(request.id, 'deny');
+        continue;
+      }
       const duration =
         request.scope === 'turn'
           ? 'Allow these permissions until the current turn ends?'

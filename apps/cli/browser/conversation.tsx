@@ -259,6 +259,7 @@ function AgentConversation({
       view() {},
       decide: (id, decision) => call({ kind: 'action', id, decision }),
       approve: (id, decision) => call({ kind: 'approval', id, decision }),
+      answer: (id, answers) => call({ kind: 'answer', id, answers }),
       artifactUrl: (artifact) => `/published/${artifact.id}?v=${artifact.version}`,
       changes: () => Promise.reject(new Error('Play delivers edits itself; use /diff.')),
     };
