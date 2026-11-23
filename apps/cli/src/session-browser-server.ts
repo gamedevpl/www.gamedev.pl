@@ -13,7 +13,6 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import { stripVTControlCharacters } from 'node:util';
 import { stripTerminalControls } from './ansi.js';
-import { formatError } from './errors.js';
 import * as z from 'zod';
 import { createSessionCommands } from './session-commands.js';
 import type { SessionController } from './session-controller.js';
@@ -23,6 +22,7 @@ import { MASCOT_FAVICON_SVG } from './mascot-svg.js';
 import { playPresence, attachPlayPresence, presenceToken } from './play-presence.js';
 import type { AppAgent } from 'genaicode/app-agent';
 import { artifactResponse } from 'genaicode/agents';
+import { playAgentCommand } from './play-agent-command.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const generation = z.number();
@@ -55,12 +55,6 @@ const command = z.discriminatedUnion('kind', [
     })
     .strict(),
   z.object({ id, kind: z.literal('stop'), taskId: generation }).strict(),
-]);
-// Browser chat answers to the Play agent; messages use /commands.
-const agentCommand = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('action'), id, decision: z.enum(['approve', 'reject']) }).strict(),
-  z.object({ kind: z.literal('approval'), id, decision: z.enum(['approve', 'deny']) }).strict(),
-  z.object({ kind: z.literal('reset') }).strict(),
 ]);
 const envelope = z.object({ version: z.literal(1), sessionId: z.string().uuid(), command }).strict();
 const clean = (text: string) => stripVTControlCharacters(text).slice(-8000);
@@ -372,22 +366,8 @@ export async function startSessionBrowser(
           reply(403, { error: 'JSON and same-origin required' });
           return;
         }
-        const agent = options.agent?.();
-        const parsed = agentCommand.safeParse(await body(req));
-        if (!agent || !parsed.success) {
-          reply(agent ? 400 : 404, { error: agent ? 'Invalid agent command' : 'No Play agent is running' });
-          return;
-        }
-        const command = parsed.data;
-        try {
-          if (command.kind === 'action') agent.decide(command.id, command.decision);
-          else if (command.kind === 'approval') agent.approve(command.id, command.decision);
-          else agent.reset();
-        } catch (error) {
-          reply(409, { error: formatError(error) });
-          return;
-        }
-        reply(200, agent.get());
+        const result = playAgentCommand(options.agent?.(), await body(req));
+        reply(result.status, result.body);
         return;
       }
       if (req.method === 'POST' && req.url === '/commands') {

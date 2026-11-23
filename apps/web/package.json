@@ -29,7 +29,7 @@
     "acorn": "8.17.0",
     "codemirror": "6.0.2",
     "comlink": "4.4.2",
-    "genaicode": "^2.34.0",
+    "genaicode": "^2.54.0",
     "i18next": "^23.14.0",
     "parse5": "8.0.0",
     "react": "^18.3.1",
