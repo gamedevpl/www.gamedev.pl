@@ -9,7 +9,7 @@ repo is not planned. On the site: [www.gamedev.pl/connect](https://www.gamedev.p
 
 ## Install
 
-Needs **Node 20+** — the same runtime a game checkout already requires. The installed
+Needs **Node 22.5+**. The installed
 file is a shebang script, not a native binary (no Apple/Windows code signing).
 
 ```bash

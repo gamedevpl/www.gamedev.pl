@@ -11,6 +11,7 @@ import {
   type ApprovalDecision,
   type ApprovalRequest,
   type CodingAgent,
+  startQuestionChannel,
 } from 'genaicode/agents';
 import {
   createAppAgent,
@@ -62,7 +63,6 @@ export function brainAgent(ws: Pick<Workshop, 'adapters' | 'selectedAgent'>): st
   if (ws.selectedAgent) return names.includes(ws.selectedAgent) ? ws.selectedAgent : undefined;
   return names[0];
 }
-
 type Prompt = (choices: string[], question: string, signal?: AbortSignal) => Promise<string>;
 export type PlayBrain = {
   agent: AppAgent;
@@ -222,7 +222,9 @@ export async function startPlayBrain(input: {
   });
   await once(server.listen(0, '127.0.0.1'), 'listening');
   const steering = trackPlaySteering();
+  const questions = await startQuestionChannel();
   const agent = createAppAgent({
+    questions,
     name: `gamedev.pl Play, editing "${ws.slug}"`,
     instructions: playBrainInstructions(ws),
     tools: withoutToolSummary([
@@ -490,6 +492,7 @@ export async function startPlayBrain(input: {
       unmirror();
       bound.handle?.close();
       agent.close();
+      await questions.close();
       await (await captureServer?.catch(() => undefined))?.close();
       await new Promise((resolve) => server.close(resolve));
     },

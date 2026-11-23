@@ -13,12 +13,11 @@ set -eu
 VERSION="\${GAMEDEV_VERSION:-${CLI_VERSION}}"
 BIN_DIR="\${GAMEDEV_BIN_DIR:-$HOME/.local/bin}"
 if ! command -v node >/dev/null 2>&1; then
-  echo "gamedevpl needs Node 20+ (same as a game checkout)" >&2
+  echo "gamedevpl needs Node 22.5+" >&2
   exit 1
 fi
-major=$(node -p "process.versions.node.split('.')[0]")
-if [ "$major" -lt 20 ]; then
-  echo "Node $(node -v) is too old; need 20+" >&2
+if ! node -e "const [a, b] = process.versions.node.split('.').map(Number); process.exit(a > 22 || (a === 22 && b >= 5) ? 0 : 1)"; then
+  echo "Node $(node -v) is too old; need 22.5+" >&2
   exit 1
 fi
 asset="${CLI_ASSET}"
@@ -61,9 +60,9 @@ $origin = if ($env:GAMEDEV_ORIGIN) { $env:GAMEDEV_ORIGIN } else { "${origin}" }
 $version = if ($env:GAMEDEV_VERSION) { $env:GAMEDEV_VERSION } else { "${CLI_VERSION}" }
 $binDir = if ($env:GAMEDEV_BIN_DIR) { $env:GAMEDEV_BIN_DIR } else { Join-Path $HOME ".local\\bin" }
 $asset = "${CLI_ASSET}"
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "gamedevpl needs Node 20+ (same as a game checkout)" }
-$major = [int]((node -p "process.versions.node.split('.')[0]"))
-if ($major -lt 20) { throw "Node $(node -v) is too old; need 20+" }
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "gamedevpl needs Node 22.5+" }
+node -e "const [a, b] = process.versions.node.split('.').map(Number); process.exit(a > 22 || (a === 22 && b >= 5) ? 0 : 1)"
+if ($LASTEXITCODE -ne 0) { throw "Node $(node -v) is too old; need 22.5+" }
 $base = "https://github.com/gamedevpl/www.gamedev.pl/releases/download/${CLI_RELEASE_PREFIX}$version"
 $tmp = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
 try {
