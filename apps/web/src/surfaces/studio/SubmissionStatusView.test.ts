@@ -1622,11 +1622,12 @@ describe('SubmissionStatusView', () => {
     }
   });
 
-  it('relays post-play feedback to the build agent', async () => {
+  it('sends post-play feedback to the managed agent selected after a self-built draft reaches review', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'in_review',
       phase: 'ready_for_review',
+      builder: 'self',
       preview: { slug: 'space-runner' },
       progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
@@ -1649,7 +1650,18 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    // The feedback panel is offered once a draft is playable.
+    const picker = container.querySelector<HTMLButtonElement>('button.builder-mode-selector');
+    expect(picker?.textContent).toContain('Your agent');
+    expect(container.querySelector('.status-feedback-route')?.textContent).toContain('when you start it');
+    await act(() => picker!.click());
+    const dialog = document.querySelector('.builder-choice-modal')!;
+    const platform = dialog.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="false"]')!;
+    expect(platform.textContent).toContain('Gamedev.pl');
+    await act(() => platform.click());
+    await act(() => dialog.querySelector<HTMLButtonElement>('.builder-choice-modal-done')!.click());
+    expect(picker?.textContent).toContain('Gamedev.pl');
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+
     const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
     expect(textarea).not.toBeNull();
     const sendButton = container.querySelector<HTMLButtonElement>('.status-feedback .primary-btn');
@@ -1676,6 +1688,8 @@ describe('SubmissionStatusView', () => {
     expect(mockedSubmitFeedback).toHaveBeenCalledWith(
       'feedback-token',
       'Please make the car faster and add a boost pad.',
+      undefined,
+      'platform',
     );
     expect(container.querySelector('.status-feedback-sent')).not.toBeNull();
 

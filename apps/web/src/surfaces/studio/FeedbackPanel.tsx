@@ -149,7 +149,7 @@ export function FeedbackPanel({
     builder: routeBuilder,
     stall: chooseBuilder ? null : stall,
     failureReason: chooseBuilder ? null : failureReason,
-    phase: chooseBuilder ? null : phase,
+    phase,
   });
   const sentSelfKey =
     composerRoute === 'active'

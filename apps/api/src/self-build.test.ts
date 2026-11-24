@@ -734,14 +734,6 @@ describe('self builder (BY-02)', () => {
       by: 'gate',
       reason: 'gate_green',
     });
-    // ready_for_review closes the round; bounce to needs_changes (reject) to open feedback.
-    await store.recordJobTransition(jobId, {
-      to: 'needs_changes',
-      at: new Date().toISOString(),
-      by: 'operator',
-      reason: 'rejected',
-    });
-
     const switchToPlatform = await app.inject({
       method: 'POST',
       url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
