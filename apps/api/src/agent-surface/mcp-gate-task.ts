@@ -5,7 +5,7 @@ import type { ToolResult } from './mcp-tool-support.js';
 
 export const GATE_TASK_TTL_MS = 60 * 60 * 1000;
 // Verdicts land in minutes; polling faster only costs requests.
-export const GATE_TASK_POLL_INTERVAL_MS = 15_000;
+export const GATE_TASK_POLL_INTERVAL_MS = 30_000;
 
 const PREFIX = 'gt1.';
 
@@ -98,20 +98,6 @@ export function completedGateResult(claims: GateTaskClaims, verdict: ToolResult)
     verdict.structuredContent && typeof verdict.structuredContent === 'object'
       ? (verdict.structuredContent as Record<string, unknown>)
       : {};
-  if (verdict.isError) {
-    const data = {
-      ok: true,
-      mode: claims.mode,
-      deliveryId: claims.deliveryId,
-      delivery: claims.delivery,
-      gateStarted: claims.gateStarted,
-      deliveriesRemaining: claims.deliveriesRemaining,
-      stop: false,
-      pendingMessages: [],
-      gate: { status: 'unknown', error: gate.error ?? 'gate verdict could not be read' },
-    };
-    return { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data };
-  }
   const { stop, reason, warnings, pendingMessages, nextSuggestedTool, ...verdictFields } = gate;
   const data = {
     ok: true,
@@ -130,9 +116,9 @@ export function completedGateResult(claims: GateTaskClaims, verdict: ToolResult)
   return { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data };
 }
 
-// True while this delivery's verdict is still building.
+// True while building, or when the read was only rate-limited.
 export function verdictPending(verdict: ToolResult): boolean {
-  if (verdict.isError) return false;
-  const data = verdict.structuredContent as { status?: unknown } | undefined;
+  const data = verdict.structuredContent as { status?: unknown; error?: unknown } | undefined;
+  if (verdict.isError) return /429|rate.?limit|too many/i.test(String(data?.error ?? ''));
   return data?.status === 'pending';
 }

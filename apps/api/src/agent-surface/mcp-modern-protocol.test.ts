@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mintAgentToken } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
+import { verdictPending } from './mcp-gate-task.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 
@@ -284,6 +285,8 @@ describe('POST /api/mcp — MCP 2026-07-28 (skills, tasks)', () => {
     expect(working).toMatchObject({ resultType: 'complete', taskId: task.taskId, status: 'working' });
     expect(working.result).toBeUndefined();
 
+    // A note the creator sends mid-gate rides the completed result.
+    const note = await store.appendCreatorMessage(ISSUE, 'Make the ship blue');
     state.done = true;
     const done = (await modernCall(app, 'tasks/get', { taskId: task.taskId }, { extensions: TASKS })).json().result;
     expect(done).toMatchObject({ resultType: 'complete', status: 'completed' });
@@ -296,6 +299,7 @@ describe('POST /api/mcp — MCP 2026-07-28 (skills, tasks)', () => {
       gate: { status: 'preview_failed' },
     });
     expect((verdict.warnings as Array<{ code: string }>).map((w) => w.code)).toContain('must_fix_gate');
+    expect((verdict.pendingMessages as Array<{ id: string }>).map((m) => m.id)).toEqual([note.id]);
 
     // The completed result still carries submit_sources' required success fields.
     const listed = (await modernCall(app, 'tools/list')).json().result;
@@ -334,5 +338,14 @@ describe('POST /api/mcp — MCP 2026-07-28 (skills, tasks)', () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error.code).toBe(-32602);
     }
+  });
+
+  it('keeps a rate-limited verdict read pending and ends on any other refusal', () => {
+    const refusal = (error: string) => ({ content: [], structuredContent: { error }, isError: true });
+    expect(verdictPending(refusal('gate verdict failed (429)'))).toBe(true);
+    expect(verdictPending(refusal('Rate limit exceeded, retry in 1 minute'))).toBe(true);
+    expect(verdictPending(refusal('stale agent token'))).toBe(false);
+    expect(verdictPending({ content: [], structuredContent: { status: 'pending' } })).toBe(true);
+    expect(verdictPending({ content: [], structuredContent: { status: 'preview_failed' } })).toBe(false);
   });
 });

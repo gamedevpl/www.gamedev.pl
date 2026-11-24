@@ -9,6 +9,7 @@ import {
   modernResult,
   readModernRequest,
   SKILLS_EXTENSION,
+  SUPPORTED_PROTOCOL_VERSIONS,
   TASKS_EXTENSION,
   type CachePolicy,
   type ModernRequest,
@@ -41,6 +42,19 @@ interface Message {
 }
 
 type Nudge = (tool: string, args: Record<string, unknown>, ctx: ToolContext, result: ToolResult) => Promise<ToolResult>;
+type Warning = { code: string; message: string };
+
+export interface ModernSurfaceDeps {
+  agentTokenSecret: string | undefined;
+  now: () => number;
+  tools: Record<string, { handler: ToolHandler }>;
+  applySessionNudges: Nudge;
+  resolveAuth: (ctx: ToolContext, args: Record<string, unknown>) => Promise<{ channelToken: string } | ToolResult>;
+  writePiggyback: (
+    request: FastifyRequest,
+    channelToken: string,
+  ) => Promise<{ pendingMessages: unknown[]; warnings?: Warning[] }>;
+}
 
 const rpcResult = (id: Id, result: unknown) => ({ jsonrpc: '2.0' as const, id: id ?? null, result });
 const rpcError = (id: Id, code: number, message: string, data?: unknown) => ({
@@ -50,19 +64,14 @@ const rpcError = (id: Id, code: number, message: string, data?: unknown) => ({
 });
 
 // MCP 2026-07-28 methods: discovery, skills and tasks, plus reply shaping.
-export function createModernSurface(
-  secret: string | undefined,
-  now: () => number,
-  tools: Record<string, { handler: ToolHandler }>,
-  nudge: Nudge,
-  legacyVersions: Iterable<string>,
-) {
-  const deps = { secret: secret ?? '', now, nudge, gateVerdict: () => tools.get_gate_verdict!.handler };
+export function createModernSurface(surface: ModernSurfaceDeps) {
+  const { now, tools } = surface;
+  const deps = { secret: surface.agentTokenSecret ?? '', now, gateVerdict: () => tools.get_gate_verdict!.handler };
 
   // Modern fields (or null for legacy), or the reply already sent.
   async function route(request: FastifyRequest, reply: FastifyReply, message: Message, bearerToken: string | null) {
     if (!isModernRequest(message)) return { modern: null, sent: null };
-    const parsed = readModernRequest(message, request.headers, legacyVersions);
+    const parsed = readModernRequest(message, request.headers, SUPPORTED_PROTOCOL_VERSIONS);
     if (isModernRejection(parsed)) {
       const body = rpcError(message.id, parsed.code, parsed.message, parsed.data);
       return { modern: null, sent: reply.status(parsed.status).send(body) };
@@ -126,9 +135,33 @@ export function createModernSurface(
     const args = { sessionKey: claims.sessionKey, deliveryId: claims.deliveryId };
     const verdict = await deps.gateVerdict()(args, ctx);
     if (verdictPending(verdict)) return ok(taskFields(taskId, claims, 'working', GATE_TASK_WORKING_MESSAGE, nowMs));
+    // A revoked session ends the task with its refusal.
+    if (verdict.isError) {
+      return ok({
+        ...taskFields(taskId, claims, 'completed', 'The gate verdict could not be read.', nowMs),
+        result: verdict,
+      });
+    }
     // The same nudges as get_gate_verdict, so a refused gate carries must_fix_gate.
-    const result = completedGateResult(claims, await deps.nudge('get_gate_verdict', args, ctx, verdict));
+    const nudged = await surface.applySessionNudges('get_gate_verdict', args, ctx, verdict);
+    const result = await withInbox(completedGateResult(claims, nudged), ctx, args);
     return ok({ ...taskFields(taskId, claims, 'completed', 'The gate verdict is in.', nowMs), result });
+  }
+
+  // Creator notes pending now, as the submit reply would have carried them.
+  async function withInbox(result: ToolResult, ctx: ToolContext, args: Record<string, unknown>) {
+    const auth = await surface.resolveAuth(ctx, args);
+    if (!('channelToken' in auth)) return result;
+    const piggy = await surface.writePiggyback(ctx.request, auth.channelToken);
+    const data = result.structuredContent as Record<string, unknown>;
+    const prior = Array.isArray(data.warnings) ? (data.warnings as Warning[]) : [];
+    const added = (piggy.warnings ?? []).filter((w) => !prior.some((p) => p.code === w.code));
+    const merged = {
+      ...data,
+      pendingMessages: piggy.pendingMessages,
+      ...(prior.length + added.length > 0 ? { warnings: [...prior, ...added] } : {}),
+    };
+    return { content: [{ type: 'text' as const, text: JSON.stringify(merged) }], structuredContent: merged };
   }
 
   // Modern-only methods; null for methods both revisions share.

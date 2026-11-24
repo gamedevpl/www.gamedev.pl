@@ -141,12 +141,11 @@ import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/
 import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
 import { createManagedCallRunner } from './managed-session-guard.js';
 import { createModernSurface, SERVER_INFO } from './mcp-modern-surface.js';
+import { PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from './mcp-modern-protocol.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
 
-const PROTOCOL_VERSION = '2025-11-25';
-const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
 import { briefLocales, receiptClosedFields, SESSION_EXPIRES_AT_PROP } from './mcp-round-closed.js';
 
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
@@ -1412,7 +1411,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
   }
 
-  const modernRpc = createModernSurface(agentTokenSecret, now, tools, applySessionNudges, SUPPORTED_PROTOCOL_VERSIONS);
+  const rpc = createModernSurface({ agentTokenSecret, now, tools, applySessionNudges, resolveAuth, writePiggyback });
   async function handleJsonRpc(request: FastifyRequest, reply: FastifyReply, message: JsonRpcRequest) {
     const sessionHeader = headerValue(request.headers[SESSION_HEADER]);
     const bearerToken = readBearerToken(request.headers.authorization);
@@ -1434,9 +1433,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(202).send();
     }
 
-    const { modern, sent } = await modernRpc.route(request, reply, message, bearerToken);
+    const { modern, sent } = await rpc.route(request, reply, message, bearerToken);
     if (sent) return sent;
-    const out = modernRpc.replier(reply, message, modern);
+    const out = rpc.replier(reply, message, modern);
 
     if (message.method === 'initialize') {
       const params = (message.params ?? {}) as { protocolVersion?: string; clientInfo?: unknown };
@@ -1717,7 +1716,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           }
         }
 
-        return out.ok(modernRpc.gateTask(modern, name, sessionKeyArg, result) ?? result);
+        return out.ok(rpc.gateTask(modern, name, sessionKeyArg, result) ?? result);
       } catch (error) {
         app.log.error({ err: error, tool: name }, 'MCP tool handler failed');
         return out.ok(toolErr(error instanceof Error ? error.message : 'internal error'));

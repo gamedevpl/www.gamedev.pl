@@ -1,5 +1,8 @@
 // MCP 2026-07-28: stateless per-request _meta, served beside legacy initialize.
 
+// The legacy (initialize) revisions, and the one offered by default.
+export const PROTOCOL_VERSION = '2025-11-25';
+export const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
 export const MODERN_PROTOCOL_VERSION = '2026-07-28';
 export const MODERN_PROTOCOL_VERSIONS: ReadonlySet<string> = new Set([MODERN_PROTOCOL_VERSION]);
 
