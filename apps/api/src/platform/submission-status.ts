@@ -108,7 +108,7 @@ export function countCreatorClarifications(rawConcept: string): number {
 }
 
 export function sanitizeCreatorText(raw: string, options: { singleLine: boolean }): string {
-  const withoutHtml = raw.replace(/<[^>]+>/g, ' ');
+  const withoutHtml = raw.replace(/<[^<>]+>/g, ' ');
   const withoutMarkdownLinks = withoutHtml
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
