@@ -152,13 +152,16 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
     if (verdict.isError) {
       return ok({
         ...taskFields(taskId, claims, 'completed', 'The gate verdict could not be read.', nowMs),
-        result: verdict,
+        result: { resultType: 'complete', ...verdict },
       });
     }
     // The same nudges as get_gate_verdict, so a refused gate carries must_fix_gate.
     const nudged = await surface.applySessionNudges('get_gate_verdict', args, ctx, verdict);
     const result = await withInbox(completedGateResult(claims, nudged), ctx, args);
-    return ok({ ...taskFields(taskId, claims, 'completed', 'The gate verdict is in.', nowMs), result });
+    return ok({
+      ...taskFields(taskId, claims, 'completed', 'The gate verdict is in.', nowMs),
+      result: { resultType: 'complete', ...result },
+    });
   }
 
   // Creator notes pending now, as the submit reply would have carried them.

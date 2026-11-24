@@ -289,7 +289,8 @@ describe('POST /api/mcp — MCP 2026-07-28 (skills, tasks)', () => {
     const note = await store.appendCreatorMessage(ISSUE, 'Make the ship blue');
     state.done = true;
     const done = (await modernCall(app, 'tasks/get', { taskId: task.taskId }, { extensions: TASKS })).json().result;
-    expect(done).toMatchObject({ resultType: 'complete', status: 'completed' });
+    // The inlined tool result is itself a 2026-07-28 result.
+    expect(done).toMatchObject({ resultType: 'complete', status: 'completed', result: { resultType: 'complete' } });
     const verdict = done.result.structuredContent;
     expect(verdict).toMatchObject({
       ok: true,
