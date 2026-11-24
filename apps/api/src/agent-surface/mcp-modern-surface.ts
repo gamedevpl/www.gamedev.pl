@@ -27,6 +27,7 @@ import {
 } from './mcp-gate-task.js';
 import type { ToolContext, ToolHandler, ToolResult } from './mcp-tool-support.js';
 import { MCP_INSTRUCTIONS } from './mcp-round-guide.js';
+import { verifyManagedMcpOpener } from '../platform/agent-token.js';
 
 export const SERVER_INFO = { name: 'gamedevpl', version: '1.0.0' };
 // tools/list depends on the bearer, so it is private.
@@ -76,7 +77,19 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
       const body = rpcError(message.id, parsed.code, parsed.message, parsed.data);
       return { modern: null, sent: reply.status(parsed.status).send(body) };
     }
-    return { modern: parsed, sent: await handle(request, reply, message, parsed, bearerToken) };
+    const modern = { ...parsed, managed: isManaged(bearerToken) };
+    return { modern, sent: await handle(request, reply, message, modern, bearerToken) };
+  }
+
+  // Managed builders follow their own prompt: no skills, no gate tasks.
+  function isManaged(bearerToken: string | null): boolean {
+    if (!bearerToken || !deps.secret) return false;
+    try {
+      verifyManagedMcpOpener(bearerToken, deps.secret);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // Reply helpers that shape results for whichever revision the request spoke.
@@ -99,7 +112,7 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
 
   // A delivered submit_sources becomes a gate task for a task-capable client.
   function gateTask(modern: ModernRequest | null, tool: string, sessionKey: string, result: ToolResult) {
-    if (!modern || tool !== 'submit_sources' || !sessionKey) return null;
+    if (!modern || modern.managed || tool !== 'submit_sources' || !sessionKey) return null;
     if (!clientHasExtension(modern, TASKS_EXTENSION)) return null;
     const delivery = gateTaskDelivery(result);
     if (!delivery) return null;
@@ -175,7 +188,7 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
     const params = (message.params ?? {}) as { uri?: unknown };
     const uri = typeof params.uri === 'string' ? params.uri : '';
     const ok = (result: object, cache?: CachePolicy) => send(reply, message.id, modern, result, cache);
-    const hasSkills = serverSkills().length > 0;
+    const hasSkills = !modern.managed && serverSkills().length > 0;
     switch (message.method) {
       case 'server/discover':
         return ok(
@@ -184,7 +197,10 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
             capabilities: {
               tools: {},
               ...(hasSkills ? { resources: {} } : {}),
-              extensions: { ...(hasSkills ? { [SKILLS_EXTENSION]: {} } : {}), [TASKS_EXTENSION]: {} },
+              extensions: {
+                ...(hasSkills ? { [SKILLS_EXTENSION]: {} } : {}),
+                ...(modern.managed ? {} : { [TASKS_EXTENSION]: {} }),
+              },
             },
             instructions: MCP_INSTRUCTIONS,
           },
@@ -204,14 +220,14 @@ export function createModernSurface(surface: ModernSurfaceDeps) {
       case 'resources/templates/list':
         return ok({ resourceTemplates: [] }, STATIC_CACHE);
       case 'resources/read': {
-        const skill = findSkill(uri);
+        const skill = modern.managed ? null : findSkill(uri);
         if (!skill) return fail(reply, message.id, modern, -32602, `unknown resource: ${uri || '(missing uri)'}`);
         return ok({ contents: [{ uri: skill.uri, mimeType: 'text/markdown', text: skill.text }] }, SKILL_CACHE);
       }
       case 'tasks/get':
       case 'tasks/update':
       case 'tasks/cancel':
-        return taskMethod(request, reply, message, modern, bearerToken);
+        return modern.managed ? null : taskMethod(request, reply, message, modern, bearerToken);
       default:
         return null;
     }

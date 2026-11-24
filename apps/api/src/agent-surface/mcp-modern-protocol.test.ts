@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mintAgentToken } from '../platform/agent-token.js';
+import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { verdictPending } from './mcp-gate-task.js';
@@ -347,5 +347,37 @@ describe('POST /api/mcp — MCP 2026-07-28 (skills, tasks)', () => {
     expect(verdictPending(refusal('stale agent token'))).toBe(false);
     expect(verdictPending({ content: [], structuredContent: { status: 'pending' } })).toBe(true);
     expect(verdictPending({ content: [], structuredContent: { status: 'preview_failed' } })).toBe(false);
+  });
+
+  it('serves a managed builder the base revision only: no skills, no gate task', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setRoundBuilder(ISSUE, 'platform');
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const authorization = `Bearer ${mintManagedMcpOpener(ISSUE, secret, { roundGeneration: 1 })}`;
+    const managed = { extensions: TASKS, headers: { authorization } };
+
+    const discovered = (await modernCall(app, 'server/discover', {}, managed)).json().result;
+    expect(discovered.capabilities).toEqual({ tools: {}, extensions: {} });
+    expect((await modernCall(app, 'skills/list', {}, managed)).statusCode).toBe(404);
+
+    const started = await modernCall(
+      app,
+      'tools/call',
+      { name: 'start', arguments: { slug: 'comet-courier' } },
+      managed,
+    );
+    const sessionKey = (started.json().result.structuredContent as { sessionKey: string }).sessionKey;
+    const submitted = await modernCall(
+      app,
+      'tools/call',
+      {
+        name: 'submit_sources',
+        arguments: { sessionKey, kitEngineRef: ENGINE, files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })) },
+      },
+      managed,
+    );
+    expect(submitted.json().result).toMatchObject({ resultType: 'complete', structuredContent: { ok: true } });
   });
 });

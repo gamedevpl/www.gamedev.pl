@@ -22,6 +22,8 @@ export const UNSUPPORTED_PROTOCOL_VERSION = -32022;
 export interface ModernRequest {
   protocolVersion: string;
   clientCapabilities: Record<string, unknown>;
+  // A managed builder session: served the base revision only, no extensions.
+  managed?: boolean;
 }
 
 export interface ModernRejection {
