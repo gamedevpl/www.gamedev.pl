@@ -30,8 +30,8 @@
     "slug:backfill": "tsx scripts/slug-backfill.ts",
     "player:erase": "tsx scripts/erase-player-signals.ts",
     "verify:erase": "tsx scripts/verify-erase-signals.ts",
-    "// build:assets": "tsc emits only .js; the MCP round card is real .html and has to be copied beside it.",
-    "build:assets": "cp src/agent-surface/mcp-ui-round-status.html dist/agent-surface/"
+    "// build:assets": "tsc emits only .js; the MCP round card (.html) and the gamedevpl skill served over MCP (SKILL.md) are copied beside it.",
+    "build:assets": "cp src/agent-surface/mcp-ui-round-status.html dist/agent-surface/ && mkdir -p dist/agent-surface/skills/gamedevpl && cp ../../skills/gamedevpl/SKILL.md dist/agent-surface/skills/gamedevpl/"
   },
   "dependencies": {
     "@babel/parser": "^7.29.8",

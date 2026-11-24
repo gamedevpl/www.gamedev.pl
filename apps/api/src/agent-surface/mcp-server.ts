@@ -140,12 +140,12 @@ import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
 import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
 import { createManagedCallRunner } from './managed-session-guard.js';
+import { createModernSurface, SERVER_INFO } from './mcp-modern-surface.js';
+import { PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from './mcp-modern-protocol.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
 
-const PROTOCOL_VERSION = '2025-11-25';
-const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-11-25', '2025-03-26', '2024-11-05']);
 import { briefLocales, receiptClosedFields, SESSION_EXPIRES_AT_PROP } from './mcp-round-closed.js';
 
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
@@ -1411,6 +1411,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
   }
 
+  const rpc = createModernSurface({ agentTokenSecret, now, tools, applySessionNudges, resolveAuth, writePiggyback });
   async function handleJsonRpc(request: FastifyRequest, reply: FastifyReply, message: JsonRpcRequest) {
     const sessionHeader = headerValue(request.headers[SESSION_HEADER]);
     const bearerToken = readBearerToken(request.headers.authorization);
@@ -1431,6 +1432,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (message.method === 'notifications/initialized' || message.method.startsWith('notifications/')) {
       return reply.status(202).send();
     }
+
+    const { modern, sent } = await rpc.route(request, reply, message, bearerToken);
+    if (sent) return sent;
+    const out = rpc.replier(reply, message, modern);
 
     if (message.method === 'initialize') {
       const params = (message.params ?? {}) as { protocolVersion?: string; clientInfo?: unknown };
@@ -1460,10 +1465,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                 }
               : {}),
           },
-          serverInfo: {
-            name: 'gamedevpl',
-            version: '1.0.0',
-          },
+          serverInfo: SERVER_INFO,
           instructions: MCP_INSTRUCTIONS,
         }),
       );
@@ -1474,7 +1476,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     // a 404 here made every post-initialize tool call a coin flip. Inventing an id
     // grants nothing: sessionKey / Bearer still authorize every tool. Exception:
     // IDs this instance explicitly terminated via DELETE stay dead (tombstone).
-    if (sessionHeader && !transportSessions.has(sessionHeader)) {
+    if (!modern && sessionHeader && !transportSessions.has(sessionHeader)) {
       pruneTransportSessions(now());
       if (terminatedTransportSessions.has(sessionHeader)) {
         request.log.warn(
@@ -1510,18 +1512,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     const protocolVersion = headerValue(request.headers['mcp-protocol-version']);
-    if (protocolVersion && !SUPPORTED_PROTOCOL_VERSIONS.has(protocolVersion)) {
+    if (!modern && protocolVersion && !SUPPORTED_PROTOCOL_VERSIONS.has(protocolVersion)) {
       return reply.status(400).send({ error: 'unsupported MCP-Protocol-Version' });
     }
 
     const ctx: ToolContext = {
       request,
-      sessionId: sessionHeader,
+      sessionId: modern ? null : sessionHeader,
       bearerToken,
     };
 
     if (message.method === 'ping') {
-      return reply.send(jsonRpcResult(message.id, {}));
+      return out.ok({});
     }
 
     if (message.method === 'tools/list') {
@@ -1532,44 +1534,42 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         !(opener !== null && MCP_HIDDEN_FROM_MANAGED.has(name));
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
-      const withUi = sessionWantsUi(sessionHeader);
-      return reply.send(
-        jsonRpcResult(message.id, {
-          tools: Object.entries(tools)
-            .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
-            .filter(([name]) => offered(name))
-            // An app-only tool exists for the view. A client with no views would offer it
-            // to its model, which is exactly what visibility:["app"] forbids.
-            .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
-            .map(([name, tool]) => {
-              const appOnly = withUi && MCP_UI_APP_ONLY_TOOLS.has(name);
-              const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
-              const uiMeta = appOnly
-                ? { visibility: ['app'] }
-                : uiResourceUri
-                  ? // visibility defaults to ["model", "app"], so a launcher says nothing.
-                    { resourceUri: uiResourceUri }
-                  : null;
-              // ChatGPT rendered the card but could not call the app-only tool from it.
-              // Its own compatibility keys say the same things as `_meta.ui`, so declare
-              // both rather than guess which one a host actually reads.
-              const openAiMeta = appOnly
-                ? { 'openai/widgetAccessible': true }
-                : uiResourceUri
-                  ? { 'openai/outputTemplate': uiResourceUri }
-                  : null;
-              return {
-                name,
-                description: tool.description,
-                inputSchema: tool.inputSchema,
-                // Declared once here, so a tool cannot forget that it can refuse.
-                outputSchema: withErrorBranch(tool.outputSchema),
-                ...(tool.annotations ? { annotations: tool.annotations } : {}),
-                ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
-              };
-            }),
-        }),
-      );
+      const withUi = !modern && sessionWantsUi(sessionHeader);
+      return out.ok({
+        tools: Object.entries(tools)
+          .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
+          .filter(([name]) => offered(name))
+          // An app-only tool exists for the view. A client with no views would offer it
+          // to its model, which is exactly what visibility:["app"] forbids.
+          .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
+          .map(([name, tool]) => {
+            const appOnly = withUi && MCP_UI_APP_ONLY_TOOLS.has(name);
+            const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
+            const uiMeta = appOnly
+              ? { visibility: ['app'] }
+              : uiResourceUri
+                ? // visibility defaults to ["model", "app"], so a launcher says nothing.
+                  { resourceUri: uiResourceUri }
+                : null;
+            // ChatGPT rendered the card but could not call the app-only tool from it.
+            // Its own compatibility keys say the same things as `_meta.ui`, so declare
+            // both rather than guess which one a host actually reads.
+            const openAiMeta = appOnly
+              ? { 'openai/widgetAccessible': true }
+              : uiResourceUri
+                ? { 'openai/outputTemplate': uiResourceUri }
+                : null;
+            return {
+              name,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+              // Declared once here, so a tool cannot forget that it can refuse.
+              outputSchema: withErrorBranch(tool.outputSchema),
+              ...(tool.annotations ? { annotations: tool.annotations } : {}),
+              ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
+            };
+          }),
+      });
     }
 
     // MCP Apps resources, on exactly the same gate as `_meta.ui`: the flag AND a client
@@ -1580,7 +1580,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     // reads as not capable and would be refused here. Single-instance today
     // (`--max-instances 1`), and a spike runs against one process, but a durable view
     // surface cannot key off the correlator alone.
-    const wantsUiResources = sessionWantsUi(sessionHeader);
+    const wantsUiResources = !modern && sessionWantsUi(sessionHeader);
 
     if (wantsUiResources && message.method === 'resources/list') {
       return reply.send(jsonRpcResult(message.id, { resources: uiResourceDescriptors() }));
@@ -1606,18 +1606,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const name = typeof params.name === 'string' ? params.name : '';
       const tool = tools[name];
       if (!tool) {
-        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       // visibility:["app"] is a contract, so enforce it rather than relying on the tool
       // being absent from tools/list: a client that guesses the name would otherwise
       // reach a tool its model was never meant to see. This refuses in exactly the
       // situations views are already unavailable, so it cannot break a working view.
-      if (MCP_UI_APP_ONLY_TOOLS.has(name) && !sessionWantsUi(sessionHeader)) {
-        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+      if (MCP_UI_APP_ONLY_TOOLS.has(name) && (modern || !sessionWantsUi(sessionHeader))) {
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       // Managed-only tools do not exist for public clients.
       if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerClaims(bearerToken) === null) {
-        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
       const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
@@ -1626,9 +1626,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const rawResult = await runManagedCall(name, args, ctx, () => tool.handler(args, ctx));
         const result = await applySessionNudges(name, args, ctx, rawResult);
         // Echo session id on tool responses when we have one (transport correlator).
-        if (sessionHeader) {
-          reply.header('Mcp-Session-Id', sessionHeader);
-        } else if (name === 'start' && result.structuredContent && typeof result.structuredContent === 'object') {
+        const legacyStart = !modern && name === 'start';
+        if (ctx.sessionId) {
+          reply.header('Mcp-Session-Id', ctx.sessionId);
+        } else if (legacyStart && result.structuredContent && typeof result.structuredContent === 'object') {
           const sid = (result.structuredContent as { sessionId?: string }).sessionId;
           if (sid) reply.header('Mcp-Session-Id', sid);
         }
@@ -1715,12 +1716,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           }
         }
 
-        return reply.send(jsonRpcResult(message.id, result));
+        return out.ok(rpc.gateTask(modern, name, sessionKeyArg, result) ?? result);
       } catch (error) {
         app.log.error({ err: error, tool: name }, 'MCP tool handler failed');
-        return reply.send(
-          jsonRpcResult(message.id, toolErr(error instanceof Error ? error.message : 'internal error')),
-        );
+        return out.ok(toolErr(error instanceof Error ? error.message : 'internal error'));
       }
     }
 
@@ -1728,7 +1727,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(202).send();
     }
 
-    return reply.send(jsonRpcError(message.id, -32601, `method not found: ${message.method}`));
+    return out.fail(-32601, `method not found: ${message.method}`);
   }
 
   const mcpRouteConfig = {

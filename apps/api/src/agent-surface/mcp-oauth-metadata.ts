@@ -96,7 +96,7 @@ export function mcpMethodAllowsAnonymousHandshake(method: string | undefined): b
 // A 200 handshake reads as "no auth needed"; discovery never starts.
 export function shouldIssueMcpOAuthChallenge(request: FastifyRequest, message: JsonRpcMessage): boolean {
   if (mcpMethodAllowsAnonymousHandshake(message.method)) return false;
-  if (message.method === 'initialize') return !readBearerToken(request.headers.authorization);
+  if (message.method?.match(/^(initialize|server\/discover)$/)) return !readBearerToken(request.headers.authorization);
   if (message.method !== 'tools/call') return false;
   return mcpRequestLacksCredential(request, message);
 }

@@ -76,7 +76,9 @@ Buffer.from(dataUrl.split(',')[1], 'base64'))`; never print or return the
    rejected delivery.
 4. **`end` after your last submit.** Do not stop at `submit_sources`, and do not sit in a
    `get_gate_verdict` loop waiting — Studio shows the gate to the creator on its own.
-   `get_gate_verdict` is a one-shot check, never a poll.
+   `get_gate_verdict` is a one-shot check, never a poll. The exception is a client that runs
+   `submit_sources` as a background task (MCP Tasks): that task completes with the verdict
+   under `gate`, so let it finish before `end`, and on `must_fix_gate` fix and submit again.
 5. **The inbox comes to you.** Every write reply carries `pendingMessages`. When it is
    non-empty, `read_inbox` returns those notes plus their attached images (`attachments`
    counts them), which `pendingMessages` does not. Notes already read stop counting as
