@@ -4,7 +4,12 @@ import { looksLikeGameAgentKey, SESSION_KEY_IS_NOT_AN_OPENER_REASON } from './ag
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { looksLikeMcpSessionKey } from './mcp-session-key.js';
 import type { Store } from '../platform/store.js';
-import { toolOk, toolErr, RETIRED_GAME_KEY_REASON, type ToolHandler } from './mcp-tool-support.js';
+import {
+  toolOk,
+  toolErr,
+  RETIRED_GAME_KEY_REASON,
+  type ToolHandler,
+} from './mcp-tool-support.js';
 
 const WRITES = {
   readOnlyHint: false,
