@@ -1,19 +1,11 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
-/**
- * Skills over MCP (`io.modelcontextprotocol/skills`): the server ships the gamedevpl
- * skill itself, so a client with no plugin still gets the loop rules, and the text
- * moves with every deploy instead of waiting for a plugin release.
- *
- * The skill is the same file the plugin installs (`skills/gamedevpl/SKILL.md` at the
- * repo root). The image copies it beside this module (`build:assets`); in a checkout it
- * is read from the root. When neither exists the extension is simply not declared.
- */
+// Serves the gamedevpl SKILL.md over MCP (build:assets copies it).
 
 export const GAMEDEVPL_SKILL_URI = 'skill://gamedevpl/SKILL.md';
 
-// The skill changes only on deploy, which every instance picks up on boot.
+// The skill changes only on deploy.
 export const SKILL_CACHE = { ttlMs: 3_600_000, cacheScope: 'public' as const };
 
 export interface McpSkill {
@@ -29,8 +21,7 @@ const CANDIDATES = [
   new URL('../../../../skills/gamedevpl/SKILL.md', import.meta.url),
 ];
 
-// Flat `key: value` frontmatter, which is all a SKILL.md here carries. Every field is
-// kept, as the extension requires.
+// Flat `key: value` frontmatter; every field is kept.
 export function parseSkillFrontmatter(text: string): Record<string, string> | null {
   if (!text.startsWith('---\n')) return null;
   const end = text.indexOf('\n---', 4);
@@ -63,7 +54,7 @@ export function skillFromText(uri: string, text: string): McpSkill | null {
 
 let loaded: McpSkill[] | null = null;
 
-/** The skills this server ships; empty when the file is not on disk. */
+// Shipped skills; empty when the file is missing.
 export function serverSkills(): McpSkill[] {
   if (loaded) return loaded;
   for (const candidate of CANDIDATES) {
@@ -77,7 +68,7 @@ export function serverSkills(): McpSkill[] {
   return (loaded = []);
 }
 
-/** A skills/list entry (or skills/get `skill`): one atomic manifest per skill. */
+// One atomic skills/list manifest entry.
 export function skillEntry(skill: McpSkill) {
   return {
     uri: skill.uri,

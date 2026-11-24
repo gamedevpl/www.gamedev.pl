@@ -473,6 +473,7 @@ const FILE_BUCKET = {
   'mcp-modern-protocol': 'agent-surface',
   'mcp-skills': 'agent-surface',
   'mcp-gate-task': 'agent-surface',
+  'mcp-modern-surface': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
   'mcp-session-key': 'agent-surface',
   'mcp-round-closed': 'agent-surface',

@@ -1,18 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { ToolResult } from './mcp-tool-support.js';
 
-/**
- * Tasks (`io.modelcontextprotocol/tasks`) for the gate. A preview or publish delivery
- * takes 2–5 minutes to get a verdict; until now the agent had to end the session and
- * the verdict waited for the next round. When the client supports tasks, a successful
- * `submit_sources` answers with a task instead, and the task completes with the
- * delivery plus its verdict, so a refused gate can be fixed in the same session.
- *
- * Stateless by design (Cloud Run is multi-instance): the taskId is the encrypted
- * `(sessionKey, delivery)` pair. `tasks/get` decrypts it and reads the verdict through
- * the same authority checks as `get_gate_verdict`. Encryption, not just a signature,
- * because the taskId travels in the `Mcp-Name` header and may be logged by proxies.
- */
+// Gate as an MCP task; taskId encrypts (sessionKey, delivery), stays stateless.
 
 export const GATE_TASK_TTL_MS = 60 * 60 * 1000;
 // Verdicts land in minutes; polling faster only costs requests.
@@ -20,8 +9,7 @@ export const GATE_TASK_POLL_INTERVAL_MS = 15_000;
 
 const PREFIX = 'gt1.';
 
-// The submit fields the completed result repeats, so it still satisfies submit_sources'
-// outputSchema. Anything larger stays out of the id.
+// Submit fields the completed result repeats for the outputSchema.
 export interface GateTaskDelivery {
   mode: string;
   deliveryId: string;
@@ -47,7 +35,7 @@ export function mintGateTaskId(secret: string, claims: GateTaskClaims): string {
   return PREFIX + Buffer.concat([iv, cipher.getAuthTag(), body]).toString('base64url');
 }
 
-/** The claims, or null for a forged, damaged or expired id (all answer -32602). */
+// Claims, or null for forged, damaged or expired ids.
 export function readGateTaskId(secret: string, taskId: string, nowMs: number): GateTaskClaims | null {
   if (!taskId.startsWith(PREFIX)) return null;
   try {
@@ -65,10 +53,7 @@ export function readGateTaskId(secret: string, taskId: string, nowMs: number): G
   }
 }
 
-/**
- * The delivery a successful submit_sources started a gate for, or null when there is
- * nothing to wait on (refused, stored without a gate, or a reply that says stop).
- */
+// The started gate delivery, or null when nothing is worth awaiting.
 export function gateTaskDelivery(result: ToolResult): GateTaskDelivery | null {
   if (result.isError) return null;
   const data = result.structuredContent as Record<string, unknown> | undefined;
@@ -107,11 +92,7 @@ export function taskFields(
 export const GATE_TASK_WORKING_MESSAGE =
   'Delivered; the gate is running. The verdict usually lands in 2–5 minutes and completes this task.';
 
-/**
- * The completed task's tool result: the delivery as submit_sources reported it, plus the
- * verdict under `gate`. A refused verdict reads as a successful call (isError stays for
- * protocol-level failures), with `must_fix_gate` among the warnings so the agent fixes it.
- */
+// Submit fields plus the verdict under `gate`, as submit_sources' schema allows.
 export function completedGateResult(claims: GateTaskClaims, verdict: ToolResult): ToolResult {
   const gate =
     verdict.structuredContent && typeof verdict.structuredContent === 'object'
@@ -149,7 +130,7 @@ export function completedGateResult(claims: GateTaskClaims, verdict: ToolResult)
   return { content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data };
 }
 
-/** True while the verdict for this delivery is still being built. */
+// True while this delivery's verdict is still building.
 export function verdictPending(verdict: ToolResult): boolean {
   if (verdict.isError) return false;
   const data = verdict.structuredContent as { status?: unknown } | undefined;

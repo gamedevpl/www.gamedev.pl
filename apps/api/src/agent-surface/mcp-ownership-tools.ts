@@ -14,12 +14,7 @@ import {
   transferProposalReviewPath,
 } from '../store/records/game-transfer-proposal.js';
 import type { Store } from '../platform/store.js';
-import {
-  toolOk,
-  toolErr,
-  RETIRED_GAME_KEY_REASON,
-  type ToolHandler,
-} from './mcp-tool-support.js';
+import { toolOk, toolErr, RETIRED_GAME_KEY_REASON, type ToolHandler } from './mcp-tool-support.js';
 
 const READS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 const WRITES = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;

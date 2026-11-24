@@ -8,12 +8,7 @@ import { isGameMember } from '../platform/game-access-permissions.js';
 import { assertAgentTokenActive, InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { isActiveBuildRound, resolveJobState } from '../creation/job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
-import {
-  toolOk,
-  toolErr,
-  RETIRED_GAME_KEY_REASON,
-  type ToolHandler,
-} from './mcp-tool-support.js';
+import { toolOk, toolErr, RETIRED_GAME_KEY_REASON, type ToolHandler } from './mcp-tool-support.js';
 
 const READS = {
   readOnlyHint: true,
@@ -144,7 +139,6 @@ export function createAccountGamesTools(deps: AccountGamesToolsDeps): Record<str
             throw error;
           }
         }
-
 
         if (!creatorUid && bearer) {
           if (looksLikeGameAgentKey(bearer)) {

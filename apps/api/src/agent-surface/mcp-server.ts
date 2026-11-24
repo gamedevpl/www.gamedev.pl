@@ -140,31 +140,7 @@ import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
 import { createReferenceLookup, REFERENCE_UNSEEN_WARNING, REFERENCE_WRITE_TOOLS } from './reference-unseen.js';
 import { createManagedCallRunner } from './managed-session-guard.js';
-import {
-  clientHasExtension,
-  isModernRejection,
-  isModernRequest,
-  MISSING_CLIENT_CAPABILITY,
-  MODERN_PROTOCOL_VERSIONS,
-  modernErrorStatus,
-  modernResult,
-  readModernRequest,
-  SKILLS_EXTENSION,
-  TASKS_EXTENSION,
-  type CachePolicy,
-  type ModernRequest,
-} from './mcp-modern-protocol.js';
-import { findSkill, serverSkills, SKILL_CACHE, skillEntry } from './mcp-skills.js';
-import {
-  completedGateResult,
-  GATE_TASK_TTL_MS,
-  GATE_TASK_WORKING_MESSAGE,
-  gateTaskDelivery,
-  mintGateTaskId,
-  readGateTaskId,
-  taskFields,
-  verdictPending,
-} from './mcp-gate-task.js';
+import { createModernSurface, SERVER_INFO } from './mcp-modern-surface.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 // Round tools require session capabilities; account reads verify account credentials.
@@ -176,10 +152,6 @@ import { briefLocales, receiptClosedFields, SESSION_EXPIRES_AT_PROP } from './mc
 const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
-const SERVER_INFO = { name: 'gamedevpl', version: '1.0.0' };
-// tools/list depends on the bearer (managed openers see more), so it is private.
-const TOOLS_LIST_CACHE: CachePolicy = { ttlMs: 300_000, cacheScope: 'private' };
-const EMPTY_LIST_CACHE: CachePolicy = { ttlMs: 3_600_000, cacheScope: 'public' };
 
 export const MCP_UNADVERTISED_TOOLS: readonly string[] = Object.freeze([
   'open_proposal_round',
@@ -1440,6 +1412,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
   }
 
+  const modernRpc = createModernSurface(agentTokenSecret, now, tools, applySessionNudges, SUPPORTED_PROTOCOL_VERSIONS);
   async function handleJsonRpc(request: FastifyRequest, reply: FastifyReply, message: JsonRpcRequest) {
     const sessionHeader = headerValue(request.headers[SESSION_HEADER]);
     const bearerToken = readBearerToken(request.headers.authorization);
@@ -1461,27 +1434,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(202).send();
     }
 
-    // MCP 2026-07-28: a request that names its own protocol version is served
-    // statelessly, beside (never instead of) the 2025-11-25 session flow below.
-    let modern: ModernRequest | null = null;
-    if (isModernRequest(message)) {
-      const read = readModernRequest(message, request.headers, SUPPORTED_PROTOCOL_VERSIONS);
-      if (isModernRejection(read)) {
-        return reply.status(read.status).send(jsonRpcError(message.id, read.code, read.message, read.data));
-      }
-      modern = read;
-    }
-    const sendResult = (result: Record<string, unknown>, cache?: CachePolicy) =>
-      reply.send(jsonRpcResult(message.id, modern ? modernResult(result, SERVER_INFO, cache) : result));
-    const sendError = (code: number, text: string, data?: unknown) =>
-      modern
-        ? reply.status(modernErrorStatus(code)).send(jsonRpcError(message.id, code, text, data))
-        : reply.send(jsonRpcError(message.id, code, text, data));
-
-    if (modern) {
-      const handled = await handleModernOnly(request, reply, message, modern, bearerToken);
-      if (handled) return handled;
-    }
+    const { modern, sent } = await modernRpc.route(request, reply, message, bearerToken);
+    if (sent) return sent;
+    const out = modernRpc.replier(reply, message, modern);
 
     if (message.method === 'initialize') {
       const params = (message.params ?? {}) as { protocolVersion?: string; clientInfo?: unknown };
@@ -1562,7 +1517,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(400).send({ error: 'unsupported MCP-Protocol-Version' });
     }
 
-    // The modern revision has no sessions: Mcp-Session-Id is ignored there.
     const ctx: ToolContext = {
       request,
       sessionId: modern ? null : sessionHeader,
@@ -1570,7 +1524,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     };
 
     if (message.method === 'ping') {
-      return sendResult({});
+      return out.ok({});
     }
 
     if (message.method === 'tools/list') {
@@ -1582,44 +1536,41 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // `_meta.ui` is added only for a client that negotiated the extension, so this
       // list stays byte-identical for every client that shipped before views existed.
       const withUi = !modern && sessionWantsUi(sessionHeader);
-      return sendResult(
-        {
-          tools: Object.entries(tools)
-            .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
-            .filter(([name]) => offered(name))
-            // An app-only tool exists for the view. A client with no views would offer it
-            // to its model, which is exactly what visibility:["app"] forbids.
-            .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
-            .map(([name, tool]) => {
-              const appOnly = withUi && MCP_UI_APP_ONLY_TOOLS.has(name);
-              const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
-              const uiMeta = appOnly
-                ? { visibility: ['app'] }
-                : uiResourceUri
-                  ? // visibility defaults to ["model", "app"], so a launcher says nothing.
-                    { resourceUri: uiResourceUri }
-                  : null;
-              // ChatGPT rendered the card but could not call the app-only tool from it.
-              // Its own compatibility keys say the same things as `_meta.ui`, so declare
-              // both rather than guess which one a host actually reads.
-              const openAiMeta = appOnly
-                ? { 'openai/widgetAccessible': true }
-                : uiResourceUri
-                  ? { 'openai/outputTemplate': uiResourceUri }
-                  : null;
-              return {
-                name,
-                description: tool.description,
-                inputSchema: tool.inputSchema,
-                // Declared once here, so a tool cannot forget that it can refuse.
-                outputSchema: withErrorBranch(tool.outputSchema),
-                ...(tool.annotations ? { annotations: tool.annotations } : {}),
-                ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
-              };
-            }),
-        },
-        TOOLS_LIST_CACHE,
-      );
+      return out.ok({
+        tools: Object.entries(tools)
+          .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
+          .filter(([name]) => offered(name))
+          // An app-only tool exists for the view. A client with no views would offer it
+          // to its model, which is exactly what visibility:["app"] forbids.
+          .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
+          .map(([name, tool]) => {
+            const appOnly = withUi && MCP_UI_APP_ONLY_TOOLS.has(name);
+            const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
+            const uiMeta = appOnly
+              ? { visibility: ['app'] }
+              : uiResourceUri
+                ? // visibility defaults to ["model", "app"], so a launcher says nothing.
+                  { resourceUri: uiResourceUri }
+                : null;
+            // ChatGPT rendered the card but could not call the app-only tool from it.
+            // Its own compatibility keys say the same things as `_meta.ui`, so declare
+            // both rather than guess which one a host actually reads.
+            const openAiMeta = appOnly
+              ? { 'openai/widgetAccessible': true }
+              : uiResourceUri
+                ? { 'openai/outputTemplate': uiResourceUri }
+                : null;
+            return {
+              name,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+              // Declared once here, so a tool cannot forget that it can refuse.
+              outputSchema: withErrorBranch(tool.outputSchema),
+              ...(tool.annotations ? { annotations: tool.annotations } : {}),
+              ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
+            };
+          }),
+      });
     }
 
     // MCP Apps resources, on exactly the same gate as `_meta.ui`: the flag AND a client
@@ -1655,21 +1606,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const params = (message.params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
       const name = typeof params.name === 'string' ? params.name : '';
       const tool = tools[name];
-      // The modern revision answers an unknown tool as invalid params.
-      const unknownTool = () => sendError(modern ? -32602 : -32601, `unknown tool: ${name}`);
       if (!tool) {
-        return unknownTool();
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       // visibility:["app"] is a contract, so enforce it rather than relying on the tool
       // being absent from tools/list: a client that guesses the name would otherwise
       // reach a tool its model was never meant to see. This refuses in exactly the
       // situations views are already unavailable, so it cannot break a working view.
-      if (MCP_UI_APP_ONLY_TOOLS.has(name) && (modern !== null || !sessionWantsUi(sessionHeader))) {
-        return unknownTool();
+      if (MCP_UI_APP_ONLY_TOOLS.has(name) && (modern || !sessionWantsUi(sessionHeader))) {
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       // Managed-only tools do not exist for public clients.
       if (MCP_MANAGED_ONLY_TOOLS.has(name) && managedOpenerClaims(bearerToken) === null) {
-        return unknownTool();
+        return out.fail(modern ? -32602 : -32601, `unknown tool: ${name}`);
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
       const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
@@ -1678,12 +1627,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const rawResult = await runManagedCall(name, args, ctx, () => tool.handler(args, ctx));
         const result = await applySessionNudges(name, args, ctx, rawResult);
         // Echo session id on tool responses when we have one (transport correlator).
-        // The modern revision has no sessions, so it never mints or echoes one.
-        if (modern) {
-          // no session header
-        } else if (sessionHeader) {
-          reply.header('Mcp-Session-Id', sessionHeader);
-        } else if (name === 'start' && result.structuredContent && typeof result.structuredContent === 'object') {
+        const legacyStart = !modern && name === 'start';
+        if (ctx.sessionId) {
+          reply.header('Mcp-Session-Id', ctx.sessionId);
+        } else if (legacyStart && result.structuredContent && typeof result.structuredContent === 'object') {
           const sid = (result.structuredContent as { sessionId?: string }).sessionId;
           if (sid) reply.header('Mcp-Session-Id', sid);
         }
@@ -1770,36 +1717,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           }
         }
 
-        // Tasks: a client that supports them gets the gate as a task, which completes
-        // with the verdict, instead of a reply that tells it to end and look later.
-        if (modern && name === 'submit_sources' && clientHasExtension(modern, TASKS_EXTENSION) && sessionKeyArg) {
-          const delivery = gateTaskDelivery(result);
-          if (delivery) {
-            const createdAt = now();
-            const claims = {
-              ...delivery,
-              sessionKey: sessionKeyArg,
-              createdAt,
-              expiresAt: createdAt + GATE_TASK_TTL_MS,
-            };
-            const taskId = mintGateTaskId(agentTokenSecret!, claims);
-            request.log.info(
-              { event: 'mcp_gate_task_created', tool: name, deliveryId: delivery.deliveryId, mode: delivery.mode },
-              'mcp gate task created',
-            );
-            return sendResult({
-              resultType: 'task',
-              ...taskFields(taskId, claims, 'working', GATE_TASK_WORKING_MESSAGE, createdAt),
-            });
-          }
-        }
-
-        return sendResult(result as unknown as Record<string, unknown>);
+        return out.ok(modernRpc.gateTask(modern, name, sessionKeyArg, result) ?? result);
       } catch (error) {
         app.log.error({ err: error, tool: name }, 'MCP tool handler failed');
-        return sendResult(
-          toolErr(error instanceof Error ? error.message : 'internal error') as unknown as Record<string, unknown>,
-        );
+        return out.ok(toolErr(error instanceof Error ? error.message : 'internal error'));
       }
     }
 
@@ -1807,105 +1728,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.status(202).send();
     }
 
-    return sendError(-32601, `method not found: ${message.method}`);
-  }
-
-  // Methods that exist only on the modern revision: discovery, skills and tasks.
-  // Returns null for the methods both revisions share (tools/list, tools/call, …).
-  async function handleModernOnly(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    message: JsonRpcRequest,
-    modern: ModernRequest,
-    bearerToken: string | null,
-  ): Promise<FastifyReply | null> {
-    const params = (message.params ?? {}) as Record<string, unknown>;
-    const ok = (result: Record<string, unknown>, cache?: CachePolicy) =>
-      reply.send(jsonRpcResult(message.id, modernResult(result, SERVER_INFO, cache)));
-    const fail = (code: number, text: string, data?: unknown) =>
-      reply.status(modernErrorStatus(code)).send(jsonRpcError(message.id, code, text, data));
-    const skills = serverSkills();
-
-    switch (message.method) {
-      case 'server/discover':
-        return ok(
-          {
-            supportedVersions: [...MODERN_PROTOCOL_VERSIONS],
-            capabilities: {
-              tools: {},
-              ...(skills.length > 0 ? { resources: {} } : {}),
-              extensions: {
-                ...(skills.length > 0 ? { [SKILLS_EXTENSION]: {} } : {}),
-                [TASKS_EXTENSION]: {},
-              },
-            },
-            instructions: MCP_INSTRUCTIONS,
-          },
-          EMPTY_LIST_CACHE,
-        );
-
-      case 'skills/list':
-        if (skills.length === 0) return null;
-        return ok({ skills: skills.map(skillEntry) }, SKILL_CACHE);
-
-      case 'skills/get': {
-        if (skills.length === 0) return null;
-        const skill = findSkill(typeof params.uri === 'string' ? params.uri : '');
-        if (!skill) return fail(-32602, `unknown skill: ${String(params.uri ?? '(missing uri)')}`);
-        return ok({ skill: skillEntry(skill) }, SKILL_CACHE);
-      }
-
-      case 'resources/list':
-        // Skill files are reached through skills/list, not offered as attachable context.
-        return ok({ resources: [] }, EMPTY_LIST_CACHE);
-
-      case 'resources/templates/list':
-        return ok({ resourceTemplates: [] }, EMPTY_LIST_CACHE);
-
-      case 'resources/read': {
-        const uri = typeof params.uri === 'string' ? params.uri : '';
-        const skill = findSkill(uri);
-        if (!skill) return fail(-32602, `unknown resource: ${uri || '(missing uri)'}`);
-        return ok({ contents: [{ uri: skill.uri, mimeType: 'text/markdown', text: skill.text }] }, SKILL_CACHE);
-      }
-
-      case 'tasks/get':
-      case 'tasks/update':
-      case 'tasks/cancel': {
-        if (!clientHasExtension(modern, TASKS_EXTENSION)) {
-          return fail(MISSING_CLIENT_CAPABILITY, 'Missing required client capability', {
-            requiredCapabilities: { extensions: { [TASKS_EXTENSION]: {} } },
-          });
-        }
-        const taskId = typeof params.taskId === 'string' ? params.taskId : '';
-        const nowMs = now();
-        const claims = readGateTaskId(agentTokenSecret!, taskId, nowMs);
-        if (!claims) return fail(-32602, 'unknown or expired taskId');
-        // A gate task never asks for input, and a running Cloud Build is not cancelled
-        // by the agent losing interest; both answer as accepted no-ops.
-        if (message.method !== 'tasks/get') {
-          if (message.method === 'tasks/update') return fail(-32602, 'this task has no outstanding input requests');
-          return ok({});
-        }
-        const ctx: ToolContext = { request, sessionId: null, bearerToken };
-        const verdictArgs = { sessionKey: claims.sessionKey, deliveryId: claims.deliveryId };
-        const verdict = await tools.get_gate_verdict!.handler(verdictArgs, ctx);
-        if (verdictPending(verdict)) {
-          return ok(taskFields(taskId, claims, 'working', GATE_TASK_WORKING_MESSAGE, nowMs));
-        }
-        // Read once, at completion, through the same nudges as get_gate_verdict, so a
-        // refused gate carries must_fix_gate exactly as a direct check would.
-        const nudged = await applySessionNudges('get_gate_verdict', verdictArgs, ctx, verdict);
-        const result = completedGateResult(claims, nudged);
-        return ok({
-          ...taskFields(taskId, claims, 'completed', 'The gate verdict is in.', nowMs),
-          result,
-        });
-      }
-
-      default:
-        return null;
-    }
+    return out.fail(-32601, `method not found: ${message.method}`);
   }
 
   const mcpRouteConfig = {

@@ -1,12 +1,4 @@
-/**
- * MCP revision 2026-07-28 ("modern"), served beside the 2025-11-25 session flow.
- *
- * The modern revision has no handshake: every request names its protocol version and
- * client capabilities in `params._meta`, the HTTP headers mirror the method and target,
- * and there is no Mcp-Session-Id. A request carrying that `_meta` is served statelessly
- * here; an `initialize` request keeps the legacy session behaviour unchanged. Skills over
- * MCP and Tasks are extensions of this revision, so they exist only on this path.
- */
+// MCP 2026-07-28: stateless per-request _meta, served beside legacy initialize.
 
 export const MODERN_PROTOCOL_VERSION = '2026-07-28';
 export const MODERN_PROTOCOL_VERSIONS: ReadonlySet<string> = new Set([MODERN_PROTOCOL_VERSION]);
@@ -19,7 +11,7 @@ export const META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
 export const SKILLS_EXTENSION = 'io.modelcontextprotocol/skills';
 export const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
 
-// Error codes the modern revision adds (renumbered from -32001/-32003/-32004).
+// Error codes added by the modern revision.
 export const HEADER_MISMATCH = -32020;
 export const MISSING_CLIENT_CAPABILITY = -32021;
 export const UNSUPPORTED_PROTOCOL_VERSION = -32022;
@@ -62,17 +54,13 @@ function meta(message: Message): Record<string, unknown> | null {
   return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
 }
 
-/**
- * True when the request speaks the modern revision: it carries the per-request protocol
- * version, or it is `server/discover`, which only a modern client sends. Everything else
- * (initialize, and every call on a legacy session) stays on the legacy path.
- */
+// Modern when _meta names a version, or the method is server/discover.
 export function isModernRequest(message: Message): boolean {
   if (message.method === 'server/discover') return true;
   return meta(message)?.[META_PROTOCOL_VERSION] !== undefined;
 }
 
-// The header named for a method's target, when the revision requires one.
+// The Mcp-Name target a method requires, if any.
 function nameTarget(message: Message): string | null {
   const params = (message.params ?? {}) as Record<string, unknown>;
   if (message.method === 'tools/call' || message.method === 'prompts/get') {
@@ -85,7 +73,7 @@ function nameTarget(message: Message): string | null {
   return null;
 }
 
-/** Validates the per-request fields and headers; returns the request or why it is refused. */
+// Validates per-request _meta and headers; returns the request or a refusal.
 export function readModernRequest(
   message: Message,
   headers: Headers,
@@ -143,7 +131,7 @@ export function isModernRejection(value: ModernRequest | ModernRejection): value
   return 'code' in value;
 }
 
-/** True when the client declared an extension in its per-request capabilities. */
+// True when the client declared this extension.
 export function clientHasExtension(request: ModernRequest, extension: string): boolean {
   const extensions = request.clientCapabilities.extensions;
   return Boolean(
@@ -159,10 +147,7 @@ export interface CachePolicy {
   cacheScope: 'public' | 'private';
 }
 
-/**
- * A modern result: `resultType` on every result, serverInfo in `_meta`, and the cache
- * fields on the list and read results that the revision makes cacheable.
- */
+// Adds resultType, serverInfo and cache fields to a modern result.
 export function modernResult(
   result: Record<string, unknown>,
   serverInfo: { name: string; version: string },
@@ -180,7 +165,7 @@ export function modernResult(
   };
 }
 
-// Unknown methods answer 404 on this revision; every other refusal is a 400.
+// Unknown methods answer 404; other refusals 400.
 export function modernErrorStatus(code: number): number {
   return code === -32601 ? 404 : 400;
 }
