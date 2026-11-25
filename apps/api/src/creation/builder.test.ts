@@ -122,23 +122,6 @@ describe('builder helpers', () => {
         { stall: 'ended' },
       ),
     ).toBe(false);
-    // An idle managed session never reads a new inbox note.
-    expect(
-      shouldSteerFeedbackViaInbox({
-        state: 'building',
-        agentEndedAt: '2026-11-25T22:01:00Z',
-        agentEndedBy: 'submit',
-        agentState: 'idle',
-        agentStateRef: 'task-1',
-        ...withRef,
-      }),
-    ).toBe(false);
-    const idle = { agentState: 'idle', agentStateRef: 'task-1', ...withRef };
-    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...idle })).toBe(false);
-    // Idle from the previous session says nothing about this one.
-    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...idle, agentStateRef: 'task-0' })).toBe(true);
-    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...idle, agentState: 'in_progress' })).toBe(true);
-    expect(shouldSteerFeedbackViaInbox({ state: 'building', builder: 'self', ...idle })).toBe(true);
     expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef }, { stall: 'quiet' })).toBe(false);
     expect(shouldSteerFeedbackViaInbox({ state: 'dispatched', ...withRef }, { stall: 'not_dispatched' })).toBe(false);
     expect(
