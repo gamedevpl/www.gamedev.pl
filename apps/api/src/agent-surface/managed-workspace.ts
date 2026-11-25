@@ -19,6 +19,7 @@ import { loadReferenceArchives, referenceKickoffLines, type ReferenceStore } fro
 
 export const KIT_ARCHIVE = 'kit.tgz';
 export const SOURCES_ARCHIVE = 'sources.tgz';
+export const SETUP_SCRIPT = 'setup.sh';
 // Where the agent unpacks; Anthropic's default working directory.
 const WORKSPACE_ROOT = '/workspace';
 
@@ -84,7 +85,7 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
     const replace = outdated || (pinned !== undefined && pinned !== engineRef);
     const held = await deps.store.pinRoundKitEngineRef(brief.jobId, engineRef, replace);
     if (held && held !== engineRef) throw new Error(`round pinned ${held} while mounting ${engineRef}`);
-    const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }];
+    const archives: ManagedWorkspaceArchive[] = [{ name: KIT_ARCHIVE, bytes: kit }, setupArchive()];
     const sources = await loadRoundSources(deps.store, deps.gamesStore, record, undefined, deps.log);
     const kitOutdated = outdated || undefined;
     const context = await loadKickoffContext(deps.store, record, sources.kind).catch(() => undefined);
@@ -111,10 +112,16 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
 
 // 2026-11-19: the environment's Playwright package arrived without its browser.
 const BROWSER = `{ (playwright install --with-deps chromium || npx -y playwright install --with-deps chromium) >/tmp/chrome-install.log 2>&1; echo "chrome install exit $?" >>/tmp/chrome-install.log; } &`;
-// 2026-11-19: a builder skipped a second background command.
-const INSTALL = `nohup sh -c '${BROWSER} s=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log; wait' >/dev/null 2>&1 &`;
+const NPM_CI = `s=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log`;
+// 2026-11-25: builders rewrote the inline command, dropping the browser.
+export const SETUP = `#!/bin/sh\n# Runs from the kit root; returns at once.\nnohup sh -c '${BROWSER} ${NPM_CI}; wait' >/dev/null 2>&1 &\n`;
+
+function setupArchive(): ManagedWorkspaceArchive {
+  return { name: SETUP_SCRIPT, type: 'text/plain', bytes: new TextEncoder().encode(SETUP) };
+}
+
 const INSTALL_WAIT =
-  'That installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself. The same line fetches the capture browser: only if `capture` reports no Chrome, `tail -1 /tmp/chrome-install.log` shows whether that fetch has finished.';
+  'The script installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself. The script also fetches the capture browser, so `capture` works here; an older note saying this sandbox has no Chrome is out of date. Only if `capture` reports no Chrome, `tail -1 /tmp/chrome-install.log` shows whether that fetch has finished.';
 
 // Kickoff lines for a mounted workspace, in place of the download steps.
 export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): string[] {
@@ -131,7 +138,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
     : 'an empty `games/` — write the files `get_sources` returns into `games/<slug>/`';
   const remount = `move \`games/\` aside, delete the kit directory, extract its kitUrl into ${WORKSPACE_ROOT}, move \`games/\` back and run \`npm ci --ignore-scripts\` again`;
   return [
-    `Your workspace is already mounted. Run once: \`${unpack}; ${INSTALL}\`.`,
+    `Your workspace is already mounted. Run once, exactly as written: \`${unpack} && sh ${dir}/${SETUP_SCRIPT}\`.`,
     INSTALL_WAIT,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
     workspace.kitOutdated
