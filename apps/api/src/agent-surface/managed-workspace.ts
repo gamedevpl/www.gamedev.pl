@@ -109,12 +109,13 @@ export function createManagedWorkspaceLoader(deps: ManagedWorkspaceDeps): Manage
   };
 }
 
-// 2026-11-19: the environment's Playwright package arrived without its browser.
-const BROWSER = `{ (playwright install --with-deps chromium || npx -y playwright install --with-deps chromium) >/tmp/chrome-install.log 2>&1; echo "chrome install exit $?" >>/tmp/chrome-install.log; } &`;
-// 2026-11-19: a builder skipped a second background command.
-const INSTALL = `nohup sh -c '${BROWSER} s=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log; wait' >/dev/null 2>&1 &`;
+// 2026-11-17: a blocking install held one round for 199 s.
+const INSTALL = `nohup sh -c 's=$(date +%s); npm ci --ignore-scripts >/tmp/npm-ci.log 2>&1; echo "npm ci exit $? in $(($(date +%s)-s))s" >>/tmp/npm-ci.log' >/dev/null 2>&1 &`;
 const INSTALL_WAIT =
-  'That installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself. The same line fetches the capture browser: only if `capture` reports no Chrome, `tail -1 /tmp/chrome-install.log` shows whether that fetch has finished.';
+  'That installs the kit’s dependencies in the background, so read the kit and write the game meanwhile. Before your first typecheck, `tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`: while it prints anything else the install is still running, so check again a few seconds later, and if it prints another exit code run `npm ci --ignore-scripts` yourself.';
+// 2026-11-25: a stale no-Chrome note made builders skip capture.
+const BROWSER_NOTE =
+  'This sandbox has a browser, so `capture` works here; an older note saying it has no Chrome is out of date.';
 
 // Kickoff lines for a mounted workspace, in place of the download steps.
 export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): string[] {
@@ -133,6 +134,7 @@ export function workspaceKickoff(dir: string, workspace: ManagedWorkspace): stri
   return [
     `Your workspace is already mounted. Run once: \`${unpack}; ${INSTALL}\`.`,
     INSTALL_WAIT,
+    BROWSER_NOTE,
     `It holds Creator Kit ${workspace.engineRef} and ${game}; do not download the kit or the sources archive${workspace.delivered ? ' and do not call `get_sources`, which returns the same files' : ''}. Revise those files; never scaffold over them.`,
     workspace.kitOutdated
       ? `This kit replaces the one the last delivery was refused for (kit_outdated): call \`get_kit\` once. If its kitEngineRef is not ${workspace.engineRef}, ${remount}. Submit with get_kit's kitEngineRef.`
