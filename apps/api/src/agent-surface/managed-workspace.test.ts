@@ -6,7 +6,6 @@ import type { ManagedAgentProvider, ManagedSessionRequest } from './managed-agen
 import {
   createManagedWorkspaceLoader,
   ManagedWorkspaceError,
-  SETUP,
   startWithWorkspace,
   workspaceKickoff,
   type ManagedWorkspace,
@@ -48,10 +47,9 @@ describe('managed workspace loader', () => {
     await expect(load(BRIEF)).rejects.toThrow('round pinned eng_other');
     expect(workspace?.slug).toBe('rocks');
     expect(workspace?.delivered).toBe(true);
-    expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'setup.sh', 'sources.tgz']);
+    expect(workspace?.archives.map((archive) => archive.name)).toEqual(['kit.tgz', 'sources.tgz']);
     expect(Buffer.from(workspace!.archives[0]!.bytes).toString()).toBe('NEW');
-    expect(Buffer.from(workspace!.archives[1]!.bytes).toString()).toBe(SETUP);
-    expect(gunzipSync(workspace!.archives[2]!.bytes).toString('latin1')).toContain('rocks/game.ts');
+    expect(gunzipSync(workspace!.archives[1]!.bytes).toString('latin1')).toContain('rocks/game.ts');
   });
 
   it('keeps the round pin get_kit would report while its kit is still stored', async () => {
@@ -84,14 +82,6 @@ describe('managed workspace loader', () => {
     );
   });
 
-  it('ships one setup script that fetches the browser beside npm ci', () => {
-    expect(SETUP.startsWith('#!/bin/sh\n')).toBe(true);
-    expect(SETUP.match(/nohup/g)).toHaveLength(1);
-    expect(SETUP).toContain('playwright install --with-deps chromium');
-    expect(SETUP).toContain('npm ci --ignore-scripts >/tmp/npm-ci.log');
-    expect(SETUP.trimEnd().endsWith('&')).toBe(true);
-  });
-
   it('mounts nothing when the kit is not published', async () => {
     expect(await createManagedWorkspaceLoader(deps({ slug: 'rocks' }, {}))(BRIEF)).toBeNull();
   });
@@ -107,10 +97,10 @@ describe('workspace kickoff', () => {
     expect(lines).toContain('tar xzf /mnt/session/uploads/kit.tgz -C /workspace');
     expect(lines).toContain('tar xzf /mnt/session/uploads/sources.tgz -C /workspace/gamedevpl-creator-kit/games');
     expect(lines).toContain('npm config set update-notifier false && mkdir -p /workspace');
-    expect(lines).toContain('cd /workspace/gamedevpl-creator-kit && sh /mnt/session/uploads/setup.sh`');
-    expect(lines).not.toContain('nohup');
+    expect(lines).toContain('npm ci --ignore-scripts');
+    expect(lines).toContain('cd /workspace/gamedevpl-creator-kit; nohup sh -c');
     expect(lines).toContain('`tail -1 /tmp/npm-ci.log` must print `npm ci exit 0`');
-    expect(lines).toContain('`tail -1 /tmp/chrome-install.log`');
+    expect(lines).not.toContain('playwright install');
     expect(lines).toContain('no Chrome is out of date');
     expect(lines).toContain('`games/rocks/`');
     expect(lines).not.toContain('do not call `get_sources`');
