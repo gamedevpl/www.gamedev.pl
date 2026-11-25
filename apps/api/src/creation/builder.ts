@@ -54,6 +54,7 @@ export function shouldSteerFeedbackViaInbox(
     agentEndedAt?: string | null;
     agentEndedBy?: 'submit' | 'end' | 'takeover';
     agentState?: string;
+    agentStateRef?: string;
   },
   opts?: { builderChanging?: boolean; stall?: JobStall | null },
 ): boolean {
@@ -65,7 +66,10 @@ export function shouldSteerFeedbackViaInbox(
   const submitMarkerActive = Boolean(record.agentEndedAt) && !platformSessionEnded;
   const platformStalled =
     opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || (opts?.stall === 'ended' && !submitMarkerActive);
-  if ((record.builder ?? 'platform') === 'platform' && (platformSessionEnded || platformStalled)) {
+  // 2026-11-25: an idle managed session never reads the inbox again.
+  const refs = record.dispatch?.refs ?? [];
+  const platformIdle = record.agentState === 'idle' && record.agentStateRef === refs[refs.length - 1];
+  if ((record.builder ?? 'platform') === 'platform' && (platformSessionEnded || platformStalled || platformIdle)) {
     return false;
   }
   return (record.dispatch?.refs?.length ?? 0) > 0;
