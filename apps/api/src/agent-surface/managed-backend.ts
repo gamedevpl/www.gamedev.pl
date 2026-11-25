@@ -7,6 +7,7 @@ import { inlinedBy } from './workspace-context.js';
 import { resolveCreatorMemory, type CreatorMemoryIndex } from './managed-creator-memory.js';
 import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
+import { sessionTitle, type CreatorHandleLookup } from './managed-session-title.js';
 import {
   isManagedSessionHarvestable,
   ManagedAgentError,
@@ -32,6 +33,7 @@ export interface ManagedBackendOptions {
   workspace?: ManagedWorkspaceLoader;
   // Per-creator memory store index; unset keeps rounds memoryless.
   creatorMemory?: CreatorMemoryIndex;
+  creatorHandle?: CreatorHandleLookup;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
   budget?: ManagedUsageBudget;
@@ -160,6 +162,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     );
     const request: ManagedSessionRequest = {
       correlationId: String(brief.jobId),
+      title: await sessionTitle(brief, options.creatorHandle),
       ...(systemPrompt ? { systemPrompt } : {}),
       prompt: buildPrompt(effectiveBrief, { shell, maxSeconds: options.maxDurationSeconds }),
       model: options.provider.model,
@@ -193,10 +196,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     };
     const session = await startWithWorkspace(vendor, load, request, withWorkspace, options.log);
     startedAt.set(session.id, requestedAt);
-    sessionJobs.set(session.id, {
-      jobId: brief.jobId,
-      ...(brief.slug ? { slug: brief.slug } : {}),
-    });
+    sessionJobs.set(session.id, { jobId: brief.jobId, ...(brief.slug ? { slug: brief.slug } : {}) });
     if (session.credentialRef) {
       credentialRefs.set(session.id, session.credentialRef);
       options.log?.info?.(

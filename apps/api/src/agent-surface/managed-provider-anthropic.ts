@@ -215,13 +215,9 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             : {}),
         },
         environment_id: environmentId,
+        ...(request.title ? { title: request.title } : {}),
         ...(sessionVaultIds?.length ? { vault_ids: sessionVaultIds } : {}),
-        initial_events: [
-          {
-            type: 'user.message',
-            content: [{ type: 'text', text: request.prompt }],
-          },
-        ],
+        initial_events: [{ type: 'user.message', content: [{ type: 'text', text: request.prompt }] }],
         ...(maxListCostCents === undefined
           ? {}
           : {

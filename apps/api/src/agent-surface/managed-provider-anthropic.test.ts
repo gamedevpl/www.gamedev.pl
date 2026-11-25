@@ -45,6 +45,7 @@ describe('anthropic managed provider', () => {
       prompt: 'build it',
       model: 'test-model',
       outputPath: 'outputs',
+      title: 'ada/comet-courier',
     });
 
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
@@ -60,11 +61,9 @@ describe('anthropic managed provider', () => {
         model: { id: 'test-model' },
       },
       environment_id: 'env_test',
+      title: 'ada/comet-courier',
       vault_ids: ['vlt_test'],
-      budget: {
-        type: 'limit',
-        max_list_cost: { amount: '125', currency: 'USD' },
-      },
+      budget: { type: 'limit', max_list_cost: { amount: '125', currency: 'USD' } },
       initial_events: [{ type: 'user.message', content: [{ type: 'text', text: 'build it' }] }],
     });
   });

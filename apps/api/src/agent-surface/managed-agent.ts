@@ -91,6 +91,8 @@ export interface ManagedSessionRequest {
   mcpBearerCredential?: ManagedMcpBearerCredential;
   // Creator memory store; dropped if the vendor refuses it.
   memoryStoreId?: string;
+  // Console label, e.g. "<handle>/<slug>"; vendors without one ignore it.
+  title?: string;
 }
 
 export interface ManagedAgentProvider {
