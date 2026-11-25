@@ -16,6 +16,7 @@ import type { ManagedWorkspaceLoader } from './managed-workspace.js';
 import { builderSystemPrompt } from './builder-system-prompt.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 import type { CreatorMemoryIndex } from './managed-creator-memory.js';
+import type { CreatorHandleLookup } from './managed-session-title.js';
 
 interface Logger {
   info: (context: object, message: string) => void;
@@ -58,6 +59,8 @@ export interface ManagedBackendDeps {
   readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
   // Used only when MANAGED_AGENT_GAME_MEMORY=true.
   creatorMemory?: CreatorMemoryIndex;
+  // Titles sessions "<handle>/<slug>"; unset leaves the slug alone.
+  creatorHandle?: CreatorHandleLookup;
 }
 
 const EFFORTS: readonly ManagedAgentEffort[] = ['low', 'medium', 'high'];
@@ -177,6 +180,7 @@ function buildManagedBackendForVendor(
     ...(deps?.creatorMemory && process.env.MANAGED_AGENT_GAME_MEMORY?.trim() === 'true'
       ? { creatorMemory: deps.creatorMemory }
       : {}),
+    ...(deps?.creatorHandle ? { creatorHandle: deps.creatorHandle } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     ...((isGemini || isOpenAi) && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0

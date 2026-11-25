@@ -534,6 +534,7 @@ export async function registerSubmissionRoutes(
                     const record = await store.getSubmission(jobId);
                     return record?.dispatch?.credentialRefs?.[sessionRef];
                   },
+                  creatorHandle: async (ownerUid: string) => (await store.getUser(ownerUid))?.handle,
                 }
               : {}),
           }
