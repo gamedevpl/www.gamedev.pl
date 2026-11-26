@@ -635,6 +635,7 @@ const FILE_BUCKET = {
   'raster-assets': 'catalog',
   'bake-media': 'catalog',
   'game-snapshot': 'catalog',
+  'snapshot-write-retry': 'catalog',
   'game-snapshot-publish': 'catalog',
   'game-snapshot-publish.fixture': 'catalog',
   'game-artifact': 'catalog',

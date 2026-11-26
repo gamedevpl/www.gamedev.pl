@@ -1,5 +1,6 @@
 import { GoogleAuth } from 'google-auth-library';
 import type { CatalogGameEntry } from './github-client.js';
+import { retrySnapshotWrite } from './snapshot-write-retry.js';
 
 /**
  * Published games as immutable, pre-assembled objects in Cloud Storage.
@@ -310,15 +311,17 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     const url =
       `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o` +
       `?uploadType=media&name=${encodeURIComponent(name)}`;
-    const response = await fetchImpl(url, {
-      method: 'POST',
-      headers: {
-        ...(await authHeaders()),
-        'content-type': contentType,
-        'cache-control': cacheControl,
-      },
-      body: new Uint8Array(body),
-    });
+    const response = await retrySnapshotWrite(name, async () =>
+      fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          ...(await authHeaders()),
+          'content-type': contentType,
+          'cache-control': cacheControl,
+        },
+        body: new Uint8Array(body),
+      }),
+    );
     if (!response.ok) {
       throw new Error(`snapshot write of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
     }
