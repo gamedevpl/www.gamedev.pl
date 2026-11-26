@@ -1,7 +1,8 @@
 import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
-import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
+import { deleteGameSave, fetchGameSave, putGameSave, SIGNED_OUT } from './gameSaveApi.js';
+import { accountSaveState, deviceSaveState, writeDeviceSave } from './gameSaveDevice.js';
 import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
 
 /**
@@ -72,13 +73,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
     if (!slug) return;
     let cancelled = false;
     let writing = false;
-    /**
-     * The newest value waiting to be written, owned by this effect run.
-     *
-     * Deliberately not a ref shared across runs: the effect is keyed on the slug, so a
-     * value surviving into the next run would be one game's progress queued against the
-     * next game's save slot.
-     */
+    let onDevice = false;
+    // Newest unwritten value, per effect run: a shared ref could cross slugs.
     // A clear is queued like a put, so no older write can resurrect it.
     let pending:
       | { data: string; version: number; reply: (payload: Record<string, unknown>) => void }
@@ -96,11 +92,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
       if (writing) return;
       writing = true;
       try {
-        // Keeps draining after unmount on purpose. Stopping on `cancelled` would leave
-        // a queued value for the cleanup below to send as a *second*, parallel request,
-        // which could land before the one already in flight — reintroducing exactly the
-        // out-of-order write this serialization exists to prevent. The acks are what
-        // gets suppressed once the frame is gone, not the writes.
+        // Drains past unmount: stopping would race cleanup's write against this one.
         while (pending) {
           const next = pending;
           pending = null;
@@ -136,13 +128,10 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         try {
           const save = await fetchGameSave(slug!);
           if (cancelled) return;
-          // null means no slot exists — signed out, or not a published game. The module
-          // treats that as "unavailable" and the game plays on without saving.
-          postToGame(
-            save
-              ? { t: 'save:state', available: true, data: save.data, version: save.version }
-              : { t: 'save:state', available: false, retryable: false },
-          );
+          onDevice = save === SIGNED_OUT;
+          if (save === SIGNED_OUT) return postToGame(deviceSaveState(slug!));
+          // null: not a published game, so the game plays on without saving.
+          postToGame(save ? accountSaveState(slug!, save) : { t: 'save:state', available: false, retryable: false });
         } catch {
           // A read that failed is also "no slot" as far as the game is concerned —
           // guessing optimistically here would let it write over a save we simply could
@@ -153,6 +142,8 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
         }
         return;
       }
+
+      if (onDevice) return writeDeviceSave(slug!, message, postToGame);
 
       if (message.t === 'save:put') {
         // `message.version` verbatim, with no fallback: the parser has already replaced

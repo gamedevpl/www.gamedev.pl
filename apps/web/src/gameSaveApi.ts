@@ -17,16 +17,16 @@ export interface GameSave {
 /** Thrown for anything that is not "you are not signed in" — see `fetchGameSave`. */
 export class GameSaveError extends Error {}
 
-/**
- * Reads this player's save. Returns null when there is no slot at all (not signed in,
- * or the game is not a published catalog entry) — the caller cannot act differently on
- * those two, and telling a game apart from them would leak whether a slug exists.
- */
-export async function fetchGameSave(slug: string): Promise<GameSave | null> {
+/** A visitor with no session; the bridge keeps their save on this device. */
+export const SIGNED_OUT = 'signed_out' as const;
+
+/** Reads this player's save: SIGNED_OUT without a session, null for an unpublished game. */
+export async function fetchGameSave(slug: string): Promise<GameSave | typeof SIGNED_OUT | null> {
   const res = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}/save`, {
     credentials: 'include',
   });
-  if (res.status === 401 || res.status === 404) return null;
+  if (res.status === 401) return SIGNED_OUT;
+  if (res.status === 404) return null;
   if (!res.ok) throw new GameSaveError(`Save read failed (${res.status})`);
   return (await res.json()) as GameSave;
 }

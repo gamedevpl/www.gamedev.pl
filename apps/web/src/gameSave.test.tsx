@@ -134,15 +134,15 @@ describe('useGameSaveBridge', () => {
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: true, data: '{"level":5}', version: 1 });
   });
 
-  it('reports no slot when the player is signed out', async () => {
-    // 401 is an ordinary state, not an error: the game plays on without saving.
+  it('offers a device slot when the player is signed out', async () => {
+    // 401 is an ordinary state: the save lives in this browser instead.
     fetchMock.mockResolvedValue(jsonResponse({ error: 'authentication required' }, 401));
     const { fromGame } = mount();
 
     fromGame({ t: 'save:hello', version: 1 });
 
     await waitFor(() => expect(toGame).toHaveLength(1));
-    expect(toGame[0]).toMatchObject({ t: 'save:state', available: false });
+    expect(toGame[0]).toMatchObject({ t: 'save:state', available: true, data: null });
   });
 
   it('reports no slot when the read fails outright, rather than guessing', async () => {
@@ -329,14 +329,14 @@ describe('useGameSaveBridge', () => {
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: true, data: '{"deepest":4}' });
   });
 
-  it('tells the game a signed-out slot is not worth retrying', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ error: 'authentication required' }, 401));
+  it('tells the game an unpublished slot is not worth retrying', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'game not found' }, 404));
     const { fromGame } = mount();
 
     fromGame({ t: 'save:hello', version: 1 });
 
     await waitFor(() => expect(toGame).toHaveLength(1));
-    // The distinction that keeps an anonymous visitor from being polled forever.
+    // The distinction that keeps a game from polling a missing slot forever.
     expect(toGame[0]).toMatchObject({ t: 'save:state', available: false, retryable: false });
   });
 
