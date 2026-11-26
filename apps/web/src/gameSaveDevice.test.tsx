@@ -107,4 +107,20 @@ describe('useGameSaveBridge for a signed-out player', () => {
     await settle();
     expect(toGame[0]).toMatchObject({ data: '{"acct":1}' });
   });
+
+  it('retires the device save once the account accepts a write', async () => {
+    window.localStorage.setItem('gdp.save.crypt-delver', JSON.stringify({ data: '{"guest":1}', version: 3 }));
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method
+        ? ({ ok: true, status: 204, json: async () => ({}) } as Response)
+        : ({ ok: true, status: 200, json: async () => ({ data: null, version: 0 }) } as Response),
+    );
+    const fromGame = mount();
+    fromGame({ t: 'save:hello', version: 3 });
+    await settle();
+    fromGame({ t: 'save:clear' });
+    await settle();
+    expect(toGame.at(-1)).toMatchObject({ t: 'save:ack', ok: true });
+    expect(window.localStorage.getItem('gdp.save.crypt-delver')).toBeNull();
+  });
 });

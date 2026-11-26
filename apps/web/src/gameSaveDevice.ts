@@ -32,6 +32,16 @@ export function accountSaveState(
   return { t: 'save:state', available: true, data: chosen.data, version: chosen.version };
 }
 
+// The account write succeeded; retire the browser copy for good.
+export function accountWriteAck(slug: string): Record<string, unknown> {
+  try {
+    window.localStorage.removeItem(DEVICE_SAVE_PREFIX + slug);
+  } catch {
+    // Storage blocked: nothing was kept there to retire.
+  }
+  return { t: 'save:ack', ok: true };
+}
+
 // Applies a put or clear and acks it like the API path.
 export function writeDeviceSave(slug: string, message: DeviceWrite, reply: Reply): void {
   try {

@@ -2,7 +2,7 @@ import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave, SIGNED_OUT } from './gameSaveApi.js';
-import { accountSaveState, deviceSaveState, writeDeviceSave } from './gameSaveDevice.js';
+import { accountSaveState, accountWriteAck, deviceSaveState, writeDeviceSave } from './gameSaveDevice.js';
 import { bindGameFrameReply, isFromGameFrame } from './frameMessage.js';
 
 /**
@@ -99,7 +99,7 @@ export function useGameSaveBridge(frameRef: MutableRefObject<HTMLIFrameElement |
           try {
             if (next.data === null) await deleteGameSave(slug!);
             else await putGameSave(slug!, next.data, next.version);
-            next.reply({ t: 'save:ack', ok: true });
+            next.reply(accountWriteAck(slug!));
           } catch (error) {
             if (next.data === null) {
               next.reply({ t: 'save:ack', ok: false, error: 'clear failed' });
