@@ -45,6 +45,7 @@ Options:
 - `--max-cents` (per-session budget, default 300);
 - `--max-minutes` (default 40);
 - `--mcp-url`;
+- `--judge-model` (model that rates the gate frames, default `claude-opus-5-5`; `none` skips it);
 - `--title-prefix` (default `[hc] `, so test games are easy to find and delete);
 - `--out`.
 
@@ -57,5 +58,30 @@ own folder with:
 
 - `kickoff.md`;
 - `events.json` (the full session export);
-- `result.json`: the slug, the gate verdict read through `get_gate_verdict`, and the
-  `infra/session-score-lib.mjs` score.
+- `result.json`: the slug, the gate verdict read through `get_gate_verdict`, the visual
+  score, and the `infra/session-score-lib.mjs` score.
+
+## Visual score
+
+The gate passes games that run but look like placeholders. After the verdict, the script
+fetches up to four of the gate's own frames through `get_gate_media` and asks a model to
+rate them against the brief. The model scores five axes from 1 to 5:
+
+- `readability`: HUD and UI text is legible and nothing overlaps;
+- `art`: sprites have shapes, detail and shading, not bare rectangles;
+- `scene`: the background has depth and texture;
+- `cohesion`: one style and palette that fits the theme;
+- `fidelity`: what the brief names is visible.
+
+`visual.overall` is the mean, and `visual.issues` lists the defects the model points at.
+The rating costs a few cents per game, billed to `ANTHROPIC_API_KEY`.
+
+To score a run that has none yet, run `npm run builder:judge -w @gamedevpl/api -- <run dir>`.
+It needs `ANTHROPIC_API_KEY` and `GAMEDEV_CREATOR_KEY`, and rewrites `result.json` and
+`summary.json` in place.
+
+## Variants
+
+`scripts/builder-variants/` holds kickoff additions to compare against the baseline with
+`--kickoff-extra`. `art-pass.md` asks the agent to capture, list visual defects, fix them and
+capture again before the final preview.
