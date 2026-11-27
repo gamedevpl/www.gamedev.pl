@@ -544,6 +544,7 @@ const FILE_BUCKET = {
   'status-agent-activity': 'delivery',
   'builder-system-prompt': 'agent-surface',
   'gate-verdict': 'agent-surface',
+  'canonical-game-manifest': 'agent-surface',
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
