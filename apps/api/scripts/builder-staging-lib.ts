@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
@@ -90,21 +91,34 @@ export async function publishLocalKit(gamesRepo: string, bucketRoot: string, out
   return engineRef;
 }
 
+const onPath = (bin: string) =>
+  (process.env.PATH ?? '').split(path.delimiter).some((dir) => dir && existsSync(path.join(dir, bin)));
+
 // Public URL so the sandbox and MCP connector reach the local API.
 export async function openTunnel(port: number): Promise<{ url: string; child: ChildProcess }> {
-  const child = spawn(
-    'ssh',
-    [
-      '-o',
-      'StrictHostKeyChecking=accept-new',
-      '-o',
-      'ServerAliveInterval=30',
-      '-R',
-      `80:127.0.0.1:${port}`,
-      'nokey@localhost.run',
-    ],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
-  );
+  // Quick tunnels keep one URL per process; nokey localhost.run rotates it.
+  const cloudflared = onPath('cloudflared');
+  const child = cloudflared
+    ? spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://127.0.0.1:${port}`], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+    : spawn(
+        'ssh',
+        [
+          '-o',
+          'StrictHostKeyChecking=accept-new',
+          '-o',
+          'ServerAliveInterval=30',
+          '-R',
+          `80:127.0.0.1:${port}`,
+          'nokey@localhost.run',
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+  const name = cloudflared ? 'cloudflared' : 'ssh';
+  const pattern = cloudflared ? /https:\/\/[a-z0-9-]+\.trycloudflare\.com/g : /https:\/\/[a-z0-9.-]+\.lhr\.life/g;
+  if (!cloudflared) log('[tunnel] cloudflared not found; localhost.run nokey URLs rotate mid-run');
+  let current: string | undefined;
   const url = await new Promise<string>((resolve, reject) => {
     let seen = '';
     const fail = (error: Error) => {
@@ -112,23 +126,30 @@ export async function openTunnel(port: number): Promise<{ url: string; child: Ch
       child.kill();
       reject(error);
     };
-    const timer = setTimeout(() => fail(new Error(`no tunnel URL after 30s:\n${seen}`)), 30_000);
+    const timer = setTimeout(() => fail(new Error(`no tunnel URL after 45s:\n${seen}`)), 45_000);
     const scan = (chunk: Buffer) => {
       seen += chunk.toString();
-      const match = seen.match(/https:\/\/[a-z0-9-]+\.lhr\.life/);
-      if (match) {
-        clearTimeout(timer);
-        resolve(match[0]);
+      for (const found of chunk.toString().match(pattern) ?? []) {
+        if (found === 'https://api.trycloudflare.com') continue;
+        if (!current) {
+          current = found;
+          clearTimeout(timer);
+          resolve(found);
+        } else if (found !== current) {
+          // Sessions keep the old URL, so every MCP call will now fail.
+          log(`[tunnel] URL changed to ${found}; running sessions cannot reach the API`);
+          current = found;
+        }
       }
     };
     child.stdout!.on('data', scan);
     child.stderr!.on('data', scan);
-    child.on('error', (error) => fail(new Error(`could not start ssh: ${error.message}`)));
+    child.on('error', (error) => fail(new Error(`could not start ${name}: ${error.message}`)));
     child.on('exit', (code) => fail(new Error(`tunnel exited (${code}):\n${seen}`)));
   });
   // Mid-run drops break uploads; say so instead of failing silently.
   child.on('exit', (code, signal) => {
-    if (signal !== 'SIGTERM') log(`[tunnel] ssh exited (${code ?? signal}); sandbox uploads will fail`);
+    if (signal !== 'SIGTERM') log(`[tunnel] ${name} exited (${code ?? signal}); sandbox uploads will fail`);
   });
   return { url, child };
 }

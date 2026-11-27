@@ -19,9 +19,14 @@ production builder agent and prints how each round went.
 | Job reconciler                         | Not running: no idle nudges and no automatic gate-repair round                                 |
 
 The sandbox and the MCP connector have to reach the local API, so the script opens a public
-tunnel (`ssh -R` to localhost.run; nothing to install) and sets `APP_BASE_URL` to it. If the
-builder environment uses `limited` networking that does not allow the tunnel host, the
-script creates a copy of the environment that does, and archives it when the run ends.
+tunnel and sets `APP_BASE_URL` to it. The URL is fixed into the session when it is created,
+so the tunnel must keep one address for the whole run. With `cloudflared` on `PATH`
+(`brew install cloudflared`, no account needed) the script opens a quick tunnel, which keeps
+its URL while the process runs. Without it the script falls back to `ssh -R` to
+localhost.run, whose anonymous URLs rotate within minutes and break the round mid-way; it
+logs when that happens. `--public-url` takes a tunnel you run yourself. If the builder
+environment uses `limited` networking that does not allow the tunnel host, the script
+creates a copy of the environment that does, and archives it when the run ends.
 
 ## Running it
 
