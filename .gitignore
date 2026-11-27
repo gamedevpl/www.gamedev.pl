@@ -28,3 +28,4 @@ infra/firebase/public/assets/
 
 # Generated, self-contained CLI browser assets.
 apps/cli/src/generated/
+.staging-runs/
