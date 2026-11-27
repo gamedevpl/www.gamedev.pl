@@ -1,7 +1,7 @@
 // A directory standing in for the games bucket during staging.
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 
@@ -10,7 +10,7 @@ export interface FsBucket {
   // The GCS JSON API slice that games-store and gcs-sign use.
   fetch: typeof fetch;
   objectStore: GcsObjectStore;
-  // Checks a URL minted by objectStore.signReadUrl and returns its object name.
+  // True when the signature matches a URL from objectStore.signReadUrl.
   verifyReadUrl(name: string, signature: string, expires: string): boolean;
 }
 
@@ -27,7 +27,7 @@ async function walk(dir: string, base = ''): Promise<string[]> {
   for (const entry of entries) {
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) names.push(...(await walk(path.join(dir, entry.name), rel)));
-    else if (entry.isFile()) names.push(rel);
+    else if (entry.isFile() && !entry.name.endsWith('.partial')) names.push(rel);
   }
   return names;
 }
@@ -75,7 +75,10 @@ export function createFsBucket(options: { root: string; publicBaseUrl: () => str
     await mkdir(path.dirname(file), { recursive: true });
     const body = init.body;
     const bytes = typeof body === 'string' ? Buffer.from(body) : Buffer.from(body as Uint8Array);
-    await writeFile(file, bytes);
+    // Temp file plus rename, so readers never see a half write.
+    const temp = `${file}.${randomBytes(6).toString('hex')}.partial`;
+    await writeFile(temp, bytes);
+    await rename(temp, file);
     const next = Math.max(current, clock) + 1;
     clock = next;
     generations.set(name, next);
@@ -135,11 +138,11 @@ export function createFsBucket(options: { root: string; publicBaseUrl: () => str
     handle(String(input instanceof Request ? input.url : input), init)) as typeof fetch;
 
   const objectStore: GcsObjectStore = {
-    async readObject(name) {
-      return readFile(fileFor(name)).catch(() => null);
+    readObject(name) {
+      return locked(name, () => readFile(fileFor(name)).catch(() => null));
     },
-    async objectExists(name) {
-      return (await generationOf(name)) > 0;
+    objectExists(name) {
+      return locked(name, async () => (await generationOf(name)) > 0);
     },
     // The sandbox reaches these through the run's public tunnel.
     async signReadUrl(name, expiresSeconds = 3600, signedAtMs) {

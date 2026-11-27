@@ -1,26 +1,31 @@
 [
   {
     "id": "platformer",
+    "locale": "pl",
     "title": "Kot na dachach",
     "concept": "Platformówka 2D: rudy kot skacze po dachach nocnego miasta i zbiera rybki. Kominy dymią, a niektóre dachówki się osuwają. Trzy krótkie poziomy, na końcu każdego kot wskakuje przez okno do ciepłego mieszkania. Sterowanie strzałkami i spacją, na telefonie przyciski na ekranie."
   },
   {
     "id": "match3",
+    "locale": "pl",
     "title": "Grzybobranie",
     "concept": "Gra logiczna typu match-3 na planszy 8x8 z grzybami: borowiki, kurki, podgrzybki i muchomory. Łączenie trzech lub więcej znika grzyby i daje punkty, muchomory po połączeniu niszczą sąsiednie pola. 30 ruchów na rundę, cel to 1500 punktów. Jesienny las w tle."
   },
   {
     "id": "topdown-shooter",
+    "locale": "en",
     "title": "Orbital Janitor",
     "concept": "Top-down arena shooter in space: you pilot a small cleaning drone that blasts space junk drifting toward a station. Bigger junk splits into smaller pieces. Collect scrap to buy one of three upgrades between waves. Five waves, then a boss made of welded-together satellites. Mouse to aim, WASD to move."
   },
   {
     "id": "tower-defense",
+    "locale": "pl",
     "title": "Obrona pasieki",
     "concept": "Tower defense: szerszenie lecą krętą ścieżką do ula. Gracz stawia na polach obok ścieżki pszczoły-strażniczki (szybkie, słabe), dymiarki (spowalniają) i słoiki z miodem (pułapka obszarowa). Miód z zestrzelonych szerszeni to waluta. 8 fal, wygrana gdy ul przetrwa."
   },
   {
     "id": "endless-runner",
+    "locale": "en",
     "title": "Night Bus",
     "concept": "Endless runner viewed from the side: a late-night bus driver weaves between three lanes, picking up passengers at glowing stops and dodging potholes, taxis and a rogue shopping trolley. Speed rises over time. Score is passengers delivered; three crashes end the run. Swipe or arrow keys to change lanes."
   }

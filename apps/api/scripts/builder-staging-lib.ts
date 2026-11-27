@@ -25,7 +25,8 @@ export function sh(command: string, argv: string[], cwd: string): string {
   return result.stdout;
 }
 
-export const field = (output: string, label: string) => output.match(new RegExp(`${label}:\\s+(\\S+)`))?.[1];
+export const field = (output: string, label: string) =>
+  output.match(new RegExp(`${label}:[ \\t]+(.+?)[ \\t]*$`, 'm'))?.[1];
 export const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 // Packs kit and workspace from the games checkout, published as current.
@@ -106,7 +107,12 @@ export async function openTunnel(port: number): Promise<{ url: string; child: Ch
   );
   const url = await new Promise<string>((resolve, reject) => {
     let seen = '';
-    const timer = setTimeout(() => reject(new Error(`no tunnel URL after 30s:\n${seen}`)), 30_000);
+    const fail = (error: Error) => {
+      clearTimeout(timer);
+      child.kill();
+      reject(error);
+    };
+    const timer = setTimeout(() => fail(new Error(`no tunnel URL after 30s:\n${seen}`)), 30_000);
     const scan = (chunk: Buffer) => {
       seen += chunk.toString();
       const match = seen.match(/https:\/\/[a-z0-9-]+\.lhr\.life/);
@@ -117,7 +123,12 @@ export async function openTunnel(port: number): Promise<{ url: string; child: Ch
     };
     child.stdout!.on('data', scan);
     child.stderr!.on('data', scan);
-    child.on('exit', () => reject(new Error(`tunnel exited:\n${seen}`)));
+    child.on('error', (error) => fail(new Error(`could not start ssh: ${error.message}`)));
+    child.on('exit', (code) => fail(new Error(`tunnel exited (${code}):\n${seen}`)));
+  });
+  // Mid-run drops break uploads; say so instead of failing silently.
+  child.on('exit', (code, signal) => {
+    if (signal !== 'SIGTERM') log(`[tunnel] ssh exited (${code ?? signal}); sandbox uploads will fail`);
   });
   return { url, child };
 }

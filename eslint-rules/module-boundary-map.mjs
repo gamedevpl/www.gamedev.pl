@@ -574,6 +574,8 @@ const FILE_BUCKET = {
   'editor-upload-validation': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
+  'fs-bucket': 'delivery',
+  'local-gate': 'delivery',
   'stage-audio-hint': 'delivery',
   'audio-profile': 'delivery',
   'audio-profile-log': 'delivery',

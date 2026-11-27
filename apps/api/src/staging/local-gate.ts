@@ -127,6 +127,7 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
     const lane = mode ?? 'publish';
     const harnesses: string[] = [];
     const started = Date.now();
+    let sandbox: Awaited<ReturnType<typeof createHarnessRunner>>['sandbox'] = null;
     log(`[gate] ${slug}@${version} ${lane}: start`);
     try {
       let harnessDir: string | undefined;
@@ -134,7 +135,7 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
       harnesses.push(scratch);
       const seatbelt = options.isolation === 'seatbelt';
       const browsers = path.join(homedir(), 'Library/Caches/ms-playwright');
-      const { runInHarness: inner } = await createHarnessRunner(run, harnesses, {
+      const runner = await createHarnessRunner(run, harnesses, {
         GATE_DELIVERY_SLUG: slug,
         ...(seatbelt
           ? {
@@ -144,6 +145,8 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
             }
           : {}),
       });
+      sandbox = runner.sandbox;
+      const inner = runner.runInHarness;
       const runInHarness: typeof inner = seatbelt
         ? (command, args, cwd, runOptions) =>
             inner(
@@ -181,8 +184,11 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
             if (add.code !== 0) throw new Error(`could not cut a worktree at ${engineRef}: ${add.output.trim()}`);
             // Shared, read-only in practice: the gate writes only under games/<slug>/.
             await symlink(path.join(options.gamesRepo, 'node_modules'), path.join(dir, 'node_modules'));
+            await sandbox?.adopt(dir);
             return dir;
           },
+          // Written by this process; the sandbox user must own it.
+          afterMaterialize: async (gameDir) => sandbox?.adopt(gameDir),
         },
         mode === 'health'
           ? { engineRef: 'main' }
@@ -229,6 +235,7 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
         })
         .catch(() => false);
     } finally {
+      await sandbox?.dispose().catch(() => undefined);
       if (!options.keepHarness) {
         for (const dir of harnesses) {
           await run('git', ['worktree', 'remove', '--force', dir], options.gamesRepo).catch(() => undefined);

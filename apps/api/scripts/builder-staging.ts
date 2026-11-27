@@ -15,18 +15,6 @@ import { createFsBucket } from '../src/staging/fs-bucket.js';
 import { createLocalGate, gateIsolation, type LocalGate } from '../src/staging/local-gate.js';
 // @ts-expect-error plain ESM helper shared with infra/session-score.mjs
 import { scoreSession } from '../../../infra/session-score-lib.mjs';
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '../../..');
-const args = process.argv.slice(2);
-const flag = (name: string) => args.includes(`--${name}`);
-const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
-
-interface Brief {
-  id: string;
-  title: string;
-  concept: string;
-}
 import {
   frontDoor,
   log,
@@ -39,31 +27,115 @@ import {
   stagingEnvironment,
 } from './builder-staging-lib.js';
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, '../../..');
+
+const VALUE_FLAGS = [
+  'agent-id',
+  'briefs',
+  'environment-id',
+  'games',
+  'gate-selftest',
+  'max-cents',
+  'max-minutes',
+  'only',
+  'out',
+  'public-url',
+] as const;
+const BOOLEAN_FLAGS = ['keep-harness', 'seed', 'unsafe-gate'] as const;
+
+// Strict: a typo must not silently fall back to paid defaults.
+function parseArgs(argv: string[]): { values: Map<string, string>; flags: Set<string> } {
+  const values = new Map<string, string>();
+  const flags = new Set<string>();
+  for (let i = 0; i < argv.length; i++) {
+    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(argv[i]);
+    const name = match?.[1];
+    if (name && (BOOLEAN_FLAGS as readonly string[]).includes(name) && match[2] === undefined) flags.add(name);
+    else if (name && (VALUE_FLAGS as readonly string[]).includes(name)) {
+      const given = match[2] ?? argv[++i];
+      if (given === undefined || given === '' || given.startsWith('--')) usage(`--${name} needs a value`);
+      values.set(name, given);
+    } else usage(`unknown argument: ${argv[i]}`);
+  }
+  return { values, flags };
+}
+
+function usage(problem: string): never {
+  console.error(`${problem}\nflags: ${[...VALUE_FLAGS, ...BOOLEAN_FLAGS].map((f) => `--${f}`).join(' ')}`);
+  process.exit(2);
+}
+
+function positiveInt(raw: string | undefined, fallback: number, name: string): number {
+  if (raw === undefined) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) usage(`--${name} must be a positive integer, got ${raw}`);
+  return parsed;
+}
+
+const parsed = parseArgs(process.argv.slice(2));
+const flag = (name: (typeof BOOLEAN_FLAGS)[number]) => parsed.flags.has(name);
+const value = (name: (typeof VALUE_FLAGS)[number]) => parsed.values.get(name);
+
+// Operator shell settings that would point a staging round at production.
+const AMBIENT_ENV = [
+  'CANONICAL_HOST',
+  'GAMES_STORE_BUCKET',
+  'MANAGED_AGENT_BASE_URL',
+  'MANAGED_AGENT_GAME_MEMORY',
+  'MANAGED_AGENT_VAULT_IDS',
+  'MANAGED_AGENT_VAULT_ID',
+  'NODE_ENV',
+  'SEED_DISPATCH_AUDIENCE',
+  'SEED_DISPATCH_SA',
+];
+
+interface Brief {
+  id: string;
+  title: string;
+  concept: string;
+  locale?: string;
+}
+
+// Sessions still running, interrupted on Ctrl+C or a crash.
+const live = new Map<string, { jobId: number; store: InMemoryStore }>();
+
+async function stopSession(apiKey: string, sessionId: string, store: InMemoryStore, jobId: number): Promise<void> {
+  await postOk(apiKey, `/v1/sessions/${sessionId}/events?beta=true`, { events: [{ type: 'user.interrupt' }] });
+  await archiveVault(apiKey, sessionId, store, jobId);
+}
+
+async function archiveVault(apiKey: string, sessionId: string, store: InMemoryStore, jobId: number): Promise<void> {
+  const credentialRef = (await store.getSubmission(jobId))?.dispatch?.credentialRefs?.[sessionId];
+  if (credentialRef) await postOk(apiKey, `/v1/vaults/${credentialRef}/archive?beta=true`);
+}
+
 async function main() {
+  const selftest = value('gate-selftest');
   const apiKey = (process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_API_KEY ?? '').trim();
   const agentId = (value('agent-id') ?? process.env.MANAGED_AGENT_ID ?? '').trim();
-  const baseEnvironment = (
-    value('environment-id') ??
-    process.env.MANAGED_AGENT_ENVIRONMENT_ID ??
-    'env_01Cfs2XCfF6zVSkChxMrGugn'
-  ).trim();
+  const baseEnvironment = (value('environment-id') ?? process.env.MANAGED_AGENT_ENVIRONMENT_ID ?? '').trim();
   const gamesRepo = path.resolve(value('games') ?? path.join(repoRoot, '..', 'www.gamedev.pl-games'));
   const briefsFile = value('briefs') ?? path.join(here, 'staging-briefs.json');
   const only = value('only')?.split(',');
-  const maxCents = value('max-cents') ?? '300';
-  const maxMinutes = Number(value('max-minutes') ?? 40);
+  const maxCents = positiveInt(value('max-cents'), 300, 'max-cents');
+  const maxMinutes = positiveInt(value('max-minutes'), 40, 'max-minutes');
   const isolation = gateIsolation(flag('unsafe-gate'));
   const outDir = path.resolve(
     value('out') ?? path.join(repoRoot, '.staging-runs', new Date().toISOString().replace(/[:.]/g, '-')),
   );
-  if ((!apiKey || !agentId) && !value('gate-selftest')) {
-    console.error('needs ANTHROPIC_API_KEY (or CLAUDE_API_KEY) and MANAGED_AGENT_ID (or --agent-id)');
-    process.exit(2);
+  if ((!apiKey || !agentId || !baseEnvironment) && !selftest) {
+    usage(
+      'needs ANTHROPIC_API_KEY (or CLAUDE_API_KEY), MANAGED_AGENT_ID (or --agent-id) and ' +
+        'MANAGED_AGENT_ENVIRONMENT_ID (or --environment-id)',
+    );
   }
   const briefs = (JSON.parse(await readFile(briefsFile, 'utf8')) as Brief[]).filter(
     (b) => !only || only.includes(b.id),
   );
-  if (!briefs.length) throw new Error('no briefs selected');
+  const unknown = only?.filter((id) => !briefs.some((b) => b.id === id)) ?? [];
+  if (unknown.length) usage(`no such brief: ${unknown.join(', ')}`);
+  if (!briefs.length) usage('no briefs selected');
   await mkdir(outDir, { recursive: true });
   log(`run dir ${outDir}`);
 
@@ -72,7 +144,7 @@ async function main() {
     delete process.env.GITHUB_TOKEN;
     delete process.env.GAMES_REPO_TOKEN;
   }
-  delete process.env.GAMES_STORE_BUCKET;
+  for (const name of AMBIENT_ENV) delete process.env[name];
 
   const bucketRoot = path.join(outDir, 'bucket');
   const engineRef = await publishLocalKit(gamesRepo, bucketRoot, path.join(outDir, 'packed'));
@@ -99,7 +171,6 @@ async function main() {
   });
 
   // Gate only, no API spend: checks isolation on this machine.
-  const selftest = value('gate-selftest');
   if (selftest) {
     const source = path.join(gamesRepo, 'games', selftest);
     const names = (await readdir(source, { recursive: true, withFileTypes: true }))
@@ -125,8 +196,16 @@ async function main() {
     });
     await gate.trigger({ slug, version, mode: 'preview' });
     await gate.settled(slug);
-    const verdict = (await gamesStore.getManifest(slug, version))?.previewGate;
-    log(`selftest (${isolation}): ${verdict ? (verdict.green ? 'GREEN' : `RED\n${verdict.report}`) : 'no verdict'}`);
+    const manifest = await gamesStore.getManifest(slug, version);
+    const verdict = manifest?.previewGate;
+    const outcome = verdict
+      ? verdict.green
+        ? 'GREEN'
+        : `RED\n${verdict.report}`
+      : manifest?.gateCrash
+        ? 'CRASHED'
+        : 'no verdict';
+    log(`selftest (${isolation}): ${outcome}`);
     process.exit(verdict?.green ? 0 : 1);
   }
 
@@ -134,6 +213,24 @@ async function main() {
   let tunnel: ChildProcess | undefined;
   let app: FastifyInstance | undefined;
   let environment: { id: string; created: boolean } | undefined;
+  let cleaned: Promise<void> | undefined;
+  const cleanup = () =>
+    (cleaned ??= (async () => {
+      await Promise.all([...live].map(([sessionId, { jobId, store }]) => stopSession(apiKey, sessionId, store, jobId)));
+      await app?.close().catch(() => undefined);
+      door.close();
+      tunnel?.kill();
+      if (environment?.created) {
+        const archived = await postOk(apiKey, `/v1/environments/${environment.id}/archive?beta=true`);
+        if (!archived) log(`archive environment ${environment.id} by hand in the Console`);
+      }
+    })());
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      log(`${signal}: interrupting ${live.size} session(s) and cleaning up`);
+      void cleanup().finally(() => process.exit(130));
+    });
+  }
   try {
     // `--public-url local` skips the tunnel, for fake-API dry runs.
     if (publicUrl === 'local') publicUrl = `http://127.0.0.1:${door.port}`;
@@ -143,7 +240,7 @@ async function main() {
       tunnel = opened.child;
     }
     log(`public URL ${publicUrl} -> 127.0.0.1:${door.port}`);
-    environment = await stagingEnvironment(apiKey, baseEnvironment, new URL(publicUrl).host);
+    environment = await stagingEnvironment(apiKey, baseEnvironment, new URL(publicUrl).hostname);
 
     Object.assign(process.env, {
       APP_BASE_URL: publicUrl,
@@ -154,7 +251,7 @@ async function main() {
       MANAGED_AGENT_ID: agentId,
       MANAGED_AGENT_ENVIRONMENT_ID: environment.id,
       MANAGED_AGENT_MAX_SECONDS: String(maxMinutes * 60),
-      MANAGED_AGENT_MAX_LIST_COST_CENTS: maxCents,
+      MANAGED_AGENT_MAX_LIST_COST_CENTS: String(maxCents),
       MANAGED_AGENT_MCP_URL: `${publicUrl}/api/mcp`,
     });
 
@@ -165,6 +262,8 @@ async function main() {
       get: (_, key) => (key === 'then' ? undefined : async () => null),
     });
     app = await buildApp({
+      // Dispatch failures are only ever logged; keep warnings visible.
+      logger: { level: 'warn' },
       store,
       sessionSecret,
       submissionRoutes: {
@@ -177,13 +276,18 @@ async function main() {
     });
     // Tunnel reaches agent routes only; runner calls carry a key.
     const localKey = randomBytes(16).toString('hex');
-    const PUBLIC = ['/api/mcp', '/api/agent/', '/staging-bucket/'];
+    const isPublic = (url: string) =>
+      url === '/api/mcp' ||
+      url.startsWith('/api/mcp?') ||
+      url.startsWith('/api/agent/') ||
+      url.startsWith('/staging-bucket/');
     app.addHook('onRequest', async (request, reply) => {
       if (request.headers['x-staging-local'] === localKey) return;
-      if (!PUBLIC.some((prefix) => request.url.startsWith(prefix))) return reply.code(404).send();
+      if (!isPublic(request.url)) return reply.code(404).send();
     });
     app.get('/staging-bucket/*', async (request, reply) => {
-      const name = decodeURIComponent((request.params as { '*': string })['*']);
+      // Fastify has already decoded the wildcard.
+      const name = (request.params as { '*': string })['*'];
       const query = request.query as { sig?: string; expires?: string };
       if (!bucket.verifyReadUrl(name, query.sig ?? '', query.expires ?? '')) return reply.code(403).send();
       const body = await bucket.objectStore.readObject(name);
@@ -213,15 +317,16 @@ async function main() {
     await writeFile(path.join(outDir, 'summary.json'), JSON.stringify(results, null, 2));
     log(`summary: ${path.join(outDir, 'summary.json')}`);
   } finally {
-    await app?.close().catch(() => undefined);
-    door.close();
-    tunnel?.kill();
-    if (environment?.created) {
-      const archived = await postOk(apiKey, `/v1/environments/${environment.id}/archive?beta=true`);
-      if (!archived) log(`archive environment ${environment.id} by hand in the Console`);
-    }
+    await cleanup();
   }
 }
+
+// Version ids are timestamp-prefixed, so the later one sorts last.
+const latest = (...versions: Array<string | undefined>) =>
+  versions
+    .filter((v): v is string => Boolean(v))
+    .sort()
+    .at(-1);
 
 async function runBrief(input: {
   brief: Brief;
@@ -244,49 +349,57 @@ async function runBrief(input: {
   const created = await app.inject({
     method: 'POST',
     url: '/api/submissions',
+    // One address per brief: the per-IP submission window is five.
+    remoteAddress: `127.0.${Math.floor(input.index / 250)}.${(input.index % 250) + 2}`,
     headers: { cookie, 'x-staging-local': input.localKey },
-    payload: { title: brief.title, concept: brief.concept },
+    payload: { title: brief.title, concept: brief.concept, ...(brief.locale ? { locale: brief.locale } : {}) },
   });
   if (created.statusCode !== 200) {
     log(`[${brief.id}] submission refused: ${created.statusCode} ${created.body}`);
     return { id: brief.id, error: created.body };
   }
-  const deadline = Date.now() + input.maxMinutes * 60_000;
+  // Dispatch is quick; a silent failure shows in the warn log above.
+  const dispatchDeadline = Date.now() + 3 * 60_000;
   let sessionId: string | undefined;
   let jobId: number | undefined;
-  while (!sessionId && Date.now() < deadline) {
+  while (!sessionId && Date.now() < dispatchDeadline) {
     const [job] = await store.listSubmissionsByOwner(uid);
     jobId = job?.jobId;
     sessionId = job?.dispatch?.refs?.at(-1);
     if (!sessionId) await sleep(2000);
   }
   if (!sessionId || jobId === undefined) {
-    log(`[${brief.id}] never dispatched`);
+    log(`[${brief.id}] not dispatched within 3 min`);
     return { id: brief.id, error: 'not dispatched' };
   }
+  live.set(sessionId, { jobId, store });
   log(`[${brief.id}] job ${jobId} session ${sessionId}`);
   const startedAt = Date.now();
+  const deadline = startedAt + input.maxMinutes * 60_000;
   let state: { status?: string; stop?: string } = {};
   // Two idle polls in a row: the turn is over.
   let idlePolls = 0;
   let timedOut = false;
-  for (;;) {
-    if (Date.now() >= deadline) {
-      timedOut = true;
-      log(`[${brief.id}] over ${input.maxMinutes} min: interrupting ${sessionId}`);
-      await postOk(apiKey, `/v1/sessions/${sessionId}/events?beta=true`, { events: [{ type: 'user.interrupt' }] });
-      break;
+  try {
+    for (;;) {
+      if (Date.now() >= deadline) {
+        timedOut = true;
+        log(`[${brief.id}] over ${input.maxMinutes} min: interrupting ${sessionId}`);
+        await postOk(apiKey, `/v1/sessions/${sessionId}/events?beta=true`, { events: [{ type: 'user.interrupt' }] });
+        break;
+      }
+      await sleep(15_000);
+      state = await sessionState(apiKey, sessionId);
+      const record = await store.getSubmission(jobId);
+      if (state.status === 'terminated') break;
+      idlePolls = state.status === 'idle' ? idlePolls + 1 : 0;
+      if (idlePolls >= 2 || (idlePolls === 1 && record?.agentEndedBy === 'end')) break;
     }
-    await sleep(15_000);
-    state = await sessionState(apiKey, sessionId);
-    const record = await store.getSubmission(jobId);
-    if (state.status === 'terminated') break;
-    idlePolls = state.status === 'idle' ? idlePolls + 1 : 0;
-    if (idlePolls >= 2 || (idlePolls === 1 && record?.agentEndedAt)) break;
+  } finally {
+    live.delete(sessionId);
+    await archiveVault(apiKey, sessionId, store, jobId);
   }
   const minutes = Math.round((Date.now() - startedAt) / 6000) / 10;
-  const credentialRef = (await store.getSubmission(jobId))?.dispatch?.credentialRefs?.[sessionId];
-  if (credentialRef) await postOk(apiKey, `/v1/vaults/${credentialRef}/archive?beta=true`);
 
   const slug = (await store.getSubmission(jobId))?.slug;
   if (slug) await gate.settled(slug);
@@ -295,9 +408,14 @@ async function runBrief(input: {
   const dir = path.join(input.outDir, brief.id);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, 'events.json'), JSON.stringify(exported.events, null, 2));
-  const version = record?.deliveredVersion ?? record?.previewVersion;
+  const version = latest(record?.deliveredVersion, record?.previewVersion);
   const manifest = slug && version ? await gamesStore.getManifest(slug, version) : null;
   const verdict = manifest?.gate ?? manifest?.previewGate;
+  const gateResult = verdict
+    ? { green: verdict.green, lane: manifest?.gate ? 'publish' : 'preview' }
+    : manifest?.gateCrash
+      ? { green: false, crashed: true }
+      : null;
   const result = {
     id: brief.id,
     session: sessionId,
@@ -306,15 +424,14 @@ async function runBrief(input: {
     sessionStatus: state,
     timedOut,
     minutes,
-    gate: verdict ? { green: verdict.green, lane: manifest?.gate ? 'publish' : 'preview' } : null,
+    gate: gateResult,
     ...(exported.error ? { exportError: exported.error, exportedEvents: exported.events.length } : {}),
     score: exported.events.length ? scoreSession(exported.events) : null,
   };
   if (verdict && !verdict.green) await writeFile(path.join(dir, 'gate-report.txt'), String(verdict.report ?? ''));
   await writeFile(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
-  log(
-    `[${brief.id}] done: gate ${verdict ? (verdict.green ? 'GREEN' : 'RED') : 'none'}${timedOut ? ', timed out' : ''}`,
-  );
+  const gateWord = gateResult ? (gateResult.green ? 'GREEN' : 'crashed' in gateResult ? 'CRASHED' : 'RED') : 'none';
+  log(`[${brief.id}] done: gate ${gateWord}${timedOut ? ', timed out' : ''}`);
   return result;
 }
 

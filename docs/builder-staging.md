@@ -16,6 +16,7 @@ production builder agent and prints how each round went.
 | Gate                                   | `runGate` in-process against a worktree of the games checkout (`src/staging/local-gate.ts`)    |
 | Firestore, GitHub, round-0 seed        | In-memory store; no GitHub; no seed, so the round builds from an empty directory               |
 | `knowledge_query`                      | Off unless `KNOWLEDGE_SEARCH_ENGINE_ID` and Google credentials are set                         |
+| Job reconciler                         | Not running: no idle nudges and no automatic gate-repair round                                 |
 
 The sandbox and the MCP connector have to reach the local API, so the script opens a public
 tunnel (`ssh -R` to localhost.run; nothing to install) and sets `APP_BASE_URL` to it. If the
@@ -24,8 +25,9 @@ script creates a copy of the environment that does, and archives it when the run
 
 ## Running it
 
-Needs: the games checkout with `npm ci` done (the gate uses its `node_modules` and Chrome),
-an Anthropic API key for the organisation that owns the builder agent, and the agent id.
+Needs: the games checkout with `pnpm install` done (the gate uses its `node_modules` and Chrome),
+an Anthropic API key for the organisation that owns the builder agent, the agent id and
+the builder environment id (`MANAGED_AGENT_ENVIRONMENT_ID` or `--environment-id`).
 
 ```bash
 # Gate only, no API spend: checks the harness and isolation on this machine first.
@@ -33,13 +35,15 @@ npm run builder:staging -w @gamedevpl/api -- --gate-selftest tilt-labyrinth
 
 export ANTHROPIC_API_KEY=...            # or CLAUDE_API_KEY
 export MANAGED_AGENT_ID=agent_...       # the production builder agent
+export MANAGED_AGENT_ENVIRONMENT_ID=env_...
 npm run builder:staging -w @gamedevpl/api -- --only platformer
 npm run builder:staging -w @gamedevpl/api -- --games ../www.gamedev.pl-games --max-cents 300
 ```
 
 Options: `--briefs <file>` (default `scripts/staging-briefs.json`), `--only <id,id>`,
 `--max-cents` (per-session budget, default 300), `--max-minutes` (default 40; a session
-still running then is interrupted and marked `timedOut`), `--environment-id`,
+still running then is interrupted and marked `timedOut`), `--environment-id`, `--agent-id`,
+`--out <dir>`, `--unsafe-gate`,
 `--public-url` (bring your own tunnel; `local` skips exposure, for dry runs with a fake
 API), `--keep-harness`, `--seed` (keep `GITHUB_TOKEN` so round-0 seeding runs as in
 production).
