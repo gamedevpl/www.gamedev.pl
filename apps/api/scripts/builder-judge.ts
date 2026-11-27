@@ -147,7 +147,7 @@ export async function judgeVisuals(input: {
     .map((part) => part.text ?? '')
     .join('');
   const verdict = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as Record<string, unknown>;
-  // A missing or out-of-range axis is a failed rating, not a zero.
+  // A missing axis is a failed rating, not zero.
   const bad = AXES.filter((axis) => !(Number(verdict[axis]) >= 1 && Number(verdict[axis]) <= 5));
   if (bad.length) throw new Error(`judge verdict lacks ${bad.join(', ')}: ${text.slice(0, 200)}`);
   const scores = Object.fromEntries(AXES.map((axis) => [axis, Number(verdict[axis])])) as VisualScore['scores'];
