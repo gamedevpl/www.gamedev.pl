@@ -41,24 +41,58 @@ describe('scoreSession', () => {
       },
       { type: 'session.usage', processed_at: at(51), usage: { list_cost: { amount: '7' } } },
     ]);
-    expect(score.seconds).toEqual({ total: 51, toFirstEdit: 10, toFirstSubmit: 40, replayPhase: 10 });
-    expect(score.calls).toMatchObject({ replays: 2, starts: 2, progressReports: 1, submits: 1 });
+    expect(score.seconds).toEqual({
+      total: 51,
+      toFirstEdit: 10,
+      toFirstSubmit: 40,
+      replayPhase: 10,
+      longestProgressGap: 38,
+    });
+    expect(score.calls).toMatchObject({ replays: 2, captures: 2, starts: 2, progressReports: 1, submits: 1 });
     expect(score.tokens).toMatchObject({ cacheRead: 400, cacheWrite: 20, output: 10, replayPhaseCacheReadShare: 0.75 });
     expect(score.listCost).toBe('7');
-    expect(score.flags).toEqual([
-      'acceptance_names_loss',
-      'win_not_reached',
-      'few_progress_reports',
-      'repeated_start',
-      'text_after_end',
-    ]);
+    expect(score.flags).toEqual(['acceptance_names_loss', 'win_not_reached', 'repeated_start', 'text_after_end']);
   });
 
   it('flags a session that never delivered', () => {
     expect(scoreSession([{ type: 'session.status_running', processed_at: at(0) }]).flags).toEqual([
       'no_delivery',
       'no_end',
-      'few_progress_reports',
     ]);
+  });
+
+  // 2026-11-27: refused reports counted, stills went uncounted, and a two-update round was flagged.
+  it('counts accepted reports, stills captures, the longest silence and text after the end reply', () => {
+    const use = (second, name, id, input = {}) => ({ ...mcp(second, name, input), id });
+    const result = (second, id, content, isError = false) => ({
+      type: 'agent.mcp_tool_result',
+      processed_at: at(second),
+      mcp_tool_use_id: id,
+      is_error: isError,
+      content: [{ type: 'text', text: content }],
+    });
+    const say = (second, text) => ({ type: 'agent.message', processed_at: at(second), content: [{ text }] });
+    const base = [
+      { type: 'session.status_running', processed_at: at(0) },
+      use(5, 'report_progress', 'p1'),
+      result(6, 'p1', '{"ok":true}'),
+      use(7, 'report_progress', 'p2'),
+      result(8, 'p2', '{"error":"rejected"}'),
+      bash(10, 'timeout 300 npm run --silent capture -- x --stills --out /tmp/a'),
+      use(20, 'report_progress', 'p3'),
+      result(21, 'p3', '{"ok":true}'),
+      use(30, 'submit_sources', 's1'),
+      result(31, 's1', '{"accepted":true}'),
+      use(32, 'end', 'e1', { summary: 'Done.' }),
+      say(33, 'Ending.'),
+      result(34, 'e1', '{"ok":true,"ended":true}'),
+    ];
+    const quiet = scoreSession([...base, { type: 'session.status_idle', processed_at: at(35) }]);
+    expect(quiet.calls).toMatchObject({ progressReports: 2, captures: 1, replays: 0 });
+    expect(quiet.seconds.longestProgressGap).toBe(15);
+    expect(quiet.flags).toEqual([]);
+
+    const chatty = scoreSession([...base, say(36, 'Here is a recap of the round.')]);
+    expect(chatty.flags).toEqual(['text_after_end']);
   });
 });
