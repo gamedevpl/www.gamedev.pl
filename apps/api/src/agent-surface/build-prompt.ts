@@ -137,13 +137,19 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
     ...(brief.feedback || brief.gateRepair ? [] : [audioFitLine(shell)]),
     '- The publish gate requires the audio module, so removing it only defers the failure.',
-    '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
-    '  game is playable, even if you can see things you would rather improve. A delivered rough',
-    '  draft beats a better one that never arrived.',
-    // 2026-11-27 baseline-2: "end straight after" overrode the system prompt's art pass in 5/5 rounds.
-    brief.createGame && shell
-      ? '- After that first preview, do the art pass the system prompt describes (capture, check, fix, second preview), then `end`. Do not wait on the gate. No one reads text after `end`: stop there.'
-      : '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
+    ...(brief.createGame && shell
+      ? [
+          // 2026-11-27 baselines 1-3: "even if you can see things you would rather improve" won over the art pass.
+          '- Stage the `CAPTURE.json` you ran locally with the first preview, uploaded from disk. After changing it or a renderer module, run that exact plan again and confirm it wrote its PNGs before staging it. Prove the objective with the capture DSL’s `equals` or `greaterThanOrEqual`; in an endless game, prove the scoring action (such as a delivery) rather than adding a finish line the brief does not have.',
+          '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` once the game is playable and its one look check (system prompt) is done. A delivered draft beats a better one that never arrived, so keep that check to one pass.',
+          '- `end` straight after that submit returns, with your closing word in `summary`. Do not wait on the gate. Once `end` replies `ended: true`, write nothing more.',
+        ]
+      : [
+          '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
+          '  game is playable, even if you can see things you would rather improve. A delivered rough',
+          '  draft beats a better one that never arrived.',
+          '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
+        ]),
   ];
 }
 

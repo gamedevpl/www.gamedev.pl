@@ -51,14 +51,21 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
 
-  // 2026-11-27: baseline-1 games all stopped at a flat first preview.
-  it('gives a new game one art pass after its first preview, on the shell lane only', () => {
+  // 2026-11-27: no builder edited visuals after an accepted preview; the check moves before it.
+  it('gives a new game one look check before its first preview, on the shell lane only', () => {
     const shell = builderSystemPrompt({ shell: true });
-    expect(shell).toContain('A new game gets one art pass');
-    expect(shell).toContain('once its first preview is submitted, do not `end` yet');
-    expect(shell).toContain('then submit a second preview and `end`');
-    expect(shell).toContain('capture only for a visual request or a new game’s art pass');
-    expect(builderSystemPrompt({ shell: false })).not.toContain('art pass');
+    expect(shell).toContain('A new 2D game gets one look check, before its first preview');
+    expect(shell).toContain('never submit a visual edit whose frame you have not opened');
+    expect(shell).toContain('capture only for a visual request or a new game’s look check before its first preview');
+    expect(shell).toContain('(a new game after its one look check)');
+    expect(shell).not.toContain('submit a second preview');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('look check');
+  });
+
+  it('closes in end.summary and stays silent after ended: true', () => {
+    for (const shell of [true, false]) {
+      expect(builderSystemPrompt({ shell })).toContain('Once `end` replies `ended: true`, your turn is over');
+    }
   });
 
   // 2026-10-24: the kit-browse rule was read as covering knowledge_query.
@@ -93,11 +100,11 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: false })).not.toContain('advisor');
   });
 
-  // 2026-11-16: one report in a six-minute round.
+  // 2026-11-16: one report in a six-minute round; 2026-11-27: a 90 s cadence replaced fixed points.
   it('names fixed progress points on the shell lane', () => {
     const shell = builderSystemPrompt({ shell: true });
-    expect(shell).toContain('when the game first typechecks, after each capture');
-    expect(shell).toContain('and just before `submit_sources`');
+    expect(shell).toContain('whenever 90 seconds of local work have passed since your last report');
+    expect(shell).toContain('once after you read your capture frames');
     expect(builderSystemPrompt({ shell: false })).toContain('before and after long steps');
   });
 });
