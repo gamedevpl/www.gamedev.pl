@@ -55,23 +55,39 @@ export function createFsBucket(options: { root: string; publicBaseUrl: () => str
     return 1;
   };
 
+  // Precondition check and write run as one step per object.
+  const locks = new Map<string, Promise<unknown>>();
+  function locked<T>(name: string, work: () => Promise<T>): Promise<T> {
+    const result = (locks.get(name) ?? Promise.resolve()).then(work, work);
+    const settled = result.catch(() => undefined);
+    locks.set(name, settled);
+    void settled.then(() => {
+      if (locks.get(name) === settled) locks.delete(name);
+    });
+    return result;
+  }
+
+  async function upload(name: string, url: URL, init: RequestInit): Promise<Response> {
+    const match = url.searchParams.get('ifGenerationMatch');
+    const current = await generationOf(name);
+    if (match !== null && Number(match) !== current) return json({ error: 'precondition' }, 412);
+    const file = fileFor(name);
+    await mkdir(path.dirname(file), { recursive: true });
+    const body = init.body;
+    const bytes = typeof body === 'string' ? Buffer.from(body) : Buffer.from(body as Uint8Array);
+    await writeFile(file, bytes);
+    const next = Math.max(current, clock) + 1;
+    clock = next;
+    generations.set(name, next);
+    return json({ name, generation: String(next), size: String(bytes.length) });
+  }
+
   async function handle(href: string, init: RequestInit = {}): Promise<Response> {
     const method = (init.method ?? 'GET').toUpperCase();
     const url = new URL(href);
     if (href.startsWith(UPLOAD) && method === 'POST') {
       const name = url.searchParams.get('name') ?? '';
-      const match = url.searchParams.get('ifGenerationMatch');
-      const current = await generationOf(name);
-      if (match !== null && Number(match) !== current) return json({ error: 'precondition' }, 412);
-      const file = fileFor(name);
-      await mkdir(path.dirname(file), { recursive: true });
-      const body = init.body;
-      const bytes = typeof body === 'string' ? Buffer.from(body) : Buffer.from(body as Uint8Array);
-      await writeFile(file, bytes);
-      const next = Math.max(current, clock) + 1;
-      clock = next;
-      generations.set(name, next);
-      return json({ name, generation: String(next), size: String(bytes.length) });
+      return locked(name, () => upload(name, url, init));
     }
     if (!href.startsWith(API)) return json({ error: `fs bucket does not serve ${href}` }, 501);
     const rest = href.slice(API.length).split('?')[0];

@@ -293,6 +293,13 @@ async function main() {
       agentChannel: { gamesStore, objectStore: bucket.objectStore, onSourcesDelivered: gate.trigger },
     },
   });
+  // Tunnel traffic reaches only agent routes; the runner's own calls carry a key.
+  const localKey = randomBytes(16).toString('hex');
+  const PUBLIC = ['/api/mcp', '/api/agent/', '/staging-bucket/'];
+  app.addHook('onRequest', async (request, reply) => {
+    if (request.headers['x-staging-local'] === localKey) return;
+    if (!PUBLIC.some((prefix) => request.url.startsWith(prefix))) return reply.code(404).send();
+  });
   app.get('/staging-bucket/*', async (request, reply) => {
     const name = decodeURIComponent((request.params as { '*': string })['*']);
     const query = request.query as { sig?: string; expires?: string };
@@ -313,7 +320,7 @@ async function main() {
       const created = await app.inject({
         method: 'POST',
         url: '/api/submissions',
-        headers: { cookie },
+        headers: { cookie, 'x-staging-local': localKey },
         payload: { title: brief.title, concept: brief.concept },
       });
       if (created.statusCode !== 200) {

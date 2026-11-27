@@ -39,6 +39,14 @@ describe('fs bucket', () => {
     expect(await b.objectStore.objectExists('a/b.json')).toBe(false);
   });
 
+  it('lets only one of two racing create-only uploads win', async () => {
+    const b = await bucket();
+    const statuses = await Promise.all(
+      ['one', 'two'].map((body) => b.fetch(upload('race.json', 0), { method: 'POST', body: Buffer.from(body) })),
+    );
+    expect(statuses.map((r) => r.status).sort()).toEqual([200, 412]);
+  });
+
   it('lists prefixes the way version history reads them', async () => {
     const b = await bucket();
     for (const name of ['games/x/versions/v1/manifest.json', 'games/x/versions/v2/manifest.json', 'games/x/top.json']) {
