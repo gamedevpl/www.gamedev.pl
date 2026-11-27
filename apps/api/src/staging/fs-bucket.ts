@@ -1,4 +1,4 @@
-// A directory standing in for the games bucket, for the builder staging loop.
+// A directory standing in for the games bucket during staging.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 
 export interface FsBucket {
   root: string;
-  // Speaks the slice of the GCS JSON API that games-store and gcs-sign use.
+  // The GCS JSON API slice that games-store and gcs-sign use.
   fetch: typeof fetch;
   objectStore: GcsObjectStore;
   // Checks a URL minted by objectStore.signReadUrl and returns its object name.

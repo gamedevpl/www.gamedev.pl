@@ -1,4 +1,4 @@
-// Runs first-iteration builder rounds against a local platform. See docs/builder-staging.md.
+// Builder rounds for new games against a local platform.
 
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
@@ -48,7 +48,7 @@ function sh(command: string, argv: string[], cwd: string): string {
 const field = (output: string, label: string) => output.match(new RegExp(`${label}:\\s+(\\S+)`))?.[1];
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 
-// Packs the kit and workspace from the local games checkout and publishes them as current.
+// Packs kit and workspace from the games checkout, published as current.
 async function publishLocalKit(gamesRepo: string, bucketRoot: string, outDir: string): Promise<string> {
   const engineRef = sh('git', ['rev-parse', 'HEAD'], gamesRepo).trim();
   if (sh('git', ['status', '--porcelain'], gamesRepo).trim()) {
@@ -109,7 +109,7 @@ async function publishLocalKit(gamesRepo: string, bucketRoot: string, outDir: st
   return engineRef;
 }
 
-// A public URL for the local API: the managed sandbox and MCP connector must reach it.
+// Public URL so the sandbox and MCP connector reach the local API.
 async function openTunnel(port: number): Promise<{ url: string; child: ChildProcess }> {
   const child = spawn(
     'ssh',
@@ -142,7 +142,7 @@ async function openTunnel(port: number): Promise<{ url: string; child: ChildProc
   return { url, child };
 }
 
-// The sandbox PUTs uploads to the tunnel; a limited environment must allow that host.
+// Sandbox uploads go through the tunnel, so the environment must allow it.
 async function stagingEnvironment(
   apiKey: string,
   environmentId: string,
@@ -224,7 +224,7 @@ async function main() {
   await mkdir(outDir, { recursive: true });
   log(`run dir ${outDir}`);
 
-  // Round 0 seeding and the games-repo catalog stay off: nothing here talks to GitHub.
+  // No round-0 seed or catalog: nothing here talks to GitHub.
   if (!flag('seed')) {
     delete process.env.GITHUB_TOKEN;
     delete process.env.GAMES_REPO_TOKEN;
@@ -278,7 +278,7 @@ async function main() {
 
   const sessionSecret = randomBytes(32).toString('hex');
   const store = new InMemoryStore();
-  // Every catalog read misses; `then` stays undefined so it is never mistaken for a promise.
+  // Catalog reads miss; `then` stays undefined (not a thenable).
   const githubClient = new Proxy({} as GitHubClient, {
     get: (_, key) => (key === 'then' ? undefined : async () => null),
   });
@@ -338,7 +338,7 @@ async function main() {
       log(`[${brief.id}] job ${jobId} session ${sessionId}`);
       const startedAt = Date.now();
       let state: { status?: string; stop?: string } = {};
-      // Idle twice in a row means the turn is over, ended or not (a budget stop included).
+      // Two idle polls in a row: the turn is over.
       let idlePolls = 0;
       while (Date.now() < deadline) {
         await sleep(15_000);

@@ -17,7 +17,7 @@ export interface LocalGateOptions {
   // A games-repo checkout with node_modules installed; worktrees are cut from it.
   gamesRepo: string;
   log?: (line: string) => void;
-  // Gate runs are Chrome-heavy; more than one at a time starves the box.
+  // Gate runs are Chrome-heavy; parallel runs starve the box.
   concurrency?: number;
   keepHarness?: boolean;
   // What `main` means here: the commit the local kit was packed from.
@@ -52,7 +52,7 @@ function run(
   });
 }
 
-// Same assembly as scripts/run-gate.ts: serve policy, not the repo's dist/.
+// Same assembly as scripts/run-gate.ts, not the repo's dist/.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug, undefined, { entry: 'publish' });
