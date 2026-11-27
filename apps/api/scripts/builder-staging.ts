@@ -293,7 +293,7 @@ async function main() {
       agentChannel: { gamesStore, objectStore: bucket.objectStore, onSourcesDelivered: gate.trigger },
     },
   });
-  // Tunnel traffic reaches only agent routes; the runner's own calls carry a key.
+  // Tunnel reaches agent routes only; runner calls carry a key.
   const localKey = randomBytes(16).toString('hex');
   const PUBLIC = ['/api/mcp', '/api/agent/', '/staging-bucket/'];
   app.addHook('onRequest', async (request, reply) => {
