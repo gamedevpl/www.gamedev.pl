@@ -33,6 +33,29 @@ function scripted(actions: unknown, found: Json[] = []): Json[] {
   return found;
 }
 
+// The capture DSL's operators (games repo tools/lib/capture-plan.ts CONDITION_OPERATORS).
+const OPERATORS = ['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual', 'oneOf'];
+
+// 2026-11-27: `{"field":"lives","atLeast":1}` failed the gate at frame 83 and stored no frames.
+function conditionWithoutOperator(actions: unknown, path = 'script'): string | null {
+  if (!Array.isArray(actions)) return null;
+  for (const [index, action] of actions.entries()) {
+    if (!isObject(action)) continue;
+    for (const kind of ['assert', 'waitFor'] as const) {
+      const condition = action[kind];
+      if (isObject(condition) && !OPERATORS.some((operator) => operator in condition)) {
+        const field = typeof condition.field === 'string' ? ` on "${condition.field}"` : '';
+        return `${path}[${index}].${kind}${field}`;
+      }
+    }
+    if (isObject(action.repeat)) {
+      const nested = conditionWithoutOperator(action.repeat.actions, `${path}[${index}].repeat.actions`);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
 const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
 // True when the capture condition holding means the objective's does.
@@ -54,9 +77,26 @@ function implies(capture: Json, objective: Json): boolean {
 
 // Null when the files show a win, or cannot say.
 export function winProofProblem(files: readonly SourceFile[], opts: { firstDelivery: boolean }): string | null {
+  // A broken plan fails the gate on any delivery, old games included.
+  const plan = parseObject(files, 'CAPTURE.json');
+  const broken = plan ? conditionWithoutOperator(plan.script) : null;
+  if (broken) {
+    return (
+      `CAPTURE.json ${broken} has no comparison operator (use one of ${OPERATORS.join(', ')}), ` +
+      'so the gate fails that step and stores no frames. Fix it, run the plan locally, then submit again.'
+    );
+  }
+
   const acceptance = parseObject(files, 'ACCEPTANCE.json');
   const achieved = Array.isArray(acceptance?.achieved) ? acceptance.achieved.filter(isObject) : [];
   if (achieved.length === 0) return null;
+  // 2026-11-27: a first delivery without its plan passed with no frames for Studio.
+  if (opts.firstDelivery && !files.some((file) => file.path === 'CAPTURE.json')) {
+    return (
+      'The delivery has no CAPTURE.json, so the gate stores no frames and nothing shows the game can be won. ' +
+      'Stage the plan you ran locally, scripted to the state ACCEPTANCE.json names, then submit again.'
+    );
+  }
 
   const loss = achieved.find((condition) => typeof condition.equals === 'string' && LOSS.test(condition.equals));
   if (loss && achieved.every((condition) => typeof condition.equals === 'string' && LOSS.test(condition.equals))) {

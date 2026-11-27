@@ -58,12 +58,33 @@ describe('winProofProblem', () => {
     expect(winProofProblem(files(acceptance, enough), { firstDelivery: true })).toBeNull();
   });
 
+  it('names a capture condition with no comparison operator, on any delivery', () => {
+    const acceptance = { objective: 'Deliver', achieved: [{ field: 'delivered', atLeast: 1 }] };
+    const capture = plan([
+      { repeat: { times: 2, actions: [{ assert: { field: 'lives', atLeast: 1 } }] } },
+      { waitFor: { field: 'delivered', greaterThanOrEqual: 1, maxFrames: 900 } },
+    ]);
+    for (const firstDelivery of [true, false]) {
+      const problem = winProofProblem(files(acceptance, capture), { firstDelivery });
+      expect(problem).toContain('script[0].repeat.actions[0].assert on "lives" has no comparison operator');
+      expect(problem).toContain('greaterThanOrEqual');
+    }
+    expect(winProofProblem(files({}, capture), { firstDelivery: false })).toContain('no comparison operator');
+  });
+
+  it('holds a first delivery that has an objective but no capture plan', () => {
+    const acceptance = { objective: 'Win', achieved: [{ field: 'state', equals: 'won' }] };
+    expect(winProofProblem(files(acceptance), { firstDelivery: true })).toContain('has no CAPTURE.json');
+    expect(winProofProblem(files(acceptance), { firstDelivery: false })).toBeNull();
+  });
+
   it('stays silent when it cannot tell', () => {
     expect(winProofProblem([], { firstDelivery: true })).toBeNull();
     expect(winProofProblem([{ path: 'ACCEPTANCE.json', content: '{' }], { firstDelivery: true })).toBeNull();
     expect(winProofProblem(files({ objective: 'x', achieved: [] }), { firstDelivery: true })).toBeNull();
     const numeric = { objective: 'Score', achieved: [{ field: 'score', atLeast: 10 }] };
-    expect(winProofProblem(files(numeric), { firstDelivery: true })).toBeNull();
+    // A later delivery may carry only its changed files, so a missing plan says nothing there.
+    expect(winProofProblem(files(numeric), { firstDelivery: false })).toBeNull();
   });
 });
 
