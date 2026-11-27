@@ -112,18 +112,21 @@ export function createFsBucket(options: { root: string; publicBaseUrl: () => str
     }
     const name = decodeURIComponent(tail.slice(1));
     const file = fileFor(name);
-    if (method === 'DELETE') {
-      generations.delete(name);
-      await rm(file, { force: true });
-      return new Response(null, { status: 204 });
-    }
-    const body = await readFile(file).catch(() => null);
-    if (!body) return json({ error: 'not found' }, 404);
-    const generation = String(await generationOf(name));
-    if (url.searchParams.get('alt') === 'media') {
-      return new Response(new Uint8Array(body), { status: 200, headers: { 'x-goog-generation': generation } });
-    }
-    return json({ name, size: String(body.length), generation });
+    // Same lock as upload: body and generation must describe one write.
+    return locked(name, async () => {
+      if (method === 'DELETE') {
+        generations.delete(name);
+        await rm(file, { force: true });
+        return new Response(null, { status: 204 });
+      }
+      const body = await readFile(file).catch(() => null);
+      if (!body) return json({ error: 'not found' }, 404);
+      const generation = String(await generationOf(name));
+      if (url.searchParams.get('alt') === 'media') {
+        return new Response(new Uint8Array(body), { status: 200, headers: { 'x-goog-generation': generation } });
+      }
+      return json({ name, size: String(body.length), generation });
+    });
   }
 
   const sign = (name: string, expires: string) =>

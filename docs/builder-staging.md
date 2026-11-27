@@ -28,6 +28,9 @@ Needs: the games checkout with `npm ci` done (the gate uses its `node_modules` a
 an Anthropic API key for the organisation that owns the builder agent, and the agent id.
 
 ```bash
+# Gate only, no API spend: checks the harness and isolation on this machine first.
+npm run builder:staging -w @gamedevpl/api -- --gate-selftest tilt-labyrinth
+
 export ANTHROPIC_API_KEY=...            # or CLAUDE_API_KEY
 export MANAGED_AGENT_ID=agent_...       # the production builder agent
 npm run builder:staging -w @gamedevpl/api -- --only platformer
@@ -35,11 +38,28 @@ npm run builder:staging -w @gamedevpl/api -- --games ../www.gamedev.pl-games --m
 ```
 
 Options: `--briefs <file>` (default `scripts/staging-briefs.json`), `--only <id,id>`,
-`--max-cents` (per-session budget, default 300), `--max-minutes` (default 40),
-`--environment-id`, `--public-url` (bring your own tunnel), `--keep-harness`, `--seed`
-(keep `GITHUB_TOKEN` so round-0 seeding runs as in production).
+`--max-cents` (per-session budget, default 300), `--max-minutes` (default 40; a session
+still running then is interrupted and marked `timedOut`), `--environment-id`,
+`--public-url` (bring your own tunnel; `local` skips exposure, for dry runs with a fake
+API), `--keep-harness`, `--seed` (keep `GITHUB_TOKEN` so round-0 seeding runs as in
+production).
+
+The API listens on an ephemeral port before the tunnel opens, so public traffic never
+reaches another local service. Only `/api/mcp`, `/api/agent/` and signed bucket reads are
+served through the tunnel; the runner's own calls carry a per-run key. Each round's vault
+is archived when the round ends, and the cloned environment (if any) when the run ends,
+including after an error.
 
 Every round costs real API credit, roughly what a production round costs.
+
+## Gate isolation
+
+The gate runs game code nobody has reviewed. On macOS each gate command runs under
+`sandbox-exec` with a profile that denies reads of your home directory (except the games
+checkout, the Node install and the Playwright browser cache), denies writes outside the
+harness and temp directories, and denies non-local network. Chrome's own sandbox is off
+inside it. On Linux set `GATE_SANDBOX_USER` and start the runner as root (the Cloud Build
+mechanism), or pass `--unsafe-gate` on a throwaway machine.
 
 ## Output
 

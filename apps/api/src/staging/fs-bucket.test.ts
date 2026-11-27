@@ -47,6 +47,17 @@ describe('fs bucket', () => {
     expect(statuses.map((r) => r.status).sort()).toEqual([200, 412]);
   });
 
+  it('never pairs an old body with a newer generation', async () => {
+    const b = await bucket();
+    await b.fetch(upload('m.json', 0), { method: 'POST', body: Buffer.from('old') });
+    const [read] = await Promise.all([
+      b.fetch(object('m.json')),
+      b.fetch(upload('m.json', 1), { method: 'POST', body: Buffer.from('new') }),
+    ]);
+    const body = await read.text();
+    expect(read.headers.get('x-goog-generation')).toBe(body === 'old' ? '1' : '2');
+  });
+
   it('lists prefixes the way version history reads them', async () => {
     const b = await bucket();
     for (const name of ['games/x/versions/v1/manifest.json', 'games/x/versions/v2/manifest.json', 'games/x/top.json']) {

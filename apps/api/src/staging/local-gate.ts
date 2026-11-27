@@ -1,8 +1,9 @@
 // Runs the delivery gate in-process against a local games checkout.
 
 import { spawn } from 'node:child_process';
+import { existsSync, realpathSync } from 'node:fs';
 import { mkdtemp, rm, symlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/contract';
 import { createLocalGamesClient } from '../catalog/local-games-repo.js';
@@ -22,11 +23,53 @@ export interface LocalGateOptions {
   keepHarness?: boolean;
   // What `main` means here: the commit the local kit was packed from.
   mainRef?: string;
+  isolation: GateIsolation;
 }
 
 export interface LocalGate {
   trigger: (input: GateTriggerInput & { jobId?: number }) => Promise<GateTriggerResult>;
-  idle: () => Promise<void>;
+  // Resolves once every gate run queued for this slug has finished.
+  settled: (slug: string) => Promise<void>;
+}
+
+// How candidate code is kept away from the operator's account.
+export type GateIsolation = 'seatbelt' | 'sandbox-user' | 'none';
+
+export function gateIsolation(allowUnsafe: boolean, platform = process.platform): GateIsolation {
+  if (process.env.GATE_SANDBOX_USER?.trim()) return 'sandbox-user';
+  if (platform === 'darwin') return 'seatbelt';
+  if (allowUnsafe) return 'none';
+  throw new Error(
+    'the local gate runs unreviewed game code: use macOS (sandbox-exec), set GATE_SANDBOX_USER ' +
+      '(runner as root), or pass --unsafe-gate on a throwaway machine',
+  );
+}
+
+const real = (dir: string) => (existsSync(dir) ? realpathSync(dir) : dir);
+const quote = (value: string) => JSON.stringify(value);
+
+// Seatbelt: no HOME reads beyond the toolchain; writes to harness and temp.
+export function seatbeltProfile(input: {
+  harness: string;
+  home: string;
+  gamesRepo: string;
+  nodeDir: string;
+  scratch: string;
+}): string {
+  const home = quote(real(input.home));
+  return [
+    '(version 1)',
+    '(allow default)',
+    `(deny file-read* (subpath ${home}))`,
+    `(allow file-read* (literal ${home}) (subpath ${quote(real(input.gamesRepo))}) (subpath ${quote(real(input.nodeDir))})`,
+    `  (subpath ${quote(real(path.join(input.home, 'Library/Caches/ms-playwright')))}))`,
+    '(deny file-write* (subpath "/"))',
+    `(allow file-write* (subpath ${quote(real(input.harness))}) (subpath ${quote(real(input.scratch))})`,
+    '  (subpath "/dev") (subpath "/private/var/folders") (subpath "/private/tmp"))',
+    `(allow file-read* (subpath ${quote(real(input.harness))}) (subpath ${quote(real(input.scratch))}))`,
+    '(deny network-outbound (remote ip "*:*"))',
+    '(allow network-outbound (remote ip "localhost:*"))',
+  ].join('\n');
 }
 
 type RunResult = { code: number; output: string };
@@ -65,7 +108,7 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
   const log = options.log ?? ((line: string) => console.log(line));
   const limit = Math.max(1, options.concurrency ?? 1);
   const queue: Array<() => Promise<void>> = [];
-  const waiters: Array<() => void> = [];
+  const pending = new Map<string, Set<Promise<void>>>();
   let active = 0;
 
   const pump = () => {
@@ -75,7 +118,6 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
       void job().finally(() => {
         active--;
         pump();
-        if (active === 0 && queue.length === 0) waiters.splice(0).forEach((resolve) => resolve());
       });
     }
   };
@@ -87,7 +129,41 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
     const started = Date.now();
     log(`[gate] ${slug}@${version} ${lane}: start`);
     try {
-      const { runInHarness } = await createHarnessRunner(run, harnesses, { GATE_DELIVERY_SLUG: slug });
+      let harnessDir: string | undefined;
+      const scratch = await mkdtemp(path.join(tmpdir(), 'staging-gate-home-'));
+      harnesses.push(scratch);
+      const seatbelt = options.isolation === 'seatbelt';
+      const browsers = path.join(homedir(), 'Library/Caches/ms-playwright');
+      const { runInHarness: inner } = await createHarnessRunner(run, harnesses, {
+        GATE_DELIVERY_SLUG: slug,
+        ...(seatbelt
+          ? {
+              HOME: scratch,
+              GATE_CHROME_NO_SANDBOX: '1',
+              ...(existsSync(browsers) ? { PLAYWRIGHT_BROWSERS_PATH: browsers } : {}),
+            }
+          : {}),
+      });
+      const runInHarness: typeof inner = seatbelt
+        ? (command, args, cwd, runOptions) =>
+            inner(
+              'sandbox-exec',
+              [
+                '-p',
+                seatbeltProfile({
+                  harness: harnessDir ?? cwd,
+                  home: homedir(),
+                  gamesRepo: options.gamesRepo,
+                  nodeDir: path.dirname(path.dirname(process.execPath)),
+                  scratch,
+                }),
+                command,
+                ...args,
+              ],
+              cwd,
+              runOptions,
+            )
+        : inner;
       const outcome = await runGate(
         slug,
         version,
@@ -99,6 +175,7 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
           async prepareHarness(engineRef) {
             const dir = await mkdtemp(path.join(tmpdir(), 'staging-gate-'));
             harnesses.push(dir);
+            harnessDir = dir;
             const ref = engineRef === 'main' && options.mainRef ? options.mainRef : engineRef;
             const add = await run('git', ['worktree', 'add', '--detach', dir, ref], options.gamesRepo);
             if (add.code !== 0) throw new Error(`could not cut a worktree at ${engineRef}: ${add.output.trim()}`);
@@ -163,11 +240,16 @@ export function createLocalGate(options: LocalGateOptions): LocalGate {
 
   return {
     async trigger(input) {
-      queue.push(() => gateOne(input));
+      const done = new Promise<void>((resolve) => queue.push(() => gateOne(input).finally(resolve)));
+      const forSlug = pending.get(input.slug) ?? new Set();
+      forSlug.add(done);
+      pending.set(input.slug, forSlug);
+      void done.then(() => forSlug.delete(done));
       pump();
       return { accepted: true, buildId: `local-${input.slug}-${input.version}` };
     },
-    idle: () =>
-      active === 0 && queue.length === 0 ? Promise.resolve() : new Promise((resolve) => waiters.push(resolve)),
+    async settled(slug) {
+      while (pending.get(slug)?.size) await Promise.all(pending.get(slug)!);
+    },
   };
 }
