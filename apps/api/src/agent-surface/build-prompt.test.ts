@@ -62,6 +62,19 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('Call `start` with exactly `{ "slug": "(slug)" }`');
   });
 
+  // 2026-11-27: "end straight after the submit" overrode the art pass in every creation round.
+  it('sends a shell creation round to the art pass before end', () => {
+    const create = {
+      ...BRIEF,
+      slug: undefined,
+      createGame: { title: 'Star Parcel Run', concept: 'Guide a courier ship across a bright sky.' },
+    };
+    expect(buildPrompt(create, { shell: true })).toContain('After that first preview, do the art pass');
+    expect(buildPrompt(create, { shell: true })).not.toContain('`end` straight after the submit returns');
+    expect(buildPrompt(create)).toContain('`end` straight after the submit returns');
+    expect(buildPrompt(BRIEF, { shell: true })).toContain('`end` straight after the submit returns');
+  });
+
   it('does not send a sandboxed round looking for a checkout it does not have', () => {
     // Measured: 15 seconds of a two-minute round spent on `find / -iname ...`.
     const prompt = buildPrompt(BRIEF);
