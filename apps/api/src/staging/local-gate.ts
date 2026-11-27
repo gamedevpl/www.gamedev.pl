@@ -56,13 +56,22 @@ export function seatbeltProfile(input: {
   nodeDir: string;
   scratch: string;
 }): string {
-  const home = quote(real(input.home));
+  const homeDir = real(input.home);
+  const home = quote(homeDir);
+  const trees = [input.gamesRepo, input.nodeDir, path.join(input.home, 'Library/Caches/ms-playwright')].map(real);
+  // realpath lstats every parent, so folders above allowed trees need metadata.
+  const parents = new Set<string>();
+  for (const tree of trees) {
+    for (let dir = path.dirname(tree); dir.startsWith(homeDir + path.sep); dir = path.dirname(dir)) parents.add(dir);
+  }
   return [
     '(version 1)',
     '(allow default)',
     `(deny file-read* (subpath ${home}))`,
-    `(allow file-read* (literal ${home}) (subpath ${quote(real(input.gamesRepo))}) (subpath ${quote(real(input.nodeDir))})`,
-    `  (subpath ${quote(real(path.join(input.home, 'Library/Caches/ms-playwright')))}))`,
+    `(allow file-read* (literal ${home}) ${trees.map((tree) => `(subpath ${quote(tree)})`).join(' ')})`,
+    ...(parents.size
+      ? [`(allow file-read-metadata ${[...parents].map((dir) => `(literal ${quote(dir)})`).join(' ')})`]
+      : []),
     '(deny file-write* (subpath "/"))',
     `(allow file-write* (subpath ${quote(real(input.harness))}) (subpath ${quote(real(input.scratch))})`,
     '  (subpath "/dev") (subpath "/private/var/folders") (subpath "/private/tmp"))',

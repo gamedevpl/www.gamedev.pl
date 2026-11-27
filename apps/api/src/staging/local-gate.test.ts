@@ -30,5 +30,9 @@ describe('local gate isolation', () => {
     expect(profile).toContain('(allow file-write* (subpath "/tmp/h")');
     expect(profile).not.toMatch(/allow file-write\*[^)]*\/Users\/op\/src\/games/);
     expect(profile).toContain('(deny network-outbound (remote ip "*:*"))');
+    expect(profile).toContain('(allow file-read-metadata');
+    expect(profile).toContain('(literal "/Users/op/.nvm")');
+    expect(profile).toContain('(literal "/Users/op/.nvm/versions/node")');
+    expect(profile).not.toMatch(/file-read-metadata[^\n]*\(subpath/);
   });
 });
