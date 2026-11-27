@@ -102,12 +102,17 @@ function toolResults(events: unknown[], tool: string): Array<Record<string, unkn
     if (raw.type === 'agent.mcp_tool_use' && raw.id) names.set(raw.id, raw.name ?? '');
     if (raw.type !== 'agent.mcp_tool_result' || raw.is_error) continue;
     if (names.get(raw.mcp_tool_use_id ?? '') !== tool) continue;
-    const text = (raw.content ?? []).map((part) => part.text ?? '').join('');
-    try {
-      results.push(JSON.parse(text) as Record<string, unknown>);
-    } catch {
-      // A non-JSON result carries nothing this report reads.
+    // start returns several blocks; only one of them is JSON.
+    const parsed: Record<string, unknown> = {};
+    for (const part of raw.content ?? []) {
+      try {
+        const value: unknown = JSON.parse(part.text ?? '');
+        if (value && typeof value === 'object') Object.assign(parsed, value);
+      } catch {
+        // Prose blocks carry nothing this report reads.
+      }
     }
+    if (Object.keys(parsed).length) results.push(parsed);
   }
   return results;
 }
@@ -128,8 +133,14 @@ async function mcpTool(url: string, key: string, name: string, args: Record<stri
   const result = (JSON.parse(json) as { result?: { structuredContent?: unknown; content?: Array<{ text?: string }> } })
     .result;
   if (result?.structuredContent) return result.structuredContent;
-  const body = result?.content?.[0]?.text;
-  return body ? JSON.parse(body) : { status: response.status, raw: text.slice(0, 500) };
+  for (const part of result?.content ?? []) {
+    try {
+      return JSON.parse(part.text ?? '');
+    } catch {
+      // Skip prose blocks; the verdict is the JSON one.
+    }
+  }
+  return { status: response.status, raw: text.slice(0, 500) };
 }
 
 async function main(): Promise<void> {
@@ -222,20 +233,34 @@ async function main(): Promise<void> {
       live.set(session.id, session.credentialRef);
       log(`[${label}] session ${session.id}`);
       let timedOut = false;
+      let abandoned = false;
       let idle = 0;
+      let failures = 0;
       try {
         while (!stopping) {
           await sleep(10_000);
-          const state = await provider.getSession(session.id).catch(() => null);
-          if (!state || ['completed', 'failed', 'timed_out', 'cancelled'].includes(state.state)) break;
-          idle = state.state === 'idle' && state.stopReason !== 'requires_action' ? idle + 1 : 0;
-          if (idle >= 2) break;
           if (Date.now() - started > maxMinutes * 60_000) {
             timedOut = true;
             break;
           }
+          let state: Awaited<ReturnType<typeof provider.getSession>>;
+          try {
+            state = await provider.getSession(session.id);
+            failures = 0;
+          } catch (error) {
+            // Transient read errors retry; a dead monitor must not leave it running.
+            log(`[${label}] status read failed: ${error instanceof Error ? error.message : String(error)}`);
+            if (++failures >= 6) {
+              abandoned = true;
+              break;
+            }
+            continue;
+          }
+          if (!state || ['completed', 'failed', 'timed_out', 'cancelled'].includes(state.state)) break;
+          idle = state.state === 'idle' && state.stopReason !== 'requires_action' ? idle + 1 : 0;
+          if (idle >= 2) break;
         }
-        if (timedOut || stopping) await provider.cancelSession(session.id).catch(() => undefined);
+        if (timedOut || abandoned || stopping) await provider.cancelSession(session.id).catch(() => undefined);
       } finally {
         if (session.credentialRef) await provider.releaseCredential?.(session.credentialRef).catch(() => undefined);
         live.delete(session.id);
@@ -262,6 +287,7 @@ async function main(): Promise<void> {
         session: session.id,
         slug,
         timedOut,
+        ...(abandoned ? { abandoned: true } : {}),
         minutes,
         submits: submits.length,
         gate,
