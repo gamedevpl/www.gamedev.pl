@@ -62,17 +62,19 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('Call `start` with exactly `{ "slug": "(slug)" }`');
   });
 
-  // 2026-11-27: "end straight after the submit" overrode the art pass in every creation round.
-  it('sends a shell creation round to the art pass before end', () => {
+  // 2026-11-27: builders end after one submit, so the look is checked before it.
+  it('sends a shell creation round to the visual check before its first submit', () => {
     const create = {
       ...BRIEF,
       slug: undefined,
       createGame: { title: 'Star Parcel Run', concept: 'Guide a courier ship across a bright sky.' },
     };
-    expect(buildPrompt(create, { shell: true })).toContain('After that first preview, do the art pass');
-    expect(buildPrompt(create, { shell: true })).not.toContain('`end` straight after the submit returns');
-    expect(buildPrompt(create)).toContain('`end` straight after the submit returns');
-    expect(buildPrompt(BRIEF, { shell: true })).toContain('`end` straight after the submit returns');
+    const shell = buildPrompt(create, { shell: true });
+    expect(shell).toContain('before the first submit, do the one visual check');
+    expect(shell).not.toContain('even if you can see things you would rather improve');
+    expect(shell).toContain('`end` straight after the submit returns');
+    expect(buildPrompt(create)).toContain('even if you can see things you would rather improve');
+    expect(buildPrompt(BRIEF, { shell: true })).toContain('even if you can see things you would rather improve');
   });
 
   it('does not send a sandboxed round looking for a checkout it does not have', () => {

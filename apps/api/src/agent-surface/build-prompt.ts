@@ -137,13 +137,20 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
     ...(brief.feedback || brief.gateRepair ? [] : [audioFitLine(shell)]),
     '- The publish gate requires the audio module, so removing it only defers the failure.',
-    '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
-    '  game is playable, even if you can see things you would rather improve. A delivered rough',
-    '  draft beats a better one that never arrived.',
-    // 2026-11-27 baseline-2: "end straight after" overrode the system prompt's art pass in 5/5 rounds.
-    brief.createGame && shell
-      ? '- After that first preview, do the art pass the system prompt describes (capture, check, fix, second preview), then `end`. Do not wait on the gate. No one reads text after `end`: stop there.'
-      : '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
+    // 2026-11-27: looks improved only when checked before the submit.
+    ...(brief.createGame && shell
+      ? [
+          '- New game: before the first submit, do the one visual check the system prompt describes',
+          '  (capture, `read` the frames, fix the most visible defect, capture and `read` again).',
+          '- Then stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })`. A delivered',
+          '  draft beats a better one that never arrived, so do not go past that one check.',
+        ]
+      : [
+          '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
+          '  game is playable, even if you can see things you would rather improve. A delivered rough',
+          '  draft beats a better one that never arrived.',
+        ]),
+    '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
   ];
 }
 

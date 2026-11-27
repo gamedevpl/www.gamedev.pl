@@ -79,9 +79,3 @@ The rating costs a few cents per game, billed to `ANTHROPIC_API_KEY`.
 To score a run that has none yet, run `npm run builder:judge -w @gamedevpl/api -- <run dir>`.
 It needs `ANTHROPIC_API_KEY` and `GAMEDEV_CREATOR_KEY`, and rewrites `result.json` and
 `summary.json` in place.
-
-## Variants
-
-`scripts/builder-variants/` holds kickoff additions to compare against the baseline with
-`--kickoff-extra`. `art-pass.md` asks the agent to capture, list visual defects, fix them and
-capture again before the final preview.
