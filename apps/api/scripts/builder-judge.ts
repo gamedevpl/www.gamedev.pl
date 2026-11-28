@@ -59,12 +59,15 @@ export async function mcpTool(url: string, key: string, name: string, args: Reco
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
   });
   const text = await response.text();
+  // Auth or gateway failures are plain text, not JSON-RPC.
+  if (!response.ok) throw new Error(`${name}: HTTP ${response.status} ${text.slice(0, 200)}`);
   const json = text.startsWith('{') ? text : (text.match(/^data: (.*)$/m)?.[1] ?? '{}');
-  const result = (
-    JSON.parse(json) as {
-      result?: { structuredContent?: unknown; content?: Array<{ text?: string }>; isError?: boolean };
-    }
-  ).result;
+  const reply = JSON.parse(json) as {
+    error?: { message?: string };
+    result?: { structuredContent?: unknown; content?: Array<{ text?: string }>; isError?: boolean };
+  };
+  if (!reply.result) throw new Error(`${name}: ${reply.error?.message ?? `no result in ${text.slice(0, 200)}`}`);
+  const result = reply.result;
   // A refusal (expired session, not owner) must not read as empty media.
   if (result?.isError) throw new Error(`${name}: ${(result.content ?? []).map((part) => part.text).join(' ')}`);
   if (result?.structuredContent) return result.structuredContent;
@@ -158,7 +161,8 @@ export async function judgeVisuals(input: {
     .join('');
   const verdict = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] ?? '{}') as Record<string, unknown>;
   // A missing axis is a failed rating, not zero.
-  const bad = AXES.filter((axis) => !(Number(verdict[axis]) >= 1 && Number(verdict[axis]) <= 5));
+  const valid = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5;
+  const bad = AXES.filter((axis) => !valid(verdict[axis]));
   if (bad.length) throw new Error(`judge verdict lacks ${bad.join(', ')}: ${text.slice(0, 200)}`);
   const scores = Object.fromEntries(AXES.map((axis) => [axis, Number(verdict[axis])])) as VisualScore['scores'];
   const overall = Math.round((AXES.reduce((sum, axis) => sum + scores[axis], 0) / AXES.length) * 10) / 10;
@@ -167,26 +171,43 @@ export async function judgeVisuals(input: {
 }
 
 // Backfill: `builder:judge <run dir>` scores every brief already in it.
-async function main(): Promise<void> {
-  const runDir = process.argv[2];
-  if (!runDir) {
-    console.error('usage: builder:judge <run dir> [--model <id>] [--briefs <file>] [--mcp-url <url>]');
+const USAGE = 'usage: builder:judge <run dir> [--model <id>] [--briefs <file>] [--mcp-url <url>]';
+
+// Strict flags: a typo or a missing value stops before any spend.
+function judgeArgs(argv: string[]): { runDir: string; flags: Map<string, string> } {
+  const flags = new Map<string, string>();
+  const positional: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(argv[i]!);
+    if (!match) {
+      positional.push(argv[i]!);
+      continue;
+    }
+    const value = match[2] ?? argv[++i];
+    if (!['model', 'briefs', 'mcp-url'].includes(match[1]!) || !value || value.startsWith('--')) {
+      console.error(`${USAGE}\nbad argument: ${argv[i - (match[2] === undefined ? 1 : 0)]}`);
+      process.exit(2);
+    }
+    flags.set(match[1]!, value);
+  }
+  if (positional.length !== 1) {
+    console.error(USAGE);
     process.exit(2);
   }
-  const modelFlag = process.argv.indexOf('--model');
-  const model = modelFlag > 0 ? process.argv[modelFlag + 1] : undefined;
+  return { runDir: positional[0]!, flags };
+}
+
+async function main(): Promise<void> {
+  const { runDir, flags } = judgeArgs(process.argv.slice(2));
+  const model = flags.get('model');
   const apiKey = (process.env.ANTHROPIC_API_KEY ?? process.env.CLAUDE_API_KEY)?.trim();
   const creatorKey = process.env.GAMEDEV_CREATOR_KEY?.trim();
   if (!apiKey || !creatorKey) {
     console.error('needs ANTHROPIC_API_KEY (or CLAUDE_API_KEY) and GAMEDEV_CREATOR_KEY');
     process.exit(2);
   }
-  const mcpFlag = process.argv.indexOf('--mcp-url');
-  const briefsFlag = process.argv.indexOf('--briefs');
   const briefsPath =
-    briefsFlag > 0
-      ? process.argv[briefsFlag + 1]
-      : path.join(path.dirname(fileURLToPath(import.meta.url)), 'builder-briefs.json');
+    flags.get('briefs') ?? path.join(path.dirname(fileURLToPath(import.meta.url)), 'builder-briefs.json');
   const briefs = JSON.parse(await readFile(briefsPath, 'utf8')) as Array<{
     id: string;
     title: string;
@@ -206,10 +227,11 @@ async function main(): Promise<void> {
     // The runner labels repetitions `<brief id>#<run>`.
     const id = String(result.id ?? '').replace(/#\d+$/, '');
     const known = briefs.find((item) => item.id === id);
-    const mcpUrl =
-      (mcpFlag > 0 ? process.argv[mcpFlag + 1] : undefined) ??
+    const mcpUrl = (
+      flags.get('mcp-url') ??
       (result.mcpUrl as string | undefined) ??
-      'https://www.gamedev.pl/api/mcp';
+      'https://www.gamedev.pl/api/mcp'
+    ).replace(/\/$/, '');
     const deliveryId = (result.gate as { deliveryId?: string } | null)?.deliveryId;
     const fresh = !known
       ? { error: `brief ${id || entry.name} not in the briefs file` }

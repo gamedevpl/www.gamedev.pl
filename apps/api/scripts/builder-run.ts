@@ -242,7 +242,7 @@ async function main(): Promise<void> {
       }
       // Gate frames are rated after the verdict; judge-model none skips.
       const visual =
-        sessionKey && submits.length && judgeModel !== 'none'
+        sessionKey && submits.length && judgeModel !== 'none' && !stopping
           ? await judgeVisuals({
               apiKey,
               mcpUrl,

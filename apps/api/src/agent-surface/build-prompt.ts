@@ -138,7 +138,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean, lane: PromptLane)
     ...(brief.feedback || brief.gateRepair ? [] : [audioFitLine(shell)]),
     '- The publish gate requires the audio module, so removing it only defers the failure.',
     // 2026-11-27: looks improved only when checked before the submit.
-    brief.createGame && shell
+    shell && !brief.feedback && !brief.gateRepair && !brief.previewVersion
       ? '- New game: before the first submit, do the one visual check the system prompt describes (capture, `read` the frames, fix the most visible defect, capture and `read` again). Then stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })`. A delivered draft beats a better one that never arrived, so do not go past that one check.'
       : '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the game is playable, even if you can see things you would rather improve. A delivered rough draft beats a better one that never arrived.',
     '- `end` straight after the submit returns. Do not wait on the gate. No one reads text after `end`: stop there.',
