@@ -1,5 +1,7 @@
 // 2026-11-18: a delivery named "lost" as its objective, unopposed.
 
+import { capturePlanHint } from './capture-plan-hint.js';
+
 type Json = Record<string, unknown>;
 type SourceFile = { path: string; content: string };
 
@@ -33,29 +35,6 @@ function scripted(actions: unknown, found: Json[] = []): Json[] {
   return found;
 }
 
-// Capture DSL operators, as in the games repo's CONDITION_OPERATORS.
-const OPERATORS = ['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual', 'oneOf'];
-
-// 2026-11-27: an `atLeast` capture condition failed the gate, no frames.
-function conditionWithoutOperator(actions: unknown, path = 'script'): string | null {
-  if (!Array.isArray(actions)) return null;
-  for (const [index, action] of actions.entries()) {
-    if (!isObject(action)) continue;
-    for (const kind of ['assert', 'waitFor'] as const) {
-      const condition = action[kind];
-      if (isObject(condition) && !OPERATORS.some((operator) => operator in condition)) {
-        const field = typeof condition.field === 'string' ? ` on "${condition.field}"` : '';
-        return `${path}[${index}].${kind}${field}`;
-      }
-    }
-    if (isObject(action.repeat)) {
-      const nested = conditionWithoutOperator(action.repeat.actions, `${path}[${index}].repeat.actions`);
-      if (nested) return nested;
-    }
-  }
-  return null;
-}
-
 const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
 // True when the capture condition holding means the objective's does.
@@ -77,15 +56,10 @@ function implies(capture: Json, objective: Json): boolean {
 
 // Null when the files show a win, or cannot say.
 export function winProofProblem(files: readonly SourceFile[], opts: { firstDelivery: boolean }): string | null {
-  // A broken plan fails the gate on any delivery.
-  const plan = parseObject(files, 'CAPTURE.json');
-  const broken = plan ? conditionWithoutOperator(plan.script) : null;
-  if (broken) {
-    return (
-      `CAPTURE.json ${broken} has no comparison operator (use one of ${OPERATORS.join(', ')}), ` +
-      'so the gate fails that step and stores no frames. Fix it, run the plan locally, then submit again.'
-    );
-  }
+  // A plan the runner cannot finish stores no frames, on any delivery.
+  const plan = files.find((file) => file.path === 'CAPTURE.json');
+  const broken = plan ? capturePlanHint(plan.content, { stills: false }) : null;
+  if (broken) return `${broken} Fix CAPTURE.json and submit again.`;
 
   const acceptance = parseObject(files, 'ACCEPTANCE.json');
   const achieved = Array.isArray(acceptance?.achieved) ? acceptance.achieved.filter(isObject) : [];
@@ -94,7 +68,7 @@ export function winProofProblem(files: readonly SourceFile[], opts: { firstDeliv
   if (opts.firstDelivery && !files.some((file) => file.path === 'CAPTURE.json')) {
     return (
       'The delivery has no CAPTURE.json, so the gate stores no frames and nothing shows the game can be won. ' +
-      'Stage the plan you ran locally, scripted to the state ACCEPTANCE.json names, then submit again.'
+      'Stage a CAPTURE.json scripted to the state ACCEPTANCE.json names, then submit again.'
     );
   }
 

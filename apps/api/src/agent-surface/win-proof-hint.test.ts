@@ -58,18 +58,30 @@ describe('winProofProblem', () => {
     expect(winProofProblem(files(acceptance, enough), { firstDelivery: true })).toBeNull();
   });
 
-  it('names a capture condition with no comparison operator, on any delivery', () => {
+  it('names a capture step the runner cannot finish, on any delivery', () => {
     const acceptance = { objective: 'Deliver', achieved: [{ field: 'delivered', atLeast: 1 }] };
-    const capture = plan([
-      { repeat: { times: 2, actions: [{ assert: { field: 'lives', atLeast: 1 } }] } },
-      { waitFor: { field: 'delivered', greaterThanOrEqual: 1, maxFrames: 900 } },
-    ]);
+    const win = { waitFor: { field: 'delivered', greaterThanOrEqual: 1, maxFrames: 900 } };
+    const noOperator = plan([{ repeat: { times: 2, actions: [{ assert: { field: 'lives', atLeast: 1 } }] } }, win]);
     for (const firstDelivery of [true, false]) {
-      const problem = winProofProblem(files(acceptance, capture), { firstDelivery });
-      expect(problem).toContain('script[0].repeat.actions[0].assert on "lives" has no comparison operator');
+      const problem = winProofProblem(files(acceptance, noOperator), { firstDelivery });
+      expect(problem).toContain('assert needs exactly one comparison operator');
       expect(problem).toContain('greaterThanOrEqual');
+      expect(problem).not.toContain('locally');
     }
-    expect(winProofProblem(files({}, capture), { firstDelivery: false })).toContain('no comparison operator');
+    expect(winProofProblem(files({}, noOperator), { firstDelivery: false })).toContain('comparison operator');
+    // The publish gate refuses two operators on one condition.
+    const twoOperators = plan([{ assert: { field: 'lives', equals: 1, notEquals: 0 } }, win]);
+    expect(winProofProblem(files(acceptance, twoOperators), { firstDelivery: true })).toContain('exactly one');
+    const until = plan([{ repeat: { times: 5, until: { field: 'delivered', atLeast: 1 }, actions: [] } }, win]);
+    expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toContain('repeat.until needs exactly');
+  });
+
+  it('holds a plan that is not valid JSON or has no script', () => {
+    const acceptance = { path: 'ACCEPTANCE.json', content: '{"achieved":[{"field":"state","equals":"won"}]}' };
+    for (const content of ['{', '{}']) {
+      const problem = winProofProblem([acceptance, { path: 'CAPTURE.json', content }], { firstDelivery: true });
+      expect(problem).toMatch(/not valid JSON|not a capture plan/);
+    }
   });
 
   it('holds a first delivery that has an objective but no capture plan', () => {

@@ -16,7 +16,8 @@ function countCaptures(actions: unknown[]): number {
   return count;
 }
 
-export function capturePlanHint(content: string): string | null {
+// `stills: false` skips the rule that a plan must capture a frame.
+export function capturePlanHint(content: string, opts: { stills: boolean } = { stills: true }): string | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
@@ -44,7 +45,7 @@ export function capturePlanHint(content: string): string | null {
       `screenshot and the creator gets no concept proposal. Fix that step; a minimal plan is ${EXAMPLE}.`
     );
   }
-  if (countCaptures(plan.script) === 0) {
+  if (opts.stills && countCaptures(plan.script) === 0) {
     return (
       'CAPTURE.json has no { "capture": "<name>" } step, so the gate stores no screenshot and the creator ' +
       `gets no concept proposal. Add one once the game shows play with its HUD, e.g. ${EXAMPLE}.`

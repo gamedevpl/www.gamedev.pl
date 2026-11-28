@@ -46,7 +46,7 @@ function conditionProblem(condition: unknown, label: string, needsMaxFrames: boo
     return `${label} needs a metadata field`;
   }
   const operators = OPERATORS.filter((operator) => operator in condition);
-  if (operators.length !== 1) return `${label} needs exactly one comparison operator`;
+  if (operators.length !== 1) return `${label} needs exactly one comparison operator (${OPERATORS.join(', ')})`;
   const operator = operators[0]!;
   if (operator === 'oneOf' && (!Array.isArray(condition.oneOf) || condition.oneOf.length === 0)) {
     return `${label}.oneOf must be a non-empty array`;
@@ -102,7 +102,9 @@ function actionProblem(action: Step, depth: number, names: Set<string>): string 
       if (!isObject(value) || !Number.isInteger(times) || (times as number) < 1 || !Array.isArray(value.actions)) {
         return 'repeat needs positive times and an actions array';
       }
-      return stepsProblem(value.actions, depth + 1, names, 'repeat step');
+      // The runner evaluates `until` on every pass of the loop.
+      const until = 'until' in value ? conditionProblem(value.until, 'repeat.until', false) : null;
+      return until ?? stepsProblem(value.actions, depth + 1, names, 'repeat step');
     }
   }
 }
