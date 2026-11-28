@@ -963,6 +963,7 @@ export function CreatorStudioView({
                               : { icon: 'wrench', label: t('statusView.draftBadge') }
                           }
                           source={theaterSlug ? { slug: theaterSlug } : { html: stageSource.rawHtml! }}
+                          orientation={stageSource.orientation}
                           onExit={() => setTheaterOpen(false)}
                         />
                       ) : null}

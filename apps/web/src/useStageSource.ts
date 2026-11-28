@@ -2,29 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
-import { publishedBuildVersion } from './stageCheckVerdict.js';
+import {
+  resolveStageSourceState,
+  type StageChannelEntry,
+  type StageOrigin,
+  type StageOriginKind,
+  type StagePreviewEntry,
+  type StagePublishedEntry,
+  type StageSource,
+  type StageVersionPreviewEntry,
+} from './stageSourceState.js';
 import { deliveredPreview } from './studioPreviewDelivery.js';
 import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from './submissionApi.js';
 
-// Freshness uses server clocks; see docs/studio-preview-source.md.
-export type StageOriginKind = 'staged' | 'delivered' | 'seed' | 'none';
-
-export type StageOrigin = {
-  kind: StageOriginKind;
-  at: number | null;
-  versionLabel: string | null;
-  // Gate version on stage; versionLabel may be a free-text caption.
-  version?: string | null;
-  artifactVersion?: string;
-};
-
-export type StageSource = {
-  html: string | null;
-  rawHtml: string | null;
-  origin: StageOrigin;
-};
-
-const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
+export type { StageOrigin, StageOriginKind, StageSource };
 
 // Sharing one source keeps the stage ribbon and thread in sync.
 export type UseStageSourceResult = StageSource & {
@@ -44,15 +35,10 @@ export function useStageSource(
   const delivery = deliveredPreview(status);
   const deliveredPreviewVersion = delivery?.version;
   const deliveredPreviewVerdict = delivery?.verdict;
-  const [preview, setPreview] = useState<{ html: string; at: number; version?: string | null } | null>(null);
-  const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
-  const [channel, setChannel] = useState<{
-    html: string;
-    at: number;
-    label: string | null;
-    seed: boolean;
-  } | null>(null);
-  const [published, setPublished] = useState<{ html: string; slug: string; artifactVersion?: string } | null>(null);
+  const [preview, setPreview] = useState<StagePreviewEntry | null>(null);
+  const [versionPreview, setVersionPreview] = useState<StageVersionPreviewEntry | null>(null);
+  const [channel, setChannel] = useState<StageChannelEntry | null>(null);
+  const [published, setPublished] = useState<StagePublishedEntry | null>(null);
   const [dataToken, setDataToken] = useState(token);
 
   const loadedVersionPreviewKeyRef = useRef<string | null>(null);
@@ -113,6 +99,7 @@ export function useStageSource(
           html: result.html,
           at: Date.now(),
           version: selectedPreviewVersion,
+          orientation: result.orientation,
         });
       })
       .catch(() => {
@@ -157,6 +144,7 @@ export function useStageSource(
           html: result.html,
           at: Number.isFinite(producedAt) ? producedAt : Date.now(),
           version: headSha ?? null,
+          orientation: result.orientation,
         });
       })
       .catch(() => {
@@ -264,7 +252,12 @@ export function useStageSource(
         if (activeTokenRef.current !== requestToken) return;
         loadedPublishedSlugRef.current = key;
         publishedRetryRef.current = 0;
-        setPublished({ html: game.html, slug, artifactVersion: game.artifactVersion });
+        setPublished({
+          html: game.html,
+          slug,
+          artifactVersion: game.artifactVersion,
+          orientation: game.orientation,
+        });
       })
       .catch(() => {
         if (activeTokenRef.current !== requestToken) return;
@@ -286,54 +279,20 @@ export function useStageSource(
       });
   }, [status?.status, status?.slug, token, publishedRetryTick]);
 
-  const isPublished = !selectedPreviewVersion && status?.status === 'published' && Boolean(status.slug);
-  // When a historical version preview is explicitly selected, it takes precedence over normal stage sources.
-  const hasVersionPreview = Boolean(selectedPreviewVersion && versionPreview?.html);
-  // Prefer the freshest fetched document.
-  const showChannel = !hasVersionPreview && channel != null && (preview === null || channel.at > preview.at);
-  const rawHtml = hasVersionPreview
-    ? versionPreview!.html
-    : isPublished
-      ? (published?.html ?? null)
-      : showChannel
-        ? channel!.html
-        : (preview?.html ?? channel?.html ?? published?.html ?? null);
+  const { rawHtml, origin, orientation } = resolveStageSourceState({
+    status,
+    selectedPreviewVersion,
+    preview,
+    versionPreview,
+    channel,
+    published,
+  });
   // Every source shares the same locale preparation and embedding path.
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
-
-  let origin: StageOrigin = NONE_ORIGIN;
-  if (hasVersionPreview) {
-    const { at, version } = versionPreview!;
-    origin = { kind: 'staged', at, versionLabel: version, version };
-  } else if (isPublished) {
-    origin = {
-      kind: 'delivered',
-      at: null,
-      versionLabel: null,
-      version: publishedBuildVersion(status),
-      artifactVersion: published?.artifactVersion,
-    };
-  } else if (showChannel) {
-    origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
-  } else if (preview) {
-    origin = { kind: 'staged', at: preview.at, versionLabel: null, version: preview.version ?? null };
-  } else if (channel) {
-    origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
-  } else if (published) {
-    origin = {
-      kind: 'delivered',
-      at: null,
-      versionLabel: null,
-      version: publishedBuildVersion(status),
-      artifactVersion: published?.artifactVersion,
-    };
-  } else if (status && !status.preview && !status.playable?.length) {
-    origin = NONE_ORIGIN;
-  }
 
   const pushPreview = useCallback((nextHtml: string) => {
     setPreview({ html: nextHtml, at: Date.now(), version: null });
   }, []);
 
-  return { html, rawHtml, origin, pushPreview };
+  return { html, rawHtml, origin, orientation, pushPreview };
 }

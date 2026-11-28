@@ -1,3 +1,4 @@
+import { CATALOG_ORIENTATIONS, type CatalogOrientation } from '@gamedevpl/contract';
 import { readResponseBody, type FetchProgress } from './fetchProgress.js';
 import type { PublishedGame } from './catalog.js';
 
@@ -46,5 +47,8 @@ export async function fetchPublishedGame(
   if (typeof body?.html !== 'string' || typeof body?.title !== 'string') {
     throw new Error('Game response was malformed');
   }
-  return body;
+  const orientation = (CATALOG_ORIENTATIONS as readonly unknown[]).includes(body.orientation)
+    ? (body.orientation as CatalogOrientation)
+    : undefined;
+  return orientation ? { ...body, orientation } : body;
 }

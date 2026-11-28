@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import type { CatalogOrientation } from '@gamedevpl/contract';
+import { parseSpecOrientation } from '../platform/spec-frontmatter.js';
 import { isSlugTakenDown } from './slug-takedown.js';
 import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -9,7 +11,7 @@ import { InvalidTokenError, verifyToken } from '../platform/submission-token.js'
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { GamesStore } from './games-store.js';
 
-type DraftPreviewValue = { slug: string; title: string; html: string };
+type DraftPreviewValue = { slug: string; title: string; html: string; orientation?: CatalogOrientation };
 // Carries the record it authorized, so serving it needs no second read.
 export type DraftGrant = { jobId: number; record?: SubmissionRecord | null; version?: string };
 // `revision` is the delivered candidate's games-store version id.
@@ -131,7 +133,17 @@ export async function registerDraftPreviewRoutes(
     // Null means not ready yet; a store error throws instead.
     if (bundle === null) return false;
 
-    const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
+    const spec =
+      typeof gamesStore.getSourceFile === 'function'
+        ? await gamesStore.getSourceFile(slug, playableVersion, 'SPEC.md').catch(() => null)
+        : null;
+    const orientation = spec ? parseSpecOrientation(spec) : undefined;
+    const value: DraftPreviewValue = {
+      slug,
+      title: record.title || slug,
+      html: bundle.toString('utf8'),
+      ...(orientation && orientation !== 'any' ? { orientation } : {}),
+    };
     if (!versionOverride) {
       rememberDraftPreview(record.jobId, {
         value,

@@ -45,5 +45,13 @@ export function PublicPlayView({
     return <GameLoadScreen onExit={onExit} progress={progress} />;
   }
 
-  return <GameTheater title={game.title} source={{ slug, loadedGame: game }} reportSlug={slug} onExit={onExit} />;
+  return (
+    <GameTheater
+      title={game.title}
+      source={{ slug, loadedGame: game }}
+      orientation={game.orientation}
+      reportSlug={slug}
+      onExit={onExit}
+    />
+  );
 }

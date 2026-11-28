@@ -225,6 +225,8 @@
     "exitFullscreen": "Exit Fullscreen",
     "rotateLandscape": "Turn your phone sideways to play",
     "rotatePortrait": "Hold your phone upright to play",
+    "lockLandscape": "Lock landscape",
+    "lockPortrait": "Lock portrait",
     "share": "Share",
     "shareCopied": "Link copied",
     "moreActions": "More actions",

@@ -71,6 +71,7 @@ export interface PublishedGame {
   slug: string;
   title: string;
   html: string;
+  orientation?: CatalogOrientation;
 }
 
 // The catalog and published games are served by our own API (which reads the —

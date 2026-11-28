@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { CatalogOrientation } from '@gamedevpl/contract';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 
-export type CreatorReviewPreview = { slug: string; title: string; html: string };
+export type CreatorReviewPreview = { slug: string; title: string; html: string; orientation?: CatalogOrientation };
 export type CreatorReviewPreviewLoader = (slug: string, version: string) => Promise<CreatorReviewPreview | null>;
 
 export function registerReviewPlay(

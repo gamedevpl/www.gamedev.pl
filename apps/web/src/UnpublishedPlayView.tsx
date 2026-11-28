@@ -68,6 +68,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
       title={game.title}
       badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
       source={{ html: game.html }}
+      orientation={game.orientation}
       onExit={onExit}
     />
   );

@@ -662,6 +662,7 @@ export function SubmissionStatusView({
           }
           badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
           source={{ html: launchedHtml }}
+          orientation={preview?.orientation}
           onExit={closeTheater}
         />
       ) : null}

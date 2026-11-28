@@ -30,6 +30,14 @@ export interface WakeLockPlatform {
   request(): Promise<WakeLockHandle | null>;
 }
 
+export type OrientationLock = 'portrait' | 'landscape';
+
+export interface OrientationPlatform {
+  canLock(): boolean;
+  lock(orientation: OrientationLock): Promise<boolean>;
+  unlock(): void;
+}
+
 export type TiltReading = { beta: number | null; gamma: number | null };
 export type TiltPermission = 'granted' | 'denied' | 'unsupported';
 
@@ -116,6 +124,7 @@ export interface PlatformCapabilities {
   share: SharePlatform;
   push: PushPlatform;
   wakeLock: WakeLockPlatform;
+  orientation: OrientationPlatform;
   tilt: TiltPlatform;
   install: InstallPlatform;
   qr: QrPlatform;

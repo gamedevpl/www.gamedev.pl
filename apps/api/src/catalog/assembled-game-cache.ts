@@ -1,4 +1,25 @@
-export type CachedAssembledGame = { slug: string; title: string; html: string };
+import type { CatalogOrientation } from '@gamedevpl/contract';
+
+export type CachedAssembledGame = { slug: string; title: string; html: string; orientation?: CatalogOrientation };
+
+export function withGameOrientation(
+  game: CachedAssembledGame,
+  orientation: CatalogOrientation | undefined,
+): CachedAssembledGame {
+  return orientation && orientation !== 'any' ? { ...game, orientation } : game;
+}
+
+export async function attachCatalogOrientation(
+  game: CachedAssembledGame,
+  lookup: () => Promise<{ orientation?: CatalogOrientation } | null>,
+): Promise<CachedAssembledGame> {
+  if (game.orientation && game.orientation !== 'any') return game;
+  try {
+    return withGameOrientation(game, (await lookup())?.orientation);
+  } catch {
+    return game;
+  }
+}
 
 export const GAME_CACHE_TTL_MS = 5 * 60_000;
 // Caps RAM: ~9 near-limit games on a 1 GiB instance.

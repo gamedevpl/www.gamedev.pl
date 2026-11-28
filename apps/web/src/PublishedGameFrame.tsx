@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame.js';
 import { GameLoadScreen } from './GameLoadScreen.js';
-import type { PublishedGame } from './catalog.js';
+import type { CatalogOrientation, PublishedGame } from './catalog.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
@@ -29,6 +29,7 @@ type PublishedGameFrameProps = {
   // Hidden mounted frames must not accrue play time.
   active?: boolean;
   agentMode?: boolean;
+  onOrientation?: (orientation: CatalogOrientation | null) => void;
 };
 
 /**
@@ -49,6 +50,7 @@ export function PublishedGameFrame({
   agentMode = false,
   agentBridge,
   agentBridgePending,
+  onOrientation,
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [gameTitle, setGameTitle] = useState<string>(title);
@@ -88,7 +90,8 @@ export function PublishedGameFrame({
 
   useEffect(() => {
     if (game?.title) setGameTitle(game.title);
-  }, [game]);
+    onOrientation?.(game?.orientation ?? null);
+  }, [game, onOrientation]);
 
   if (error) {
     return (

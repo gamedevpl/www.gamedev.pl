@@ -225,6 +225,8 @@
     "exitFullscreen": "Zamknij pełny ekran",
     "rotateLandscape": "Obróć telefon poziomo, aby zagrać",
     "rotatePortrait": "Trzymaj telefon pionowo, aby zagrać",
+    "lockLandscape": "Zablokuj poziom",
+    "lockPortrait": "Zablokuj pion",
     "share": "Udostępnij",
     "shareCopied": "Skopiowano link",
     "moreActions": "Więcej działań",

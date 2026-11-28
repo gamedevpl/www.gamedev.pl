@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogLinks } from '@gamedevpl/contract';
-import { gamePageHandle, isPlatformAuthor, type CatalogTouch, type PublishedGame } from './catalog.js';
+import {
+  gamePageHandle,
+  isPlatformAuthor,
+  type CatalogOrientation,
+  type CatalogTouch,
+  type PublishedGame,
+} from './catalog.js';
 import { AgentPlayPanel } from './AgentPlayPanel.js';
 import { agentModeRequested, isAgentModeEnabled, setAgentModeEnabled } from './agentPlay.js';
 import { useAgentBridge } from './useAgentBridge.js';
@@ -30,6 +36,7 @@ import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useAgentViewportTrack, useTheaterMidWidth, useTheaterNarrow } from './useTheaterLayout.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
+import { useTheaterFullscreen } from './useTheaterFullscreen.js';
 import { useOrientationMismatch } from './useOrientationMismatch.js';
 import { creatorPath, gamePath } from './core/router.js';
 
@@ -166,7 +173,9 @@ export function GameTheater({
   // a time, which is exactly when a phone dims and sleeps. Hold the screen awake.
   useScreenWakeLock(true);
 
-  const rotateHint = useOrientationMismatch(orientation);
+  const [loadedOrientation, setLoadedOrientation] = useState<CatalogOrientation | null>(null);
+  const effectiveOrientation: CatalogOrientation = orientation !== 'any' ? orientation : (loadedOrientation ?? 'any');
+  const rotateHint = useOrientationMismatch(effectiveOrientation);
 
   // Callers routinely pass a fresh `onExit` closure on every render (and the status
   // view re-renders every few seconds while a build polls). Keeping it in a ref lets
@@ -235,10 +244,27 @@ export function GameTheater({
     requestExit();
   }, [requestExit, closeHowTo]);
 
+  // Fullscreen buys back the browser chrome — on a phone that's a third of the
+  // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
+  // the control simply doesn't appear rather than failing on tap.
+  const {
+    fullscreen,
+    canFullscreen,
+    canOrientationLock,
+    enterFullscreenAndLock,
+    exitFullscreenAndUnlock,
+    toggleFullscreen,
+  } = useTheaterFullscreen({
+    stageRef,
+    frameRef,
+    orientation: effectiveOrientation,
+    agentOpen,
+  });
+
   const quitGame = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    exitFullscreenAndUnlock();
     onExitRef.current();
-  }, []);
+  }, [exitFullscreenAndUnlock]);
 
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
@@ -309,22 +335,11 @@ export function GameTheater({
   const authorLabel = submittedBy && !isPlatformAuthor(submittedBy) ? submittedBy : t('catalog.platformAuthor');
   const authorLink = creatorHandle && submittedBy && !isPlatformAuthor(submittedBy) ? creatorPath(creatorHandle) : null;
 
-  // Fullscreen buys back the browser chrome — on a phone that's a third of the
-  // screen. Unsupported on iPhone Safari, where `fullscreenEnabled` is false and
-  // the control simply doesn't appear rather than failing on tap.
-  const [fullscreen, setFullscreen] = useState(false);
-  const canFullscreen = Boolean(document.fullscreenEnabled);
   // Phone bar is title · More · Exit; sound/fullscreen move into the menu. Track
   // the breakpoint in JS so we don't render an empty More control on desktop for
   // drafts that have no vote/share/report row.
   const isNarrow = useTheaterNarrow(agentOpen);
   const isMidWidth = useTheaterMidWidth(agentOpen);
-
-  useEffect(() => {
-    const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
 
   useEffect(() => {
     if (!fullscreen) {
@@ -350,17 +365,6 @@ export function GameTheater({
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
     return () => window.clearTimeout(timer);
   }, [chromeFocused, chromeIdle, chromeManuallyHidden, howToOpen, moreOpen, playerEngaged]);
-
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-    } else {
-      void stageRef.current?.requestFullscreen?.().catch(() => undefined);
-    }
-    // Fullscreen moves focus to the element we expanded; hand it back to the game
-    // so WASD keeps working without a click.
-    setTimeout(() => frameRef.current?.contentWindow?.focus(), 100);
-  }, []);
 
   // The theater takes over the whole viewport, so keyboard focus has to come with
   // it — otherwise focus is left behind on the page underneath, and Escape (the
@@ -799,6 +803,7 @@ export function GameTheater({
             agentMode={agentOpen}
             agentBridge={agentBridge ?? null}
             agentBridgePending={agentBridge === undefined}
+            onOrientation={setLoadedOrientation}
           />
         ) : agentBridge === undefined ? (
           <GameLoadScreen onExit={onExit} />
@@ -818,12 +823,20 @@ export function GameTheater({
         ) : null}
         {/* A nudge, not a gate: the game stays playable and running underneath, and
             the hint clears itself the moment the device is turned. */}
-        {rotateHint && (
-          <div className="theater-rotate-hint" role="status">
-            <PixelIcon name="phone" size={20} />
-            <span>{orientation === 'landscape' ? t('player.rotateLandscape') : t('player.rotatePortrait')}</span>
-          </div>
-        )}
+        {rotateHint &&
+          (canFullscreen && canOrientationLock && !fullscreen ? (
+            <button type="button" className="theater-rotate-hint is-action" onClick={enterFullscreenAndLock}>
+              <PixelIcon name="expand" size={16} />
+              <span>{effectiveOrientation === 'landscape' ? t('player.lockLandscape') : t('player.lockPortrait')}</span>
+            </button>
+          ) : (
+            <div className="theater-rotate-hint" role="status">
+              <PixelIcon name="phone" size={20} />
+              <span>
+                {effectiveOrientation === 'landscape' ? t('player.rotateLandscape') : t('player.rotatePortrait')}
+              </span>
+            </div>
+          ))}
       </div>
       {/* After the iframe in DOM order + high z-index so it isn't buried under the
           game surface. Escape still exits fullscreen via the browser. */}

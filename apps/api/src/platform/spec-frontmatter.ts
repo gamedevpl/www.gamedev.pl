@@ -1,3 +1,7 @@
+import { CATALOG_ORIENTATIONS, type CatalogOrientation } from '@gamedevpl/contract';
+
+const ORIENTATIONS = new Set<string>(CATALOG_ORIENTATIONS);
+
 // Matches the lenient frontmatter format spec.mjs writes; no nested YAML.
 export function parseSpecFrontmatter(specMd: string): Record<string, string> {
   const matched = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
@@ -25,4 +29,9 @@ export function parseSpecFrontmatter(specMd: string): Record<string, string> {
 
 export function parseSpecTitle(specMd: string): string | null {
   return parseSpecFrontmatter(specMd).title || null;
+}
+
+export function parseSpecOrientation(specMd: string): CatalogOrientation {
+  const value = (parseSpecFrontmatter(specMd).orientation ?? '').trim().toLowerCase();
+  return ORIENTATIONS.has(value) ? (value as CatalogOrientation) : 'any';
 }
