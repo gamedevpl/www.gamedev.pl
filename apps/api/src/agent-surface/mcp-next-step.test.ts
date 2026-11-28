@@ -300,6 +300,22 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     expect(inline.data.retry).toMatch(/sent inline were not kept/);
   });
 
+  it('refuses a GAME.json the gate would reject, and keeps the staged files', async () => {
+    await round();
+    await start();
+    const manifest = JSON.parse(FILES.find((file) => file.path === 'GAME.json')!.content);
+    const misordered = JSON.stringify({ ...manifest, engine: { modules: ['rng', 'input'] } });
+    for (const file of FILES) {
+      await call('stage_source_file', file.path === 'GAME.json' ? { ...file, content: misordered } : file);
+    }
+    const refused = await call('submit_sources', { fromStaged: true, mode: 'preview', kitEngineRef: NEW_ENGINE });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ reason: 'game_manifest_invalid' });
+    expect(refused.data.error).toContain('Reorder to: ["input","rng"]');
+    expect(refused.data.retry).toMatch(/stage it again/);
+    expect(refused.next).toBeUndefined();
+  });
+
   it('G: a successful delivery points at end, and end closes the session', async () => {
     await round();
     await start();

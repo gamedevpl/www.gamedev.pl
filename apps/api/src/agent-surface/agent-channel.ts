@@ -63,7 +63,7 @@ import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
-import { deliveredManifestProblem } from './delivered-manifest-problem.js';
+import { deliveredManifestRefusal } from './delivered-manifest-problem.js';
 import { winProofProblem } from './win-proof-hint.js';
 import { resolveAuthorizedRoundBaseVersion, resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
@@ -2060,15 +2060,8 @@ export async function registerAgentChannelRoutes(
         }
         mode ??= 'publish';
 
-        // 2026-11-27: misordered modules reached the gate unread.
-        const manifestProblem = deliveredManifestProblem(files);
-        if (manifestProblem) {
-          return reply.status(400).send({
-            error: manifestProblem,
-            reason: 'game_manifest_invalid',
-            retry: 'Fix GAME.json, stage it again, then call submit_sources again.',
-          });
-        }
+        const manifestRefusal = deliveredManifestRefusal(files);
+        if (manifestRefusal) return reply.status(400).send(manifestRefusal);
 
         if (!options.sourceDelivery) {
           return reply.status(503).send({ error: 'delivery is not configured on this deployment' });

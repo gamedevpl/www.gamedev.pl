@@ -28,3 +28,11 @@ export function deliveredManifestProblem(files: ReadonlyArray<{ path: string; co
   }
   return null;
 }
+
+// 2026-11-27: misordered modules reached the gate unread.
+export function deliveredManifestRefusal(files: ReadonlyArray<{ path: string; content: string }>) {
+  const error = deliveredManifestProblem(files);
+  if (!error) return null;
+  const retry = 'Fix GAME.json, stage it again, then call submit_sources again.';
+  return { error, reason: 'game_manifest_invalid', retry };
+}
