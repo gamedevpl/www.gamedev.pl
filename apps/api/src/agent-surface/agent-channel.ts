@@ -2060,7 +2060,7 @@ export async function registerAgentChannelRoutes(
         }
         mode ??= 'publish';
 
-        // 2026-11-27: two of four builds appended "rng" after "audio"; the hint rode a PUT reply nobody read.
+        // 2026-11-27: misordered modules reached the gate unread.
         const manifestProblem = deliveredManifestProblem(files);
         if (manifestProblem) {
           return reply.status(400).send({

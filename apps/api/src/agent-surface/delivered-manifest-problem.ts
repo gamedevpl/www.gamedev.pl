@@ -1,9 +1,6 @@
 import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
 
-// The gate's parser (catalog/parse-game-manifest.ts) throws on an engine.modules list that
-// names an unknown module, repeats one, or leaves the canonical order. Staging only hints,
-// and a hint on a signed-URL PUT reply is easy to miss, so a delivery the gate would refuse
-// for that reason is refused here, before a build is spent on it.
+// Refuses at submit an engine.modules list the gate would reject.
 export function deliveredManifestProblem(files: ReadonlyArray<{ path: string; content: string }>): string | null {
   const manifest = files.find((file) => file.path === 'GAME.json');
   if (!manifest) return null;

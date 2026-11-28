@@ -2029,7 +2029,7 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
-    // 2026-11-27: a manifest the gate refuses is refused at submit, before a build is spent.
+    // 2026-11-27: refuse at submit what the gate would refuse.
     it('refuses fromStaged when GAME.json would fail the gate, and keeps the buffer', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
