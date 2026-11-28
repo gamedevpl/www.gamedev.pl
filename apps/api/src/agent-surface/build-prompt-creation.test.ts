@@ -20,6 +20,7 @@ describe('buildPrompt for a new game on the shell lane', () => {
     for (const brief of [BRIEF, create]) {
       const shell = buildPrompt(brief, { shell: true });
       expect(shell).toContain(check);
+      expect(shell).toContain('two captures and one fix, no more');
       expect(shell).not.toContain(rough);
       expect(shell).toContain('`end` straight after the submit returns');
     }
