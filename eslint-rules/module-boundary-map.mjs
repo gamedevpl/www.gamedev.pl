@@ -621,6 +621,7 @@ const FILE_BUCKET = {
   'admin-trash-routes': 'catalog',
   'game-play-route': 'catalog',
   'assembled-game-cache': 'catalog',
+  'stored-published-game': 'catalog',
   'slug-resolver': 'catalog',
   'catalog-enricher': 'catalog',
   'catalog-tagline': 'catalog',

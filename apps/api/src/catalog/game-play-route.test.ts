@@ -59,7 +59,12 @@ describe('published game errors', () => {
 it('identifies actual served HTML consistently across publication lanes', async () => {
   const run = async (lane: 'store' | 'snapshot') => {
     const app = Fastify({ logger: false });
-    const game = { slug: 'space-hop', title: 'Space Hop', html: '<html>same artifact</html>' };
+    const game = {
+      slug: 'space-hop',
+      title: 'Space Hop',
+      html: '<html>same artifact</html>',
+      orientation: 'landscape' as const,
+    };
     await registerGamePlayRoute(app, {
       githubClient: {} as GitHubClient,
       snapshotReader: lane === 'snapshot' ? ({} as never) : null,
@@ -72,9 +77,10 @@ it('identifies actual served HTML consistently across publication lanes', async 
       draftPreview: { canPlayDraft: async () => null, replyWithDraft: async (_, reply) => reply },
     });
     const res = await app.inject({ method: 'GET', url: '/api/games/space-hop' });
-    const body = res.json() as { artifactVersion: string };
+    const body = res.json() as { artifactVersion: string; orientation?: string };
     expect(res.statusCode).toBe(200);
     expect(body.artifactVersion).toMatch(/^[a-f0-9]{64}$/);
+    expect(body.orientation).toBe('landscape');
     await app.close();
     return body.artifactVersion;
   };

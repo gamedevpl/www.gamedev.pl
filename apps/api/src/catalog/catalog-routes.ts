@@ -22,8 +22,8 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
 import { isListedEntry, isPublishedEntry } from '@gamedevpl/contract';
 import { resolveGameAccess } from '../platform/game-access-resolve.js';
-
-type PublishedGame = { slug: string; title: string; html: string };
+import { attachCatalogOrientation, type CachedAssembledGame as PublishedGame } from './assembled-game-cache.js';
+import { readStoredPublishedGame } from './stored-published-game.js';
 
 export interface CatalogRoutesOptions {
   store?: Store;
@@ -108,7 +108,8 @@ export async function registerCatalogRoutes(
   async function readSnapshotGame(slug: string): Promise<PublishedGame | null> {
     if (!snapshotReader) return null;
     try {
-      return await snapshotReader.getGame(slug);
+      const game = await snapshotReader.getGame(slug);
+      return game ? attachCatalogOrientation(game, () => getPublishedCatalogEntry(slug)) : null;
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) throw error;
       app.log.warn({ err: error, slug }, 'snapshot game unavailable');
@@ -230,17 +231,7 @@ export async function registerCatalogRoutes(
   }
 
   async function storePublishedGame(slug: string): Promise<PublishedGame | null> {
-    if (!store || !gamesStore) return null;
-    const publication = await store.getPublication(slug);
-    if (!isPublished(publication)) return null;
-    const bundle = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'bundle.html');
-    if (!bundle) {
-      app.log.error({ slug, version: publication.currentVersion }, 'published game has no stored bundle');
-      return null;
-    }
-    const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
-    const title = (spec && catalogEntryFromSpec(slug, spec, () => null)?.title) || slug;
-    return { slug, title, html: bundle.toString('utf8') };
+    return readStoredPublishedGame({ slug, store, gamesStore, log: app.log });
   }
 
   // What readStorePublishedMedia would read, unread.

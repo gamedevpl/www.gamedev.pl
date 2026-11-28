@@ -1,4 +1,4 @@
-import type { FeedbackContext } from '@gamedevpl/contract';
+import type { CatalogOrientation, FeedbackContext } from '@gamedevpl/contract';
 export type { FeedbackContext } from '@gamedevpl/contract';
 import type {
   BuildEventKind,
@@ -77,6 +77,7 @@ export type SubmissionPreview = {
   slug: string;
   title: string;
   html: string;
+  orientation?: CatalogOrientation;
 };
 
 export type SubmissionApiError = Error & { status?: number; category?: string };

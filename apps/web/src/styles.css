@@ -2456,6 +2456,31 @@ body.player-open {
   animation: fadeIn 0.25s ease-out;
 }
 
+.theater-rotate-hint.is-action {
+  pointer-events: auto;
+  cursor: pointer;
+  min-height: 44px;
+  font-family: inherit;
+  border-color: rgba(0, 228, 172, 0.55);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 228, 172, 0.25);
+}
+
+.theater-rotate-hint.is-action:hover,
+.theater-rotate-hint.is-action:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  background: rgba(12, 18, 24, 0.96);
+  outline: none;
+}
+
+.is-native-fullscreen .theater-rotate-hint {
+  left: 68px;
+  right: 68px;
+  max-width: calc(100% - 136px);
+}
+
 /* Icon + label, so the label can drop out on a narrow screen and leave a square,
    thumb-sized icon button behind (each control carries its own aria-label).
    Include .report-btn (an <a>) so it sizes with the real buttons. */
