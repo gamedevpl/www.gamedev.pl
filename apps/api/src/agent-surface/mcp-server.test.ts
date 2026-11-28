@@ -1223,7 +1223,7 @@ declare const GameKit: { defineGame(): unknown };
     expect(joined).toMatch(/seedStatus=pending means a draft is still generating/);
     expect(joined).toMatch(/get_kit_api/);
     expect(joined).toMatch(/not published on the web/);
-    expect(joined).toMatch(/needs no browser, npm ci, capture or playtest/);
+    expect(joined).toMatch(/builds and runs, not how it looks/);
     expect(joined).toMatch(/mode=publish .*full gate/);
     expect(joined).toMatch(/one-shot read: pending with a deliveryId means the build is still running/);
     expect(joined).toMatch(/staging alone does not re-run the gate/);

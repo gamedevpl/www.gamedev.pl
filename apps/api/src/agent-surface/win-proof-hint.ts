@@ -1,5 +1,7 @@
 // 2026-11-18: a delivery named "lost" as its objective, unopposed.
 
+import { capturePlanHint } from './capture-plan-hint.js';
+
 type Json = Record<string, unknown>;
 type SourceFile = { path: string; content: string };
 
@@ -54,9 +56,21 @@ function implies(capture: Json, objective: Json): boolean {
 
 // Null when the files show a win, or cannot say.
 export function winProofProblem(files: readonly SourceFile[], opts: { firstDelivery: boolean }): string | null {
+  // A plan the runner cannot finish stores no frames, on any delivery.
+  const plan = files.find((file) => file.path === 'CAPTURE.json');
+  const broken = plan ? capturePlanHint(plan.content, { stills: false }) : null;
+  if (broken) return `${broken} Fix CAPTURE.json and submit again.`;
+
   const acceptance = parseObject(files, 'ACCEPTANCE.json');
   const achieved = Array.isArray(acceptance?.achieved) ? acceptance.achieved.filter(isObject) : [];
   if (achieved.length === 0) return null;
+  // 2026-11-27: a first delivery without a plan stored no frames.
+  if (opts.firstDelivery && !files.some((file) => file.path === 'CAPTURE.json')) {
+    return (
+      'The delivery has no CAPTURE.json, so the gate stores no frames and nothing shows the game can be won. ' +
+      'Stage a CAPTURE.json scripted to the state ACCEPTANCE.json names, then submit again.'
+    );
+  }
 
   const loss = achieved.find((condition) => typeof condition.equals === 'string' && LOSS.test(condition.equals));
   if (loss && achieved.every((condition) => typeof condition.equals === 'string' && LOSS.test(condition.equals))) {

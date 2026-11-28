@@ -58,12 +58,45 @@ describe('winProofProblem', () => {
     expect(winProofProblem(files(acceptance, enough), { firstDelivery: true })).toBeNull();
   });
 
+  it('names a capture step the runner cannot finish, on any delivery', () => {
+    const acceptance = { objective: 'Deliver', achieved: [{ field: 'delivered', atLeast: 1 }] };
+    const win = { waitFor: { field: 'delivered', greaterThanOrEqual: 1, maxFrames: 900 } };
+    const noOperator = plan([{ repeat: { times: 2, actions: [{ assert: { field: 'lives', atLeast: 1 } }] } }, win]);
+    for (const firstDelivery of [true, false]) {
+      const problem = winProofProblem(files(acceptance, noOperator), { firstDelivery });
+      expect(problem).toContain('assert needs exactly one comparison operator');
+      expect(problem).toContain('greaterThanOrEqual');
+      expect(problem).not.toContain('locally');
+    }
+    expect(winProofProblem(files({}, noOperator), { firstDelivery: false })).toContain('comparison operator');
+    // The publish gate refuses two operators on one condition.
+    const twoOperators = plan([{ assert: { field: 'lives', equals: 1, notEquals: 0 } }, win]);
+    expect(winProofProblem(files(acceptance, twoOperators), { firstDelivery: true })).toContain('exactly one');
+    const until = plan([{ repeat: { times: 5, until: { field: 'delivered', atLeast: 1 }, actions: [] } }, win]);
+    expect(winProofProblem(files(acceptance, until), { firstDelivery: true })).toContain('repeat.until needs exactly');
+  });
+
+  it('holds a plan that is not valid JSON or has no script', () => {
+    const acceptance = { path: 'ACCEPTANCE.json', content: '{"achieved":[{"field":"state","equals":"won"}]}' };
+    for (const content of ['{', '{}']) {
+      const problem = winProofProblem([acceptance, { path: 'CAPTURE.json', content }], { firstDelivery: true });
+      expect(problem).toMatch(/not valid JSON|not a capture plan/);
+    }
+  });
+
+  it('holds a first delivery that has an objective but no capture plan', () => {
+    const acceptance = { objective: 'Win', achieved: [{ field: 'state', equals: 'won' }] };
+    expect(winProofProblem(files(acceptance), { firstDelivery: true })).toContain('has no CAPTURE.json');
+    expect(winProofProblem(files(acceptance), { firstDelivery: false })).toBeNull();
+  });
+
   it('stays silent when it cannot tell', () => {
     expect(winProofProblem([], { firstDelivery: true })).toBeNull();
     expect(winProofProblem([{ path: 'ACCEPTANCE.json', content: '{' }], { firstDelivery: true })).toBeNull();
     expect(winProofProblem(files({ objective: 'x', achieved: [] }), { firstDelivery: true })).toBeNull();
     const numeric = { objective: 'Score', achieved: [{ field: 'score', atLeast: 10 }] };
-    expect(winProofProblem(files(numeric), { firstDelivery: true })).toBeNull();
+    // A later delivery may carry only changed files.
+    expect(winProofProblem(files(numeric), { firstDelivery: false })).toBeNull();
   });
 });
 
