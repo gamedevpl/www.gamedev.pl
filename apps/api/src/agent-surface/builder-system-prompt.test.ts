@@ -54,7 +54,12 @@ describe('builderSystemPrompt', () => {
   // 2026-11-27: no builder ever sent a second preview.
   it('gives a new game one visual check before its first preview, on the shell lane only', () => {
     const shell = builderSystemPrompt({ shell: true });
-    expect(shell).toContain('A new game gets one visual check before its first preview');
+    expect(shell).toContain('A new game gets an art brief and one visual check before its first preview');
+    // 2026-11-28: one build captured 14 times, another fixed nothing.
+    expect(shell).toContain('two captures and one fix, however the second frame looks');
+    expect(shell).toContain('A check that names no defect and changes nothing is not done');
+    expect(shell).toContain('is in the language of the brief');
+    expect(shell).toContain('never placeholder text');
     expect(shell).toContain('Before you stage that first preview');
     expect(shell).toContain('staging the same `CAPTURE.json` you just ran');
     expect(shell).toContain('capture only for a visual request or a new game’s first preview');
