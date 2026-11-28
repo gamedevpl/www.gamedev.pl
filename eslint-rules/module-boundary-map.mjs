@@ -544,11 +544,10 @@ const FILE_BUCKET = {
   'status-agent-activity': 'delivery',
   'builder-system-prompt': 'agent-surface',
   'gate-verdict': 'agent-surface',
+  'canonical-game-manifest': 'agent-surface',
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
-  // Refuses at submit an engine.modules list the gate's manifest parser rejects.
-  'delivered-manifest-problem': 'agent-surface',
   'inbox-reference-images': 'agent-surface',
   'reference-image-url': 'agent-surface',
   'reference-unseen': 'agent-surface',
@@ -580,6 +579,7 @@ const FILE_BUCKET = {
   'audio-profile': 'delivery',
   'audio-profile-log': 'delivery',
   'games-store': 'delivery',
+  'manifest-modules-problem': 'delivery',
   'purge-game-objects': 'delivery',
   'stored-version-history': 'delivery',
   'storage-write-retry': 'delivery',

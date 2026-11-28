@@ -63,7 +63,7 @@ import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
-import { deliveredManifestProblem } from './delivered-manifest-problem.js';
+import { canonicalGameManifest } from './canonical-game-manifest.js';
 import { winProofProblem } from './win-proof-hint.js';
 import { resolveAuthorizedRoundBaseVersion, resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
@@ -71,7 +71,7 @@ import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
 import type { SourceDeliveryService, SourceDeliveryValidationError } from '../delivery/source-delivery.js';
-import { deliveryRefusalFields } from './delivery-refusal-reply.js';
+import { deliveryRefusalFields, uploadRefusalBody } from './delivery-refusal-reply.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
 import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
@@ -2058,17 +2058,8 @@ export async function registerAgentChannelRoutes(
           });
           files = Object.entries(overlay).map(([path, content]) => ({ path, content }));
         }
+        files = files.map(canonicalGameManifest);
         mode ??= 'publish';
-
-        // 2026-11-27: misordered modules reached the gate unread.
-        const manifestProblem = deliveredManifestProblem(files);
-        if (manifestProblem) {
-          return reply.status(400).send({
-            error: manifestProblem,
-            reason: 'game_manifest_invalid',
-            retry: 'Fix GAME.json, stage it again, then call submit_sources again.',
-          });
-        }
 
         if (!options.sourceDelivery) {
           return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -2139,7 +2130,7 @@ export async function registerAgentChannelRoutes(
         // is the one place a 400 body is worth writing carefully: the alternative is an
         // agent burning a session guessing which file was refused.
         if (error instanceof InvalidUploadError) {
-          return reply.status(400).send({ error: error.message });
+          return reply.status(400).send(uploadRefusalBody(error, parsed.data));
         }
         throw error;
       }

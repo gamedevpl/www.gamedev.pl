@@ -171,7 +171,7 @@ describe('validateSourceUpload — the delivery contract', () => {
     it('refuses a schema-only delivery whose GAME.json does not parse', () => {
       expect(() =>
         validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: '{"howToPlay": {' }]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json is not valid JSON/);
     });
 
     it('refuses a howToPlay whose goal/hint are truthy but not {en, pl} strings', () => {

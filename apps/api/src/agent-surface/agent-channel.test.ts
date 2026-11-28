@@ -2029,39 +2029,6 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
-    // 2026-11-27: refuse at submit what the gate would refuse.
-    it('refuses fromStaged when GAME.json would fail the gate, and keeps the buffer', async () => {
-      const store = new InMemoryStore();
-      await seedSubmission(store);
-      const { gamesStore, stored, staged } = stubGamesStore();
-      app = await createApp(store, { gamesStore });
-      const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json').map((f) =>
-        f.path === 'GAME.json'
-          ? { ...f, content: JSON.stringify({ ...JSON.parse(f.content), engine: { modules: ['rng', 'input'] } }) }
-          : f,
-      );
-      for (const file of draft) {
-        const stagedRes = await app.inject({
-          method: 'PUT',
-          url: '/api/agent/build/sources/stage',
-          headers: agentHeaders(),
-          payload: { slug: 'comet-courier', path: file.path, content: file.content },
-        });
-        expect(stagedRes.statusCode).toBe(200);
-      }
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/agent/build/sources',
-        headers: agentHeaders(),
-        payload: { slug: 'comet-courier', fromStaged: true, kitEngineRef: 'abcdef1234567890', mode: 'preview' },
-      });
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toMatchObject({ reason: 'game_manifest_invalid' });
-      expect(response.json().error).toContain('Reorder to: ["input","rng"]');
-      expect(stored).toHaveLength(0);
-      expect(staged.size).toBeGreaterThan(0);
-    });
-
     it('patches a delivery file into staging and fromStaged overlays the rest', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
