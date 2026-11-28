@@ -1,4 +1,5 @@
 import type { SourceDeliveryRejected } from '../delivery/source-delivery.js';
+import { GameManifestUploadError } from '../platform/upload-error.js';
 
 // What a refused delivery tells the builder, per refusal.
 export function deliveryRefusalFields(
@@ -49,4 +50,18 @@ export function deliveryRefusalFields(
         retry: `The content check could not run. ${kept}; deliver again shortly.`,
       };
   }
+}
+
+// A 400 body for an upload the store refused before the gate.
+export function uploadRefusalBody(
+  error: Error,
+  from: { fromStaged?: boolean; fromLatestDelivery?: boolean },
+): Record<string, unknown> {
+  if (!(error instanceof GameManifestUploadError)) return { error: error.message };
+  const retry = from.fromStaged
+    ? 'Your staged sources stay staged. Fix GAME.json, stage it again, then call submit_sources again.'
+    : from.fromLatestDelivery
+      ? 'The latest delivery stays as it was. Call submit_sources with fromLatestDelivery again and a corrected GAME.json in files[].'
+      : 'Files sent inline were not kept. Send the whole set again with a corrected GAME.json.';
+  return { error: error.message, reason: error.reason, retry };
 }

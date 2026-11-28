@@ -579,6 +579,7 @@ const FILE_BUCKET = {
   'audio-profile': 'delivery',
   'audio-profile-log': 'delivery',
   'games-store': 'delivery',
+  'manifest-modules-problem': 'delivery',
   'purge-game-objects': 'delivery',
   'stored-version-history': 'delivery',
   'storage-write-retry': 'delivery',

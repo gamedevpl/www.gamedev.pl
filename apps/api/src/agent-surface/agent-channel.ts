@@ -71,7 +71,7 @@ import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
 import type { SourceDeliveryService, SourceDeliveryValidationError } from '../delivery/source-delivery.js';
-import { deliveryRefusalFields } from './delivery-refusal-reply.js';
+import { deliveryRefusalFields, uploadRefusalBody } from './delivery-refusal-reply.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
 import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
@@ -2130,7 +2130,7 @@ export async function registerAgentChannelRoutes(
         // is the one place a 400 body is worth writing carefully: the alternative is an
         // agent burning a session guessing which file was refused.
         if (error instanceof InvalidUploadError) {
-          return reply.status(400).send({ error: error.message });
+          return reply.status(400).send(uploadRefusalBody(error, parsed.data));
         }
         throw error;
       }

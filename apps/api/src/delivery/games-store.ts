@@ -4,7 +4,8 @@ import { listStoredVersions } from './stored-version-history.js';
 import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
+import { GameManifestUploadError, InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
+import { manifestModulesProblem } from './manifest-modules-problem.js';
 import { GoogleAuth } from 'google-auth-library';
 import {
   DELIVERY_FIXED_FILES,
@@ -147,6 +148,9 @@ export function validateSourceUpload(
   const editorProblem = editorUploadProblem(files);
   if (editorProblem) throw new InvalidUploadError(editorProblem);
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
+  // 2026-11-27: the gate refused these after a full build wait.
+  const modulesProblem = gameJson ? manifestModulesProblem(gameJson.content) : null;
+  if (modulesProblem) throw new GameManifestUploadError(modulesProblem);
 
   const indexHtml = files.find((file) => file.path.trim() === 'index.html');
   const hasIndexHtml = !!indexHtml?.content.trim();
@@ -159,7 +163,7 @@ export function validateSourceUpload(
       hasHowToPlay = hasPlayableHowToPlay(manifest.howToPlay);
       howToPlayProblem = howToPlayShapeProblem(manifest.howToPlay);
     } catch {
-      // Unparseable GAME.json is reported elsewhere; it cannot supply markup.
+      // Unparseable GAME.json was refused above; it cannot supply markup.
     }
   }
 
