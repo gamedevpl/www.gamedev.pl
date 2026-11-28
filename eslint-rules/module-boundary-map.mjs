@@ -538,6 +538,7 @@ const FILE_BUCKET = {
   'build-prompt': 'agent-surface',
   'audio-fit-brief': 'agent-surface',
   'build-prompt-opening': 'agent-surface',
+  'build-prompt-submit': 'agent-surface',
   'managed-anthropic-activity': 'agent-surface',
   'managed-activity-evidence': 'agent-surface',
   'managed-activity-summary': 'agent-surface',

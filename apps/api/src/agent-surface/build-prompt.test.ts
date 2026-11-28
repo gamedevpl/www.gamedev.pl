@@ -62,23 +62,6 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('Call `start` with exactly `{ "slug": "(slug)" }`');
   });
 
-  // 2026-11-27: "rather improve" beat the art pass in every round.
-  it('sends a shell creation round through one look check before its only preview', () => {
-    const create = {
-      ...BRIEF,
-      slug: undefined,
-      createGame: { title: 'Star Parcel Run', concept: 'Guide a courier ship across a bright sky.' },
-    };
-    const shellCreate = buildPrompt(create, { shell: true });
-    expect(shellCreate).toContain('once the game is playable and its one look check (system prompt) is done');
-    expect(shellCreate).toContain('Stage the `CAPTURE.json` you ran locally with the first preview');
-    expect(shellCreate).toContain('`greaterThanOrEqual`');
-    expect(shellCreate).not.toContain('even if you can see things you would rather improve');
-    expect(shellCreate).not.toContain('`end` straight after the submit returns');
-    expect(buildPrompt(create)).toContain('`end` straight after the submit returns');
-    expect(buildPrompt(BRIEF, { shell: true })).toContain('`end` straight after the submit returns');
-  });
-
   it('does not send a sandboxed round looking for a checkout it does not have', () => {
     // Measured: 15 seconds of a two-minute round spent on `find / -iname ...`.
     const prompt = buildPrompt(BRIEF);
