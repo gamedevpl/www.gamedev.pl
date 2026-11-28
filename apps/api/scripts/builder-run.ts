@@ -249,7 +249,7 @@ async function main(): Promise<void> {
               creatorKey,
               sessionKey,
               brief: `${brief.title}\n${brief.concept}`,
-              ...(deliveryOf(gate) ? { deliveryId: deliveryOf(gate) } : {}),
+              deliveryId: deliveryOf(gate),
               model: judgeModel,
             }).catch((error: unknown) => ({ error: String(error) }))
           : undefined;

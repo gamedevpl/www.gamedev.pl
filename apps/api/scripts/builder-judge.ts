@@ -109,25 +109,27 @@ export async function judgeVisuals(input: {
   creatorKey: string;
   sessionKey: string;
   brief: string;
-  deliveryId?: string;
+  deliveryId: string | undefined;
   model?: string;
   maxFrames?: number;
 }): Promise<VisualScore> {
   const model = input.model ?? 'claude-opus-5-5';
   if (!input.brief.trim()) throw new Error('no brief to judge fidelity against');
+  const deliveryId = input.deliveryId;
+  if (typeof deliveryId !== 'string' || !deliveryId.trim()) throw new Error('gate verdict has no deliveryId');
   const media = (await mcpTool(input.mcpUrl, input.creatorKey, 'get_gate_media', {
     sessionKey: input.sessionKey,
-    ...(input.deliveryId ? { deliveryId: input.deliveryId } : {}),
+    deliveryId,
   })) as { deliveryId?: string | null; screenshots?: Array<{ file: string; url: string }> };
   // Frames of a later delivery would be scored against this verdict.
-  if (input.deliveryId && media.deliveryId !== input.deliveryId) {
-    throw new Error(`gate media is for ${media.deliveryId ?? 'no delivery'}, not ${input.deliveryId}`);
+  if (media.deliveryId !== deliveryId) {
+    throw new Error(`gate media is for ${media.deliveryId ?? 'no delivery'}, not ${deliveryId}`);
   }
   const shots = pick(
     (media.screenshots ?? []).filter((shot) => /\.png$/i.test(shot.file)),
     input.maxFrames ?? 4,
   );
-  if (!shots.length) throw new Error(`no gate frames for ${media.deliveryId ?? 'the latest delivery'}`);
+  if (!shots.length) throw new Error(`no gate frames for ${deliveryId}`);
   const images = await Promise.all(
     shots.map(async (shot) => {
       const response = await fetch(shot.url);
@@ -243,7 +245,7 @@ async function main(): Promise<void> {
             creatorKey,
             sessionKey,
             brief: `${known.title}\n${known.concept}`,
-            ...(deliveryId ? { deliveryId } : {}),
+            deliveryId,
             model,
           }).catch((error: unknown) => ({ error: String(error) }));
     // A failed retry keeps the last good rating and records why.
