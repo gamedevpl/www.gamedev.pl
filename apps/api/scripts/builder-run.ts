@@ -8,6 +8,7 @@ import { buildPrompt } from '../src/agent-surface/build-prompt.js';
 import { builderSystemPrompt } from '../src/agent-surface/builder-system-prompt.js';
 import type { ManagedAgentEffort } from '../src/agent-surface/managed-agent.js';
 import { createAnthropicManagedProvider } from '../src/agent-surface/managed-provider-anthropic.js';
+import { judgeVisuals, mcpTool, toolResults } from './builder-judge.js';
 // @ts-expect-error -- plain .mjs shared with infra tooling
 import { scoreSession } from '../../../infra/session-score-lib.mjs';
 
@@ -15,6 +16,7 @@ const ANTHROPIC = 'https://api.anthropic.com';
 const VALUE_FLAGS = [
   'briefs',
   'effort',
+  'judge-model',
   'kickoff-extra',
   'max-cents',
   'max-minutes',
@@ -92,55 +94,10 @@ async function sessionEvents(apiKey: string, sessionId: string): Promise<{ event
   }
 }
 
-type Event = { type?: string; name?: string; content?: Array<{ text?: string }>; is_error?: boolean };
-
-// Parsed JSON results of one MCP tool, in call order.
-function toolResults(events: unknown[], tool: string): Array<Record<string, unknown>> {
-  const names = new Map<string, string>();
-  const results: Array<Record<string, unknown>> = [];
-  for (const raw of events as Array<Event & { id?: string; mcp_tool_use_id?: string }>) {
-    if (raw.type === 'agent.mcp_tool_use' && raw.id) names.set(raw.id, raw.name ?? '');
-    if (raw.type !== 'agent.mcp_tool_result' || raw.is_error) continue;
-    if (names.get(raw.mcp_tool_use_id ?? '') !== tool) continue;
-    // start returns several blocks; only one of them is JSON.
-    const parsed: Record<string, unknown> = {};
-    for (const part of raw.content ?? []) {
-      try {
-        const value: unknown = JSON.parse(part.text ?? '');
-        if (value && typeof value === 'object') Object.assign(parsed, value);
-      } catch {
-        // Prose blocks carry nothing this report reads.
-      }
-    }
-    if (Object.keys(parsed).length) results.push(parsed);
-  }
-  return results;
-}
-
-// One stateless JSON-RPC call; the verdict lands minutes after submit.
-async function mcpTool(url: string, key: string, name: string, args: Record<string, unknown>): Promise<unknown> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${key}`,
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-    },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
-  });
-  const text = await response.text();
-  const json = text.startsWith('{') ? text : (text.match(/^data: (.*)$/m)?.[1] ?? '{}');
-  const result = (JSON.parse(json) as { result?: { structuredContent?: unknown; content?: Array<{ text?: string }> } })
-    .result;
-  if (result?.structuredContent) return result.structuredContent;
-  for (const part of result?.content ?? []) {
-    try {
-      return JSON.parse(part.text ?? '');
-    } catch {
-      // Skip prose blocks; the verdict is the JSON one.
-    }
-  }
-  return { status: response.status, raw: text.slice(0, 500) };
+// The verdict names the delivery its frames belong to.
+function deliveryOf(gate: unknown): string | undefined {
+  const id = (gate as { deliveryId?: unknown } | null)?.deliveryId;
+  return typeof id === 'string' && id ? id : undefined;
 }
 
 async function main(): Promise<void> {
@@ -189,6 +146,7 @@ async function main(): Promise<void> {
   const model = value('model') ?? process.env.MANAGED_AGENT_MODEL?.trim() ?? 'claude-sonnet-5-5';
   const effort = (value('effort') ?? process.env.MANAGED_AGENT_ANTHROPIC_EFFORT?.trim() ?? 'medium') as
     ManagedAgentEffort | undefined;
+  const judgeModel = value('judge-model');
   const provider = createAnthropicManagedProvider({
     apiKey,
     model,
@@ -282,15 +240,30 @@ async function main(): Promise<void> {
         if (!/pending|running|queued/.test(status)) break;
         await sleep(45_000);
       }
+      // Gate frames are rated after the verdict; judge-model none skips.
+      const visual =
+        sessionKey && submits.length && judgeModel !== 'none' && !stopping
+          ? await judgeVisuals({
+              apiKey,
+              mcpUrl,
+              creatorKey,
+              sessionKey,
+              brief: `${brief.title}\n${brief.concept}`,
+              ...(deliveryOf(gate) ? { deliveryId: deliveryOf(gate) } : {}),
+              model: judgeModel,
+            }).catch((error: unknown) => ({ error: String(error) }))
+          : undefined;
       const result = {
         id: label,
         session: session.id,
+        mcpUrl,
         slug,
         timedOut,
         ...(abandoned ? { abandoned: true } : {}),
         minutes,
         submits: submits.length,
         gate,
+        ...(visual ? { visual } : {}),
         score: scoreSession(exported.events),
         ...(exported.error ? { exportError: exported.error } : {}),
       };
@@ -302,7 +275,8 @@ async function main(): Promise<void> {
       await writeFile(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
       await writeFile(path.join(outDir, 'summary.json'), JSON.stringify(results, null, 2));
       const verdict = (gate as { status?: string } | null)?.status ?? (gate === null ? 'no delivery' : 'unknown');
-      log(`[${label}] done in ${minutes} min, slug ${slug ?? '-'}, gate ${verdict}`);
+      const look = !visual ? '-' : 'error' in visual ? visual.error : visual.overall;
+      log(`[${label}] done in ${minutes} min, slug ${slug ?? '-'}, gate ${verdict}, visual ${look}`);
     }
   }
   log(`summary: ${path.join(outDir, 'summary.json')}`);

@@ -51,6 +51,17 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
 
+  // 2026-11-27: no builder ever sent a second preview.
+  it('gives a new game one visual check before its first preview, on the shell lane only', () => {
+    const shell = builderSystemPrompt({ shell: true });
+    expect(shell).toContain('A new game gets one visual check before its first preview');
+    expect(shell).toContain('Before you stage that first preview');
+    expect(shell).toContain('staging the same `CAPTURE.json` you just ran');
+    expect(shell).toContain('capture only for a visual request or a new game’s first preview');
+    expect(shell).not.toContain('second preview');
+    expect(builderSystemPrompt({ shell: false })).not.toContain('visual check');
+  });
+
   // 2026-10-24: the kit-browse rule was read as covering knowledge_query.
   it('keeps knowledge_query and the first report_progress in the shell round order', () => {
     const shell = builderSystemPrompt({ shell: true });
