@@ -13,7 +13,6 @@ export interface VisualScore {
   issues: string[];
   frames: string[];
   model: string;
-  error?: string;
 }
 
 type Event = {
@@ -61,8 +60,13 @@ export async function mcpTool(url: string, key: string, name: string, args: Reco
   });
   const text = await response.text();
   const json = text.startsWith('{') ? text : (text.match(/^data: (.*)$/m)?.[1] ?? '{}');
-  const result = (JSON.parse(json) as { result?: { structuredContent?: unknown; content?: Array<{ text?: string }> } })
-    .result;
+  const result = (
+    JSON.parse(json) as {
+      result?: { structuredContent?: unknown; content?: Array<{ text?: string }>; isError?: boolean };
+    }
+  ).result;
+  // A refusal (expired session, not owner) must not read as empty media.
+  if (result?.isError) throw new Error(`${name}: ${(result.content ?? []).map((part) => part.text).join(' ')}`);
   if (result?.structuredContent) return result.structuredContent;
   for (const part of result?.content ?? []) {
     try {
@@ -102,19 +106,25 @@ export async function judgeVisuals(input: {
   creatorKey: string;
   sessionKey: string;
   brief: string;
+  deliveryId?: string;
   model?: string;
   maxFrames?: number;
 }): Promise<VisualScore> {
   const model = input.model ?? 'claude-opus-5-5';
-  const empty = Object.fromEntries(AXES.map((axis) => [axis, 0])) as VisualScore['scores'];
+  if (!input.brief.trim()) throw new Error('no brief to judge fidelity against');
   const media = (await mcpTool(input.mcpUrl, input.creatorKey, 'get_gate_media', {
     sessionKey: input.sessionKey,
-  })) as { screenshots?: Array<{ file: string; url: string }> };
+    ...(input.deliveryId ? { deliveryId: input.deliveryId } : {}),
+  })) as { deliveryId?: string | null; screenshots?: Array<{ file: string; url: string }> };
+  // Frames of a later delivery would be scored against this verdict.
+  if (input.deliveryId && media.deliveryId !== input.deliveryId) {
+    throw new Error(`gate media is for ${media.deliveryId ?? 'no delivery'}, not ${input.deliveryId}`);
+  }
   const shots = pick(
     (media.screenshots ?? []).filter((shot) => /\.png$/i.test(shot.file)),
     input.maxFrames ?? 4,
   );
-  if (!shots.length) return { overall: 0, scores: empty, issues: [], frames: [], model, error: 'no gate frames' };
+  if (!shots.length) throw new Error(`no gate frames for ${media.deliveryId ?? 'the latest delivery'}`);
   const images = await Promise.all(
     shots.map(async (shot) => {
       const response = await fetch(shot.url);
@@ -160,7 +170,7 @@ export async function judgeVisuals(input: {
 async function main(): Promise<void> {
   const runDir = process.argv[2];
   if (!runDir) {
-    console.error('usage: builder:judge <run dir> [--model <id>] [--briefs <file>]');
+    console.error('usage: builder:judge <run dir> [--model <id>] [--briefs <file>] [--mcp-url <url>]');
     process.exit(2);
   }
   const modelFlag = process.argv.indexOf('--model');
@@ -171,7 +181,7 @@ async function main(): Promise<void> {
     console.error('needs ANTHROPIC_API_KEY (or CLAUDE_API_KEY) and GAMEDEV_CREATOR_KEY');
     process.exit(2);
   }
-  const mcpUrl = 'https://www.gamedev.pl/api/mcp';
+  const mcpFlag = process.argv.indexOf('--mcp-url');
   const briefsFlag = process.argv.indexOf('--briefs');
   const briefsPath =
     briefsFlag > 0
@@ -193,18 +203,33 @@ async function main(): Promise<void> {
     if (!result) continue;
     const events = JSON.parse(await readFile(path.join(dir, 'events.json'), 'utf8')) as unknown[];
     const sessionKey = toolResults(events, 'start').at(-1)?.sessionKey as string | undefined;
-    // Run dirs are named <brief id> or <brief id>-<run>.
-    const known = briefs.find((item) => entry.name === item.id || entry.name.startsWith(`${item.id}-`));
-    const brief = known ? `${known.title}\n${known.concept}` : '';
-    const visual = sessionKey
-      ? await judgeVisuals({ apiKey, mcpUrl, creatorKey, sessionKey, brief, model }).catch((error: unknown) => ({
-          error: String(error),
-        }))
-      : { error: 'no sessionKey in events' };
+    // The runner labels repetitions `<brief id>#<run>`.
+    const id = String(result.id ?? '').replace(/#\d+$/, '');
+    const known = briefs.find((item) => item.id === id);
+    const mcpUrl =
+      (mcpFlag > 0 ? process.argv[mcpFlag + 1] : undefined) ??
+      (result.mcpUrl as string | undefined) ??
+      'https://www.gamedev.pl/api/mcp';
+    const deliveryId = (result.gate as { deliveryId?: string } | null)?.deliveryId;
+    const fresh = !known
+      ? { error: `brief ${id || entry.name} not in the briefs file` }
+      : !sessionKey
+        ? { error: 'no sessionKey in events' }
+        : await judgeVisuals({
+            apiKey,
+            mcpUrl,
+            creatorKey,
+            sessionKey,
+            brief: `${known.title}\n${known.concept}`,
+            ...(deliveryId ? { deliveryId } : {}),
+            model,
+          }).catch((error: unknown) => ({ error: String(error) }));
+    // A failed retry keeps the last good rating and records why.
+    const previous = result.visual as { overall?: number } | undefined;
+    const visual = 'error' in fresh && previous?.overall ? { ...previous, lastError: fresh.error } : fresh;
     await writeFile(path.join(dir, 'result.json'), JSON.stringify({ ...result, visual }, null, 2));
     summary.push({ ...result, visual });
-    const overall = (visual as { overall?: number }).overall;
-    console.log(`${entry.name}: visual ${overall ?? (visual as { error?: string }).error}`);
+    console.log(`${entry.name}: visual ${'error' in fresh ? fresh.error : fresh.overall}`);
   }
   await writeFile(path.join(runDir, 'summary.json'), JSON.stringify(summary, null, 2));
 }

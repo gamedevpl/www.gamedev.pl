@@ -78,4 +78,6 @@ The rating costs a few cents per game, billed to `ANTHROPIC_API_KEY`.
 
 To score a run that has none yet, run `npm run builder:judge -w @gamedevpl/api -- <run dir>`.
 It needs `ANTHROPIC_API_KEY` and `GAMEDEV_CREATOR_KEY`, and rewrites `result.json` and
-`summary.json` in place.
+`summary.json` in place. It scores the delivery named in the saved gate verdict, asks the MCP
+server the run used (`result.mcpUrl`, or `--mcp-url`), and looks up the brief by the saved
+`result.id`. A failed retry keeps the last good score and adds `visual.lastError`.

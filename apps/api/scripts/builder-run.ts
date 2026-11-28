@@ -94,6 +94,12 @@ async function sessionEvents(apiKey: string, sessionId: string): Promise<{ event
   }
 }
 
+// The verdict names the delivery its frames belong to.
+function deliveryOf(gate: unknown): string | undefined {
+  const id = (gate as { deliveryId?: unknown } | null)?.deliveryId;
+  return typeof id === 'string' && id ? id : undefined;
+}
+
 async function main(): Promise<void> {
   const { values, printPrompt } = parseArgs(process.argv.slice(2));
   const value = (name: string) => values.get(name);
@@ -243,12 +249,14 @@ async function main(): Promise<void> {
               creatorKey,
               sessionKey,
               brief: `${brief.title}\n${brief.concept}`,
+              ...(deliveryOf(gate) ? { deliveryId: deliveryOf(gate) } : {}),
               model: judgeModel,
             }).catch((error: unknown) => ({ error: String(error) }))
           : undefined;
       const result = {
         id: label,
         session: session.id,
+        mcpUrl,
         slug,
         timedOut,
         ...(abandoned ? { abandoned: true } : {}),
@@ -267,7 +275,7 @@ async function main(): Promise<void> {
       await writeFile(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
       await writeFile(path.join(outDir, 'summary.json'), JSON.stringify(results, null, 2));
       const verdict = (gate as { status?: string } | null)?.status ?? (gate === null ? 'no delivery' : 'unknown');
-      const look = (visual as { overall?: number; error?: string } | undefined)?.overall ?? visual?.error ?? '-';
+      const look = !visual ? '-' : 'error' in visual ? visual.error : visual.overall;
       log(`[${label}] done in ${minutes} min, slug ${slug ?? '-'}, gate ${verdict}, visual ${look}`);
     }
   }
