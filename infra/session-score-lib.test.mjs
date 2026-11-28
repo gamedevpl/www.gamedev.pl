@@ -41,24 +41,102 @@ describe('scoreSession', () => {
       },
       { type: 'session.usage', processed_at: at(51), usage: { list_cost: { amount: '7' } } },
     ]);
-    expect(score.seconds).toEqual({ total: 51, toFirstEdit: 10, toFirstSubmit: 40, replayPhase: 10 });
-    expect(score.calls).toMatchObject({ replays: 2, starts: 2, progressReports: 1, submits: 1 });
+    expect(score.seconds).toEqual({
+      total: 51,
+      toFirstEdit: 10,
+      toFirstSubmit: 40,
+      replayPhase: 10,
+      longestProgressGap: 38,
+    });
+    expect(score.calls).toMatchObject({ replays: 2, captures: 2, starts: 2, progressReports: 1, submits: 1 });
     expect(score.tokens).toMatchObject({ cacheRead: 400, cacheWrite: 20, output: 10, replayPhaseCacheReadShare: 0.75 });
     expect(score.listCost).toBe('7');
-    expect(score.flags).toEqual([
-      'acceptance_names_loss',
-      'win_not_reached',
-      'few_progress_reports',
-      'repeated_start',
-      'text_after_end',
-    ]);
+    expect(score.flags).toEqual(['acceptance_names_loss', 'win_not_reached', 'repeated_start', 'text_after_end']);
   });
 
   it('flags a session that never delivered', () => {
     expect(scoreSession([{ type: 'session.status_running', processed_at: at(0) }]).flags).toEqual([
       'no_delivery',
       'no_end',
-      'few_progress_reports',
     ]);
+  });
+
+  // 2026-11-27: refused reports counted, stills went uncounted, and a two-update round was flagged.
+  it('counts accepted reports, stills captures, the longest silence and text after the end reply', () => {
+    const use = (second, name, id, input = {}) => ({ ...mcp(second, name, input), id });
+    const result = (second, id, content, isError = false) => ({
+      type: 'agent.mcp_tool_result',
+      processed_at: at(second),
+      mcp_tool_use_id: id,
+      is_error: isError,
+      content: [{ type: 'text', text: content }],
+    });
+    const say = (second, text) => ({ type: 'agent.message', processed_at: at(second), content: [{ text }] });
+    const base = [
+      { type: 'session.status_running', processed_at: at(0) },
+      use(5, 'report_progress', 'p1'),
+      result(6, 'p1', '{"ok":true}'),
+      use(7, 'report_progress', 'p2'),
+      result(8, 'p2', '{"error":"rejected"}'),
+      bash(10, 'timeout 300 npm run --silent capture -- x --stills --out /tmp/a'),
+      use(20, 'report_progress', 'p3'),
+      result(21, 'p3', '{"ok":true}'),
+      use(30, 'submit_sources', 's1'),
+      result(31, 's1', '{"accepted":true}'),
+      use(32, 'end', 'e1', { summary: 'Done.' }),
+      say(33, 'Ending.'),
+      result(34, 'e1', '{"ok":true,"ended":true}'),
+    ];
+    const quiet = scoreSession([...base, { type: 'session.status_idle', processed_at: at(35) }]);
+    expect(quiet.calls).toMatchObject({ progressReports: 2, captures: 1, replays: 0 });
+    expect(quiet.seconds.longestProgressGap).toBe(15);
+    expect(quiet.flags).toEqual([]);
+
+    const chatty = scoreSession([...base, say(36, 'Here is a recap of the round.')]);
+    expect(chatty.flags).toEqual(['text_after_end']);
+  });
+
+  // Review of #2165: a refused call is an attempt, not a result.
+  it('counts only accepted submits, ends and reports, by log order', () => {
+    const use = (second, name, id, input = {}) => ({ ...mcp(second, name, input), id });
+    const result = (stamp, id, content, isError = false) => ({
+      type: 'agent.mcp_tool_result',
+      processed_at: stamp,
+      mcp_tool_use_id: id,
+      is_error: isError,
+      content: [{ type: 'text', text: content }],
+    });
+    const say = (stamp, text) => ({ type: 'agent.message', processed_at: stamp, content: [{ text }] });
+    const refusedSubmit = scoreSession([
+      { type: 'session.status_running', processed_at: at(0) },
+      use(30, 'submit_sources', 's1'),
+      result(at(31), 's1', '{"error":"GAME.json","reason":"game_manifest_invalid"}', true),
+      use(40, 'report_progress', 'p1'),
+      result(at(41), 'p1', '{"ok":false}'),
+      use(45, 'end', 'e1'),
+      result(at(46), 'e1', '{"error":"must_deliver"}', true),
+      say(at(47), 'The end call was refused; fixing the manifest.'),
+      bash(48, 'cd /w &&\n  npm run capture -- x'),
+      use(50, 'report_progress', 'p2'),
+      result(at(51), 'p2', '{"ok":true}'),
+      use(55, 'end', 'e2'),
+      { type: 'session.status_idle', processed_at: at(59) },
+    ]);
+    expect(refusedSubmit.calls).toMatchObject({ submits: 1, deliveries: 0, progressReports: 1, captures: 1 });
+    expect(refusedSubmit.seconds.longestProgressGap).toBe(50);
+    expect(refusedSubmit.flags).toEqual(['no_delivery', 'no_end']);
+
+    // Same second, and a reply stamped without fractional seconds.
+    const sameStamp = scoreSession([
+      { type: 'session.status_running', processed_at: at(0) },
+      use(1, 'submit_sources', 's1'),
+      result(at(2), 's1', '{"accepted":true}'),
+      use(3, 'report_progress', 'p1'),
+      result(at(3), 'p1', '{"ok":true}'),
+      use(4, 'end', 'e1'),
+      result('2026-11-18T22:00:05Z', 'e1', '{"ok":true}'),
+      say('2026-11-18T22:00:05.500Z', 'A recap after the end reply.'),
+    ]);
+    expect(sameStamp.flags).toEqual(['text_after_end']);
   });
 });
