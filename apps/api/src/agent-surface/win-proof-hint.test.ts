@@ -83,7 +83,7 @@ describe('winProofProblem', () => {
     expect(winProofProblem([{ path: 'ACCEPTANCE.json', content: '{' }], { firstDelivery: true })).toBeNull();
     expect(winProofProblem(files({ objective: 'x', achieved: [] }), { firstDelivery: true })).toBeNull();
     const numeric = { objective: 'Score', achieved: [{ field: 'score', atLeast: 10 }] };
-    // A later delivery may carry only its changed files, so a missing plan says nothing there.
+    // A later delivery may carry only changed files.
     expect(winProofProblem(files(numeric), { firstDelivery: false })).toBeNull();
   });
 });

@@ -33,10 +33,10 @@ function scripted(actions: unknown, found: Json[] = []): Json[] {
   return found;
 }
 
-// The capture DSL's operators (games repo tools/lib/capture-plan.ts CONDITION_OPERATORS).
+// Capture DSL operators, as in the games repo's CONDITION_OPERATORS.
 const OPERATORS = ['equals', 'notEquals', 'greaterThan', 'greaterThanOrEqual', 'lessThan', 'lessThanOrEqual', 'oneOf'];
 
-// 2026-11-27: `{"field":"lives","atLeast":1}` failed the gate at frame 83 and stored no frames.
+// 2026-11-27: an `atLeast` capture condition failed the gate, no frames.
 function conditionWithoutOperator(actions: unknown, path = 'script'): string | null {
   if (!Array.isArray(actions)) return null;
   for (const [index, action] of actions.entries()) {
@@ -77,7 +77,7 @@ function implies(capture: Json, objective: Json): boolean {
 
 // Null when the files show a win, or cannot say.
 export function winProofProblem(files: readonly SourceFile[], opts: { firstDelivery: boolean }): string | null {
-  // A broken plan fails the gate on any delivery, old games included.
+  // A broken plan fails the gate on any delivery.
   const plan = parseObject(files, 'CAPTURE.json');
   const broken = plan ? conditionWithoutOperator(plan.script) : null;
   if (broken) {
@@ -90,7 +90,7 @@ export function winProofProblem(files: readonly SourceFile[], opts: { firstDeliv
   const acceptance = parseObject(files, 'ACCEPTANCE.json');
   const achieved = Array.isArray(acceptance?.achieved) ? acceptance.achieved.filter(isObject) : [];
   if (achieved.length === 0) return null;
-  // 2026-11-27: a first delivery without its plan passed with no frames for Studio.
+  // 2026-11-27: a first delivery without a plan stored no frames.
   if (opts.firstDelivery && !files.some((file) => file.path === 'CAPTURE.json')) {
     return (
       'The delivery has no CAPTURE.json, so the gate stores no frames and nothing shows the game can be won. ' +
