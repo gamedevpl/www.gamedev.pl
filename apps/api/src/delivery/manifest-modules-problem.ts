@@ -1,15 +1,4 @@
 import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
-import { InvalidUploadError } from '../platform/upload-error.js';
-
-// A GAME.json the gate cannot read; the builder must fix it.
-export class GameManifestUploadError extends InvalidUploadError {
-  readonly reason = 'game_manifest_invalid';
-
-  constructor(message: string) {
-    super(message);
-    this.name = 'GameManifestUploadError';
-  }
-}
 
 // Names the engine.modules defect the gate's assembler would refuse.
 export function manifestModulesProblem(content: string): string | null {
@@ -20,7 +9,7 @@ export function manifestModulesProblem(content: string): string | null {
     return `GAME.json is not valid JSON (${error instanceof Error ? error.message : String(error)}), so the gate cannot read it.`;
   }
   const modules = (parsed as { engine?: { modules?: unknown } } | null)?.engine?.modules;
-  // A missing array is the preview check's refusal, not this one's.
+  // The preview check refuses a missing array.
   if (!Array.isArray(modules)) return null;
   const known = GAME_KIT_MODULES as readonly string[];
   const unknown = modules.find((name) => typeof name !== 'string' || !known.includes(name));

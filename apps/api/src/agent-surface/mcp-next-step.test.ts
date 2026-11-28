@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
+import { manifestModulesProblem } from '../delivery/manifest-modules-problem.js';
+import { GameManifestUploadError } from '../platform/upload-error.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import { mintAgentToken } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
@@ -45,7 +47,11 @@ function gamesStoreWith(gate?: Gate) {
   };
   const verdict = gate ? { green: false, ranAt: '2026-10-01T00:00:00.000Z', status: gate.status } : undefined;
   const gamesStore = {
-    putCandidateSources: async (input: { mode?: string }) => {
+    putCandidateSources: async (input: { mode?: string; files: Array<{ path: string; content: string }> }) => {
+      // The store's own manifest refusal; these fixtures skip the rest.
+      const game = input.files.find((file) => file.path === 'GAME.json');
+      const problem = game ? manifestModulesProblem(game.content) : null;
+      if (problem) throw new GameManifestUploadError(problem);
       submitted.push(input);
       return { version: 'v2', manifest: {} as never };
     },
@@ -298,6 +304,22 @@ describe('nextSuggestedTool through the MCP endpoint', () => {
     expect(refused.data.retry).toMatch(/paused gate runs.*stay staged/);
     const inline = await call('submit_sources', { files: FILES, mode: 'preview', kitEngineRef: NEW_ENGINE });
     expect(inline.data.retry).toMatch(/sent inline were not kept/);
+  });
+
+  it('refuses a GAME.json no reorder can repair, and keeps the staged files', async () => {
+    await round();
+    await start();
+    const manifest = JSON.parse(FILES.find((file) => file.path === 'GAME.json')!.content);
+    const doubled = JSON.stringify({ ...manifest, engine: { modules: ['input', 'input'] } });
+    for (const file of FILES) {
+      await call('stage_source_file', file.path === 'GAME.json' ? { ...file, content: doubled } : file);
+    }
+    const refused = await call('submit_sources', { fromStaged: true, mode: 'preview', kitEngineRef: NEW_ENGINE });
+    expect(refused.isError).toBe(true);
+    expect(refused.data).toMatchObject({ reason: 'game_manifest_invalid' });
+    expect(refused.data.error).toContain('duplicate');
+    expect(refused.data.retry).toMatch(/stay staged/);
+    expect(refused.next).toBeUndefined();
   });
 
   it('G: a successful delivery points at end, and end closes the session', async () => {

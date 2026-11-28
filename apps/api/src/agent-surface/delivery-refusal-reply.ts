@@ -1,5 +1,5 @@
 import type { SourceDeliveryRejected } from '../delivery/source-delivery.js';
-import { GameManifestUploadError } from '../delivery/manifest-modules-problem.js';
+import { GameManifestUploadError } from '../platform/upload-error.js';
 
 // What a refused delivery tells the builder, per refusal.
 export function deliveryRefusalFields(

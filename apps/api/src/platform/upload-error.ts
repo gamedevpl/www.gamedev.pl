@@ -17,3 +17,13 @@ export class InvalidUploadError extends Error {
     this.missingPaths = missingPaths;
   }
 }
+
+// A GAME.json the gate cannot read; the builder must fix it.
+export class GameManifestUploadError extends InvalidUploadError {
+  readonly reason = 'game_manifest_invalid';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'GameManifestUploadError';
+  }
+}

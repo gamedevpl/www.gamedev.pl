@@ -4,8 +4,8 @@ import { listStoredVersions } from './stored-version-history.js';
 import { deliveryPathRefusal, isRetiredDeliveryPath, type DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { isPublishableMode } from '../platform/publication-state.js';
-import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
-import { GameManifestUploadError, manifestModulesProblem } from './manifest-modules-problem.js';
+import { GameManifestUploadError, InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
+import { manifestModulesProblem } from './manifest-modules-problem.js';
 import { GoogleAuth } from 'google-auth-library';
 import {
   DELIVERY_FIXED_FILES,
