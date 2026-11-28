@@ -63,6 +63,7 @@ import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeScope, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { stagedFileHint } from './staged-file-hint.js';
+import { canonicalGameManifest } from './canonical-game-manifest.js';
 import { winProofProblem } from './win-proof-hint.js';
 import { resolveAuthorizedRoundBaseVersion, resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
@@ -2057,6 +2058,7 @@ export async function registerAgentChannelRoutes(
           });
           files = Object.entries(overlay).map(([path, content]) => ({ path, content }));
         }
+        files = files.map(canonicalGameManifest);
         mode ??= 'publish';
 
         if (!options.sourceDelivery) {

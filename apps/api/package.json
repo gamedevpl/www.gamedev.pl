@@ -15,6 +15,7 @@
     "gate:capability": "tsx scripts/gate-capability.ts",
     "managed:probe": "tsx scripts/managed-probe.ts",
     "builder:run": "tsx scripts/builder-run.ts",
+    "builder:judge": "tsx scripts/builder-judge.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
