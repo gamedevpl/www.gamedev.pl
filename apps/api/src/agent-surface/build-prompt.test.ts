@@ -62,7 +62,7 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('Call `start` with exactly `{ "slug": "(slug)" }`');
   });
 
-  // 2026-11-27: "even if you can see things you would rather improve" won over the art pass in every creation round.
+  // 2026-11-27: "rather improve" beat the art pass in every round.
   it('sends a shell creation round through one look check before its only preview', () => {
     const create = {
       ...BRIEF,

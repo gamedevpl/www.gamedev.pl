@@ -51,7 +51,7 @@ describe('builderSystemPrompt', () => {
     expect(shell).toContain('Do not change anything over MCP that you did not change and typecheck locally');
   });
 
-  // 2026-11-27: no builder edited visuals after an accepted preview; the check moves before it.
+  // 2026-11-27: visual fixes happened only before the first preview.
   it('gives a new game one look check before its first preview, on the shell lane only', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('A new 2D game gets one look check, before its first preview');
@@ -100,7 +100,7 @@ describe('builderSystemPrompt', () => {
     expect(builderSystemPrompt({ shell: false })).not.toContain('advisor');
   });
 
-  // 2026-11-16: one report in a six-minute round; 2026-11-27: a 90 s cadence replaced fixed points.
+  // 2026-11-16: one report in six minutes; now a cadence.
   it('names fixed progress points on the shell lane', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('whenever 90 seconds of local work have passed since your last report');
