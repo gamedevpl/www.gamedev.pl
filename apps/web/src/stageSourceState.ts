@@ -44,47 +44,57 @@ export function resolveStageSourceState(input: {
   const isPublished = !selectedPreviewVersion && status?.status === 'published' && Boolean(status.slug);
   const hasVersionPreview = Boolean(selectedPreviewVersion && versionPreview?.html);
   const showChannel = !hasVersionPreview && channel != null && (preview === null || channel.at > preview.at);
-  const rawHtml = hasVersionPreview
-    ? versionPreview!.html
-    : isPublished
-      ? (published?.html ?? null)
-      : showChannel
-        ? channel!.html
-        : (preview?.html ?? channel?.html ?? published?.html ?? null);
 
-  let origin: StageOrigin = NONE_ORIGIN;
   if (hasVersionPreview) {
-    const { at, version } = versionPreview!;
-    origin = { kind: 'staged', at, versionLabel: version, version };
-  } else if (isPublished) {
-    origin = {
-      kind: 'delivered',
-      at: null,
-      versionLabel: null,
-      version: publishedBuildVersion(status),
-      artifactVersion: published?.artifactVersion,
-    };
-  } else if (showChannel) {
-    origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
-  } else if (preview) {
-    origin = { kind: 'staged', at: preview.at, versionLabel: null, version: preview.version ?? null };
-  } else if (channel) {
-    origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
-  } else if (published) {
-    origin = {
-      kind: 'delivered',
-      at: null,
-      versionLabel: null,
-      version: publishedBuildVersion(status),
-      artifactVersion: published?.artifactVersion,
+    const { html, at, version, orientation } = versionPreview!;
+    return { rawHtml: html, origin: { kind: 'staged', at, versionLabel: version, version }, orientation };
+  }
+  if (isPublished) {
+    return {
+      rawHtml: published?.html ?? null,
+      origin: {
+        kind: 'delivered',
+        at: null,
+        versionLabel: null,
+        version: publishedBuildVersion(status),
+        artifactVersion: published?.artifactVersion,
+      },
+      orientation: published?.orientation,
     };
   }
-
-  const orientation = hasVersionPreview
-    ? versionPreview!.orientation
-    : isPublished
-      ? published?.orientation
-      : (preview?.orientation ?? published?.orientation);
-
-  return { rawHtml, origin, orientation };
+  if (showChannel) {
+    return {
+      rawHtml: channel!.html,
+      origin: { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label },
+      orientation: undefined,
+    };
+  }
+  if (preview) {
+    return {
+      rawHtml: preview.html,
+      origin: { kind: 'staged', at: preview.at, versionLabel: null, version: preview.version ?? null },
+      orientation: preview.orientation,
+    };
+  }
+  if (channel) {
+    return {
+      rawHtml: channel.html,
+      origin: { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label },
+      orientation: undefined,
+    };
+  }
+  if (published) {
+    return {
+      rawHtml: published.html,
+      origin: {
+        kind: 'delivered',
+        at: null,
+        versionLabel: null,
+        version: publishedBuildVersion(status),
+        artifactVersion: published.artifactVersion,
+      },
+      orientation: published.orientation,
+    };
+  }
+  return { rawHtml: null, origin: NONE_ORIGIN, orientation: undefined };
 }
