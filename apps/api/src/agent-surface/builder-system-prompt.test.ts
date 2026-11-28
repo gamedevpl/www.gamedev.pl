@@ -55,6 +55,7 @@ describe('builderSystemPrompt', () => {
   it('gives a new game one visual check before its first preview, on the shell lane only', () => {
     const shell = builderSystemPrompt({ shell: true });
     expect(shell).toContain('A new game gets an art brief and one visual check before its first preview');
+    expect(shell).toContain('`draw.backdrop` for the background, `draw.solid` for objects');
     // 2026-11-28: one build captured 14 times, another fixed nothing.
     expect(shell).toContain('two captures and one fix, however the second frame looks');
     expect(shell).toContain('A check that names no defect and changes nothing is not done');
