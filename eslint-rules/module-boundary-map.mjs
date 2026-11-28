@@ -547,6 +547,8 @@ const FILE_BUCKET = {
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
+  // Refuses at submit an engine.modules list the gate's manifest parser rejects.
+  'delivered-manifest-problem': 'agent-surface',
   'inbox-reference-images': 'agent-surface',
   'reference-image-url': 'agent-surface',
   'reference-unseen': 'agent-surface',
