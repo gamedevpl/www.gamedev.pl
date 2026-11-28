@@ -95,4 +95,48 @@ describe('scoreSession', () => {
     const chatty = scoreSession([...base, say(36, 'Here is a recap of the round.')]);
     expect(chatty.flags).toEqual(['text_after_end']);
   });
+
+  // Review of #2165: a refused call is an attempt, not a result.
+  it('counts only accepted submits, ends and reports, by log order', () => {
+    const use = (second, name, id, input = {}) => ({ ...mcp(second, name, input), id });
+    const result = (stamp, id, content, isError = false) => ({
+      type: 'agent.mcp_tool_result',
+      processed_at: stamp,
+      mcp_tool_use_id: id,
+      is_error: isError,
+      content: [{ type: 'text', text: content }],
+    });
+    const say = (stamp, text) => ({ type: 'agent.message', processed_at: stamp, content: [{ text }] });
+    const refusedSubmit = scoreSession([
+      { type: 'session.status_running', processed_at: at(0) },
+      use(30, 'submit_sources', 's1'),
+      result(at(31), 's1', '{"error":"GAME.json","reason":"game_manifest_invalid"}', true),
+      use(40, 'report_progress', 'p1'),
+      result(at(41), 'p1', '{"ok":false}'),
+      use(45, 'end', 'e1'),
+      result(at(46), 'e1', '{"error":"must_deliver"}', true),
+      say(at(47), 'The end call was refused; fixing the manifest.'),
+      bash(48, 'cd /w &&\n  npm run capture -- x'),
+      use(50, 'report_progress', 'p2'),
+      result(at(51), 'p2', '{"ok":true}'),
+      use(55, 'end', 'e2'),
+      { type: 'session.status_idle', processed_at: at(59) },
+    ]);
+    expect(refusedSubmit.calls).toMatchObject({ submits: 1, deliveries: 0, progressReports: 1, captures: 1 });
+    expect(refusedSubmit.seconds.longestProgressGap).toBe(50);
+    expect(refusedSubmit.flags).toEqual(['no_delivery', 'no_end']);
+
+    // Same second, and a reply stamped without fractional seconds.
+    const sameStamp = scoreSession([
+      { type: 'session.status_running', processed_at: at(0) },
+      use(1, 'submit_sources', 's1'),
+      result(at(2), 's1', '{"accepted":true}'),
+      use(3, 'report_progress', 'p1'),
+      result(at(3), 'p1', '{"ok":true}'),
+      use(4, 'end', 'e1'),
+      result('2026-11-18T22:00:05Z', 'e1', '{"ok":true}'),
+      say('2026-11-18T22:00:05.500Z', 'A recap after the end reply.'),
+    ]);
+    expect(sameStamp.flags).toEqual(['text_after_end']);
+  });
 });
