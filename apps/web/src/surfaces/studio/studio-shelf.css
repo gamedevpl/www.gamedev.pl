@@ -150,6 +150,8 @@
 }
 
 .studio-shelf-list {
+  /* Keep the absolute screen-reader labels inside this scrollport. */
+  position: relative;
   list-style: none;
   margin: 0;
   padding: 0;

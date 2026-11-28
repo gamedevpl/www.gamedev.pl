@@ -64,15 +64,10 @@ const VIEWPORTS = [
 /** Stable ids used only inside the stubbed responses — never written to the API. */
 const FIXTURE_TOKEN = 'e2e-studio-shell-token';
 const FIXTURE_SLUG = 'e2e-studio-shell';
-/** Enough games to trip the compact left rail (STUDIO_SHELF_TOOLS_AT = 5). */
-const FOCUS_SHELF_SIZE = 5;
+const FOCUS_SHELF_SIZE = 51;
 
 async function fulfillJson(route: Route, body: unknown) {
-  await route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(body),
-  });
+  await route.fulfill({ json: body });
 }
 
 function fixtureGames() {
@@ -118,16 +113,7 @@ async function stubCodeSurfaceData(page: Page) {
   });
 }
 
-/**
- * Give `/studio` a game with a composer without touching production shelf state.
- *
- * The SPA still mounts CreatorStudioView + SubmissionStatusView and applies the real
- * stylesheet; only the JSON those views fetch is replaced.
- *
- * Five games, not one: a single-game shelf never enters the compact-rail path, and that
- * is the desktop state this gate has to keep honest (work surface beside a skinny rail,
- * not a floating card and not a "switch game" combo).
- */
+/** A truncated shelf exercises both the compact rail and the overflowing list. */
 async function stubStudioThreadData(page: Page) {
   await page.route('**/api/me/studio**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace(/\/$/, '');
@@ -140,7 +126,7 @@ async function stubStudioThreadData(page: Page) {
       return;
     }
     if (path.endsWith('/api/me/studio')) {
-      await fulfillJson(route, { games: fixtureGames() });
+      await fulfillJson(route, { games: fixtureGames(), totalGames: 60, truncated: true });
       return;
     }
     await route.continue();
@@ -392,6 +378,21 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           );
         }
       }
+
+      await page.locator(viewport.width <= 800 ? '.studio-shelf-open' : '.studio-shelf-summary').click();
+      const list = page.locator('.studio-shelf-list');
+      await list.waitFor({ state: 'visible' });
+      const pageOverflow = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+      expect(pageOverflow, 'opening a long shelf must keep the page within the viewport').toBeLessThanOrEqual(2);
+      await list.hover();
+      const listHeight = await list.evaluate((el) => el.scrollHeight);
+      await page.mouse.wheel(0, listHeight);
+      await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      const lastRow = list.locator('li').last();
+      await expect
+        .poll(() => lastRow.evaluate((el) => el.getBoundingClientRect().bottom))
+        .toBeLessThanOrEqual(viewport.height + 1);
+      expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
       expect(describeProblems(watcher.drain())).toBe('');
     });
